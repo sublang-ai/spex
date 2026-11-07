@@ -20,7 +20,7 @@ import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders, sameFile, standsEmpty } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
 import { canonicalCodeRemote } from "./code-remote.js";
-import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
+import { discardTree, portable, readJsonFile, removeTree, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
@@ -1012,6 +1012,31 @@ function capText(text: string, maxBytes: number, maxLines: number): { text: stri
   }
   const count = out.length === 0 ? 0 : out.endsWith("\n") ? out.split("\n").length - 1 : out.split("\n").length;
   return { text: out, lines: count, truncated };
+}
+
+/** What a count of a clone's unsent records reads, as it stands on
+ * disk: each portable record file, and the Git configuration and refs
+ * naming its placements and what they hold — each file's path, size and
+ * modification time (storage-1, storage-34). */
+function countInputsStamp(dir: string): string {
+  const entries: string[] = [];
+  const stamp = (path: string, file: string): void => {
+    try { const info = statSync(file); entries.push(`${path}\0${info.size}\0${info.mtimeMs}`); } catch { /* absent */ }
+  };
+  const walk = (current: string, rel: string, take: (path: string) => boolean): void => {
+    let names: Dirent[];
+    try { names = readdirSync(current, { withFileTypes: true }); } catch { return; }
+    for (const entry of names) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      if (path === ".git") continue;
+      if (entry.isDirectory()) walk(join(current, entry.name), path, take);
+      else if (take(path)) stamp(path, join(current, entry.name));
+    }
+  };
+  walk(dir, "", portable);
+  for (const file of ["config", "HEAD", "packed-refs"]) stamp(`.git/${file}`, join(dir, ".git", file));
+  walk(join(dir, ".git", "refs"), ".git/refs", () => true);
+  return entries.sort().join("\n");
 }
 
 type SessionChangeSummary = { title?: string; turns: number; at?: number };
@@ -2426,8 +2451,17 @@ class RepositorySync {
    * shared commit (space-12, reachedTrees) — the path placement's among
    * them — every unit where it holds none, counted without touching the
    * clone's own lists. A placement whose host its last check found
-   * holding no `spex` holds none. */
-  async pendingUnits(): Promise<number> {
+   * holding no `spex` holds none. `stands` says whether what the count
+   * read — the records, the placements and what they hold — still
+   * stands as it was before the count read it (projects-10). */
+  async pendingUnits(): Promise<{ units: number; stands: () => boolean }> {
+    const inputs = (): string => `${countInputsStamp(this.dir)}\n${JSON.stringify([...this.runs].map(([name, run]) => [name, run.remoteEmpty ?? null]))}`;
+    const before = inputs();
+    const stands = (): boolean => inputs() === before;
+    return { units: await this.countPending(), stands };
+  }
+
+  private async countPending(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
     const placed: StorageTree[] = [];
@@ -6856,7 +6890,9 @@ export class SpaceManager {
     let stage: string | undefined;
     try {
       mkdirSync(dirname(dest), { recursive: true, mode: 0o700 });
-      stage = mkdtempSync(join(dirname(dest), `.${basename(dest)}.join-`));
+      // Named apart from the clone's own name, so a repository of the
+      // longest name a folder takes still joins.
+      stage = mkdtempSync(join(dirname(dest), ".join-"));
       const dir = join(stage, "clone");
       // The instance it is joined at brokers its clone (git-host-9).
       let brokered: GitCredentialHandle | null;
@@ -6886,7 +6922,7 @@ export class SpaceManager {
         if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
           // The host holds no `spex` yet: its default branch, then `spex`
           // beside it (space-32).
-          rmSync(dir, { recursive: true, force: true });
+          removeTree(dir);
           run = await privately(["clone", "-q", "--origin", name, url, dir], options);
           if (run.code === 0) run = await privately(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
         }
@@ -6928,7 +6964,9 @@ export class SpaceManager {
     } catch (error) {
       stop({ cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
-      if (stage) rmSync(stage, { recursive: true, force: true });
+      // The stage, a whole clone where the join did not publish it, is
+      // the join's garbage (space-63).
+      if (stage) discardTree(stage, "a join's private folder");
       await this.publish();
     }
   }
@@ -8920,9 +8958,10 @@ export class SpaceManager {
     return this.machine(key).read(path);
   }
 
-  /** What removing a project would lose (projects-9). */
-  pendingUnits(key: string): Promise<number> {
-    if (!this.host.store.repository(key)) return Promise.resolve(0);
+  /** What removing a project would lose (projects-9), with whether the
+   * records counted still stand as counted. */
+  pendingUnits(key: string): Promise<{ units: number; stands: () => boolean }> {
+    if (!this.host.store.repository(key)) return Promise.resolve({ units: 0, stands: () => true });
     return this.machine(key).pendingUnits();
   }
 

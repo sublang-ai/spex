@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { discardTree, removeTree } from "../files.js";
 import { sha256Hex } from "./format.js";
 import { readTar } from "./tar.js";
 
@@ -153,12 +154,14 @@ export function gitSource(cacheDir: string, options: GitSourceOptions = {}): Git
         if (!existsSync(join(mirror, "HEAD"))) {
           mkdirSync(mirrors, { recursive: true });
           const staging = `${mirror}.${randomUUID()}`;
+          // A staged mirror left over is garbage (environments-13).
           try {
             await git(repo, [...config, "clone", "--mirror", "--quiet", "--", repo, staging], env);
-            if (existsSync(join(mirror, "HEAD"))) rmSync(staging, { recursive: true, force: true });
-            else { rmSync(mirror, { recursive: true, force: true }); renameSync(staging, mirror); }
+            // A fetch that made the mirror meanwhile keeps its own.
+            if (existsSync(join(mirror, "HEAD"))) discardTree(staging, "a staged mirror");
+            else { removeTree(mirror); renameSync(staging, mirror); }
           } catch (error) {
-            rmSync(staging, { recursive: true, force: true });
+            discardTree(staging, "a staged mirror");
             throw error;
           }
         } else if (!(COMMIT_RE.test(rev) && (await revParse(mirror, rev)))) {

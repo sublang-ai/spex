@@ -31,7 +31,8 @@ function fixture(home: string) {
       directoryOf: (owner: MediaUploadOwner): string => {
         if (owner.kind === "draft") return assetsDir(home, owner.id, place.moved);
         if (owner.kind === "intent") return join(cloneOf(home, place.moved), "intents", `${owner.intentId}.assets`);
-        throw new Error("Only authoring and intent owners in this fixture");
+        if (owner.kind === "project") return join(cloneOf(home, place.moved), "assets");
+        throw new Error("Only project, authoring and intent owners in this fixture");
       },
       rootOf: () => cloneOf(home, place.moved),
     },
@@ -261,9 +262,40 @@ test("media-18: a removal its owner refuses invalidates nothing, so in-flight up
     }, assertDeletable), /a compile is running/);
     assert.equal(removed, false);
     assert.equal((await media.begin(inFlight)).offset, 4);
+    // Refused at its own step, as a clone held open on Windows refuses
+    // being set aside: the upload resumes alike.
+    await assert.rejects(media.retireOwner(owner, () => { throw new Error("EPERM: operation not permitted, rename"); }), /EPERM/);
+    assert.equal((await media.begin(inFlight)).offset, 4, "a removal refused at its own step invalidates nothing");
     await media.uploads.chunk(inFlight.uploadId, 4, Buffer.from("more").toString("base64"));
     const done = await media.uploads.finish(inFlight.uploadId);
     assert.equal((await media.read(owner, done.asset.assetId, 0, 8)).data, Buffer.from("halfmore").toString("base64"));
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: a removal failing after its owner went retires that owner's uploads as one that succeeds", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-failed-after-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const owner = draft("gone");
+  const {options} = fixture(home);
+  // The owner stands until its removal deletes it.
+  let gone = false;
+  const media = new ApplicationMedia({...options, assertOwner() { if (gone) throw new Error("no draft gone"); }, async openSessionAsset() { throw new Error("No session"); }});
+  const incomplete = request(owner, 8);
+  const completed = request(owner, 4);
+  try {
+    await media.prepare();
+    await media.begin(incomplete);
+    await media.uploads.chunk(incomplete.uploadId, 0, Buffer.from("half").toString("base64"));
+    await media.begin(completed);
+    await media.uploads.chunk(completed.uploadId, 0, Buffer.from("full").toString("base64"));
+    // The owner deleted, then a cleanup after it failing, as a
+    // preference write can.
+    await assert.rejects(media.retireOwner(owner, () => {
+      gone = true;
+      throw new Error("EISDIR: illegal operation on a directory, open 'prefs.json.tmp'");
+    }), /EISDIR/);
+    await assert.rejects(media.uploads.chunk(incomplete.uploadId, 4, Buffer.from("more").toString("base64")), "the incomplete upload takes no more bytes");
+    await assert.rejects(media.uploads.finish(completed.uploadId), "the completed upload publishes nothing");
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
@@ -289,6 +321,34 @@ test("media-18: removal waits for no validation, and a validation's preparation 
     await validation;
     assert.equal(existsSync(assetsDir(home, owner.id)), false, "prepare cannot resurrect the removed owner");
   } finally { releaseAll(); await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: a project's removal closes the cached readers of every owner within its clone", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-nested-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const nested = draft("nested");
+  let closed!: () => void;
+  const closing = new Promise<void>((resolve) => { closed = resolve; });
+  class WatchedClose extends ApplicationMedia {
+    override ownerStore(owner: MediaUploadOwner, write = false) {
+      const store = super.ownerStore(owner, write);
+      return {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+        const reader = await store.openAsset(...args);
+        return {...reader, close: async () => { closed(); await reader.close(); }};
+      }};
+    }
+  }
+  const {options} = fixture(home);
+  const media = new WatchedClose({...options, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    await media.read(nested, asset.assetId, 0, 1);
+    // The project's own removal: the draft within its clone is another
+    // owner, whose open reader would hold that clone on Windows.
+    await media.retireOwner({kind: "project", id: PROJECT}, () => undefined);
+    await closing;
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
 test("media-18: removal waits for no reader, closing its owner's cached readers", {timeout: 10_000}, async () => {

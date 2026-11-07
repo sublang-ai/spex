@@ -90,7 +90,7 @@ import { CoreError, SessionManager, assertRunsHere, currentSession, executionCon
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { StartedProcesses, StopBound } from "./process-tree.js";
-import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
+import { CloneHeldError, readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
@@ -653,6 +653,36 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/** How often, and how far apart, a removal its clone's rename refuses on
+ * Windows is tried again (projects-10): counted in tries, not time, so
+ * an event loop busy meanwhile spends none of them. */
+const HELD_CLONE_RETRIES = 20;
+const HELD_CLONE_RETRY_WAIT_MS = 50;
+
+/** The records a removal counted changed before it committed: counted
+ * again at its next try, `refusal` standing where no try is left
+ * (projects-10). */
+class RecordsChangedError extends Error {
+  constructor(readonly refusal: CoreError) { super(refusal.message); this.name = "RecordsChangedError"; }
+}
+
+/** Run a removal, trying it again, whole, while Windows refuses to set
+ * its clone aside because something holds a file or folder in it open —
+ * a Git child of this core, a virus scanner, or this core's own read in
+ * flight, which the wait between tries lets finish — or while the
+ * records it counted changed before it committed. Any other refusal, a
+ * failed write of `home.yaml` among them, stands at once. */
+async function retryRemoval<T>(attempt: () => Promise<T>): Promise<T> {
+  for (let retries = 0; ; retries += 1) {
+    try { return await attempt(); }
+    catch (error) {
+      const again = error instanceof CloneHeldError || error instanceof RecordsChangedError;
+      if (!again || retries >= HELD_CLONE_RETRIES) throw error instanceof RecordsChangedError ? error.refusal : error;
+      await new Promise((resolve) => setTimeout(resolve, HELD_CLONE_RETRY_WAIT_MS));
+    }
+  }
+}
+
 export class CoreService {
   private readonly options: CoreServiceOptions;
   /** Your own group's config, which follows its clone when your own
@@ -1070,6 +1100,7 @@ export class CoreService {
         } else if (!this.store.describeSession(owner.id)) throw noSession(owner.id);
       },
       openSessionAsset: (sessionId, assetId) => this.store.sessionStoreFor(sessionId).openAsset(sessionId, assetId),
+      repositoryOfSession: (sessionId) => this.store.describeSession(sessionId)?.projectId,
     });
     // The core speaks before it composes its first text (core-service-111):
     // the config error a start may raise, and the readiness requirement
@@ -1362,9 +1393,14 @@ export class CoreService {
    * leases were taken, or a clone moved or replaced since. Your own
    * group's clone is never deleted.
    */
-  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void }> {
+  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void; changed(): CoreError }> {
     const repository = this.store.repository(key);
-    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined };
+    const changed = (): CoreError => new CoreError("conflict", i18n._({
+      id: "The records of {name} changed meanwhile — Retry",
+      values: { name: splitKey(key).name.replace(/-spex$/i, "") || splitKey(key).name },
+      comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
+    }));
+    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined, changed };
     const identity = (): string | undefined => {
       try { const info = statSync(repository.dir); return `${info.dev}:${info.ino}`; } catch { return undefined; }
     };
@@ -1382,11 +1418,6 @@ export class CoreService {
     };
     const clone = identity();
     const stands = (): boolean => clone !== undefined && this.store.repository(key)?.dir === repository.dir && identity() === clone;
-    const changed = (): CoreError => new CoreError("conflict", i18n._({
-      id: "The records of {name} changed meanwhile — Retry",
-      values: { name: splitKey(key).name.replace(/-spex$/i, "") || splitKey(key).name },
-      comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
-    }));
     const held: { sessionId: string; release(): Promise<unknown> }[] = [];
     try {
       for (const id of sessionIds()) {
@@ -1413,6 +1444,7 @@ export class CoreService {
         if (stands() && sessionIds().every((id) => leased.has(id))) return;
         throw changed();
       },
+      changed,
     };
   }
 
@@ -1748,6 +1780,26 @@ export class CoreService {
       }));
     }
     this.watchProjectConfigs();
+  }
+
+  /** Close the watchers of one clone, which on Windows hold it where it
+   * lies: no rename or deletion of a folder holding a watched one is
+   * admitted there (projects-10). */
+  private unwatchRepository(key: string): void {
+    this.sessionsWatchers.get(key)?.close();
+    this.sessionsWatchers.delete(key);
+    this.configWatchers.get(key)?.watcher.close();
+    this.configWatchers.delete(key);
+  }
+
+  /** Watch every clone again after `unwatchRepository`, then read once
+   * what a watcher closed meanwhile would have reported: sessions another
+   * host wrote (core-service-60) and a changed config (core-service-2). */
+  private rewatchRepositories(): void {
+    if (this.options.watchConfig === false || this.stopping) return;
+    this.watchRepositories();
+    void this.syncForeignSessions();
+    this.scheduleReload();
   }
 
   /**
@@ -3079,9 +3131,18 @@ export class CoreService {
         };
         assertProject();
         // What no placement's `spex` holds asks a second confirmation
-        // naming the count (projects-9).
-        if (command.confirm !== true) {
-          const units = await this.space.pendingUnits(key);
+        // naming the count (projects-9): read before the leasing, and
+        // again at each try of the removal, as work a try's wait admitted
+        // counts (projects-10).
+        let counted: (() => boolean) | undefined;
+        const assertNothingUnsent = async (): Promise<void> => {
+          if (command.confirm === true) return;
+          // A count whose inputs changed while it read them is taken
+          // again before it is shown or relied on.
+          let pending = await this.space.pendingUnits(key);
+          for (let recounts = 0; !pending.stands() && recounts < HELD_CLONE_RETRIES; recounts += 1) pending = await this.space.pendingUnits(key);
+          const { units, stands } = pending;
+          counted = stands;
           if (units > 0) {
             throw new CoreError("conflict", i18n._({
               id: "{count, plural, one {# record never reached a Space.} other {# records never reached a Space.}}",
@@ -3089,26 +3150,47 @@ export class CoreService {
               values: { count: units },
             }), { units });
           }
-        }
+        };
+        await assertNothingUnsent();
         // The removal is one write at its instant (projects-10): every
         // session of the clone held under its Playbook lease — a live
         // writer's refuses it — then, with nothing awaited, the pair
         // forgotten and the clone deleted. No other work is waited for.
-        const { leases, check } = await this.leaseClone(key);
+        const { leases, check, changed } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
+        let unwatched = false;
         try {
-          // retireOwner runs the final check, then invalidates the
-          // project's uploads and readers, then the removal, with nothing
-          // awaited between them: a refusal at the check invalidates
-          // nothing (media-17). The project is read first, so a home
-          // that query finds changed is refused next, before the check.
-          await this.media.retireOwner({kind: "project", id: key}, () => {
-            if (!this.store.removeProject(key)) throw noProject(key);
-          }, () => {
-            assertProject();
-            this.store.assertProjectsWritable();
-            check();
+          await retryRemoval(async () => {
+            await assertNothingUnsent();
+            // retireOwner runs the final check, then closes the project's
+            // readers and runs the removal, with nothing awaited between
+            // them, invalidating its uploads only once the project is
+            // gone: a refusal invalidates nothing (media-20). The project
+            // is read first, so a home that query finds changed is
+            // refused next, before the check. On Windows what the core
+            // watches in the clone holds it where it lies, refusing its
+            // rename: closed right before each try, as a watch rebuilt
+            // between tries reopens it, and watched again where the clone
+            // stays.
+            await this.media.retireOwner({kind: "project", id: key}, () => {
+              this.unwatchRepository(key);
+              unwatched = true;
+              if (!this.store.removeProject(key)) throw noProject(key);
+            }, () => {
+              assertProject();
+              this.store.assertProjectsWritable();
+              check();
+              // A record written since the count read the clone — after
+              // Git staged its snapshot — is counted again first.
+              if (counted && !counted()) throw new RecordsChangedError(changed());
+            });
           });
+        } catch (error) {
+          if (unwatched) this.rewatchRepositories();
+          // `home.yaml` changed since the removal read it: a conflict to
+          // retry, as any versioned write refused (DR-111).
+          if (error instanceof VersionConflictError) throw changed();
+          throw error;
         } finally {
           // The leases went with the clone; what stands is released.
           await Promise.allSettled(leases.map((lease) => lease.release()));
