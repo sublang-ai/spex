@@ -271,6 +271,33 @@ test("media-18: a removal its owner refuses invalidates nothing, so in-flight up
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
+test("media-18: a removal failing after its owner went retires that owner's uploads as one that succeeds", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-failed-after-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const owner = draft("gone");
+  const {options} = fixture(home);
+  // The owner stands until its removal deletes it.
+  let gone = false;
+  const media = new ApplicationMedia({...options, assertOwner() { if (gone) throw new Error("no draft gone"); }, async openSessionAsset() { throw new Error("No session"); }});
+  const incomplete = request(owner, 8);
+  const completed = request(owner, 4);
+  try {
+    await media.prepare();
+    await media.begin(incomplete);
+    await media.uploads.chunk(incomplete.uploadId, 0, Buffer.from("half").toString("base64"));
+    await media.begin(completed);
+    await media.uploads.chunk(completed.uploadId, 0, Buffer.from("full").toString("base64"));
+    // The owner deleted, then a cleanup after it failing, as a
+    // preference write can.
+    await assert.rejects(media.retireOwner(owner, () => {
+      gone = true;
+      throw new Error("EISDIR: illegal operation on a directory, open 'prefs.json.tmp'");
+    }), /EISDIR/);
+    await assert.rejects(media.uploads.chunk(incomplete.uploadId, 4, Buffer.from("more").toString("base64")), "the incomplete upload takes no more bytes");
+    await assert.rejects(media.uploads.finish(completed.uploadId), "the completed upload publishes nothing");
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
 test("media-18: removal waits for no validation, and a validation's preparation cannot resurrect the removed owner", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-validation-"));
   await mkdir(cloneOf(home), {recursive: true});

@@ -249,10 +249,11 @@ export class ApplicationMedia {
 
   /** Remove an owner (media-17, media-20): `assert` first repeating the
    * removal's own refusals, then its cached readers closed — on Windows
-   * an open reader holds its clone where it lies — and `remove` run, its
-   * upload identities invalidated only once that removed the owner, so a
-   * removal refused at either step leaves them resumable. Nothing is
-   * drained: an upload still publishing finds its owner gone and is
+   * an open reader holds its clone where it lies — and `remove` run. Its
+   * upload identities are invalidated once the owner no longer stands:
+   * after a removal, and after one that failed past removing it, while
+   * one the owner refused at either step leaves them resumable. Nothing
+   * is drained: an upload still publishing finds its owner gone and is
    * refused. */
   async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
@@ -260,16 +261,30 @@ export class ApplicationMedia {
     assert?.();
     // An upload owner's folder, read while the owner still stands.
     const uploads = owner.kind === "session" ? undefined : { owner, directory: this.ownerDirectory(owner) };
-    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
-    const running = remove();
-    const removed = running instanceof Promise ? await running : running;
-    if (uploads) {
+    const retire = (): void => {
+      if (!uploads) return;
       void this.uploads.retireOwner(uploads.owner).catch((error: unknown) => {
         console.error(`spex: upload staging of ${key} was not removed: ${error instanceof Error ? error.message : String(error)}`);
       });
       this.prepared.delete(uploads.directory);
+    };
+    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
+    let removed: T;
+    try {
+      const running = remove();
+      removed = running instanceof Promise ? await running : running;
+    } catch (error) {
+      if (!this.stands(owner)) retire();
+      throw error;
     }
+    retire();
     return removed;
+  }
+
+  /** Whether an owner stands now, as an upload's admission reads it. */
+  private stands(owner: MediaOwner): boolean {
+    try { this.options.assertOwner(owner, false); return true; }
+    catch { return false; }
   }
 
   private ownerDirectory(owner: MediaUploadOwner): string {
