@@ -95,7 +95,6 @@ const WORDS = {
     notHere: "Dismiss",
     notOnLab: "Not on lab-1",
     keepOnLab: "Keep lab-1's",
-    labFiles: "Spex keeps lab-1's files in ~/.spex",
     keepLabVersion: "Keep lab-1's version? Spex Example's stays in Git history",
     nothingFromLab: "Nothing to send from lab-1",
     signOutLab: "Signs lab-1 out of Spex Example; every record stays there",
@@ -151,7 +150,6 @@ const WORDS = {
     notHere: "忽略",
     notOnLab: "不在 lab-1 上",
     keepOnLab: "保留 lab-1 的",
-    labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
     keepLabVersion: "保留 lab-1 的 1 项版本？Spex Example 的版本仍保留在 Git 历史中",
     nothingFromLab: "lab-1 没有要发送的内容",
     signOutLab: "让 lab-1 退出 Spex Example；所有记录仍保留在那里",
@@ -776,8 +774,9 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(within(panel).getByText(words.nothingFromLab)).toBeTruthy();
     // The instance's Sign out names it in its title.
     expect(screen.getByTestId("space-signout").getAttribute("title")).toBe(words.signOutLab);
-    // "Spex keeps lab-1's files in <home>".
-    expect(screen.getByTestId("space-home").textContent).toBe(words.labFiles);
+    // The overview omits the server's storage-root footer too.
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByTitle(HOME)).toBeNull();
     // No server's line at a seat's place: the seats are this computer's.
     expect(document.querySelector('[data-testid^="space-server-"]')).toBeNull();
     cleanup();

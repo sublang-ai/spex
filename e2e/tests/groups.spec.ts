@@ -450,9 +450,8 @@ test.describe("first start", () => {
     // Signed in through the device flow the stand-in approves: the
     // instance's heading reads its display name beside the account's
     // login, with Sign out, and the header Refresh; "Your sessions"
-    // stands under "Personal", whose heading carries no control; and the
-    // surface ends in where this computer's files are kept (space-3,
-    // space-4, space-1).
+    // stands under "Personal", whose heading carries no control, without
+    // a storage-root footer (space-3, space-4, space-1).
     await signInThroughPage(page, app);
     const instance = instanceSection(page, host);
     await expect(instance).toHaveAttribute("aria-label", "Stand-in Git host");
@@ -462,8 +461,9 @@ test.describe("first start", () => {
     await expect(header.getByTestId("space-signin-card")).toHaveCount(0);
     await expect(header.getByTestId("space-signout")).toHaveCount(0);
     await expect(header.getByTestId("space-refresh")).toHaveText("Refresh");
-    await expect(page.getByTestId("space-home")).toHaveText(/^Spex keeps this computer's files in /);
-    await expect(page.getByTestId("space-home")).toHaveAttribute("title", app.dataDir);
+    await expect(page.getByTestId("space-home")).toHaveCount(0);
+    await expect(page.getByText(/^Spex keeps this computer's files in /)).toHaveCount(0);
+    await expect(page.getByTestId("space-surface").getByTitle(app.dataDir, { exact: true })).toHaveCount(0);
     const personal = instance.getByTestId(`space-group-@${HOST_LOGIN}`);
     await expect(personal.getByRole("heading", { level: 3 }).first()).toHaveText("Personal");
     await expect(personal.getByTestId(`space-row-${OWN_KEY}`)).toBeVisible();

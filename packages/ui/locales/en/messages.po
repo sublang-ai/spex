@@ -7304,16 +7304,6 @@ msgstr "Spex has no remote repository address for this project's code."
 msgid "Spex itself follows your OS theme."
 msgstr "Spex itself follows your OS theme."
 
-#. the foot of a team server's Space: where the server keeps its files; {place} is the server's name, {path} that folder there
-#: src/components/SpaceSurface.tsx
-msgid "Spex keeps {place}'s files in {path}"
-msgstr "Spex keeps {place}'s files in {path}"
-
-#. the Space surface's foot: where Spex keeps this computer's files; {path} is that folder
-#: src/components/SpaceSurface.tsx
-msgid "Spex keeps this computer's files in {path}"
-msgstr "Spex keeps this computer's files in {path}"
-
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex navigation"

@@ -258,7 +258,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   const spaceRefresh = store((state) => state.spaceRefresh);
   const seats = store((state) => state.seats);
   const connected = connection === "open";
-  const seat = seatName(store.place);
   const now = useClock(true, 30_000);
   // The servers each signed-in instance lists (run-view-170), at this
   // computer alone, whose core holds the seats: read as the surface
@@ -577,28 +576,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
                     />
                   ) : undefined}
                 />
-              ) : null}
-              {anySignedIn(groups) ? (
-                // Where this place's files are, said once and quietly at the
-                // foot (space-1), naming the server at a seat's (space-112):
-                // selectable, the full path in its title.
-                <p
-                  data-testid="space-home"
-                  title={groups.home}
-                  className="min-w-0 select-text break-all text-xs text-neutral-500"
-                >
-                  {seat === undefined
-                    ? i18n._({
-                        id: "Spex keeps this computer's files in {path}",
-                        values: { path: tildify(groups.home) },
-                        comment: "the Space surface's foot: where Spex keeps this computer's files; {path} is that folder",
-                      })
-                    : i18n._({
-                        id: "Spex keeps {place}'s files in {path}",
-                        values: { place: seat, path: tildify(groups.home) },
-                        comment: "the foot of a team server's Space: where the server keeps its files; {place} is the server's name, {path} that folder there",
-                      })}
-                </p>
               ) : null}
             </>
           ) : !spaceError ? (

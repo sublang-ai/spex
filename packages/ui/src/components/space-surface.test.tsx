@@ -1728,12 +1728,13 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
     }
   });
 
-  test("space-1: the surface ends in 'Spex keeps this computer's files in <home>', the full path in its title, with no control", async () => {
+  test("space-1: the signed-in overview omits the storage-root footer while opened records retain their path controls", async () => {
     await renderGroups(repoState(), { open: false });
-    const foot = screen.getByTestId("space-home");
-    expect(foot.textContent).toBe("Spex keeps this computer's files in ~/.spex");
-    expect(foot.title).toBe(HOME);
-    expect(foot.querySelector("button, a")).toBeNull();
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByTitle(HOME)).toBeNull();
+    expect(screen.queryByText(/^Spex keeps this computer's files in /)).toBeNull();
+    fireEvent.click(screen.getByTestId(`space-repo-${KEY}`));
+    expect(within(screen.getByTestId("space-repository")).getByTestId("space-clone-path-copy")).toBeTruthy();
   });
 
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
