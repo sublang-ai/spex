@@ -21,9 +21,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
-  watch,
   writeFileSync,
-  type FSWatcher,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -90,10 +88,11 @@ import { CoreError, SessionManager, assertRunsHere, currentSession, executionCon
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { StartedProcesses, StopBound } from "./process-tree.js";
-import { CloneHeldError, readStoredLanguage, Store, type SpexRepository } from "./store.js";
+import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
+import { CloneWatches } from "./clone-watches.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
-import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
+import { fileVersion, IN_USE_RETRIES, listed, readVersioned, retryWhileInUse, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -653,34 +652,11 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** How often, and how far apart, a removal its clone's rename refuses on
- * Windows is tried again (projects-10): counted in tries, not time, so
- * an event loop busy meanwhile spends none of them. */
-const HELD_CLONE_RETRIES = 20;
-const HELD_CLONE_RETRY_WAIT_MS = 50;
-
 /** The records a removal counted changed before it committed: counted
  * again at its next try, `refusal` standing where no try is left
  * (projects-10). */
 class RecordsChangedError extends Error {
   constructor(readonly refusal: CoreError) { super(refusal.message); this.name = "RecordsChangedError"; }
-}
-
-/** Run a removal, trying it again, whole, while Windows refuses to set
- * its clone aside because something holds a file or folder in it open —
- * a Git child of this core, a virus scanner, or this core's own read in
- * flight, which the wait between tries lets finish — or while the
- * records it counted changed before it committed. Any other refusal, a
- * failed write of `home.yaml` among them, stands at once. */
-async function retryRemoval<T>(attempt: () => Promise<T>): Promise<T> {
-  for (let retries = 0; ; retries += 1) {
-    try { return await attempt(); }
-    catch (error) {
-      const again = error instanceof CloneHeldError || error instanceof RecordsChangedError;
-      if (!again || retries >= HELD_CLONE_RETRIES) throw error instanceof RecordsChangedError ? error.refusal : error;
-      await new Promise((resolve) => setTimeout(resolve, HELD_CLONE_RETRY_WAIT_MS));
-    }
-  }
 }
 
 export class CoreService {
@@ -729,12 +705,10 @@ export class CoreService {
   private upgradeListener?: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   /** The applets open on the endpoint, by capability (applets-3). */
   private readonly applets: AppletServer;
-  private watcher?: FSWatcher;
-  /** One watcher per clone's `sessions/` (storage-14). */
-  private readonly sessionsWatchers = new Map<string, FSWatcher>();
-  /** One watcher per clone's config beside your own group's
-   * (core-service-2): its `config/`, or the clone until that appears. */
-  private readonly configWatchers = new Map<string, { dir: string; watcher: FSWatcher }>();
+  /** What the core watches within the clones: their sessions
+   * (core-service-60) and configs (core-service-2), your own group's
+   * among them. */
+  private readonly watches: CloneWatches;
   private adoptTimer?: NodeJS.Timeout;
   private reloadTimer?: NodeJS.Timeout;
 
@@ -831,6 +805,17 @@ export class CoreService {
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
+    this.watches = new CloneWatches({
+      active: () => this.options.watchConfig !== false && !this.stopping,
+      repositories: () => this.store.listRepositories(),
+      own: () => this.store.home.own(),
+      configPath: () => this.configPath,
+      sessionsChanged: (filename) => this.sessionsChanged(filename),
+      configChanged: () => this.scheduleReload(),
+      // Sessions another host wrote (core-service-60) and a changed config
+      // (core-service-2) while a watch was let go of.
+      resumed: () => { void this.syncForeignSessions(); this.scheduleReload(); },
+    });
     if (!options.loadModule) {
       this.options = { ...options, loadModule: createModuleLoader(this.env) };
     }
@@ -1004,6 +989,7 @@ export class CoreService {
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
+      releaseClones: (keys) => this.letGoOfClones(keys),
     };
     this.space = new SpaceManager(spaceHost);
     // The seats on team servers (core-service-128, DR-133): each
@@ -1649,10 +1635,7 @@ export class CoreService {
       try { prepareStorageGitFiles(repository.dir, service.store.untrackedSessionPaths(repository.key)); }
       catch (error) { console.error(`spex: sync rules of ${repository.key} not refreshed: ${String(error)}`); }
     }
-    if (options.watchConfig !== false) {
-      service.watchConfigFile();
-      service.watchRepositories();
-    }
+    service.watches.update();
     // Every seat the seats file holds is read and announced
     // (core-service-128); each client is sent them as it connects.
     service.places.start();
@@ -1744,111 +1727,44 @@ export class CoreService {
     });
   }
 
-  /** One watcher per clone's `sessions/`; a clone that appeared gets
-   * one, a clone that left loses its own. */
-  private watchRepositories(): void {
-    const keys = new Set(this.store.listRepositories().map((repository) => repository.key));
-    for (const [key, watcher] of [...this.sessionsWatchers]) {
-      if (keys.has(key)) continue;
-      watcher.close();
-      this.sessionsWatchers.delete(key);
+  /** Something changed in a clone's `sessions/` (core-service-60): a
+   * file of a session another host writes rescans soon. */
+  private sessionsChanged(filename: string | null): void {
+    // The CLI can append without replacing its manifest. Our own
+    // sidecars are irrelevant, and the store excludes owned sessions
+    // when a shared stream changes. A missing filename means scan.
+    if (filename && (
+      (!filename.endsWith(".json") && !filename.endsWith(".records.jsonl") && !/^\.[0-9a-f-]{36}\.lock$/.test(filename)) ||
+      filename.endsWith(".spex.json")
+    )) {
+      return;
     }
-    for (const repository of this.store.listRepositories()) {
-      if (this.sessionsWatchers.has(repository.key) || !existsSync(repository.sessionsDir)) continue;
-      const key = repository.key;
-      this.sessionsWatchers.set(key, watch(repository.sessionsDir, (_eventType, filename) => {
-        // The CLI can append without replacing its manifest. Our own
-        // sidecars are irrelevant, and the store excludes owned sessions
-        // when a shared stream changes. A missing filename means scan.
-        if (filename && (
-          (!filename.endsWith(".json") && !filename.endsWith(".records.jsonl") && !/^\.[0-9a-f-]{36}\.lock$/.test(filename)) ||
-          filename.endsWith(".spex.json")
-        )) {
-          return;
-        }
-        if (filename?.endsWith(".records.jsonl") || filename?.endsWith(".replay.json")) {
-          const session = this.store.describeSession(filename.replace(/\.(?:records\.jsonl|replay\.json)$/, ""));
-          if (session?.live && !session.externalWriter) return;
-        }
-        // Bound the wait even while a CLI keeps writing: later events
-        // join this scan instead of postponing it until the writer stops.
-        if (this.adoptTimer) return;
-        this.adoptTimer = setTimeout(() => {
-          this.adoptTimer = undefined;
-          void this.syncForeignSessions();
-        }, 150);
-      }));
+    if (filename?.endsWith(".records.jsonl") || filename?.endsWith(".replay.json")) {
+      const session = this.store.describeSession(filename.replace(/\.(?:records\.jsonl|replay\.json)$/, ""));
+      if (session?.live && !session.externalWriter) return;
     }
-    this.watchProjectConfigs();
+    // Bound the wait even while a CLI keeps writing: later events
+    // join this scan instead of postponing it until the writer stops.
+    if (this.adoptTimer) return;
+    this.adoptTimer = setTimeout(() => {
+      this.adoptTimer = undefined;
+      void this.syncForeignSessions();
+    }, 150);
   }
 
-  /** Close the watchers of one clone, which on Windows hold it where it
-   * lies: no rename or deletion of a folder holding a watched one is
-   * admitted there (projects-10). */
-  private unwatchRepository(key: string): void {
-    this.sessionsWatchers.get(key)?.close();
-    this.sessionsWatchers.delete(key);
-    this.configWatchers.get(key)?.watcher.close();
-    this.configWatchers.delete(key);
-  }
-
-  /** Watch every clone again after `unwatchRepository`, then read once
-   * what a watcher closed meanwhile would have reported: sessions another
-   * host wrote (core-service-60) and a changed config (core-service-2). */
-  private rewatchRepositories(): void {
-    if (this.options.watchConfig === false || this.stopping) return;
-    this.watchRepositories();
-    void this.syncForeignSessions();
-    this.scheduleReload();
-  }
-
-  /**
-   * One watcher per clone's `config/playbook.config.yaml` beside your
-   * own group's (core-service-2): a change reloads the composed state.
-   * A clone with no `config/` yet is watched for its appearing, then
-   * inside it; a clone that left, or moved, loses its own.
-   */
-  private watchProjectConfigs(): void {
-    if (this.options.watchConfig === false || this.stopping) return;
-    const own = resolve(this.configPath);
-    const wanted = new Map<string, SpexRepository>();
-    for (const repository of this.store.listRepositories()) {
-      if (repository.key !== this.store.home.own() && resolve(repository.configPath) !== own) wanted.set(repository.key, repository);
-    }
-    const target = (repository: SpexRepository): string | undefined => {
-      const configDir = dirname(repository.configPath);
-      if (existsSync(configDir)) return configDir;
-      return existsSync(repository.dir) ? repository.dir : undefined;
+  /** Let go of what this core holds open within the clones at `keys` —
+   * its watches of their sessions and config, and the attachments it
+   * reads there — for a step that moves or removes them, across its
+   * every try, until the function returned takes them up again wherever
+   * the clones then lie: on Windows each one holds its clone where it
+   * lies (projects-10, space-59, space-60, media-22). */
+  private letGoOfClones(keys: readonly string[]): () => void {
+    const watches = this.watches.release(keys);
+    const media = this.media.releaseRepositories(keys);
+    return () => {
+      media();
+      watches();
     };
-    for (const [key, entry] of [...this.configWatchers]) {
-      const repository = wanted.get(key);
-      if (repository && target(repository) === entry.dir) continue;
-      entry.watcher.close();
-      this.configWatchers.delete(key);
-    }
-    for (const [key, repository] of wanted) {
-      if (this.configWatchers.has(key)) continue;
-      const dir = target(repository);
-      if (!dir) continue;
-      const configDir = dirname(repository.configPath);
-      const name = dir === configDir ? basename(repository.configPath) : basename(configDir);
-      try {
-        const watcher = watch(dir, (_eventType, filename) => {
-          if (filename && filename !== name) return;
-          // `config/` appeared: the file inside it is watched from now.
-          if (dir !== configDir) this.watchProjectConfigs();
-          this.scheduleReload();
-        });
-        watcher.on("error", () => {
-          watcher.close();
-          if (this.configWatchers.get(key)?.watcher === watcher) this.configWatchers.delete(key);
-        });
-        this.configWatchers.set(key, { dir, watcher });
-      } catch {
-        // A folder that left between the check and the watch: the next
-        // change of the clones watches again.
-      }
-    }
   }
 
   /** A config file changed on disk: reload once the writes settle. */
@@ -1973,11 +1889,7 @@ export class CoreService {
       this.places.stop();
       for (const entry of this.browserPreparations.values()) entry.controller.abort();
       await bound.within(Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done)));
-      this.watcher?.close();
-      for (const watcher of this.sessionsWatchers.values()) watcher.close();
-      this.sessionsWatchers.clear();
-      for (const { watcher } of this.configWatchers.values()) watcher.close();
-      this.configWatchers.clear();
+      this.watches.close();
       if (this.reloadTimer) clearTimeout(this.reloadTimer);
       if (this.adoptTimer) clearTimeout(this.adoptTimer);
       // A Space transport in flight is stopped; a local step finishes.
@@ -2488,16 +2400,6 @@ export class CoreService {
       }
     }
     return { state: nextState, composed: nextComposed };
-  }
-
-  private watchConfigFile(): void {
-    const dir = dirname(this.configPath);
-    const file = basename(this.configPath);
-    if (!existsSync(dir)) return;
-    this.watcher = watch(dir, (_eventType, filename) => {
-      if (filename && filename !== file) return;
-      this.scheduleReload();
-    });
   }
 
   async readiness(signIn = this.options.agentSignIn): Promise<ReadinessEntry[]> {
@@ -3140,7 +3042,7 @@ export class CoreService {
           // A count whose inputs changed while it read them is taken
           // again before it is shown or relied on.
           let pending = await this.space.pendingUnits(key);
-          for (let recounts = 0; !pending.stands() && recounts < HELD_CLONE_RETRIES; recounts += 1) pending = await this.space.pendingUnits(key);
+          for (let recounts = 0; !pending.stands() && recounts < IN_USE_RETRIES; recounts += 1) pending = await this.space.pendingUnits(key);
           const { units, stands } = pending;
           counted = stands;
           if (units > 0) {
@@ -3158,23 +3060,23 @@ export class CoreService {
         // forgotten and the clone deleted. No other work is waited for.
         const { leases, check, changed } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
-        let unwatched = false;
+        // On Windows what the core watches and reads in the clone holds
+        // it where it lies, refusing its rename: let go of across every
+        // try, so neither a watch rebuilt nor an attachment read between
+        // tries reopens it, and taken up again where the clone stays.
+        const resume = this.letGoOfClones([key]);
         try {
-          await retryRemoval(async () => {
+          // Tried again, whole, while the clone is held open or the
+          // records it counted changed before it committed.
+          await retryWhileInUse(async () => {
             await assertNothingUnsent();
             // retireOwner runs the final check, then closes the project's
             // readers and runs the removal, with nothing awaited between
             // them, invalidating its uploads only once the project is
             // gone: a refusal invalidates nothing (media-20). The project
             // is read first, so a home that query finds changed is
-            // refused next, before the check. On Windows what the core
-            // watches in the clone holds it where it lies, refusing its
-            // rename: closed right before each try, as a watch rebuilt
-            // between tries reopens it, and watched again where the clone
-            // stays.
+            // refused next, before the check.
             await this.media.retireOwner({kind: "project", id: key}, () => {
-              this.unwatchRepository(key);
-              unwatched = true;
               if (!this.store.removeProject(key)) throw noProject(key);
             }, () => {
               assertProject();
@@ -3184,14 +3086,15 @@ export class CoreService {
               // Git staged its snapshot — is counted again first.
               if (counted && !counted()) throw new RecordsChangedError(changed());
             });
-          });
+          }, (error) => error instanceof RecordsChangedError);
         } catch (error) {
-          if (unwatched) this.rewatchRepositories();
+          if (error instanceof RecordsChangedError) throw error.refusal;
           // `home.yaml` changed since the removal read it: a conflict to
           // retry, as any versioned write refused (DR-111).
           if (error instanceof VersionConflictError) throw changed();
           throw error;
         } finally {
+          resume();
           // The leases went with the clone; what stands is released.
           await Promise.allSettled(leases.map((lease) => lease.release()));
         }
@@ -4676,10 +4579,8 @@ export class CoreService {
     if (this.options.configPath === undefined) {
       const configPath = this.store.ownRepository().configPath;
       if (configPath !== this.configPath) {
+        // Watched where it now lies (afterRepositoriesChanged).
         this.configPath = configPath;
-        this.watcher?.close();
-        this.watcher = undefined;
-        if (this.options.watchConfig !== false) this.watchConfigFile();
         await this.reloadConfig();
       }
     }
@@ -4714,7 +4615,7 @@ export class CoreService {
    * are read where they stand at each use, and announced again so a
    * page shows each under the project now holding it (core-service-96). */
   private afterRepositoriesChanged(): void {
-    if (this.options.watchConfig !== false) this.watchRepositories();
+    this.watches.update();
     this.authors.republish();
     // A new clone's environment — written by the store as it made it
     // (storage-6) — resolves and installs.

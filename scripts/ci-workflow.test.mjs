@@ -141,11 +141,12 @@ test("release-33: fast gates precede selected suites; Windows retains its suppor
     assert.equal(step.run, run, name);
     assert.equal(step.if, `runner.os == 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, '${folder}'))`, name);
   }
-  // The store's and Git's removals run on the Node the app's Electron ships.
-  const appNode = steps.find((candidate) => candidate.name === "Windows store and Git removals on the app's Node");
+  // The store's and Git's removals, the clones' moves and the credential
+  // helper's line run on the Node the app's Electron ships.
+  const appNode = steps.find((candidate) => candidate.name === "Windows core suites on the app's Node");
   assert.equal(appNode.shell, "bash");
   assert.equal(appNode.if, `runner.os == 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, 'packages/core'))`);
-  assert.equal(appNode.run, "env -u ELECTRON_SKIP_BINARY_DOWNLOAD node node_modules/electron/install.js\nELECTRON_RUN_AS_NODE=1 \"$(node -p \"require('electron')\")\" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js\n");
+  assert.equal(appNode.run, "env -u ELECTRON_SKIP_BINARY_DOWNLOAD node node_modules/electron/install.js\nELECTRON_RUN_AS_NODE=1 \"$(node -p \"require('electron')\")\" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js packages/core/dist/git-credential.integration.test.js packages/core/dist/clone-moves.integration.test.js\n");
   assert.ok(!steps.some((step) => /^npm test\s*$/.test(step.run ?? "")));
 });
 

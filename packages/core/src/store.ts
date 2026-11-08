@@ -36,13 +36,13 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { discardTree, makePrivateDirectory, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { discardTree, makePrivateDirectory, moveFolder, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
-import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
+import { deferredMoves, migrateInstances, needsInstancesMigration, rekeyDeferred, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
 import { canonicalOrigin, instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
 import { SEED_PREF, seedConfig, type SeedCredentials, type SeedHome, type SeedRecord } from "./config.js";
@@ -331,18 +331,6 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
   if (typeof source.fastMode === "boolean") entry.fastMode = source.fastMode;
   if (typeof source.browser === "boolean") entry.browser = source.browser;
   return Object.keys(entry).length > 0 ? entry : undefined;
-}
-
-/** A clone's rename to set it aside refused on Windows while a file or
- * folder in it is held open — the one refusal of a removal worth trying
- * again once the holder lets go (projects-10). */
-export class CloneHeldError extends Error {
-  readonly code: string | undefined;
-  constructor(cause: NodeJS.ErrnoException) {
-    super(cause.message, { cause });
-    this.name = "CloneHeldError";
-    this.code = cause.code;
-  }
 }
 
 /** Atomic whole-file replace: a reader never sees a torn file. */
@@ -1733,9 +1721,11 @@ export class Store {
    * where their clones now lie. Only the write of `home.yaml` throws: one
    * that fails leaves the file and every index as they were, so the
    * caller can move its clones back; what follows the write is said on
-   * the console where it fails.
+   * the console where it fails. The instances migration's receipt names
+   * a moved clone no more, unless `settles` is false, for a step that
+   * settles it once the rest of it is made (settleDeferred).
    */
-  moveRepositories(moves: { from: string; to: string }[], own?: string): void {
+  moveRepositories(moves: { from: string; to: string }[], own?: string, settles = true): void {
     this.assertProjectsWritable();
     if (moves.length === 0 && own === undefined) return;
     if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
@@ -1776,8 +1766,9 @@ export class Store {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
-    // A deferred clone moved is the migration's no longer (DR-127).
-    this.settleDeferred(moves.map((move) => move.from));
+    // A deferred clone moved is the migration's no longer (DR-127), but
+    // for a step that settles it only once the rest of it is made.
+    if (settles) this.settleDeferred(moves.map((move) => move.from));
   }
 
   /** Deferred clones moved, removed or found to be another clone at
@@ -1790,6 +1781,24 @@ export class Store {
     this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
     try { settleDeferred(this.dir, settled); }
     catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** A deferred clone a step moved and could not move back stands at
+   * `to`: the receipt names it there, so it stays deferred where it
+   * stands — but where a move the migration planned already left from
+   * that path, which the receipt names it no more instead (storage-38).
+   * Whether it stays deferred. */
+  rekeyDeferred(from: string, to: string): boolean {
+    if (!this.deferred.some((move) => move.from === from)) return false;
+    let named = false;
+    try { named = rekeyDeferred(this.dir, from, to); }
+    catch (error) { console.error(`spex: the instances migration's receipt still names ${from}, now at ${to}: ${error instanceof Error ? error.message : String(error)}`); }
+    if (!named) {
+      this.settleDeferred([from]);
+      return false;
+    }
+    this.deferred = this.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
+    return true;
   }
 
   /** A clone that came under `workspace/` from outside the store — a
@@ -1812,19 +1821,14 @@ export class Store {
     if (!folder && !repository) return false;
     const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
     const aside = clone && join(dirname(clone), `.removed-${randomUUID()}`);
-    if (clone && aside) {
-      try { renameSync(clone, aside); }
-      catch (error) {
-        const { code } = error as NodeJS.ErrnoException;
-        if (process.platform === "win32" && (code === "EBUSY" || code === "EPERM")) throw new CloneHeldError(error as NodeJS.ErrnoException);
-        throw error;
-      }
-    }
+    // Held open, as Windows refuses it, the rename throws FolderInUseError,
+    // which the caller tries again once the holder lets go.
+    if (clone && aside) moveFolder(clone, aside);
     if (folder) {
       try { this.homeFile.unpairAndSave(key); }
       catch (error) {
         if (clone && aside) {
-          try { renameSync(aside, clone); }
+          try { moveFolder(aside, clone); }
           catch (back) { console.error(`spex: the records of ${key}, set aside at ${aside}, did not move back: ${back instanceof Error ? back.message : String(back)}`); }
         }
         throw error;

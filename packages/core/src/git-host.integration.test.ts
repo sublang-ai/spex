@@ -1293,43 +1293,6 @@ test("git-host-9: a push through the helper carries the brokered credential; one
   }
 });
 
-test("git-host-9: the helper names the runtime and refuses what the shell cannot quote", async () => {
-  const electron = await withGitCredential({ username: "oauth2", secret: "s3cret" }, { execPath: "/Applications/Spex.app/Contents/MacOS/Spex", electron: true });
-  try {
-    assert.equal(electron.env.ELECTRON_RUN_AS_NODE, "1");
-    assert.equal(electron.configArgs[0], "-c");
-    assert.equal(electron.configArgs[1], "credential.helper=");
-    assert.match(electron.configArgs[3], /^credential\.helper=!"\/Applications\/Spex\.app\/Contents\/MacOS\/Spex" ".*git-credential-spex\.mjs"$/);
-    const file = electron.env[GIT_CREDENTIAL_FILE_ENV] ?? "";
-    assert.equal(readFileSync(file, "utf8"), "username=oauth2\npassword=s3cret\n");
-  } finally {
-    await electron.dispose();
-  }
-  await assert.rejects(withGitCredential({ username: "oauth2", secret: "x" }, { execPath: "/tmp/a\"b", electron: false }), /cannot be quoted/);
-  await assert.rejects(withGitCredential({ username: "oauth2", secret: "x\ny" }, currentRuntime()), /cannot carry/);
-  // The shipped helper answers `get` from the file and ignores the rest.
-  const handle = await withGitCredential({ username: "oauth2", secret: "tok" }, currentRuntime());
-  try {
-    const helper = /" "(.*)"$/.exec(handle.configArgs[3])?.[1] ?? "";
-    const ask = (operation: string) => execFileSync(process.execPath, [helper, operation], { input: "protocol=https\nhost=example.test\n\n", encoding: "utf8", env: { ...process.env, ...handle.env } });
-    assert.equal(ask("get"), "username=oauth2\npassword=tok\n\n");
-    assert.equal(ask("store"), "");
-    assert.equal(ask("erase"), "");
-  } finally {
-    await handle.dispose();
-  }
-  const scoped = await withGitCredential({ username: "oauth2", secret: "tok", origin: "https://EXAMPLE.test:443/git" }, currentRuntime());
-  try {
-    const helper = /" "(.*)"$/.exec(scoped.configArgs[3])?.[1] ?? "";
-    const ask = (protocol: string, host: string) => execFileSync(process.execPath, [helper, "get"], { input: `protocol=${protocol}\nhost=${host}\n\n`, encoding: "utf8", env: { ...process.env, ...scoped.env } });
-    assert.equal(ask("https", "example.test"), "username=oauth2\npassword=tok\n\n");
-    assert.equal(ask("https", "EXAMPLE.test:443"), "username=oauth2\npassword=tok\n\n");
-    assert.equal(ask("http", "example.test"), "");
-    assert.equal(ask("https", "example.test:444"), "");
-    assert.equal(ask("https", "elsewhere.test"), "");
-  } finally { await scoped.dispose(); }
-});
-
 // ---------------------------------------------------------------------------
 // git-host-11: failures relayed with the host's words
 

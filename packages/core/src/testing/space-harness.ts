@@ -8,7 +8,7 @@ import { orderRemotes, remoteOrderOf } from "../home.js";
 import { spawnSync as spawnSyncForRemotes } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
@@ -17,6 +17,7 @@ import { CoreService, type CoreServiceOptions } from "../service.js";
 import type { SpaceStepEvent } from "../space.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
+import { seedHistorySession } from "./demo.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
 import type { StandinRegistry } from "@sublang/spex/testing";
 import { removeTree } from "@sublang/spex/files";
@@ -768,6 +769,9 @@ playbooks:
       // watchdog itself shorten this through `extra`.
       spaceTransportTimeoutMs: 20_000,
       spaceBeforeStep: (event) => hooks.beforeStep?.(event),
+      // English whatever the machine's own language, so the core's words
+      // read the same on every system (DR-078).
+      systemLanguages: ["en"],
       ...(options.extra ?? {}),
     });
     const client = new Client(service.port());
@@ -854,8 +858,24 @@ playbooks:
     { type: "turn_finished", turnId, timestamp: at + 1 },
   ];
 
+  /** A session another host wrote into a clone, as the playbook CLI
+   * writes one (core-service-60): written through Playbook's own session
+   * store apart from the clone, then its records and its manifest copied
+   * in, so no lease of it stands in the clone while the core reads it.
+   * Its id. */
+  async function writeForeignSession(clone: string, cwd: string, prompt: string): Promise<string> {
+    const apart = mkdtempSync(join(scratch, "foreign-session-"));
+    const id = await seedHistorySession(apart, cwd, turnRecords(prompt, 1));
+    for (const name of [`${id}.records.jsonl`, `${id}.json`]) copyFileSync(join(apart, name), join(clone, "sessions", name));
+    return id;
+  }
+
+  /** Whether the core announces the session `id` within 20 seconds. */
+  const announced = (home: Home, id: string): Promise<boolean> =>
+    home.client.waitFor((message) => message.type === "session.state" && message.session.id === id, 20_000).then(() => true, () => false);
+
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords, writeForeignSession, announced,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       // Its clones and bare repositories hold Git's read-only objects.

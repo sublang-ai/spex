@@ -9,7 +9,7 @@ import { existsSync, type BigIntStats } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationMedia } from "./media.js";
-import { mediaOwnerKey, type MediaUploadOwner } from "./protocol.js";
+import { mediaOwnerKey, mediaOwnerRepository, type MediaUploadOwner } from "./protocol.js";
 
 // An authoring session's assets sit beside its file in its project's
 // spex repository (media-4, storage-23). Owner removal waits for no
@@ -48,6 +48,14 @@ async function replace(path: string): Promise<{original: string; successor: stri
   await mkdir(path, {recursive: true});
   await writeFile(join(path, "successor"), "mine");
   return {original, successor: identity(await stat(path, {bigint: true}))};
+}
+
+/** Whether `promise` still stands unsettled `ms` from now. */
+async function stillPending(promise: Promise<unknown>, ms = 50): Promise<boolean> {
+  let settled = false;
+  promise.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  return !settled;
 }
 
 /** Media one of whose steps waits while a gate is armed — a
@@ -348,6 +356,94 @@ test("media-18: a project's removal closes the cached readers of every owner wit
     // owner, whose open reader would hold that clone on Windows.
     await media.retireOwner({kind: "project", id: PROJECT}, () => undefined);
     await closing;
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-23: a project's removal opens no reader within its clone until it ends, a read arriving meanwhile then refused", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-removed-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const nested = draft("nested");
+  let gone = false;
+  const {options} = fixture(home);
+  const media = new ApplicationMedia({...options, assertOwner() { if (gone) throw new Error("The project is gone"); }, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    // The removal lets go of the clone across its every try, as the
+    // core's does (projects-10).
+    const resume = media.releaseRepositories([PROJECT]);
+    const reading = media.read(nested, asset.assetId, 0, 1);
+    assert.ok(await stillPending(reading), "[media-20] a read arriving while the removal holds the clone waits for its end");
+    await media.retireOwner({kind: "project", id: PROJECT}, async () => {
+      gone = true;
+      await rm(cloneOf(home), {recursive: true, force: true});
+    });
+    resume();
+    await assert.rejects(reading, /The project is gone/, "[media-20] then refused, its owner gone");
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-23: a clone's move closes the cached readers within it and opens none there until it ends, a session's waiting read then answered from where the clone now lies and one naming the former key refused", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-moved-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  // The clone's key now, as the store names it: a move gives it another
+  // (storage-1), so an owner naming the former key stands no more, while
+  // a session, named by its own id, follows its clone.
+  const MOVED = "tester/moved-spex";
+  let key = PROJECT;
+  const nested = draft("nested");
+  // The session's files lie in its clone, wherever that lies now.
+  const sessionFiles = (): MediaUploadOwner => ({...draft("session-files"), projectId: key});
+  const closed: string[] = [];
+  class WatchedClose extends ApplicationMedia {
+    override ownerStore(owner: MediaUploadOwner, write = false) {
+      const store = super.ownerStore(owner, write);
+      return {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+        const reader = await store.openAsset(...args);
+        return {...reader, close: async () => { closed.push(mediaOwnerKey(owner)); await reader.close(); }};
+      }};
+    }
+  }
+  const {options, place} = fixture(home);
+  const media: ApplicationMedia = new WatchedClose({
+    ...options,
+    assertOwner(owner) {
+      if (owner.kind !== "session" && mediaOwnerRepository(owner) !== key) throw new Error(`No project ${mediaOwnerRepository(owner)}`);
+    },
+    openSessionAsset: (_id, assetId) => media.ownerStore(sessionFiles()).openAsset(assetId),
+    repositoryOfSession: () => key,
+  });
+  const session = {kind: "session" as const, id: "s1"};
+  const text = (data: string) => Buffer.from(data, "base64").toString();
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    const shot = await media.ownerStore(sessionFiles(), true).importAsset({bytes: Buffer.from("session"), mimeType: "text/plain", name: "session.txt"});
+    await media.read(nested, asset.assetId, 0, 1);
+    await media.read(session, shot.assetId, 0, 1);
+    // Another clone's move closes nothing here.
+    const other = media.releaseRepositories(["tester/other-spex"]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(closed, [], "[media-22] another clone's move leaves the readers open");
+    other();
+    // The move lets go of the readers within the moving clone first: on
+    // Windows an open one holds the clone where it lies.
+    const resume = media.releaseRepositories([PROJECT]);
+    for (let i = 0; i < 100 && closed.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(closed.sort(), [mediaOwnerKey(draft("session-files")), mediaOwnerKey(nested)].sort(), "[media-22] the readers within the moving clone close");
+    // Reads arriving while the move holds the clone open nothing there —
+    // on Windows one would hold the clone again through the move's every
+    // try — until the move ends.
+    const sessionRead = media.read(session, shot.assetId, 1, 6);
+    const formerRead = media.read(nested, asset.assetId, 1, 5);
+    assert.ok(await stillPending(sessionRead) && await stillPending(formerRead), "[media-22] a read arriving while the move holds the clone waits for its end");
+    await rename(cloneOf(home), cloneOf(home, true));
+    place.moved = true;
+    key = MOVED;
+    resume();
+    assert.equal(text((await sessionRead).data), "ession", "[media-22] then a session's opens its file where the clone now lies");
+    await assert.rejects(formerRead, /No project tester\/proj-spex/, "[media-22] and one naming the clone's former key is refused, as any read of an owner no longer standing");
+    assert.equal(text((await media.read({...nested, projectId: MOVED}, asset.assetId, 1, 5)).data), "ested", "[media-22] the owner's read under its key now opens the file where the clone now lies");
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 

@@ -160,6 +160,32 @@ export function settleDeferred(root: string, keys: readonly string[]): void {
   }
 }
 
+/** A deferred clone a step moved and could not move back stands at
+ * `to` (storage-38): each receipt naming it at `from` names it at `to`,
+ * its planned move too, so it reads as deferred where it stands and its
+ * deferred move, at its next sync or start, moves it from there. Refused,
+ * nothing written, where a move the migration planned already left from
+ * `to`, whose record that path names; whether it was named at `to`. */
+export function rekeyDeferred(root: string, from: string, to: string): boolean {
+  const receipts = instancesReceipts(root);
+  const planned = (receipt: InstancesReceipt): unknown[] => {
+    const clones = receipt.steps.find((entry) => entry.step === "clones");
+    return clones && Array.isArray(clones.moves) ? clones.moves as unknown[] : [];
+  };
+  if (receipts.some(({ receipt }) => receipt.deferred.some((move) => move.from === to) || planned(receipt).some((move) => isObject(move) && move.from === to))) return false;
+  let named = false;
+  for (const { receipt, dir } of receipts) {
+    if (!receipt.deferred.some((move) => move.from === from)) continue;
+    named = true;
+    const deferred = receipt.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
+    const steps = receipt.steps.map((entry) => entry.step === "clones" && Array.isArray(entry.moves)
+      ? { ...entry, moves: (entry.moves as unknown[]).map((move) => isObject(move) && move.from === from ? { ...move, from: to } : move) }
+      : entry);
+    writeApplicationFile(join(dir, "receipt.json"), { ...receipt, steps, deferred });
+  }
+  return named;
+}
+
 const divergedDestination = (): string =>
   i18n._({ id: "migration destination diverged; preserved unchanged",
     comment: "Migration diagnostic: the file changed under the migration, which wrote nothing" });

@@ -18,7 +18,7 @@ import { remoteNamesOf } from "./testing/space-harness.js";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -26,7 +26,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { StorageFormatError, sha256 } from "@sublang/spex/files";
 import { fileCredentialStore } from "@sublang/spex/git-host";
 import { Home, orderRemotes, remoteOrderOf } from "./home.js";
-import { migrateInstances, needsInstancesMigration } from "./migrate-instances.js";
+import { migrateInstances, needsInstancesMigration, rekeyDeferred } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";
 import { Store } from "./store.js";
 import { seedHistorySession } from "./testing/demo.js";
@@ -550,6 +550,31 @@ async function deferredWeb(): Promise<{ root: string; held: string; to: string; 
 
 const deferredIn = (root: string): unknown[] => receiptsOf(root).flatMap((id) =>
   (JSON.parse(readFileSync(join(root, "local", "migrations", id, "receipt.json"), "utf8")) as { deferred: unknown[] }).deferred);
+
+test("instances migration: a deferred clone the store names at another path, as a drop's failed move back leaves it, is deferred there, its next start moving it from there; one whose path a move the migration planned left from leaves the receipt instead", async () => {
+  // While its lease holds it: `ada/notes-spex` is where the migration
+  // moved your namespace's project from, its record naming that path.
+  const held = await deferredWeb();
+  const store = await Store.open({ machineIdentity, dir: held.root, env: gitEnv });
+  try {
+    assert.equal(store.rekeyDeferred(held.held, "ada/notes-spex"), false, "[storage-38] refused where a planned move left from that path");
+    assert.deepEqual(store.deferredMoves(), [], "[storage-38] the clone leaving the receipt instead");
+  } finally { store.close(); await held.release(); }
+  assert.deepEqual(deferredIn(held.root), []);
+
+  // Its lease gone, the clone stands where a failed move back left it.
+  const { root, held: from, to, release } = await deferredWeb();
+  await release();
+  const stays = "ada/web-spex";
+  mkdirSync(join(root, "workspace", "ada"), { recursive: true });
+  renameSync(workspace(root, from), workspace(root, stays));
+  assert.equal(rekeyDeferred(root, from, stays), true, "[storage-38] named at the path where it stays");
+  assert.deepEqual(deferredIn(root), [{ from: stays, to }]);
+  // Its next start moves it from there to its destination.
+  (await Store.open({ machineIdentity, dir: root, env: gitEnv })).close();
+  assert.ok(existsSync(join(workspace(root, to), ".git")) && !existsSync(workspace(root, stays)), "[storage-30] moved from where it stayed");
+  assert.deepEqual(deferredIn(root), []);
+});
 
 test("instances migration: a deferred clone whose destination is taken stays deferred at the next start, reported naming that destination, the store opening; once the destination is free the next start moves it", async () => {
   const { root, held, to, release } = await deferredWeb();

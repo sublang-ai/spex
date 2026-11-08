@@ -1226,6 +1226,11 @@ msgstr "用 gh auth status 检查你的 GitHub 账户，用 gh auth login 切换
 msgid "Choose the other side or fix the file, then Retry."
 msgstr "请选择另一方或修复该文件，然后重试。"
 
+#. Guidance where another program, a terminal or a folder window holds a project's records open, so Spex cannot move them
+#: src/space.ts
+msgid "Close what holds them open, then Retry."
+msgstr "请关闭占用它们的程序或窗口，然后重试。"
+
 #. Opening a project on a team server could not download its code: the member set no token for the code's host, which is no signed-in Space's; {host} is the code host's name as the Credentials section in Settings takes it
 #: src/space.ts
 msgid "Code not downloaded: {host} needs your credential — add it in Settings"
@@ -2986,6 +2991,11 @@ msgstr "记录已在这里 — 再次点击“在这里打开”以下载代码"
 #: src/environments.ts
 msgid "The records of {name} are not on this computer — Open here first"
 msgstr "{name} 的记录不在本机 — 请先“在此打开”"
+
+#. A stopped sync: Spex could not move the project's records to their new folder because another program, a terminal or a folder window holds a file or folder of them open, which Windows refuses; {name} is the project
+#: src/space.ts
+msgid "The records of {name} are open in another program"
+msgstr "{name} 的记录正被其他程序打开"
 
 #. A stopped step: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project; its guidance says Retry
 #: src/space.ts

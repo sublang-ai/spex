@@ -172,7 +172,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 
 When, for a clone under your own group's folder holding no placement with an instance, the host accepts a pick that creates or joins a spex repository at an instance [[space-58](space.md#space-58)], or an Attach adds its first placement [[space-99](space.md#space-99)], the core shall move the clone under that instance's folder at the repository's path there [[storage-1](#storage-1)] in one rename, as a host's rename moves a clone [[space-60](space.md#space-60)], a legacy environment's built-in spec package's lock, where its pairing's stands, taking that instance's registry whether or not the clone moves [[environments-11](environments.md#environments-11)], while an explicitly selected registry and package pins remain unchanged as only the Space binding and a current lock's request digest follow the placement [[environments-38](environments.md#environments-38)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], the pick or the Attach stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
+- where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], or something else holds the clone open through every try of it as it holds a sync's move [[space-60](space.md#space-60)], the pick or the Attach stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
 
 ### storage-31
 
@@ -217,7 +217,12 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one beneath which a session lease does not read as a dead owner of this machine by steps 3 and 4 of the root lease's rule [[storage-26](#storage-26)] | neither dropped nor moved, the drop refused to the act that asked, naming the session |
 | one whose destination something other than the clone itself takes | neither dropped nor moved, refused as a sync's move is [[space-60](space.md#space-60)] |
 | one whose next placement no read of this run has placed [[git-host-5](git-host.md#git-host-5)] | neither dropped nor moved, the drop refused to the act that asked, naming that placement's instance |
+| one something else holds open through every try of its move, as it holds a sync's move [[space-60](space.md#space-60)] | neither dropped nor moved, the drop refused to the act that asked, naming the project as in use |
+| one whose placements, or its next placement's path at that instance, change between the tries of its move | neither dropped nor moved, the drop refused as changed meanwhile, with Retry [[space-15](space.md#space-15)] |
+| one whose drop Git refuses once it moved | the clone and its pair moved back, its remote standing, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
 | any other | dropped and moved |
+
+- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred; one that cannot move back is named there at the path where it stays, but where a move the migration planned already left from that path, when it leaves the receipt, keeping its records, its remote and its pair there.
 
 ### storage-7
 
@@ -482,6 +487,7 @@ When an integration suite starts a real core on a signed-in format-1 home whose 
 - the namespace project moved under `@<host>/<login>/` and the group's under `@<host>/<group>/`, their remotes renamed likewise; the uncreated repository and the reader-named clone moved under `@<host>/` at their keys, keeping their remotes and read as that instance's; the local-only project left where it was [[storage-30](#storage-30)] [[storage-31](#storage-31)];
 - each moved clone's pairs, session locations, sync preferences and the skills placed for your agents following it [[storage-30](#storage-30)];
 - each held clone keeping its key and remote, named in the receipt's `deferred` by the key it keeps and its destination, read as that instance's, and its remote held as its placement there, with the id where it recorded one [[storage-34](#storage-34)]; the second moved by its sync's Check before any fetch or push, with no host read naming it, and its entry leaving `deferred`, the first at the restart, and the receipt complete only after both [[storage-30](#storage-30)] [[storage-31](#storage-31)];
+- a held clone the store names at another path, as a drop's failed move back leaves it, named in `deferred` at that path, and one whose path a move the migration planned already left from leaving `deferred` instead [[storage-38](#storage-38)];
 - a migration interrupted after its first move finished at the next start, a destination another process filled meanwhile left as it was, and a restart after completion repeating nothing [[storage-30](#storage-30)];
 - no request reaching the stand-in instance during the migration [[storage-30](#storage-30)];
 - a format-1 home holding no account, whose host URL is `http://LocalHost/` naming no port, migrated with `http://localhost` as its recorded origin and its clones outside your own group's folder moved under `workspace/@localhost_80/`, read as that origin's instance with no instance listed [[storage-30](#storage-30)] [[storage-1](#storage-1)] [[storage-31](#storage-31)];
@@ -619,6 +625,23 @@ Where CI runs on Windows, the integration suite shall verify real Windows storag
 ### storage-59
 
 When the integration suite makes a scratch clone a repository whose first commit fails after Git stored its files, on every platform and on Windows on the Node the app ships, it shall assert that the clone is left a plain folder with no `.git`, its files standing, and that the failure reported is the commit's own [[storage-6](#storage-6)].
+
+### storage-60
+
+When the integration suite starts a real core on a scratch home reading its clones' sessions as they change, signed in to the stand-in host, on every platform and on Windows on the Node the app ships, it shall assert:
+
+- a pick creating a local-only project's repository in a group moves its clone, holding a session another host wrote, under the stand-in's folder, its first sync pushing from there, its pair following, and a session written there afterwards read [[storage-35](#storage-35)];
+- on Windows, a confirmed Leave of that clone's only placement while another program holds the clone open is refused naming the project as in use, its remote, its placement file and its pair standing, and once let go, the Leave drops the placement and moves the clone under your own group's folder [[storage-38](#storage-38)].
+
+### storage-61
+
+When the integration suite starts a real core again on a format-1 home whose project clone the instances migration deferred while another process's writer held it, that writer gone, and a confirmed Leave drops the clone's only placement, it shall assert, case by case:
+
+| The drop | Asserted |
+| --- | --- |
+| refused by Git, the clone's configuration locked | the clone, its pair and its remote moved back, the clone still deferred and read as its Space's placement [[storage-38](#storage-38)] |
+| refused by Git, and the move back failing, onto a path no move the migration planned left from | the clone and its pair where it moved, its remote standing, deferred at that path and read as its Space's placement; the Leave's Retry, Git able to, dropping it there, local only, the receipt naming it no more [[storage-38](#storage-38)] |
+| made by Git | dropped and moved under your own group's folder, local only, its pair following, the receipt naming it no more [[storage-38](#storage-38)] |
 
 ## References
 

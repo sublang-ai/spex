@@ -213,7 +213,7 @@ When the core runs a Git transport — clone, fetch, push or `ls-remote`, includ
 
 - a placement's transport is on behalf of the instance its remote is named by [[storage-34](storage.md#storage-34)], or of the instance it is joined, created or attached at, never of one chosen by the Git origin alone, so a placement whose instance is signed out is fetched through no other instance sharing that Git origin until it follows one [[space-60](space.md#space-60)]; a project's code and a Git source are on behalf of the instance their own rules name [[projects-37](projects.md#projects-37)] [[environments-13](environments.md#environments-13)];
 - the credential — the username and the secret the instance returned, with its expiry — is written with its permitted HTTP(S) origin to a file with owner-only permissions in a temporary directory, which is removed when the Git child ends; the helper answers only requests at that normalized scheme, host and port, including requests made through a configured LFS endpoint;
-- Git runs with `-c credential.helper=` naming the app's own helper script on the app's own runtime, which answers Git's `get` with that username and password and ignores `store` and `erase`; a transport on behalf of no instance — a remote the reader named, any other origin — names no helper and uses the device's own, except that on a seat a remote at a host the member placed a token for [[storage-44](storage.md#storage-44)] takes the app's helper with that token, and the seat account's own Git configuration names the app's helper in its member mode — answering `get` for an `http` or `https` host the member placed a token for from the store, as the app's own transports serve both, [[storage-44](storage.md#storage-44)] and nothing for any other host or for a request naming a username other than the entry's, so the device's own helpers serve it — so a project's code is cloned and pushed with the member's own credential, by the app and by an agent in the work tree alike, and never the administrator's ([DR-132](../decisions/132-team-servers.md));
+- Git runs with `-c credential.helper=` naming the app's own helper script on the app's own runtime, a line Git runs with its `sh` on every platform, Windows included, each path in it one word in single quotes so that any path holding no line break or NUL runs as it is — but for a helper's path holding a backslash outside Windows, from which the runtime loads no module — and the script answers Git's `get` with that username and password and ignores `store` and `erase`; a transport on behalf of no instance — a remote the reader named, any other origin — names no helper and uses the device's own, except that on a seat a remote at a host the member placed a token for [[storage-44](storage.md#storage-44)] takes the app's helper with that token, and the seat account's own Git configuration names the app's helper in its member mode — answering `get` for an `http` or `https` host the member placed a token for from the store, as the app's own transports serve both, [[storage-44](storage.md#storage-44)] and nothing for any other host or for a request naming a username other than the entry's, so the device's own helpers serve it — so a project's code is cloned and pushed with the member's own credential, by the app and by an agent in the work tree alike, and never the administrator's ([DR-132](../decisions/132-team-servers.md));
 - the instance refusing the credential signs the device out of it alone [[git-host-4](git-host.md#git-host-4)] and stops the transport before Git runs.
 
 #### git-host-10
@@ -399,6 +399,35 @@ Where the stand-in instance answers the servers listing and the ticket route, th
 #### git-host-32
 
 When a real shared-client integration runs against an HTTP service fixture at one origin, it shall verify that Space and registry grants survive each other's login, refresh and logout, legacy credentials are Space-only, each auth request carries its scope, registry login asks no host API, and a refused registry grant leaves Space usable [[git-host-31](#git-host-31)].
+
+#### git-host-36
+
+When an integration suite, on every platform and on Windows on the Node the app ships, hands a credential to a real Git through the helper's line naming the runtime it runs on and the shipped helper, then a copy of that helper under a folder whose name holds a space, `$`, a backtick and a single quote — and, where a name may hold one, a double quote — it shall assert that Git takes the helper's answer through each line [[git-host-9](#git-host-9)].
+
+#### git-host-37
+
+When an integration suite composes the helper's line for a credential, on every platform, it shall assert, case by case [[git-host-9](#git-host-9)]:
+
+| The paths | The line |
+| --- | --- |
+| the app's executable and the shipped helper | the device's own helpers reset first, then the runtime and the script, each in single quotes |
+| a Windows path holding a space, `$` and a single quote, for the runtime and for the helper | each path one word, its backslashes, space and `$` as they are and its quote closed, escaped and reopened |
+| the member mode's runtime, helper and token store | each path one word alike |
+| a runtime path holding a line break | refused |
+
+#### git-host-38
+
+When an integration suite runs the shipped helper on a credential's file, on every platform, it shall assert, case by case [[git-host-9](#git-host-9)]:
+
+| Git asks | The helper |
+| --- | --- |
+| `get` at the credential's origin, in any case and with its default port | answers that username and password |
+| `get` at another scheme, port or host | answers nothing |
+| `store` or `erase` | answers nothing |
+
+#### git-host-39
+
+When an integration suite on Windows hands a credential to the helper beneath a temporary folder granting Everyone read access to what it holds, it shall assert that a plain file written beside the credential's inherits that grant, while the file the credential is written to grants Everyone nothing [[git-host-9](#git-host-9)].
 
 ## References
 
