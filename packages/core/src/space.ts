@@ -2037,9 +2037,15 @@ class RepositorySync {
 
   /** Drop a placement as `dropPlacement` does, or say why it was not
    * dropped, as its Check's stop (space-15): changed since it was read,
-   * or Git's own refusal in its words; nothing written either way. */
-  dropOrStop(placement: Placement): SpaceStopped | undefined {
-    if (!this.stillReads(placement)) return movedMeanwhile(this.key);
+   * or Git's own refusal in its words. `moved` where the clone moved
+   * since, within the same step: its remote is then known by its name
+   * and URL alone, as a deferred clone's instance and id read by the
+   * key it kept (storage-34). */
+  dropOrStop(placement: Placement, moved = false): SpaceStopped | undefined {
+    const stands = moved
+      ? this.placementsNow().some((candidate) => candidate.name === placement.name && candidate.url === placement.url)
+      : this.stillReads(placement);
+    if (!stands) return movedMeanwhile(this.key);
     const first = this.placementsNow()[0]?.name === placement.name;
     // Git removes the section, the refs fetched under the remote's name
     // and the upstream configuration naming it; a removal Git refuses
@@ -8122,11 +8128,12 @@ export class SpaceManager {
     }
     // The clone moves first, its move's refusals read before it, then
     // the placement is dropped, nothing awaited between at each try: a
-    // drop Git refuses moves the clone back, so either refusal leaves it
-    // neither dropped nor moved. One that cannot move back stays where
-    // it moved, said on the console, its placement standing for its next
-    // sync to move it again (space-60), the drop still refused in Git's
-    // words.
+    // drop Git refuses moves the clone and its pair back. One that cannot
+    // move back stays where it moved, said on the console, its placement
+    // standing for its next sync to move it again (space-60), the drop
+    // still refused in Git's words. A clone the instances migration
+    // deferred stays in its receipt until the drop is made, so one moved
+    // back is deferred as before (storage-30).
     const source = machine.repository.dir;
     let stays = false;
     let dropped: boolean;
@@ -8135,10 +8142,14 @@ export class SpaceManager {
         if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
         if (!still()) return false;
         if (destination() !== to) throw movedMeanwhile(from);
-        this.renameClone(machine, to, identity);
-        const refused = machine.dropOrStop(placement);
-        if (!refused) return true;
-        try { this.renameClone(machine, from, identity); }
+        this.renameClone(machine, to, identity, false);
+        // The placement just read, its remote where the clone now lies.
+        const refused = machine.dropOrStop(placement, true);
+        if (!refused) {
+          store.settleDeferred([from]);
+          return true;
+        }
+        try { this.renameClone(machine, from, identity, false); }
         catch (error) {
           stays = true;
           console.error(`spex: workspace/${to} did not move back to workspace/${from}: ${error instanceof Error ? error.message : String(error)}`);
@@ -8146,7 +8157,10 @@ export class SpaceManager {
         throw refused;
       });
     } catch (error) {
-      if (stays) await this.afterMove([{ from, to }]);
+      if (stays) {
+        store.settleDeferred([from]);
+        await this.afterMove([{ from, to }]);
+      }
       throw error;
     }
     if (!dropped) return false;
@@ -8200,8 +8214,9 @@ export class SpaceManager {
    * beneath resolve their paths at their own instants, and a process
    * holding the old path keeps it. A rename something holds the clone
    * open against throws FolderInUseError, nothing moved. The store, the
-   * machine and the waiting steps follow. */
-  private renameClone(machine: RepositorySync, to: string, identity: string | undefined): void {
+   * machine and the waiting steps follow; the instances migration's
+   * receipt names the clone no more unless `settles` is false. */
+  private renameClone(machine: RepositorySync, to: string, identity: string | undefined, settles = true): void {
     const store = this.host.store;
     const from = machine.key;
     const source = machine.repository.dir;
@@ -8214,7 +8229,7 @@ export class SpaceManager {
       throw error;
     }
     pruneEmptyFolders(dirname(source), store.home.workspace);
-    this.relocate([{ from, to }]);
+    this.relocate([{ from, to }], undefined, settles);
   }
 
   /**
@@ -8302,8 +8317,8 @@ export class SpaceManager {
    * A `home.yaml` that refuses them, or a write of it that fails, moves
    * the clones back (moveBack) and throws: the disk then stands as the
    * home still names it (space-59, space-60). */
-  private relocate(moves: { from: string; to: string }[], own?: string): void {
-    try { this.host.store.moveRepositories(moves, own); }
+  private relocate(moves: { from: string; to: string }[], own?: string, settles = true): void {
+    try { this.host.store.moveRepositories(moves, own, settles); }
     catch (error) {
       this.moveBack(moves);
       throw error;

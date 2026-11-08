@@ -1721,9 +1721,11 @@ export class Store {
    * where their clones now lie. Only the write of `home.yaml` throws: one
    * that fails leaves the file and every index as they were, so the
    * caller can move its clones back; what follows the write is said on
-   * the console where it fails.
+   * the console where it fails. The instances migration's receipt names
+   * a moved clone no more, unless `settles` is false, for a step that
+   * settles it once the rest of it is made (settleDeferred).
    */
-  moveRepositories(moves: { from: string; to: string }[], own?: string): void {
+  moveRepositories(moves: { from: string; to: string }[], own?: string, settles = true): void {
     this.assertProjectsWritable();
     if (moves.length === 0 && own === undefined) return;
     if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
@@ -1764,8 +1766,9 @@ export class Store {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
-    // A deferred clone moved is the migration's no longer (DR-127).
-    this.settleDeferred(moves.map((move) => move.from));
+    // A deferred clone moved is the migration's no longer (DR-127), but
+    // for a step that settles it only once the rest of it is made.
+    if (settles) this.settleDeferred(moves.map((move) => move.from));
   }
 
   /** Deferred clones moved, removed or found to be another clone at

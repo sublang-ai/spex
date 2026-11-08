@@ -219,8 +219,10 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one whose next placement no read of this run has placed [[git-host-5](git-host.md#git-host-5)] | neither dropped nor moved, the drop refused to the act that asked, naming that placement's instance |
 | one something else holds open through every try of its move, as it holds a sync's move [[space-60](space.md#space-60)] | neither dropped nor moved, the drop refused to the act that asked, naming the project as in use |
 | one whose placements, or its next placement's path at that instance, change between the tries of its move | neither dropped nor moved, the drop refused as changed meanwhile, with Retry [[space-15](space.md#space-15)] |
-| one whose drop Git refuses once it moved | moved back, neither dropped nor moved, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
+| one whose drop Git refuses once it moved | the clone and its pair moved back, its remote standing, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
 | any other | dropped and moved |
+
+- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred.
 
 ### storage-7
 

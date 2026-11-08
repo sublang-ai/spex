@@ -21,7 +21,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -404,6 +404,80 @@ test("space-60, storage-34: a clone the instances migration deferred, a live ses
     });
     assert.deepEqual(deferred, []);
   } finally { if (!released) await live.release(); }
+});
+
+/** The keys the instances migration's receipts still name deferred. */
+function deferredKeys(dataDir: string): string[] {
+  const root = join(dataDir, "local", "migrations");
+  return readdirSync(root).flatMap((id) => {
+    const receipt = JSON.parse(readFileSync(join(root, id, "receipt.json"), "utf8")) as { kind: string; deferred?: { from: string }[] };
+    return receipt.kind === "instances" ? (receipt.deferred ?? []).map((move) => move.from) : [];
+  });
+}
+
+test("storage-38, storage-30: a confirmed Leave of a clone the instances migration deferred, its lease released, keeps it deferred where Git refuses the drop, and otherwise drops its placement and moves it under your own group's folder, local only, the receipt naming it no more", async (t) => {
+  const host = await startHost();
+  const folder = hostFolder(host);
+  const home = await startHome("deferred-leave", { host, project: false, extra: { signIn: "browser" } });
+  let mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const code = gitFolder("leaving-deferred");
+  const { key: local } = await addFolder(home, code);
+  mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "leaving-deferred" } });
+  const key = hostKey(host, "acme/leaving-deferred-spex");
+  await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
+  await home.stop();
+
+  // The home as a Spex before DR-127 left it, a writer of another
+  // process holding the clone where it is, as the test above makes it.
+  const legacy = "acme/leaving-deferred-spex";
+  const legacyClone = clonePath(home.dataDir, legacy);
+  mkdirSync(dirname(legacyClone), { recursive: true });
+  renameSync(clonePath(home.dataDir, key), legacyClone);
+  asFormerRemote(legacyClone, folder);
+  asFormerRemote(clonePath(home.dataDir, HOST_OWN), folder);
+  const current = Home.load(home.dataDir).file;
+  writeFileSync(join(home.dataDir, "home.yaml"), stringifyYaml({
+    format: 1, device: current.device,
+    host: { url: current.origin, clientId: "spex", account: current.instances[0].account },
+    own: current.own, folders: current.folders.map((pair) => pair.repository === key ? { ...pair, repository: legacy } : pair),
+  }));
+  const sessions = createSessionStore({ sessionsDir: join(legacyClone, "sessions") });
+  await sessions.prepare();
+  const live = await sessions.acquireManagement(randomUUID());
+  const again = await startHome("deferred-leave-again", { dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => again.stop());
+  await live.release();
+  assert.deepEqual(deferredKeys(home.dataDir), [legacy], "deferred, the clone keeps its key");
+
+  // Git refusing the drop — the clone's configuration locked — moves the
+  // clone and its pair back, still deferred (storage-38, storage-30).
+  const lock = join(legacyClone, ".git", "config.lock");
+  writeFileSync(lock, "");
+  mark = again.client.mark();
+  await again.client.expectOk("space.leave", { repository: legacy, instance: host.url, confirmed: true });
+  const stopped = await again.client.waitRepository(mark, legacy, (repository) => repository.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.cause === "git" && stopped.sync.retry, `[storage-38] ${JSON.stringify(stopped.sync)}`);
+  assert.ok(existsSync(join(legacyClone, ".git")), "[storage-38] the clone moved back where it was");
+  assert.equal(Home.load(again.dataDir).keyForFolder(code), legacy, "[storage-38] its pair with it");
+  assert.deepEqual(remoteNamesOf(legacyClone), ["origin"], "[storage-38] its remote standing");
+  assert.deepEqual(deferredKeys(home.dataDir), [legacy], "[storage-30] still deferred");
+  assert.equal(placementOf(stopped, host.url)?.attached, true, "[storage-38] still read as the instance's placement");
+
+  // Git able to, the Leave drops it and moves it under your own group's
+  // folder, local only, as for any clone (storage-38).
+  rmSync(lock);
+  const ownKey = `${LOGIN}/leaving-deferred-spex`;
+  mark = again.client.mark();
+  await again.client.expectOk("space.leave", { repository: legacy, instance: host.url, confirmed: true });
+  const left = await again.client.waitRepository(mark, ownKey, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.equal(left.state, "local-only", `[storage-38] ${JSON.stringify(left)}`);
+  assert.ok(!existsSync(legacyClone) && existsSync(join(clonePath(home.dataDir, ownKey), ".git")), "[storage-38] moved under your own group's folder");
+  assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, ownKey)), [], "[storage-38] its placement dropped");
+  assert.equal(Home.load(again.dataDir).keyForFolder(code), ownKey, "[storage-38] its pair following");
+  assert.deepEqual(deferredKeys(home.dataDir), [], "[storage-30] the receipt names it no more");
 });
 
 test("storage-35, storage-5: a pick of a clone in your own group's folder moves it under the instance's folder as the creation or the join lands, its pair, sessions and preferences following; a session's lease beneath leaves it there, read as the instance's by its remote, until its next sync moves it", async (t) => {
