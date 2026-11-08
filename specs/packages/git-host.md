@@ -425,6 +425,10 @@ When an integration suite runs the shipped helper on a credential's file, on eve
 | `get` at another scheme, port or host | answers nothing |
 | `store` or `erase` | answers nothing |
 
+#### git-host-39
+
+When an integration suite on Windows hands a credential to the helper beneath a temporary folder granting Everyone read access to what it holds, it shall assert that a plain file written beside the credential's inherits that grant, while the file the credential is written to grants Everyone nothing [[git-host-9](#git-host-9)].
+
 ## References
 
 [1]: https://github.com/sublang-ai/spex.space/blob/main/specs/packages/host.md "Spex Space host package"

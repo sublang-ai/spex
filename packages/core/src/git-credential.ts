@@ -3,9 +3,10 @@
 
 // The Git credential handed to one Git child through Spex's own helper
 // (git-host-9, DR-103): never through the remote URL. The username and
-// secret the host returned go into a file of mode 0600 inside a fresh
-// directory of mode 0700, which the caller disposes of when the child
-// ends; Git runs with `-c credential.helper=` resetting the device's own
+// secret the host returned go into a file created owner-only — on
+// Windows through the protected creator the store's private files use,
+// so it inherits no grant of its folder (DR-223) — inside a fresh
+// directory, which the caller disposes of when the child ends; Git runs with `-c credential.helper=` resetting the device's own
 // helpers and then naming the app's helper script on the app's own
 // runtime, so the brokered secret is neither looked up in nor stored to
 // any other helper. A brokered credential carries its permitted origin,
@@ -16,10 +17,12 @@
 // from the member's credential store (storage-44) for the Git a person's
 // agent runs outside the app, with no secret in the command.
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { writeApplicationBytes } from "@sublang/spex/files";
 
 /** The environment variable naming the credential file for the helper. */
 export const GIT_CREDENTIAL_FILE_ENV = "SPEX_GIT_CREDENTIAL_FILE";
@@ -100,7 +103,7 @@ export async function withGitCredential(
   const dir = await mkdtemp(join(tmpdir(), "spex-git-credential-"));
   const file = join(dir, "credential");
   try {
-    await writeFile(file, `${scope}username=${credential.username}\npassword=${credential.secret}\n`, { mode: 0o600, flag: "wx" });
+    writeApplicationBytes(file, `${scope}username=${credential.username}\npassword=${credential.secret}\n`);
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
     throw error;

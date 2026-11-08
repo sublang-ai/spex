@@ -10,9 +10,12 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+
+import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, gitCredentialHelperPath, memberHelperCommand, withGitCredential } from "./git-credential.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -95,4 +98,39 @@ test("git-host-38: the shipped helper answers get from the file at its origin al
     assert.equal(ask("https", "example.test:444"), "", "[git-host-9] another port is not");
     assert.equal(ask("https", "elsewhere.test"), "", "[git-host-9] another host is not");
   } finally { await scoped.dispose(); }
+});
+
+/** Everyone, which no private entry grants anything. */
+const EVERYONE = "s-1-1-0";
+
+/** The principals an entry's descriptor grants anything. */
+function granted(path: string): string[] {
+  const facts = readOwnerAndDacl(path);
+  assert.equal(facts.status, "supported");
+  if (facts.status !== "supported") return [];
+  return facts.aces.filter((ace) => ace.aceType === "allow" && ace.mask !== 0).map((ace) => ace.sid.toLowerCase());
+}
+
+test("git-host-39: on Windows, beneath a temporary folder granting Everyone read access to what it holds, the credential's file grants Everyone nothing", { skip: process.platform === "win32" ? false : "only Windows makes a file inherit its folder's grants" }, async () => {
+  const temp = mkdtempSync(join(tmpdir(), "spex-credential-acl-"));
+  const saved = { TEMP: process.env.TEMP, TMP: process.env.TMP };
+  try {
+    execFileSync("icacls.exe", [temp, "/grant", `*${EVERYONE.toUpperCase()}:(OI)(CI)R`], { windowsHide: true });
+    process.env.TEMP = temp;
+    process.env.TMP = temp;
+    let handle;
+    try { handle = await withGitCredential({ username: "oauth2", secret: "tok" }, currentRuntime()); }
+    finally {
+      process.env.TEMP = saved.TEMP;
+      process.env.TMP = saved.TMP;
+    }
+    try {
+      const file = handle.env[GIT_CREDENTIAL_FILE_ENV] ?? "";
+      const plain = join(dirname(file), "plain");
+      writeFileSync(plain, "");
+      assert.ok(granted(plain).includes(EVERYONE), "the grant reaches a plain file the credential's folder holds");
+      assert.ok(!granted(file).includes(EVERYONE), `[git-host-9] the credential's file grants Everyone nothing: ${JSON.stringify(granted(file))}`);
+      assert.equal(readFileSync(file, "utf8"), "username=oauth2\npassword=tok\n");
+    } finally { await handle.dispose(); }
+  } finally { rmSync(temp, { recursive: true, force: true }); }
 });
