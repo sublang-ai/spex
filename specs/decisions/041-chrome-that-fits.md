@@ -5,6 +5,8 @@
 
 ## Status
 
+Extended by [DR-225](225-bounded-surfaces-and-attached-records.md) with centered 48rem content columns and full-width scrolling surfaces for global Playbooks and Space.
+
 Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
 
 Accepted (2026-09-02) on the owner's review: overlapping text in narrow panes, a composer whose buttons leave their box, a native resize grip inside a custom control, and button labels that run to sentences.

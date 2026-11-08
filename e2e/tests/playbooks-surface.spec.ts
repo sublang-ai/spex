@@ -27,6 +27,7 @@ import {
   rowAct,
   test,
 } from "../src/harness";
+import { expectSurfaceGuttersToScroll, setRail } from "../src/fit";
 
 /** The built-in spec package the global environment requests as the
  * home is made (environments-11). */
@@ -39,6 +40,16 @@ test.use({
     // authoring journeys compile (playbook-library-7).
     authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
   },
+});
+
+test("playbook-library-123: both gutters scroll the bounded Playbooks content", async ({ page, app }) => {
+  await page.setViewportSize({ width: 1600, height: 400 });
+  await open(page, app);
+  await setRail(page, true);
+  await page.setViewportSize({ width: 1600, height: 400 });
+  const surface = await playbooksSurface(page);
+  await expect(surface.getByTestId(`surface-playbooks-${BUILTINS}`)).toBeVisible();
+  await expectSurfaceGuttersToScroll(page, surface, surface.getByTestId("playbooks-surface-content"));
 });
 
 test("playbook-library-123: the surface adds, binds and removes the global packages, the project's tab following", async ({ page, app }) => {

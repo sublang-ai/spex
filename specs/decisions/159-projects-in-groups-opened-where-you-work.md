@@ -5,6 +5,8 @@
 
 ## Status
 
+Extended by [DR-225](225-bounded-surfaces-and-attached-records.md) with one records panel expanded immediately beneath its owning row.
+
 Accepted (2026-10-28) on the owner's direction: a member signs in to a space once, finds a project in one of their groups and opens it where they want to work — on this computer or on one of the group's servers — in one act; the records' Git, the seats and the sync stay beneath the surfaces, reached from a row and shown on none.
 Amended by [DR-164](164-the-seat-signs-in-on-its-ticket.md) in "A seat opens when needed": the open hands the ticket it presented to the seat's sign-in, and the approval page is opened only where the space still asks for it; the declined item on the ticket's consent is decided there.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.

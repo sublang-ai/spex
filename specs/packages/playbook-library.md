@@ -32,6 +32,10 @@ When the Playbooks surface is shown — the rail's Playbooks entry, for the sele
 - the surface lists no project's playbook and names no project;
 - while the global environment requests no package, the list reads "No playbooks yet" above "Add…".
 
+#### playbook-library-128
+
+While the Playbooks surface shows its list, the surface shall keep its content in a centered column capped at 48rem inside a positioned, height-constrained scroll box spanning the available width, so vertical scrolling over the content or either empty side gutter scrolls the same surface and the page itself never scrolls ([DR-225](../decisions/225-bounded-surfaces-and-attached-records.md)).
+
 #### playbook-library-2
 
 Where a written playbook entry fails the fail-closed config validation ([DR-004](../decisions/004-config-and-persistence.md)) — an unresolved required role, an option the entry may not carry — or names a playbook no environment of the session places [[environments-9](environments.md#environments-9)], the Playbooks tab shall list the entry marked with the specific failure and a Remove act deleting it [[playbook-library-3](#playbook-library-3)], rather than hiding it.
@@ -963,6 +967,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the State machine stage's state list stays in view with its box scrolled to the bottom [[playbook-library-22](#playbook-library-22)];
 - the open stage's box carries a grip that names the stage, and a drag of it leaves the box taller with the height still standing after a reload [[playbook-library-22](#playbook-library-22)];
 - the rail's Playbooks entry opens the Playbooks surface, listing the global spec packages, each with the playbooks it places beneath it, "Add…", the Authoring section and "New playbook", and no project's playbook, a role's ✎ there writing the global config [[playbook-library-122](#playbook-library-122)] [[playbook-library-4](#playbook-library-4)], while Remove in a spec package's row overflow carries its consequence as its tooltip [[playbook-library-92](#playbook-library-92)];
+- at a wide viewport with overflowing content, scrolling over the content and each side gutter moves the same full-width surface, its centered content no wider than 48rem and the page still, with the content fitting at the 320-pixel floor [[playbook-library-128](#playbook-library-128)];
 - the tabs and the surface name things and acts in the reader's words — "Global", "Same as global", Add, Remove, Update — and none reads Enable, Disable, "Enabled", "Available" or "Personal" [[playbook-library-26](#playbook-library-26)];
 - a role's binding editor opened on the Playbooks surface at the 320-pixel viewport floor stands wholly inside the surface's box both on opening and after discovery followed by pinning a custom model, with the surface scrolling in neither direction [[playbook-library-43](#playbook-library-43)], its model and effort stacked there and side by side at 1280 pixels [[playbook-library-4](#playbook-library-4)].
 

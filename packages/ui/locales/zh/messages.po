@@ -3431,7 +3431,7 @@ msgstr "展开图片 {name}"
 msgid "Explore"
 msgstr "浏览"
 
-#. open a project's records as an annotated tree, beneath the list
+#. open a project's records as an annotated tree beneath its row
 #: src/components/SpaceGroups.tsx
 msgid "Explore records"
 msgstr "浏览记录"

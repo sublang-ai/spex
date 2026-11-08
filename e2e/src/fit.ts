@@ -7,7 +7,7 @@
 // side, and every button's accessible name — taken in the page, with
 // the widths, heights and sidebar states the law is measured at.
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export const WIDTHS = [320, 480, 640, 800, 1024, 1280];
 /** The law is measured in a tall window and a short one (DR-041 §9):
@@ -18,6 +18,44 @@ export const HEIGHTS = [TALL, SHORT];
 /** The open sidebar is 224px wide, so the 320px floor holds with it
  * collapsed (DR-041): the open state is measured from 480px. */
 export const OPEN_RAIL_MIN_WIDTH = 480;
+
+/** A bounded content column keeps the entire surface available to the
+ * browser's native wheel scrolling, including both empty side gutters. */
+export async function expectSurfaceGuttersToScroll(page: Page, surface: Locator, content: Locator): Promise<void> {
+  const outer = await surface.boundingBox();
+  const inner = await content.boundingBox();
+  if (!outer || !inner) throw new Error("the surface or its content has no box");
+  const metrics = await surface.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    borderLeft: element.clientLeft,
+    overflow: element.scrollHeight - element.clientHeight,
+    rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+  }));
+  const left = outer.x + metrics.borderLeft;
+  const right = left + metrics.clientWidth;
+  expect(inner.width, "content keeps its 48rem reading width").toBeLessThanOrEqual(48 * metrics.rem + 1);
+  expect(Math.abs(inner.x + inner.width / 2 - (left + right) / 2), "content is centered within its surface").toBeLessThanOrEqual(1);
+  expect(inner.x - left, "the left gutter is available").toBeGreaterThan(24);
+  expect(right - inner.x - inner.width, "the right gutter is available").toBeGreaterThan(24);
+  expect(metrics.overflow, "the real content requires vertical scrolling").toBeGreaterThan(50);
+
+  const gutters = [
+    { name: "left", x: (left + inner.x) / 2 },
+    { name: "right", x: (inner.x + inner.width + right) / 2 },
+  ];
+  for (const gutter of gutters) {
+    await surface.evaluate((element) => { element.scrollTop = 0; });
+    await page.mouse.move(gutter.x, outer.y + Math.min(100, outer.height / 2));
+    await page.mouse.wheel(0, 500);
+    await expect.poll(() => surface.evaluate((element) => element.scrollTop), `${gutter.name} gutter scrolls down`).toBeGreaterThan(0);
+    await page.mouse.wheel(0, -1000);
+    await expect.poll(() => surface.evaluate((element) => element.scrollTop), `${gutter.name} gutter scrolls up`).toBe(0);
+  }
+  expect(await page.evaluate(() => ({
+    x: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    y: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+  })), "the document stays within the window").toEqual({ x: 0, y: 0 });
+}
 
 export interface Measured {
   /** Elements wider than their box outside a scrolling canvas. */
@@ -328,15 +366,9 @@ export async function expectOnboardingFit(page: Page, stage: string): Promise<vo
  * both of its controls are reachable. */
 export async function setRail(page: Page, railOpen: boolean): Promise<void> {
   await page.setViewportSize({ width: 1280, height: TALL });
-  const control = page.getByRole("button", {
-    name: railOpen ? "Show the sidebar" : "Collapse the sidebar",
-  });
-  if (await control.isVisible()) await control.click();
-  await expect(
-    page.getByRole("button", {
-      name: railOpen ? "Collapse the sidebar" : "Show the sidebar",
-    }),
-  ).toBeVisible();
+  const control = page.getByTestId("sidebar-collapse");
+  if ((await control.getAttribute("aria-expanded")) !== String(railOpen)) await control.click();
+  await expect(control).toHaveAttribute("aria-expanded", String(railOpen));
 }
 
 /** Names hold at every size: the reference is the first measurement

@@ -243,6 +243,7 @@ meta.md       The spec of specs
 | [DR-222](decisions/222-cli-publication-registry-override.md) | 222-cli-publication-registry-override.md | CLI publication uses its explicit registry override, else the project registry, else the public registry; amends DR-216 |
 | [DR-223](decisions/223-windows-storage-checks-what-macos-checks.md) | 223-windows-storage-checks-what-macos-checks.md | Windows storage checks what macOS checks: owner-only creation, no check of an existing entry before a write or at start, the lease, staging and seat checks admitting read grants, environment files as working-folder files; amends DR-178; completed for Playbook's storage by DR-224 |
 | [DR-224](decisions/224-playbook-18-1-4-adoption.md) | 224-playbook-18-1-4-adoption.md | Adopt Playbook 18.1.4, whose Windows storage admits read grants as DR-223's does: Playbook `^18.1.4`, the built-in release 18.1.4; amends DR-217 |
+| [DR-225](decisions/225-bounded-surfaces-and-attached-records.md) | 225-bounded-surfaces-and-attached-records.md | Global Playbooks and Space use centered 48rem content inside full-width scrolling surfaces; Space records expand beneath their row with the shared attached presentation and bounded Explore area; extends DR-041, DR-159 and DR-198 |
 
 ## Packages
 

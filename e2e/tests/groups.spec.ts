@@ -82,6 +82,7 @@ import {
   TALL,
   WIDTHS,
   compareNames,
+  expectSurfaceGuttersToScroll,
   measure,
   record,
   setRail,
@@ -194,8 +195,8 @@ async function showGroups(page: Page): Promise<void> {
   await expect(page.getByTestId("space-header")).toBeVisible();
 }
 
-/** Activate a project's row by its name, opening its Sync and Explore
- * tabs beneath the groups list, the Sync tab carrying its placements'
+/** Activate a project's row by its name, opening its attached Sync and
+ * Explore tabs, the Sync tab carrying its placements'
  * lines (space-1, space-87). */
 async function openRepository(page: Page, key: string): Promise<void> {
   const row = page.getByTestId(`space-repo-${key}`);
@@ -2327,6 +2328,53 @@ async function arrangeChoices(app: App): Promise<void> {
 test.describe("fit", () => {
   test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
+  test("space-43: records expand beneath Your sessions and both gutters scroll the bounded Space content", async ({ page, app }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1600, height: 400 });
+    await open(page, app);
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1600, height: 400 });
+    await showGroups(page);
+    await openRepository(page, app.ownKey);
+    const surface = page.getByTestId("space-surface");
+    const records = page.getByTestId("space-repository");
+    const attachment = await records.evaluate((panel) => {
+      const row = panel.parentElement!;
+      const summary = row.firstElementChild!;
+      return {
+        owner: row.getAttribute("data-testid"),
+        followsSummary: panel.previousElementSibling === summary,
+        gap: panel.getBoundingClientRect().top - summary.getBoundingClientRect().bottom,
+      };
+    });
+    expect(attachment.owner).toBe(`space-row-${app.ownKey}`);
+    expect(attachment.followsSummary).toBe(true);
+    expect(attachment.gap, "records follow their row").toBeGreaterThanOrEqual(0);
+    expect(attachment.gap, "records stay attached to their row").toBeLessThanOrEqual(8);
+    await expect(records).toHaveCount(1);
+    await expect(records.getByTestId("space-repository-header")).toBeInViewport();
+    await expectSurfaceGuttersToScroll(page, surface, surface.getByTestId("space-surface-content"));
+
+    for (const language of ["en", "zh"] as const) {
+      await surfaceEntry(page, "Settings").click();
+      await page.getByTestId("language-select").selectOption(language);
+      await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await surfaceEntry(page, "Space").click();
+      await openRepository(page, app.ownKey);
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        for (const width of [1600, 320]) {
+          await setRail(page, width === 1600);
+          await page.setViewportSize({ width, height: TALL });
+          await records.getByTestId("space-repository-header").scrollIntoViewIfNeeded();
+          const fit = await measure(page);
+          expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }, `${language}/${theme} at ${width}px`).toEqual({ overflow: [], vertical: [], overlap: [] });
+          await page.screenshot({ path: testInfo.outputPath(`records-context-${language}-${theme}-${width}.png`) });
+        }
+      }
+    }
+  });
+
   test("space-43: the groups list and the Sync and Explore tabs fit at every width, in both sidebar states", async ({
     page,
     app,
@@ -2404,6 +2452,28 @@ test.describe("fit", () => {
             await page.setViewportSize({ width, height });
             await view.ready();
             const where = `Space ${view.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
+            const attachment = await page.getByTestId("space-repository").evaluate((panel) => ({
+              owner: panel.parentElement?.getAttribute("data-testid"),
+              followsSummary: panel.previousElementSibling === panel.parentElement?.firstElementChild,
+              gap: panel.getBoundingClientRect().top - panel.previousElementSibling!.getBoundingClientRect().bottom,
+              endInsideRow: panel.lastElementChild!.getBoundingClientRect().bottom <= panel.parentElement!.getBoundingClientRect().bottom + 1,
+            }));
+            expect(attachment.owner, where).toBe(`space-row-${TEAM_KEY}`);
+            expect(attachment.followsSummary, where).toBe(true);
+            expect(attachment.gap, `${where}: records follow their row`).toBeGreaterThanOrEqual(0);
+            expect(attachment.gap, `${where}: records stay attached to their row`).toBeLessThanOrEqual(8);
+            expect(attachment.endInsideRow, `${where}: the owning row contains the whole panel`).toBe(true);
+            if (view.name === "Explore") {
+              const panesInside = await page.getByTestId("space-preview").evaluate((preview) => {
+                const split = preview.parentElement!;
+                const bounds = split.getBoundingClientRect();
+                return [split.firstElementChild!, preview].every((pane) => {
+                  const box = pane.getBoundingClientRect();
+                  return box.top >= bounds.top - 1 && box.bottom <= bounds.bottom + 1 && box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
+                });
+              });
+              expect(panesInside, `${where}: the tree and preview stay inside their shared viewport`).toBe(true);
+            }
             const found = await measure(page, containers);
             record(where, found, defects);
             reference = compareNames(where, found, reference, defects);
@@ -2412,6 +2482,21 @@ test.describe("fit", () => {
       }
     }
     expect(defects, defects.join("\n")).toEqual([]);
+
+    // The narrow preview keeps its wrapped header and the full file in
+    // one native scroll viewport, including in a short window.
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: 400 });
+    const preview = page.getByTestId("space-preview");
+    await preview.scrollIntoViewIfNeeded();
+    await preview.evaluate((element) => { element.scrollTop = 0; });
+    expect(await preview.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+    const box = (await preview.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 10_000);
+    await expect.poll(() => preview.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop), "the preview's file end is reachable").toBeLessThanOrEqual(1);
+    await page.mouse.wheel(0, -10_000);
+    await expect.poll(() => preview.evaluate((element) => element.scrollTop), "the preview header is reachable again").toBe(0);
   });
 });
 

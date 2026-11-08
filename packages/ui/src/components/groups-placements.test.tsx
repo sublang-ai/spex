@@ -94,7 +94,7 @@ afterEach(() => {
  * yet. */
 const THIRD = "https://third.example";
 
-/** Open a row's tabs beneath the list on its Sync tab, where its
+/** Open a row's attached tabs on its Sync tab, where its
  * placement lines stand and no row carries them (space-1, space-87,
  * DR-159); a row already open stays so. */
 function openRow(key: string): void {
@@ -241,14 +241,15 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(lineOf(BETA, SECOND).dataset.attached).toBe("false");
     expect(screen.queryByTestId("space-row-@second.example/workshop/beta-spex")).toBeNull();
     // Your own group's own repository, placed at both, its lines in its
-    // Sync tab and none on its row under Personal; a group's own at its
+    // Sync tab and none in its summary under Personal; a group's own at its
     // one instance (DR-159).
     expect(linesOf(OWN).map(reading)).toEqual([
       { name: "Spex Example", at: null, state: "Synced 3h ago" },
       { name: "Second Example", at: null, state: "Synced 3h ago" },
     ]);
     expect(screen.getByTestId("space-repository").contains(screen.getByTestId(`space-lines-${OWN}`))).toBe(true);
-    expect(within(screen.getByTestId("space-group-@jane")).queryByTestId(`space-lines-${OWN}`)).toBeNull();
+    const ownSummary = screen.getByTestId(`space-row-${OWN}`).firstElementChild as HTMLElement;
+    expect(within(ownSummary).queryByTestId(`space-lines-${OWN}`)).toBeNull();
     expect(linesOf(ACME).map(reading)).toEqual([{ name: "Spex Example", at: "acme", state: "Synced 4h ago" }]);
     // A local-only project holds no placement and carries no line.
     expect(screen.getByTestId(`space-row-${GAMMA}`)).toBeTruthy();
@@ -765,6 +766,57 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     expect(recordsClose.disabled).toBe(false);
     expect(exploreTab.disabled).toBe(false);
     expect(rowName.disabled).toBe(false);
+  });
+
+  test("space-62: a pending placement invitation keeps its selected scheduled group visible and prevents restoration", async () => {
+    let resolve!: (reply: unknown) => void;
+    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === "space.share"
+      ? new Promise((done) => { resolve = done; }) : answer(type, fields));
+    const state = placedAtTwo({ second: { can: { manageMembers: true, transfer: false } } });
+    state.instances[0]!.groups = state.instances[0]!.groups.map((group) => group.repositories.some((row) => row.key === KEY)
+      ? {
+        ...group,
+        id: "scheduled",
+        login: null,
+        mine: false,
+        fullPath: "scheduled",
+        name: "Scheduled team",
+        pendingDeletion: true,
+        deletionRoot: "scheduled",
+        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false, restore: true },
+      }
+      : group);
+    await renderGroups(state, { open: false });
+    const disclosure = screen.getByRole("button", { name: "Scheduled for deletion (1)" }) as HTMLButtonElement;
+    fireEvent.click(disclosure);
+    const scheduled = screen.getByTestId("space-scheduled-groups");
+    const hide = within(scheduled).getByRole("button", { name: "Hide" }) as HTMLButtonElement;
+    const restore = within(scheduled).getByRole("button", { name: "Restore group" }) as HTMLButtonElement;
+    const line = lineOf(KEY, SECOND);
+    fireEvent.click(within(line).getByTestId("space-line-members"));
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
+    const editor = within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`);
+    fireEvent.change(within(editor).getByLabelText("Usernames"), { target: { value: "carol" } });
+    fireEvent.submit(editor);
+    await waitFor(() => expect(disclosure.disabled).toBe(true));
+    expect(hide.disabled).toBe(true);
+    expect(restore.disabled).toBe(true);
+    fireEvent.click(disclosure);
+    fireEvent.click(hide);
+    fireEvent.click(restore);
+    fireEvent.keyDown(document.getElementById(disclosure.getAttribute("aria-controls")!)!, { key: "Escape" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId(`space-members-${KEY}@${SECOND}`)).toBe(panel);
+    expect(calls("space.share")).toHaveLength(1);
+    expect(calls("space.group.restore")).toEqual([]);
+    await act(async () => { resolve({ members: MEMBERS }); });
+    await waitFor(() => expect(disclosure.disabled).toBe(false));
+    expect(hide.disabled).toBe(false);
+    expect(restore.disabled).toBe(false);
+    fireEvent.click(hide);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
   });
 
   test.each(["en", "zh"] as const)(
@@ -1529,13 +1581,12 @@ const lineControls = (line: HTMLElement): string[] =>
     .queryAllByRole("button")
     .map((button) => button.dataset.testid ?? "");
 
-/** The controls standing on a row itself, in order, by test id: neither
- * its name nor its lines'. */
+/** The summary's controls, in order, by test id, apart from its name. */
 function rowControls(key: string): string[] {
-  const lines = screen.queryByTestId(`space-lines-${key}`);
-  return within(screen.getByTestId(`space-row-${key}`))
+  const summary = screen.getByTestId(`space-row-${key}`).firstElementChild as HTMLElement;
+  return within(summary)
     .queryAllByRole("button")
-    .filter((button) => !lines?.contains(button) && !button.dataset.testid?.startsWith("space-repo-"))
+    .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
     .map((button) => button.dataset.testid ?? "");
 }
 

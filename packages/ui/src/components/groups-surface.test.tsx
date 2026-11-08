@@ -170,7 +170,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(home.getAttribute("title")).toBe(HOME);
     expect(home.className).toContain("select-text");
     expect(home.querySelector("button")).toBeNull();
-    expect(screen.getByTestId("space-surface").lastElementChild).toBe(home);
+    expect(screen.getByTestId("space-surface-content").lastElementChild).toBe(home);
     expect(within(header).queryByRole("button", { name: "Copy path" })).toBeNull();
     // Signed out there, the line and Refresh go; the heading stays.
     deliver(signedOutAt(ORIGIN));
@@ -741,14 +741,16 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.queryByTestId("space-repo-code-@spex.example/acme/team/team-spex")).toBeNull();
     expect(screen.getByTestId("space-repo-@spex.example/acme/team/docs-spex").textContent).toBe("docs");
 
-    // Activating a row opens its tabs beneath the list; again folds them.
+    // Activating a row opens its attached tabs; again folds them.
     expect(screen.queryByTestId("space-repository")).toBeNull();
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("region", { name: "academy" })).toBeTruthy();
     // Its placements' lines stand in its Sync tab (space-87).
     expect(within(screen.getByTestId("space-repository")).getByTestId(`space-lines-${KEY}`)).toBeTruthy();
-    expect(within(screen.getByTestId(`space-row-${KEY}`)).queryByTestId(`space-lines-${KEY}`)).toBeNull();
+    const summary = screen.getByTestId(`space-row-${KEY}`).firstElementChild as HTMLElement;
+    expect(within(summary).queryByTestId(`space-lines-${KEY}`)).toBeNull();
+    expect(screen.getByTestId("space-repository").previousElementSibling).toBe(summary);
     expect(screen.getByRole("tab", { name: "Sync" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Explore" })).toBeTruthy();
     expect(screen.getByTestId("space-repository-folder").textContent).toBe("~/code/academy");
@@ -1579,11 +1581,16 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
 
   test("the surface scrolls in its own box, and the yield ladder rides the container steps", async () => {
     await renderGroups(base({}, [repo({ local: [SESSION_UNIT] })]), { open: false });
-    // The surface root is the box its content scrolls in, positioned,
-    // and the container every step queries; the page never scrolls.
+    // The full-width surface root owns scrolling, including its gutters;
+    // the bounded inner column is the container every step queries.
     const surface = screen.getByTestId("space-surface");
-    for (const name of ["@container", "relative", "overflow-y-auto", "overflow-x-hidden", "min-h-0", "min-w-0"]) {
+    for (const name of ["relative", "overflow-y-auto", "overflow-x-hidden", "min-h-0", "min-w-0"]) {
       expect(surface.className.split(/\s+/)).toContain(name);
+    }
+    const content = screen.getByTestId("space-surface-content");
+    expect(content.parentElement).toBe(surface);
+    for (const name of ["@container", "mx-auto", "max-w-3xl", "w-full", "min-w-0"]) {
+      expect(content.className.split(/\s+/)).toContain(name);
     }
     // Each row is a container; its name owns the slack and truncates
     // with its title, its phrase truncating with its own, the code
