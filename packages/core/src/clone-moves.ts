@@ -15,16 +15,19 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { UUID } from "@sublang/spex/files";
 import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 
+/** Whether `path` lies beneath `folder`, by the platform's own path
+ * segments — `\` on Windows — so a folder named `..config` beneath it
+ * does and `folder` itself does not. */
+export function liesBeneath(path: string, folder: string): boolean {
+  const rel = relative(resolve(folder), resolve(path));
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
 /** Remove the folders a move left empty, up to the workspace itself. */
 export function pruneEmptyFolders(dir: string, stopAt: string): void {
   let current = resolve(dir);
   const root = resolve(stopAt);
-  // Beneath the workspace by the platform's own separator, `\` on Windows.
-  const beneath = (path: string): boolean => {
-    const rel = relative(root, path);
-    return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-  };
-  while (beneath(current)) {
+  while (liesBeneath(current, root)) {
     try {
       if (readdirSync(current).length > 0) return;
       rmdirSync(current);

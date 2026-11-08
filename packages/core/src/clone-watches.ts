@@ -15,8 +15,9 @@
 // (projects-10, space-59, space-60, storage-35, storage-38).
 
 import { existsSync, realpathSync, watch, type FSWatcher } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
+import { liesBeneath } from "./clone-moves.js";
 import type { SpexRepository } from "./store.js";
 
 export interface CloneWatchesOptions {
@@ -47,8 +48,7 @@ interface Watched {
 
 /** Whether `path` is `folder` or lies beneath it. */
 function within(path: string, folder: string): boolean {
-  const rel = relative(resolve(folder), resolve(path));
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  return resolve(path) === resolve(folder) || liesBeneath(path, folder);
 }
 
 export class CloneWatches {
