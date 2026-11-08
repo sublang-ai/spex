@@ -626,14 +626,17 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     const phrase = within(line).getByTestId("space-line-state");
     for (const token of ["truncate", "min-w-0", "shrink"]) expect(phrase.className.split(/\s+/)).toContain(token);
     expect(phrase.getAttribute("title")).toBe(`${absoluteTitle(NOW - HOUR)} · ${countsOf(0, 0)}`);
-    // The row reads one phrase, its key placement's, on every row whether
-    // its lines are shown or not (space-87, DR-159): it truncates with its
+    // A shared row reads its key placement's phrase whether its lines
+    // are shown or not (space-87, DR-159): it truncates with its
     // title and describes the row's name.
     const phraseOfRow = screen.getByTestId(`space-repo-state-${KEY}`);
     for (const token of ["truncate", "min-w-0"]) expect(phraseOfRow.className.split(/\s+/)).toContain(token);
     expect(phraseOfRow.className.split(/\s+/)).not.toContain("hidden");
     expect(screen.getByTestId(`space-repo-${KEY}`).getAttribute("aria-describedby")).toContain(`space-repo-state-${KEY}`);
-    expect(screen.getByTestId(`space-repo-state-${GAMMA}`).className.split(/\s+/)).not.toContain("hidden");
+    // An empty status stays addressable without reserving a metadata gap.
+    const emptyPhrase = screen.getByTestId(`space-repo-state-${GAMMA}`);
+    expect(emptyPhrase.textContent).toBe("");
+    expect(emptyPhrase.className.split(/\s+/)).toContain("hidden");
     // Below @xs the row's controls wrap beneath its name, its overflow
     // last (space-28, DR-041).
     const head = screen.getByTestId(`space-repo-${KEY}`).parentElement!.parentElement!;
