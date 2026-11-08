@@ -640,7 +640,7 @@ When the integration suite starts a real core again on a format-1 home whose pro
 | The drop | Asserted |
 | --- | --- |
 | refused by Git, the clone's configuration locked | the clone, its pair and its remote moved back, the clone still deferred and read as its Space's placement [[storage-38](#storage-38)] |
-| refused by Git, and the move back failing | the clone and its pair where it moved, its remote standing, deferred at that path and read as its Space's placement; the Leave's Retry, Git able to, dropping it there, local only, the receipt naming it no more [[storage-38](#storage-38)] |
+| refused by Git, and the move back failing, onto a path no move the migration planned left from | the clone and its pair where it moved, its remote standing, deferred at that path and read as its Space's placement; the Leave's Retry, Git able to, dropping it there, local only, the receipt naming it no more [[storage-38](#storage-38)] |
 | made by Git | dropped and moved under your own group's folder, local only, its pair following, the receipt naming it no more [[storage-38](#storage-38)] |
 
 ## References
