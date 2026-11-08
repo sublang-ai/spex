@@ -8044,9 +8044,9 @@ export class SpaceManager {
    * The move's refusals are read first, then the clone moved, then the
    * remote removed, nothing awaited between (atMoveInstant): a move
    * something holds the clone open against, after every try, or a
-   * removal Git refuses — the clone then moved back — stops the act with
-   * the clone where it was, its placement standing. A Leave's drop,
-   * `leaves`, deletes that
+   * removal Git refuses — the clone then moved back, or, where it cannot
+   * move back, left where it moved for its next sync — stops the act with
+   * its placement standing. A Leave's drop, `leaves`, deletes that
    * placement's file in the same step (space-98), a local change the
    * clone's next sync carries.
    */
@@ -8089,17 +8089,29 @@ export class SpaceManager {
     // The clone moves first, its move's refusals read before it, then
     // the placement is dropped, nothing awaited between at each try: a
     // drop Git refuses moves the clone back, so either refusal leaves it
-    // neither dropped nor moved.
+    // neither dropped nor moved. One that cannot move back stays where
+    // it moved, said on the console, its placement standing for its next
+    // sync to move it again (space-60), the drop still refused in Git's
+    // words.
     const source = machine.repository.dir;
-    await this.atMoveInstant([from], () => {
-      if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
-      this.renameClone(machine, to, identity);
-      const refused = machine.dropOrStop(placement);
-      if (refused) {
-        this.renameClone(machine, from, identity);
+    let stays = false;
+    try {
+      await this.atMoveInstant([from], () => {
+        if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
+        this.renameClone(machine, to, identity);
+        const refused = machine.dropOrStop(placement);
+        if (!refused) return;
+        try { this.renameClone(machine, from, identity); }
+        catch (error) {
+          stays = true;
+          console.error(`spex: workspace/${to} did not move back to workspace/${from}: ${error instanceof Error ? error.message : String(error)}`);
+        }
         throw refused;
-      }
-    });
+      });
+    } catch (error) {
+      if (stays) await this.afterMove([{ from, to }]);
+      throw error;
+    }
     deleteFile();
     await this.afterMove([{ from, to }]);
   }
