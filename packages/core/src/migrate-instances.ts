@@ -160,6 +160,21 @@ export function settleDeferred(root: string, keys: readonly string[]): void {
   }
 }
 
+/** A deferred clone a step moved and could not move back stands at
+ * `to` (storage-38): each receipt naming it at `from` names it at `to`,
+ * its planned move too, so it reads as deferred where it stands and its
+ * deferred move, at its next sync or start, moves it from there. */
+export function rekeyDeferred(root: string, from: string, to: string): void {
+  for (const { receipt, dir } of instancesReceipts(root)) {
+    if (!receipt.deferred.some((move) => move.from === from)) continue;
+    const deferred = receipt.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
+    const steps = receipt.steps.map((entry) => entry.step === "clones" && Array.isArray(entry.moves)
+      ? { ...entry, moves: (entry.moves as unknown[]).map((move) => isObject(move) && move.from === from ? { ...move, from: to } : move) }
+      : entry);
+    writeApplicationFile(join(dir, "receipt.json"), { ...receipt, steps, deferred });
+  }
+}
+
 const divergedDestination = (): string =>
   i18n._({ id: "migration destination diverged; preserved unchanged",
     comment: "Migration diagnostic: the file changed under the migration, which wrote nothing" });

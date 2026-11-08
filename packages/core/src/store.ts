@@ -42,7 +42,7 @@ import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
-import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
+import { deferredMoves, migrateInstances, needsInstancesMigration, rekeyDeferred, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
 import { canonicalOrigin, instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
 import { SEED_PREF, seedConfig, type SeedCredentials, type SeedHome, type SeedRecord } from "./config.js";
@@ -1781,6 +1781,16 @@ export class Store {
     this.deferred = this.deferred.filter((move) => !settled.includes(move.from));
     try { settleDeferred(this.dir, settled); }
     catch (error) { console.error(`spex: the instances migration's receipt still names ${settled.join(", ")}: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** A deferred clone a step moved and could not move back stands at
+   * `to`: the receipt names it there, so it stays deferred where it
+   * stands (storage-38). */
+  rekeyDeferred(from: string, to: string): void {
+    if (!this.deferred.some((move) => move.from === from)) return;
+    this.deferred = this.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
+    try { rekeyDeferred(this.dir, from, to); }
+    catch (error) { console.error(`spex: the instances migration's receipt still names ${from}, now at ${to}: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** A clone that came under `workspace/` from outside the store — a

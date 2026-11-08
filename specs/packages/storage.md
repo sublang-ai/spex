@@ -222,7 +222,7 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one whose drop Git refuses once it moved | the clone and its pair moved back, its remote standing, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
 | any other | dropped and moved |
 
-- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred.
+- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred, and one that cannot move back is named there at the path where it stays.
 
 ### storage-7
 
@@ -631,6 +631,16 @@ When the integration suite starts a real core on a scratch home reading its clon
 
 - a pick creating a local-only project's repository in a group moves its clone, holding a session another host wrote, under the stand-in's folder, its first sync pushing from there, its pair following, and a session written there afterwards read [[storage-35](#storage-35)];
 - on Windows, a confirmed Leave of that clone's only placement while another program holds the clone open is refused naming the project as in use, its remote, its placement file and its pair standing, and once let go, the Leave drops the placement and moves the clone under your own group's folder [[storage-38](#storage-38)].
+
+### storage-61
+
+When the integration suite starts a real core again on a format-1 home whose project clone the instances migration deferred while another process's writer held it, that writer gone, and a confirmed Leave drops the clone's only placement, it shall assert, case by case:
+
+| The drop | Asserted |
+| --- | --- |
+| refused by Git, the clone's configuration locked | the clone, its pair and its remote moved back, the clone still deferred and read as its Space's placement [[storage-38](#storage-38)] |
+| refused by Git, and the move back failing | the clone and its pair where it moved, its remote standing, deferred at that path and read as its Space's placement; the Leave's Retry, Git able to, dropping it there, local only, the receipt naming it no more [[storage-38](#storage-38)] |
+| made by Git | dropped and moved under your own group's folder, local only, its pair following, the receipt naming it no more [[storage-38](#storage-38)] |
 
 ## References
 

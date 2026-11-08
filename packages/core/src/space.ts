@@ -8125,6 +8125,7 @@ export class SpaceManager {
     if (to === from) {
       const refused = machine.dropOrStop(placement);
       if (refused) throw refused;
+      store.settleDeferred([from]);
       deleteFile();
       return true;
     }
@@ -8135,7 +8136,8 @@ export class SpaceManager {
     // standing for its next sync to move it again (space-60), the drop
     // still refused in Git's words. A clone the instances migration
     // deferred stays in its receipt until the drop is made, so one moved
-    // back is deferred as before (storage-30).
+    // back is deferred as before, and one that stays is deferred where it
+    // stays (storage-30).
     const source = machine.repository.dir;
     let stays = false;
     let dropped: boolean;
@@ -8160,7 +8162,7 @@ export class SpaceManager {
       });
     } catch (error) {
       if (stays) {
-        store.settleDeferred([from]);
+        store.rekeyDeferred(from, to);
         await this.afterMove([{ from, to }]);
       }
       throw error;
