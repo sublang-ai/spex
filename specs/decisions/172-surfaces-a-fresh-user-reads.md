@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-226](226-project-names-align-with-their-actions.md) in code-location presentation on Space rows, replacing the glyph with a visible secondary caption.
+
 Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
 
 Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in repairs: a neutral Saved work review, recognizable conversations, existing-folder selection and Not now replace the issue-first presentation.

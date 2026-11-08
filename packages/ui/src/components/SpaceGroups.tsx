@@ -18,7 +18,7 @@
 //
 // A row is a project, never a spex repository by its name: the
 // repository's with its `-spex` dropped, a group's own reading "Group
-// sessions" and your own group's own "Your sessions" — a glyph titled by
+// sessions" and your own group's own "Your sessions" — a caption naming
 // where its code is, the places it is open at ("This computer", "On <server>"),
 // one standing phrase (space-120), one primary control and one overflow
 // control (space-1). The primary control is the first place it may be
@@ -981,16 +981,6 @@ type Opened = "pick" | "join" | "folder" | "members" | "resolve" | "combine" | "
 const openHereLabel = (): string =>
   i18n._({ id: "Open here", comment: "a project's primary control for the place shown: downloads its records and its code there" });
 
-/** The glyph of a project's code (space-1): code brackets, its words
- * the title of the mark that carries it. */
-function CodeGlyph() {
-  return (
-    <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
-    </svg>
-  );
-}
-
 /** The neutral information mark shares the surface's inline SVG grammar. */
 function InfoGlyph() {
   return (
@@ -1476,7 +1466,7 @@ function RepositoryRow({
   // a stop's too: one Retry on a row.
   const act = phrase.act?.kind === "retry" && repo.state === "unreachable" ? undefined : phrase.act;
 
-  // Where its code is (space-1): a glyph titled by the core's phrase,
+  // Where its code is (space-1): the core's phrase as a visible caption,
   // or neutral, expandable information where no remote is configured;
   // nothing for a group's own records, before the core knows, or on a
   // row under "This computer", which nobody shares yet.
@@ -1592,7 +1582,7 @@ function RepositoryRow({
       {/* Project identity leads; compact metadata sits beneath it and
           actions keep one aligned group, wrapping within the pane. */}
       <div
-        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm"
+        className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1 rounded px-2 py-1 text-sm"
       >
         <div className="min-w-0 flex-1 basis-40">
           <button
@@ -1607,7 +1597,7 @@ function RepositoryRow({
             disabled={selectionDisabled}
             onClick={(event) => onSelect(repo.key, undefined, event.currentTarget)}
             title={name}
-            className={`block w-full min-w-12 truncate rounded text-left font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`block min-h-7 w-full min-w-12 truncate rounded text-left font-medium leading-7 hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected ? "text-brand-800 dark:text-brand-200" : ""
             }`}
           >
@@ -1638,7 +1628,7 @@ function RepositoryRow({
               onClick={(event) => onSelect(repo.key, true, event.currentTarget)}
             >
               {phrase.text}
-            </button> : <span id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
+            </button> : <span className="hidden" id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
             {act ? (
               <button
                 ref={actRef}
@@ -1677,15 +1667,14 @@ function RepositoryRow({
                 data-kind={code.kind}
                 data-tone={code.tone}
                 title={code.phrase}
-                className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${TONES[code.tone]}`}
+                className={`hidden min-w-0 max-w-full truncate text-xs @md:block ${TONES[code.tone]}`}
               >
-                <CodeGlyph />
-                <span className="sr-only">{code.phrase}</span>
+                {code.phrase}
               </span>
             ) : null}
           </div>
         </div>
-        <span className="ml-auto flex shrink-0 items-center gap-1 self-center">
+        <span className="ml-auto flex min-h-7 shrink-0 items-center gap-1 self-start">
           {credentialHost !== undefined && onAddCredential ? (
             <button
               type="button"

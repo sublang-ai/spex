@@ -5,6 +5,8 @@
 
 ## Status
 
+Extended by [DR-226](226-project-names-align-with-their-actions.md) with project names and actions aligned on a shared leading line and readable code-location captions.
+
 Accepted (2026-11-02) after the owner approved the project-row refinement and directed delivery with language scoped to opening code on a server.
 Amends [DR-159](159-projects-in-groups-opened-where-you-work.md) in its project-row controls and palette, [DR-172](172-surfaces-a-fresh-user-reads.md) in its row vocabulary and actions, [DR-175](175-projects-shown-where-they-are-open.md) in its code phrase and opening controls, and [DR-041](041-chrome-that-fits.md) in the label budget for clickable status text.
 

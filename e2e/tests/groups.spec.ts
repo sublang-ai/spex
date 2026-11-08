@@ -2328,6 +2328,64 @@ async function arrangeChoices(app: App): Promise<void> {
 test.describe("fit", () => {
   test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
+  test("space-43: project names and opening actions align above readable code captions", async ({ page, app }, testInfo) => {
+    const host = app.host!;
+    const name = "goodme-remote-smoke-20261104-with-a-long-project-name";
+    host.script.addRepository({
+      group: HOST_GROUP,
+      name: `${name}-spex`,
+      project: { format: 1, name, remote: "https://code.example/team/smoke.git" },
+    });
+    const key = hostKey(host, `${HOST_GROUP}/${name}-spex`);
+    host.script.addRepository({ group: HOST_GROUP, name: "plain-remote-project-spex" });
+    const plainKey = hostKey(host, `${HOST_GROUP}/plain-remote-project-spex`);
+    const mark = app.core.mark();
+    await app.core.command("space.refresh", {});
+    await app.core.waitSpace(mark, (state) => state.instances.some((instance) => instance.groups.some((group) => group.repositories.some((repo) => repo.key === key))), 30_000);
+    await open(page, app);
+    await showGroups(page);
+    const title = page.getByTestId(`space-repo-${key}`);
+    const code = page.getByTestId(`space-repo-code-${key}`);
+    await expect(title).toHaveText(name);
+    await expect(title).toHaveAttribute("title", name);
+    await expectNoPhrase(page, key);
+    await expectNoPhrase(page, plainKey);
+    await expect(page.getByTestId(`space-repo-code-${plainKey}`)).toHaveCount(0);
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await setRail(page, true);
+      await expect(code).toBeVisible();
+      await expect(code).toHaveText("Code: code.example");
+      await expect(code.locator("svg, .sr-only")).toHaveCount(0);
+      const nameBounds = (await title.boundingBox())!;
+      const codeBounds = (await code.boundingBox())!;
+      expect(Math.abs(nameBounds.x - codeBounds.x), `${theme}: a sole code caption aligns with its name`).toBeLessThanOrEqual(1);
+      // The row with a code caption and its neighbor whose records
+      // have no project metadata both align their action with the name.
+      for (const row of [
+        { key, action: `space-row-open-${key}` },
+        { key: plainKey, action: `space-row-open-${plainKey}` },
+      ]) {
+        const rowTitle = page.getByTestId(`space-repo-${row.key}`);
+        await rowTitle.scrollIntoViewIfNeeded();
+        const titleBox = (await rowTitle.boundingBox())!;
+        const actionBox = (await page.getByTestId(row.action).boundingBox())!;
+        const titleCenter = titleBox.y + titleBox.height / 2;
+        const actionCenter = actionBox.y + actionBox.height / 2;
+        expect(Math.abs(titleCenter - actionCenter), `${theme}: ${row.key} aligns its name and action`).toBeLessThanOrEqual(1);
+      }
+      await title.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`row-alignment-${theme}-1280.png`) });
+      await setRail(page, false);
+      await page.setViewportSize({ width: 320, height: 400 });
+      await expect(code).toBeHidden();
+      const fit = await measure(page);
+      expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }, `${theme}: the compact row fits`).toEqual({ overflow: [], vertical: [], overlap: [] });
+      await page.screenshot({ path: testInfo.outputPath(`row-alignment-${theme}-320.png`) });
+    }
+  });
+
   test("space-43: records expand beneath Your sessions and both gutters scroll the bounded Space content", async ({ page, app }, testInfo) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1600, height: 400 });

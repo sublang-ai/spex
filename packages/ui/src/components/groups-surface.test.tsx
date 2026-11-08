@@ -711,8 +711,8 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     ]);
     expect(rowsOf(groups[1]!)).toEqual([`space-row-${OWN}`, `space-row-${KEY}`]);
 
-    // A project's row: its name with its `-spex` dropped, a glyph titled
-    // by where its code is, and one phrase — its local changes as "<n>
+    // A project's row: its name with its `-spex` dropped, a visible caption
+    // naming where its code is, and one phrase — its local changes as "<n>
     // to send", their kinds in its title — no dot, no change count, no
     // ahead and behind, which its placement's line carries in the Sync
     // tab (space-1, space-120, space-87).
@@ -722,7 +722,8 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(code.dataset.kind).toBe("elsewhere");
     expect(code.getAttribute("title")).toBe("Code: github.com");
     expect(code.textContent).toBe("Code: github.com");
-    expect(code.querySelector("svg")).toBeTruthy();
+    expect(code.querySelector("svg")).toBeNull();
+    expect(code.querySelector(".sr-only")).toBeNull();
     expect(screen.queryByTestId(`space-repo-changes-${KEY}`)).toBeNull();
     expect(screen.queryByTestId(`space-repo-dot-${KEY}`)).toBeNull();
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
@@ -899,7 +900,9 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     await renderGroups(base({}, [repo({ code: "Code: Spex Example", codeKind: "space" })]), { open: false });
     const space = screen.getByTestId(`space-repo-code-${KEY}`);
     expect(space.getAttribute("title")).toBe("Code: Spex Example");
-    expect(space.querySelector("svg")).toBeTruthy();
+    expect(space.textContent).toBe("Code: Spex Example");
+    expect(space.querySelector("svg")).toBeNull();
+    expect(space.querySelector(".sr-only")).toBeNull();
     cleanup();
     await renderGroups(base({}, [repo({ code: null, codeKind: "unknown" })]), { open: false });
     expect(screen.queryByTestId(`space-repo-code-${KEY}`)).toBeNull();
@@ -1607,7 +1610,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     for (const token of ["min-w-0", "truncate"]) expect(phrase.className.split(/\s+/)).toContain(token);
     expect(name.parentElement!.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
     expect(screen.getByTestId(`space-repo-code-${KEY}`).className).toContain("hidden");
-    expect(screen.getByTestId(`space-repo-code-${KEY}`).className).toContain("@md:inline-flex");
+    expect(screen.getByTestId(`space-repo-code-${KEY}`).className).toContain("@md:block");
     // The local changes read as the one phrase, no count beside it
     // (space-120).
     expect(phrase.textContent).toBe("1 record to sync");
