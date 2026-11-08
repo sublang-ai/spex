@@ -44,19 +44,22 @@ export interface GitCredentialHandle {
   dispose(): Promise<void>;
 }
 
-/** Characters `sh` still interprets inside double quotes, and those that
- * would end the helper's command line. */
-const UNSAFE_FOR_SH = /["`$\\\n\r\0]/;
-/** Git's credential protocol is line-based: no newline or NUL inside. */
-const UNSAFE_FOR_PROTOCOL = /[\n\r\0]/;
+/** Git's credential protocol and configuration are line-based, and no
+ * argument holds a NUL: what neither a credential nor the helper's line
+ * carries. */
+const UNCARRIED = /[\n\r\0]/;
 
-/** Refuse a path the helper's command line cannot quote. */
-function assertQuotable(paths: readonly (readonly [what: string, path: string])[]): void {
-  for (const [what, path] of paths) {
-    if (path.length === 0 || UNSAFE_FOR_SH.test(path)) {
-      throw new Error(`The ${what} path cannot be quoted for Git's credential helper: ${JSON.stringify(path)}`);
-    }
+/** One word of the helper's line, which Git runs with `sh` on every
+ * platform — on Windows, Git for Windows' own (git-host-9): in single
+ * quotes, inside which `sh` interprets nothing, each single quote of the
+ * path closing them, escaped, and opening them again. Any path but an
+ * empty one or one holding a line break or a NUL passes as it is: a
+ * Windows path's backslashes, a space, `$`, a backtick, a quote. */
+function shellWord(what: string, path: string): string {
+  if (path.length === 0 || UNCARRIED.test(path)) {
+    throw new Error(`The ${what} path cannot be quoted for Git's credential helper: ${JSON.stringify(path)}`);
   }
+  return `'${path.replace(/'/g, "'\\''")}'`;
 }
 
 /** The argument putting the helper in its member mode, the store's path
@@ -74,8 +77,8 @@ export function memberHelperCommand(
   options: { helperPath?: string } = {},
 ): string {
   const helperPath = options.helperPath ?? gitCredentialHelperPath();
-  assertQuotable([["runtime", runtime.execPath], ["helper", helperPath], ["store", storePath]]);
-  return `!${runtime.electron ? "ELECTRON_RUN_AS_NODE=1 " : ""}"${runtime.execPath}" "${helperPath}" ${MEMBER_MODE_ARG} "${storePath}"`;
+  const words = [shellWord("runtime", runtime.execPath), shellWord("helper", helperPath), MEMBER_MODE_ARG, shellWord("store", storePath)];
+  return `!${runtime.electron ? "ELECTRON_RUN_AS_NODE=1 " : ""}${words.join(" ")}`;
 }
 
 export async function withGitCredential(
@@ -84,8 +87,8 @@ export async function withGitCredential(
   options: { helperPath?: string } = {},
 ): Promise<GitCredentialHandle> {
   const helperPath = options.helperPath ?? gitCredentialHelperPath();
-  assertQuotable([["runtime", runtime.execPath], ["helper", helperPath]]);
-  if (UNSAFE_FOR_PROTOCOL.test(credential.username) || UNSAFE_FOR_PROTOCOL.test(credential.secret)) {
+  const helper = `!${shellWord("runtime", runtime.execPath)} ${shellWord("helper", helperPath)}`;
+  if (UNCARRIED.test(credential.username) || UNCARRIED.test(credential.secret)) {
     throw new Error("The Git host returned a credential Git cannot carry");
   }
   let scope = "";
@@ -108,7 +111,7 @@ export async function withGitCredential(
       [GIT_CREDENTIAL_FILE_ENV]: file,
       ...(runtime.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
     },
-    configArgs: ["-c", "credential.helper=", "-c", `credential.helper=!"${runtime.execPath}" "${helperPath}"`],
+    configArgs: ["-c", "credential.helper=", "-c", `credential.helper=${helper}`],
     dispose: async () => {
       if (disposed) return;
       disposed = true;

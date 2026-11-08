@@ -141,12 +141,12 @@ jobs:
       - name: Windows native storage and unsupported-host refusal
         if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
         run: node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js packages/core/dist/compile-module-scope.integration.test.js
-      - name: Windows store and Git removals on the app's Node
+      - name: Windows core suites on the app's Node
         if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
         shell: bash
         run: |
           env -u ELECTRON_SKIP_BINARY_DOWNLOAD node node_modules/electron/install.js
-          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js
+          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js packages/core/dist/git-credential.integration.test.js
 
   journeys:
     needs: changes

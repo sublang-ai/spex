@@ -4,14 +4,14 @@
 // Spex's Git credential helper (git-host-9), run by Git on the app's own
 // runtime in one of two modes.
 //
-// For one Git child of the core's, as `"<runtime>" "<this file>"
+// For one Git child of the core's, as `<runtime> <this file>
 // <operation>`, it answers `get` with the username and password in the
 // file named by SPEX_GIT_CREDENTIAL_FILE — written owner-only by the core
 // for that child and removed when the child ends. A brokered credential
 // carries its permitted origin and answers only that scheme, host and port.
 //
-// On a seat, in its member mode, as `"<runtime>" "<this file>" --member
-// "<store>" <operation>`, named by the seat account's own Git
+// On a seat, in its member mode, as `<runtime> <this file> --member
+// <store> <operation>`, named by the seat account's own Git
 // configuration (core-service-125), it needs no running core: it answers
 // `get` for an http or https host the member placed a token for in the
 // store, `local/code-credentials.yaml` (storage-44), with the entry's

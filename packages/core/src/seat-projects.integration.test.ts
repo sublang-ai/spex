@@ -427,7 +427,7 @@ test("core-service-127, core-service-125, git-host-9, storage-44: on a seat the 
   const include = seatGitConfigPath(account);
   const includes = async (): Promise<string[]> => (await asAccount(account, account, "config", "--global", "--get-all", "include.path")).stdout.split("\n").filter(Boolean);
   const helpers = async (): Promise<string[]> => (await asAccount(account, account, "config", "--file", include, "--get-all", "credential.helper")).stdout.split("\n").filter(Boolean);
-  const helper = `!"${process.execPath}" "${gitCredentialHelperPath()}" --member "${codeCredentialsPath(first.dataDir)}"`;
+  const helper = `!'${process.execPath}' '${gitCredentialHelperPath()}' --member '${codeCredentialsPath(first.dataDir)}'`;
   assert.deepEqual(await includes(), [include]);
   assert.equal(statSync(include).mode & 0o777, 0o600);
   assert.deepEqual(await helpers(), [helper]);
