@@ -19,7 +19,12 @@ import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 export function pruneEmptyFolders(dir: string, stopAt: string): void {
   let current = resolve(dir);
   const root = resolve(stopAt);
-  while (current !== root && current.startsWith(`${root}/`)) {
+  // Beneath the workspace by the platform's own separator, `\` on Windows.
+  const beneath = (path: string): boolean => {
+    const rel = relative(root, path);
+    return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  };
+  while (beneath(current)) {
     try {
       if (readdirSync(current).length > 0) return;
       rmdirSync(current);
