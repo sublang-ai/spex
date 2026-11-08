@@ -177,6 +177,7 @@ test("storage-60: on Windows, a Leave of a clone's first placement while another
   try {
     const stopped = await home.client.settle("space.leave", { repository: key, instance: host.url, confirmed: true });
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.cause === "lease" && stopped.sync.retry, `[storage-38] ${JSON.stringify(stopped.sync)}`);
+    assert.equal(stopped.sync.message, "The records of leaving are open in another program", `[storage-38] the refusal names the project as in use: ${JSON.stringify(stopped.sync)}`);
     assert.equal(git(clone, "remote"), remotes, "[storage-38] its placement is not dropped");
     assert.ok(existsSync(join(clone, "placements", `${hostFolder(host)}.yaml`)), "[storage-38] its placement file stays");
     assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, "[storage-38] nor is it moved");
