@@ -465,7 +465,7 @@ function ConflictRow({
             onChange={() => onChoice(unit.unit, side)}
             className="accent-brand-600"
           />
-          <span className="shrink-0 font-medium">{label}</span>
+          <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{label}</span>
           {/* A spoken space: the radio's name reads "Keep this
               computer's updated…", never two words run together. */}
           {" "}

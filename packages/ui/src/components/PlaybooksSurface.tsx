@@ -159,10 +159,12 @@ export function PlaybooksSurface({
     // page itself never scrolls.
     <div
       data-testid="playbooks-surface"
-      className="@container relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6"
+      className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
     >
-      {live.region}
-      {body}
+      <div data-testid="playbooks-surface-content" className="@container mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 p-6">
+        {live.region}
+        {body}
+      </div>
     </div>
   );
 }

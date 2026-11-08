@@ -12,7 +12,7 @@
 // surface reads the store of the place the selector names (run-view-168),
 // and at a seat's place names the server wherever it would name this
 // computer (space-112). Activating a row's name opens its records' Sync
-// and Explore tabs beneath the list, "Explore records" its Explore tab,
+// and Explore tabs immediately beneath that row, "Explore records" its Explore tab,
 // the row followed by its folder where its clone moves (storage-38). The
 // surface renders the core's state and runs no Git and no call to a Space
 // itself: every action is a command, records named by their key, whose
@@ -52,6 +52,7 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
+import { ATTACHED_PANEL } from "./SpacePanel.js";
 import { ChoicesContext, SyncTab, createChoices, forgetCompleted } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList } from "./SpaceGroups.js";
@@ -257,7 +258,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   const spaceRefresh = store((state) => state.spaceRefresh);
   const seats = store((state) => state.seats);
   const connected = connection === "open";
-  const seat = seatName(store.place);
   const now = useClock(true, 30_000);
   // The servers each signed-in instance lists (run-view-170), at this
   // computer alone, whose core holds the seats: read as the surface
@@ -479,130 +479,109 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
         data-testid="space-surface"
         aria-label={surfaceName}
         // The surface root is the box the surface scrolls in, positioned
-        // so what it holds is contained by it (DR-041 §9); its width is
-        // the container every step queries.
-        className="@container relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
+        // so its content and the empty side gutters share one scroll area.
+        className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
       >
-        <div role="status" aria-live="polite" className="sr-only" data-testid="space-live">
-          {note}
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
-          <h1 className="min-w-0 flex-1 text-lg font-semibold">{surfaceName}</h1>
-          {groups ? (
-            <HomeHeader
-              groups={groups}
-              now={now}
-              connected={connected}
-              signIn={signIn}
-              refreshing={refreshing}
-              refreshError={refreshError}
-              onRefresh={() => void refresh()}
-              issuesOpen={issuesOpen}
-              issuesPending={issuesPending}
-              onIssuesOpen={(open, opener) => {
-                if (issuesPending) return;
-                issuesOpener.current = opener;
-                setIssuesOpen(open);
-                setRevealDismissed(undefined);
-              }}
-            />
-          ) : null}
-        </div>
-        {spaceError ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
-          </p>
-        ) : null}
-        {groups ? (
-          <>
-            <IssuesList
-              groups={groups}
-              connected={connected}
-              open={issuesOpen}
-              revealDismissed={revealDismissed}
-              refreshes={refreshes}
-              onOpenProject={onOpenProject}
-              onOpenSession={onOpenSession}
-              onNote={onNote}
-              onClose={closeIssues}
-              onPendingChange={setIssuesPending}
-            />
-            {groups.git.ok ? (
-              <GroupsList
+        <div data-testid="space-surface-content" className="@container mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-3 p-6">
+          <div role="status" aria-live="polite" className="sr-only" data-testid="space-live">
+            {note}
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+            <h1 className="min-w-0 flex-1 text-lg font-semibold">{surfaceName}</h1>
+            {groups ? (
+              <HomeHeader
                 groups={groups}
                 now={now}
-                selected={selected}
-                selectionDisabled={repositoryPending}
                 connected={connected}
-                refreshes={refreshes}
-                dismissed={dismissed}
                 signIn={signIn}
-                servers={servers.listing}
-                onAddCredential={onAddCredential}
-                onSelect={(key, reveal, opener) => {
-                  if (repositoryPending) return;
-                  repositoryOpener.current = opener ?? null;
-                  setTab("sync");
-                  setSelected((current) => (!reveal && current === key ? undefined : key));
-                  setRepositoryFocus((value) => value + 1);
+                refreshing={refreshing}
+                refreshError={refreshError}
+                onRefresh={() => void refresh()}
+                issuesOpen={issuesOpen}
+                issuesPending={issuesPending}
+                onIssuesOpen={(open, opener) => {
+                  if (issuesPending) return;
+                  issuesOpener.current = opener;
+                  setIssuesOpen(open);
+                  setRevealDismissed(undefined);
                 }}
-                onExplore={(key, opener) => {
-                  if (repositoryPending) return;
-                  repositoryOpener.current = opener ?? null;
-                  setTab("explore");
-                  setSelected(key);
-                  setTimeout(() => document.getElementById("space-tab-explore")?.focus(), 0);
-                }}
-                onOpenProject={onOpenProject}
-                onNote={onNote}
               />
             ) : null}
-            {repo && groups.git.ok ? (
-              <RepositoryPanel
-                key={repo.key}
+          </div>
+          {spaceError ? (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
+            </p>
+          ) : null}
+          {groups ? (
+            <>
+              <IssuesList
                 groups={groups}
-                repo={repo}
-                now={now}
-                tab={tab}
-                onTab={setTab}
                 connected={connected}
+                open={issuesOpen}
+                revealDismissed={revealDismissed}
                 refreshes={refreshes}
-                dismissed={dismissed[repo.key]}
-                onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
+                onOpenProject={onOpenProject}
                 onOpenSession={onOpenSession}
                 onNote={onNote}
-                pending={repositoryPending}
-                onPendingChange={setRepositoryPending}
-                focusRequest={repositoryFocus}
-                onClose={closeRepository}
+                onClose={closeIssues}
+                onPendingChange={setIssuesPending}
               />
-            ) : null}
-            {anySignedIn(groups) ? (
-              // Where this place's files are, said once and quietly at the
-              // foot (space-1), naming the server at a seat's (space-112):
-              // selectable, the full path in its title.
-              <p
-                data-testid="space-home"
-                title={groups.home}
-                className="min-w-0 select-text break-all text-xs text-neutral-500"
-              >
-                {seat === undefined
-                  ? i18n._({
-                      id: "Spex keeps this computer's files in {path}",
-                      values: { path: tildify(groups.home) },
-                      comment: "the Space surface's foot: where Spex keeps this computer's files; {path} is that folder",
-                    })
-                  : i18n._({
-                      id: "Spex keeps {place}'s files in {path}",
-                      values: { place: seat, path: tildify(groups.home) },
-                      comment: "the foot of a team server's Space: where the server keeps its files; {place} is the server's name, {path} that folder there",
-                    })}
-              </p>
-            ) : null}
-          </>
-        ) : !spaceError ? (
-          <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
-        ) : null}
+              {groups.git.ok ? (
+                <GroupsList
+                  groups={groups}
+                  now={now}
+                  selected={selected}
+                  selectionDisabled={repositoryPending}
+                  connected={connected}
+                  refreshes={refreshes}
+                  dismissed={dismissed}
+                  signIn={signIn}
+                  servers={servers.listing}
+                  onAddCredential={onAddCredential}
+                  onSelect={(key, reveal, opener) => {
+                    if (repositoryPending) return;
+                    repositoryOpener.current = opener ?? null;
+                    setTab("sync");
+                    setSelected((current) => (!reveal && current === key ? undefined : key));
+                    setRepositoryFocus((value) => value + 1);
+                  }}
+                  onExplore={(key, opener) => {
+                    if (repositoryPending) return;
+                    repositoryOpener.current = opener ?? null;
+                    setTab("explore");
+                    setSelected(key);
+                    setTimeout(() => document.getElementById("space-tab-explore")?.focus(), 0);
+                  }}
+                  onOpenProject={onOpenProject}
+                  onNote={onNote}
+                  repositoryPanel={repo ? (
+                    <RepositoryPanel
+                      key={repo.key}
+                      groups={groups}
+                      repo={repo}
+                      now={now}
+                      tab={tab}
+                      onTab={setTab}
+                      connected={connected}
+                      refreshes={refreshes}
+                      dismissed={dismissed[repo.key]}
+                      onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
+                      onOpenSession={onOpenSession}
+                      onNote={onNote}
+                      pending={repositoryPending}
+                      onPendingChange={setRepositoryPending}
+                      focusRequest={repositoryFocus}
+                      onClose={closeRepository}
+                    />
+                  ) : undefined}
+                />
+              ) : null}
+            </>
+          ) : !spaceError ? (
+            <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
+          ) : null}
+        </div>
       </section>
     </ChoicesContext.Provider>
   );
@@ -772,7 +751,11 @@ function RepositoryPanel({
 }) {
   const store = usePlaceStore();
   const panelRef = useRef<HTMLElement>(null);
-  useEffect(() => { panelRef.current?.focus(); }, [focusRequest]);
+  useEffect(() => {
+    const panel = panelRef.current;
+    panel?.focus({ preventScroll: true });
+    panel?.querySelector<HTMLElement>('[data-testid="space-repository-header"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [focusRequest]);
   const seat = seatName(store.place);
   // The row's name and whether it is a project's, as its group reads it
   // (space-1).
@@ -826,12 +809,7 @@ function RepositoryPanel({
       id="space-repository"
       data-testid="space-repository"
       aria-label={name}
-      // The explorer fills the pane and scrolls inside itself, keeping a
-      // floor of 24rem, so a long groups list — a line per placement
-      // beneath each row (space-87) — scrolls the surface instead of
-      // folding the explorer under the foot; the Sync tab keeps its
-      // whole height for the same reason (space-28).
-      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-96" : ""}`}
+      className={`flex min-w-0 flex-col gap-3 ${ATTACHED_PANEL}`}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
@@ -840,7 +818,7 @@ function RepositoryPanel({
     >
       <div
         data-testid="space-repository-header"
-        className="flex min-w-0 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+        className="flex min-w-0 flex-col gap-1"
       >
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
@@ -887,7 +865,7 @@ function RepositoryPanel({
         role="tabpanel"
         id={`space-panel-${tab}`}
         aria-labelledby={`space-tab-${tab}`}
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3"
+        className="flex min-h-0 min-w-0 flex-col gap-3"
       >
         {tab === "sync" ? (
           <SyncTab

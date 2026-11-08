@@ -627,10 +627,10 @@ export function ExploreTab({
       <PrivacyPanel />
       <div
         ref={splitRef}
-        className="flex min-h-0 flex-1 flex-col gap-3 @2xl:flex-row @2xl:gap-0"
+        className="flex h-[clamp(24rem,60vh,36rem)] min-h-0 flex-none flex-col gap-3 @2xl:flex-row @2xl:gap-0"
         style={{ ["--space-split" as string]: `${split}%` }}
       >
-        <div className="flex min-h-48 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 @2xl:min-h-0 @2xl:w-[var(--space-split)] @2xl:flex-none">
+        <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 @2xl:w-[var(--space-split)] @2xl:flex-none">
           <div className="flex items-center gap-2 border-b border-neutral-200 px-2 py-1 text-xs text-neutral-500 dark:border-neutral-800">
             <span className="truncate font-mono" title={root}>
               {root}
@@ -729,7 +729,7 @@ export function ExploreTab({
         <SplitDivider percent={split} onChange={setSplit} containerRef={splitRef} />
         <div
           data-testid="space-preview"
-          className="flex min-h-48 min-w-0 flex-1 flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-900 @2xl:min-h-0"
+          className="relative min-h-0 min-w-0 flex-1 space-y-2 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-900"
         >
           {selectedRow ? (
             <PreviewPane

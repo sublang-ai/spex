@@ -18,7 +18,7 @@
 //
 // A row is a project, never a spex repository by its name: the
 // repository's with its `-spex` dropped, a group's own reading "Group
-// sessions" and your own group's own "Your sessions" — a glyph titled by
+// sessions" and your own group's own "Your sessions" — a caption naming
 // where its code is, the places it is open at ("This computer", "On <server>"),
 // one standing phrase (space-120), one primary control and one overflow
 // control (space-1). The primary control is the first place it may be
@@ -42,7 +42,7 @@
 // are not offered here (DR-172). What an act opens stands beneath its
 // row: the group picker (space-58), the folder an Open asks for on the
 // served page (space-63) and the members panel. Activating a row's name
-// opens its Sync and Explore tabs beneath the list, the Sync tab
+// opens its Sync and Explore tabs immediately beneath that row, the Sync tab
 // carrying its placements' lines (space-87). No
 // part of the list links a page of the Space, or names what stands
 // behind it (space-1). At a remote place an Open names no folder, its
@@ -308,6 +308,7 @@ export function GroupsList({
   onExplore,
   onOpenProject,
   onNote,
+  repositoryPanel,
 }: {
   groups: GroupsState;
   now: number;
@@ -332,6 +333,8 @@ export function GroupsList({
    * none is named (space-111). */
   onOpenProject(projectId: string, place?: string): void;
   onNote: Note;
+  /** The selected row's records, rendered directly beneath its summary. */
+  repositoryPanel?: ReactNode;
 }) {
   // Every seat's projects and Groups state, each row reading where it is
   // open (space-1, space-111).
@@ -352,6 +355,7 @@ export function GroupsList({
     onExplore,
     onOpenProject,
     onNote,
+    repositoryPanel,
   };
   const local = thisComputerEntry(groups);
   const seat = seatName(usePlaceStore().place);
@@ -430,7 +434,8 @@ function InstanceGroups({ instance, entries, ...shared }: Shared & { instance: I
   const activeTree = groupTree(entries.filter((group) => !pending(group)));
   const scheduled = entries.filter(pending);
   const pendingTree = groupTree(scheduled);
-  const busy = Object.keys(held).length > 0;
+  const busy = Object.keys(held).length > 0 || (!!shared.selectionDisabled &&
+    scheduled.some((group) => group.repositories.some((repo) => repo.key === shared.selected)));
   const fallback = () => root.current?.closest("[data-signed-in]")?.querySelector<HTMLButtonElement>('[data-testid="space-new-group"]:not(:disabled), [data-testid="space-signout"]');
   useLayoutEffect(() => {
     const next = focusAfter.current;
@@ -578,6 +583,7 @@ interface Shared {
   onExplore(key: string, opener?: HTMLElement): void;
   onOpenProject(projectId: string, place?: string): void;
   onNote: Note;
+  repositoryPanel?: ReactNode;
   lifecycle?: GroupLifecycle;
 }
 
@@ -713,7 +719,7 @@ function GroupSection({
   };
 
   const restoreGroup = async () => {
-    if (deletePending.current || !connected || !instance || hostGroup === null || !group.can.restore || !group.pendingDeletion) return;
+    if (deletePending.current || shared.selectionDisabled || !connected || !instance || hostGroup === null || !group.can.restore || !group.pendingDeletion) return;
     deletePending.current = true;
     shared.lifecycle?.begin(group);
     setRestoring(true);
@@ -835,7 +841,7 @@ function GroupSection({
                   : i18n._("A group owner can restore it before deletion takes effect.")}</p>
             </div>
             {group.can.restore || restoring ? (
-              <button ref={restoreRef} data-group-restore type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
+              <button ref={restoreRef} data-group-restore type="button" className={SECONDARY} disabled={!connected || deleting || restoring || shared.selectionDisabled} onClick={() => void restoreGroup()}>
                 {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
               </button>
             ) : null}
@@ -975,16 +981,6 @@ type Opened = "pick" | "join" | "folder" | "members" | "resolve" | "combine" | "
 const openHereLabel = (): string =>
   i18n._({ id: "Open here", comment: "a project's primary control for the place shown: downloads its records and its code there" });
 
-/** The glyph of a project's code (space-1): code brackets, its words
- * the title of the mark that carries it. */
-function CodeGlyph() {
-  return (
-    <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
-    </svg>
-  );
-}
-
 /** The neutral information mark shares the surface's inline SVG grammar. */
 function InfoGlyph() {
   return (
@@ -1023,6 +1019,7 @@ function RepositoryRow({
   onExplore,
   onOpenProject,
   onNote,
+  repositoryPanel,
 }: Shared & {
   /** The Space whose heading the row stands under; none under "This
    * computer". */
@@ -1469,7 +1466,7 @@ function RepositoryRow({
   // a stop's too: one Retry on a row.
   const act = phrase.act?.kind === "retry" && repo.state === "unreachable" ? undefined : phrase.act;
 
-  // Where its code is (space-1): a glyph titled by the core's phrase,
+  // Where its code is (space-1): the core's phrase as a visible caption,
   // or neutral, expandable information where no remote is configured;
   // nothing for a group's own records, before the core knows, or on a
   // row under "This computer", which nobody shares yet.
@@ -1506,7 +1503,7 @@ function RepositoryRow({
   // Your own sessions on this computer alone carry no control (space-1).
   if (!(repo.own && repo.state === "local-only")) {
     more.push({
-      label: i18n._({ id: "Explore records", comment: "open a project's records as an annotated tree, beneath the list" }),
+      label: i18n._({ id: "Explore records", comment: "open a project's records as an annotated tree beneath its row" }),
       testId: `space-row-explore-${repo.key}`,
       disabled: selectionDisabled,
       onSelect: () => onExplore(repo.key, moreRef.current ?? undefined),
@@ -1579,15 +1576,13 @@ function RepositoryRow({
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
-      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick" || opened === "members" || opened === "code"
+      className={`@container flex min-w-0 flex-col gap-1 ${isSelected || opened === "pick" || opened === "members" || opened === "code"
         ? ATTACHED_OWNER
         : ""}`}>
       {/* Project identity leads; compact metadata sits beneath it and
           actions keep one aligned group, wrapping within the pane. */}
       <div
-        className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm ${
-          isSelected ? "bg-brand-50 dark:bg-brand-950" : ""
-        }`}
+        className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1 rounded px-2 py-1 text-sm"
       >
         <div className="min-w-0 flex-1 basis-40">
           <button
@@ -1602,7 +1597,7 @@ function RepositoryRow({
             disabled={selectionDisabled}
             onClick={(event) => onSelect(repo.key, undefined, event.currentTarget)}
             title={name}
-            className={`block w-full min-w-12 truncate rounded text-left font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`block min-h-7 w-full min-w-12 truncate rounded text-left font-medium leading-7 hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected ? "text-brand-800 dark:text-brand-200" : ""
             }`}
           >
@@ -1633,7 +1628,7 @@ function RepositoryRow({
               onClick={(event) => onSelect(repo.key, true, event.currentTarget)}
             >
               {phrase.text}
-            </button> : <span id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
+            </button> : <span className="hidden" id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
             {act ? (
               <button
                 ref={actRef}
@@ -1672,15 +1667,14 @@ function RepositoryRow({
                 data-kind={code.kind}
                 data-tone={code.tone}
                 title={code.phrase}
-                className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${TONES[code.tone]}`}
+                className={`hidden min-w-0 max-w-full truncate text-xs @md:block ${TONES[code.tone]}`}
               >
-                <CodeGlyph />
-                <span className="sr-only">{code.phrase}</span>
+                {code.phrase}
               </span>
             ) : null}
           </div>
         </div>
-        <span className="ml-auto flex shrink-0 items-center gap-1 self-center">
+        <span className="ml-auto flex min-h-7 shrink-0 items-center gap-1 self-start">
           {credentialHost !== undefined && onAddCredential ? (
             <button
               type="button"
@@ -1703,6 +1697,7 @@ function RepositoryRow({
           <MoreMenu of={name} testId={`space-row-more-${repo.key}`} buttonRef={moreRef} entries={more} disabled={disabled} />
         </span>
       </div>
+      {isSelected ? repositoryPanel : null}
       {opened === "code" && code?.kind === "none" ? (
         <div
           ref={codeDetailsRef}

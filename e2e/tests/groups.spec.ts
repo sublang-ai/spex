@@ -82,6 +82,7 @@ import {
   TALL,
   WIDTHS,
   compareNames,
+  expectSurfaceGuttersToScroll,
   measure,
   record,
   setRail,
@@ -194,8 +195,8 @@ async function showGroups(page: Page): Promise<void> {
   await expect(page.getByTestId("space-header")).toBeVisible();
 }
 
-/** Activate a project's row by its name, opening its Sync and Explore
- * tabs beneath the groups list, the Sync tab carrying its placements'
+/** Activate a project's row by its name, opening its attached Sync and
+ * Explore tabs, the Sync tab carrying its placements'
  * lines (space-1, space-87). */
 async function openRepository(page: Page, key: string): Promise<void> {
   const row = page.getByTestId(`space-repo-${key}`);
@@ -449,9 +450,8 @@ test.describe("first start", () => {
     // Signed in through the device flow the stand-in approves: the
     // instance's heading reads its display name beside the account's
     // login, with Sign out, and the header Refresh; "Your sessions"
-    // stands under "Personal", whose heading carries no control; and the
-    // surface ends in where this computer's files are kept (space-3,
-    // space-4, space-1).
+    // stands under "Personal", whose heading carries no control, without
+    // a storage-root footer (space-3, space-4, space-1).
     await signInThroughPage(page, app);
     const instance = instanceSection(page, host);
     await expect(instance).toHaveAttribute("aria-label", "Stand-in Git host");
@@ -461,8 +461,9 @@ test.describe("first start", () => {
     await expect(header.getByTestId("space-signin-card")).toHaveCount(0);
     await expect(header.getByTestId("space-signout")).toHaveCount(0);
     await expect(header.getByTestId("space-refresh")).toHaveText("Refresh");
-    await expect(page.getByTestId("space-home")).toHaveText(/^Spex keeps this computer's files in /);
-    await expect(page.getByTestId("space-home")).toHaveAttribute("title", app.dataDir);
+    await expect(page.getByTestId("space-home")).toHaveCount(0);
+    await expect(page.getByText(/^Spex keeps this computer's files in /)).toHaveCount(0);
+    await expect(page.getByTestId("space-surface").getByTitle(app.dataDir, { exact: true })).toHaveCount(0);
     const personal = instance.getByTestId(`space-group-@${HOST_LOGIN}`);
     await expect(personal.getByRole("heading", { level: 3 }).first()).toHaveText("Personal");
     await expect(personal.getByTestId(`space-row-${OWN_KEY}`)).toBeVisible();
@@ -2327,6 +2328,111 @@ async function arrangeChoices(app: App): Promise<void> {
 test.describe("fit", () => {
   test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
+  test("space-43: project names and opening actions align above readable code captions", async ({ page, app }, testInfo) => {
+    const host = app.host!;
+    const name = "goodme-remote-smoke-20261104-with-a-long-project-name";
+    host.script.addRepository({
+      group: HOST_GROUP,
+      name: `${name}-spex`,
+      project: { format: 1, name, remote: "https://code.example/team/smoke.git" },
+    });
+    const key = hostKey(host, `${HOST_GROUP}/${name}-spex`);
+    host.script.addRepository({ group: HOST_GROUP, name: "plain-remote-project-spex" });
+    const plainKey = hostKey(host, `${HOST_GROUP}/plain-remote-project-spex`);
+    const mark = app.core.mark();
+    await app.core.command("space.refresh", {});
+    await app.core.waitSpace(mark, (state) => state.instances.some((instance) => instance.groups.some((group) => group.repositories.some((repo) => repo.key === key))), 30_000);
+    await open(page, app);
+    await showGroups(page);
+    const title = page.getByTestId(`space-repo-${key}`);
+    const code = page.getByTestId(`space-repo-code-${key}`);
+    await expect(title).toHaveText(name);
+    await expect(title).toHaveAttribute("title", name);
+    await expectNoPhrase(page, key);
+    await expectNoPhrase(page, plainKey);
+    await expect(page.getByTestId(`space-repo-code-${plainKey}`)).toHaveCount(0);
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await setRail(page, true);
+      await expect(code).toBeVisible();
+      await expect(code).toHaveText("Code: code.example");
+      await expect(code.locator("svg, .sr-only")).toHaveCount(0);
+      const nameBounds = (await title.boundingBox())!;
+      const codeBounds = (await code.boundingBox())!;
+      expect(Math.abs(nameBounds.x - codeBounds.x), `${theme}: a sole code caption aligns with its name`).toBeLessThanOrEqual(1);
+      // The row with a code caption and its neighbor whose records
+      // have no project metadata both align their action with the name.
+      for (const row of [
+        { key, action: `space-row-open-${key}` },
+        { key: plainKey, action: `space-row-open-${plainKey}` },
+      ]) {
+        const rowTitle = page.getByTestId(`space-repo-${row.key}`);
+        await rowTitle.scrollIntoViewIfNeeded();
+        const titleBox = (await rowTitle.boundingBox())!;
+        const actionBox = (await page.getByTestId(row.action).boundingBox())!;
+        const titleCenter = titleBox.y + titleBox.height / 2;
+        const actionCenter = actionBox.y + actionBox.height / 2;
+        expect(Math.abs(titleCenter - actionCenter), `${theme}: ${row.key} aligns its name and action`).toBeLessThanOrEqual(1);
+      }
+      await title.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`row-alignment-${theme}-1280.png`) });
+      await setRail(page, false);
+      await page.setViewportSize({ width: 320, height: 400 });
+      await expect(code).toBeHidden();
+      const fit = await measure(page);
+      expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }, `${theme}: the compact row fits`).toEqual({ overflow: [], vertical: [], overlap: [] });
+      await page.screenshot({ path: testInfo.outputPath(`row-alignment-${theme}-320.png`) });
+    }
+  });
+
+  test("space-43: records expand beneath Your sessions and both gutters scroll the bounded Space content", async ({ page, app }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1600, height: 400 });
+    await open(page, app);
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1600, height: 400 });
+    await showGroups(page);
+    await openRepository(page, app.ownKey);
+    const surface = page.getByTestId("space-surface");
+    const records = page.getByTestId("space-repository");
+    const attachment = await records.evaluate((panel) => {
+      const row = panel.parentElement!;
+      const summary = row.firstElementChild!;
+      return {
+        owner: row.getAttribute("data-testid"),
+        followsSummary: panel.previousElementSibling === summary,
+        gap: panel.getBoundingClientRect().top - summary.getBoundingClientRect().bottom,
+      };
+    });
+    expect(attachment.owner).toBe(`space-row-${app.ownKey}`);
+    expect(attachment.followsSummary).toBe(true);
+    expect(attachment.gap, "records follow their row").toBeGreaterThanOrEqual(0);
+    expect(attachment.gap, "records stay attached to their row").toBeLessThanOrEqual(8);
+    await expect(records).toHaveCount(1);
+    await expect(records.getByTestId("space-repository-header")).toBeInViewport();
+    await expectSurfaceGuttersToScroll(page, surface, surface.getByTestId("space-surface-content"));
+
+    for (const language of ["en", "zh"] as const) {
+      await surfaceEntry(page, "Settings").click();
+      await page.getByTestId("language-select").selectOption(language);
+      await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await surfaceEntry(page, "Space").click();
+      await openRepository(page, app.ownKey);
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        for (const width of [1600, 320]) {
+          await setRail(page, width === 1600);
+          await page.setViewportSize({ width, height: TALL });
+          await records.getByTestId("space-repository-header").scrollIntoViewIfNeeded();
+          const fit = await measure(page);
+          expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }, `${language}/${theme} at ${width}px`).toEqual({ overflow: [], vertical: [], overlap: [] });
+          await page.screenshot({ path: testInfo.outputPath(`records-context-${language}-${theme}-${width}.png`) });
+        }
+      }
+    }
+  });
+
   test("space-43: the groups list and the Sync and Explore tabs fit at every width, in both sidebar states", async ({
     page,
     app,
@@ -2404,6 +2510,28 @@ test.describe("fit", () => {
             await page.setViewportSize({ width, height });
             await view.ready();
             const where = `Space ${view.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
+            const attachment = await page.getByTestId("space-repository").evaluate((panel) => ({
+              owner: panel.parentElement?.getAttribute("data-testid"),
+              followsSummary: panel.previousElementSibling === panel.parentElement?.firstElementChild,
+              gap: panel.getBoundingClientRect().top - panel.previousElementSibling!.getBoundingClientRect().bottom,
+              endInsideRow: panel.lastElementChild!.getBoundingClientRect().bottom <= panel.parentElement!.getBoundingClientRect().bottom + 1,
+            }));
+            expect(attachment.owner, where).toBe(`space-row-${TEAM_KEY}`);
+            expect(attachment.followsSummary, where).toBe(true);
+            expect(attachment.gap, `${where}: records follow their row`).toBeGreaterThanOrEqual(0);
+            expect(attachment.gap, `${where}: records stay attached to their row`).toBeLessThanOrEqual(8);
+            expect(attachment.endInsideRow, `${where}: the owning row contains the whole panel`).toBe(true);
+            if (view.name === "Explore") {
+              const panesInside = await page.getByTestId("space-preview").evaluate((preview) => {
+                const split = preview.parentElement!;
+                const bounds = split.getBoundingClientRect();
+                return [split.firstElementChild!, preview].every((pane) => {
+                  const box = pane.getBoundingClientRect();
+                  return box.top >= bounds.top - 1 && box.bottom <= bounds.bottom + 1 && box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
+                });
+              });
+              expect(panesInside, `${where}: the tree and preview stay inside their shared viewport`).toBe(true);
+            }
             const found = await measure(page, containers);
             record(where, found, defects);
             reference = compareNames(where, found, reference, defects);
@@ -2412,6 +2540,21 @@ test.describe("fit", () => {
       }
     }
     expect(defects, defects.join("\n")).toEqual([]);
+
+    // The narrow preview keeps its wrapped header and the full file in
+    // one native scroll viewport, including in a short window.
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: 400 });
+    const preview = page.getByTestId("space-preview");
+    await preview.scrollIntoViewIfNeeded();
+    await preview.evaluate((element) => { element.scrollTop = 0; });
+    expect(await preview.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+    const box = (await preview.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 10_000);
+    await expect.poll(() => preview.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop), "the preview's file end is reachable").toBeLessThanOrEqual(1);
+    await page.mouse.wheel(0, -10_000);
+    await expect.poll(() => preview.evaluate((element) => element.scrollTop), "the preview header is reachable again").toBe(0);
   });
 });
 

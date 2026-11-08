@@ -36,6 +36,7 @@ import {
   MERGE_DIAGNOSTIC,
   NOW,
   ORIGIN,
+  OWN,
   SESSION_UNIT,
   SETTINGS_UNIT,
   answer,
@@ -1438,15 +1439,29 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(screen.getByTestId("space-preview").textContent).toContain("not shown");
   });
 
-  test("space-1: Explore records in the row's overflow opens its Explore tab beneath the list, as its name opens its Sync tab", async () => {
+  test("space-1: Explore records and the row's name open their tabs directly beneath the owning row", async () => {
     await renderGroups(repoState(), { open: false });
     fireEvent.click(within(openMore()).getByTestId(`space-row-explore-${KEY}`));
     expect(await screen.findByTestId("space-tree")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Explore" }).getAttribute("aria-selected")).toBe("true");
     expect(calls("space.tree")[0]).toEqual({ repository: KEY });
+    let row = screen.getByTestId(`space-row-${KEY}`);
+    let records = screen.getByTestId("space-repository");
+    expect(records.parentElement).toBe(row);
+    expect(records.previousElementSibling).toBe(row.firstElementChild);
+    expect(screen.getAllByTestId("space-repository")).toHaveLength(1);
     cleanup();
     await renderGroups(repoState());
     expect(screen.getByRole("tab", { name: "Sync" }).getAttribute("aria-selected")).toBe("true");
+    row = screen.getByTestId(`space-row-${KEY}`);
+    records = screen.getByTestId("space-repository");
+    expect(records.parentElement).toBe(row);
+    expect(records.previousElementSibling).toBe(row.firstElementChild);
+    expect(screen.getAllByTestId("space-repository")).toHaveLength(1);
+    fireEvent.click(screen.getByTestId(`space-repo-${OWN}`));
+    expect(screen.getByTestId("space-repository").parentElement).toBe(screen.getByTestId(`space-row-${OWN}`));
+    expect(screen.getByTestId(`space-repo-${KEY}`).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getAllByTestId("space-repository")).toHaveLength(1);
   });
 
   test.each(["en", "zh"] as const)("space-23, space-27: `placements/<folder>.yaml` reads 'kept at <Space>' and its folder 'where these records are kept', Shared, never 'placement' (%s)", async (language) => {
@@ -1713,12 +1728,13 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
     }
   });
 
-  test("space-1: the surface ends in 'Spex keeps this computer's files in <home>', the full path in its title, with no control", async () => {
+  test("space-1: the signed-in overview omits the storage-root footer while opened records retain their path controls", async () => {
     await renderGroups(repoState(), { open: false });
-    const foot = screen.getByTestId("space-home");
-    expect(foot.textContent).toBe("Spex keeps this computer's files in ~/.spex");
-    expect(foot.title).toBe(HOME);
-    expect(foot.querySelector("button, a")).toBeNull();
+    expect(screen.queryByTestId("space-home")).toBeNull();
+    expect(screen.queryByTitle(HOME)).toBeNull();
+    expect(screen.queryByText(/^Spex keeps this computer's files in /)).toBeNull();
+    fireEvent.click(screen.getByTestId(`space-repo-${KEY}`));
+    expect(within(screen.getByTestId("space-repository")).getByTestId("space-clone-path-copy")).toBeTruthy();
   });
 
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {

@@ -3431,7 +3431,7 @@ msgstr "展开图片 {name}"
 msgid "Explore"
 msgstr "浏览"
 
-#. open a project's records as an annotated tree, beneath the list
+#. open a project's records as an annotated tree beneath its row
 #: src/components/SpaceGroups.tsx
 msgid "Explore records"
 msgstr "浏览记录"
@@ -7303,16 +7303,6 @@ msgstr "Spex 尚未记录此项目代码的远程仓库地址。"
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex 本身跟随系统主题。"
-
-#. the foot of a team server's Space: where the server keeps its files; {place} is the server's name, {path} that folder there
-#: src/components/SpaceSurface.tsx
-msgid "Spex keeps {place}'s files in {path}"
-msgstr "Spex 将 {place} 的文件保存在 {path}"
-
-#. the Space surface's foot: where Spex keeps this computer's files; {path} is that folder
-#: src/components/SpaceSurface.tsx
-msgid "Spex keeps this computer's files in {path}"
-msgstr "Spex 将本机的文件保存在 {path}"
 
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
