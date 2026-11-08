@@ -222,7 +222,7 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one whose drop Git refuses once it moved | the clone and its pair moved back, its remote standing, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
 | any other | dropped and moved |
 
-- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred, and one that cannot move back is named there at the path where it stays.
+- a clone the instances migration deferred [[storage-30](#storage-30)] stays named in its receipt until its drop is made, so one moved back stays deferred; one that cannot move back is named there at the path where it stays, but where a move the migration planned already left from that path, when it leaves the receipt, keeping its records, its remote and its pair there.
 
 ### storage-7
 
@@ -487,6 +487,7 @@ When an integration suite starts a real core on a signed-in format-1 home whose 
 - the namespace project moved under `@<host>/<login>/` and the group's under `@<host>/<group>/`, their remotes renamed likewise; the uncreated repository and the reader-named clone moved under `@<host>/` at their keys, keeping their remotes and read as that instance's; the local-only project left where it was [[storage-30](#storage-30)] [[storage-31](#storage-31)];
 - each moved clone's pairs, session locations, sync preferences and the skills placed for your agents following it [[storage-30](#storage-30)];
 - each held clone keeping its key and remote, named in the receipt's `deferred` by the key it keeps and its destination, read as that instance's, and its remote held as its placement there, with the id where it recorded one [[storage-34](#storage-34)]; the second moved by its sync's Check before any fetch or push, with no host read naming it, and its entry leaving `deferred`, the first at the restart, and the receipt complete only after both [[storage-30](#storage-30)] [[storage-31](#storage-31)];
+- a held clone the store names at another path, as a drop's failed move back leaves it, named in `deferred` at that path, and one whose path a move the migration planned already left from leaving `deferred` instead [[storage-38](#storage-38)];
 - a migration interrupted after its first move finished at the next start, a destination another process filled meanwhile left as it was, and a restart after completion repeating nothing [[storage-30](#storage-30)];
 - no request reaching the stand-in instance during the migration [[storage-30](#storage-30)];
 - a format-1 home holding no account, whose host URL is `http://LocalHost/` naming no port, migrated with `http://localhost` as its recorded origin and its clones outside your own group's folder moved under `workspace/@localhost_80/`, read as that origin's instance with no instance listed [[storage-30](#storage-30)] [[storage-1](#storage-1)] [[storage-31](#storage-31)];

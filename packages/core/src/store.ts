@@ -1785,12 +1785,20 @@ export class Store {
 
   /** A deferred clone a step moved and could not move back stands at
    * `to`: the receipt names it there, so it stays deferred where it
-   * stands (storage-38). */
-  rekeyDeferred(from: string, to: string): void {
-    if (!this.deferred.some((move) => move.from === from)) return;
-    this.deferred = this.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
-    try { rekeyDeferred(this.dir, from, to); }
+   * stands — but where a move the migration planned already left from
+   * that path, which the receipt names it no more instead (storage-38).
+   * Whether it stays deferred. */
+  rekeyDeferred(from: string, to: string): boolean {
+    if (!this.deferred.some((move) => move.from === from)) return false;
+    let named = false;
+    try { named = rekeyDeferred(this.dir, from, to); }
     catch (error) { console.error(`spex: the instances migration's receipt still names ${from}, now at ${to}: ${error instanceof Error ? error.message : String(error)}`); }
+    if (!named) {
+      this.settleDeferred([from]);
+      return false;
+    }
+    this.deferred = this.deferred.map((move) => move.from === from ? { ...move, from: to } : move);
+    return true;
   }
 
   /** A clone that came under `workspace/` from outside the store — a
