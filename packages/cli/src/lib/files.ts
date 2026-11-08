@@ -287,6 +287,55 @@ export function removeTree(path: string): boolean {
   return removeEntry(path);
 }
 
+/** A folder's rename refused because something holds a file or folder
+ * beneath it open: Windows refuses to rename a folder while any handle
+ * inside it stands — a watch, an open file, a process's working folder —
+ * a rule no other platform has (moveFolder). */
+export class FolderInUseError extends Error {
+  readonly code: string | undefined;
+  constructor(readonly path: string, cause: NodeJS.ErrnoException) {
+    super(cause.message, { cause });
+    this.name = "FolderInUseError";
+    this.code = cause.code;
+  }
+}
+
+/** Rename a folder as `renameSync` does; where Windows refuses it with
+ * `EPERM` or `EBUSY`, which it answers while something holds a file or
+ * folder beneath it open, the refusal is a FolderInUseError, which
+ * holds on no other platform. */
+export function moveFolder(from: string, to: string): void {
+  try { renameSync(from, to); }
+  catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (process.platform === "win32" && (code === "EPERM" || code === "EBUSY")) throw new FolderInUseError(from, error as NodeJS.ErrnoException);
+    throw error;
+  }
+}
+
+/** How often, and how far apart, a step a held folder refuses is tried
+ * again (retryWhileInUse): counted in tries, not time, so an event loop
+ * busy meanwhile spends none of them. */
+export const IN_USE_RETRIES = 20;
+export const IN_USE_RETRY_WAIT_MS = 50;
+
+/** Run `attempt` — one step at its instant, which undoes what it did
+ * before it throws — and run it again, whole, while a folder it renames
+ * is held (FolderInUseError) or `again` takes its refusal for one worth
+ * the same, up to IN_USE_RETRIES more times IN_USE_RETRY_WAIT_MS apart,
+ * so what holds it briefly — a process finishing, a file being closed —
+ * lets go; the last refusal then stands. The first try runs at once,
+ * within its caller's step. */
+export async function retryWhileInUse<T>(attempt: () => T | Promise<T>, again: (error: unknown) => boolean = () => false): Promise<T> {
+  for (let retries = 0; ; retries += 1) {
+    try { return await attempt(); }
+    catch (error) {
+      if (!(error instanceof FolderInUseError || again(error)) || retries >= IN_USE_RETRIES) throw error;
+      await new Promise((resolve) => setTimeout(resolve, IN_USE_RETRY_WAIT_MS));
+    }
+  }
+}
+
 /** `removeTree` for garbage — a stage, or what a removal set aside —
  * whose failure is said on the console, never in place of the outcome
  * of the work that made it. */

@@ -274,8 +274,9 @@ export class ApplicationMedia {
       this.prepared.delete(uploads.directory);
     };
     for (const [name, entry] of [...this.readers]) {
-      if (entry.ownerKey === key || (owner.kind === "project" && entry.repository === owner.id)) void this.release(name, entry);
+      if (entry.ownerKey === key) void this.release(name, entry);
     }
+    if (owner.kind === "project") this.releaseRepositories([owner.id]);
     let removed: T;
     try {
       const running = remove();
@@ -286,6 +287,17 @@ export class ApplicationMedia {
     }
     retire();
     return removed;
+  }
+
+  /** Close the cached readers of every owner within the clones of the
+   * spex repositories `keys` (media-20): on Windows an open reader holds
+   * its clone where it lies, refusing its move or removal. A read in
+   * flight ends its chunk first; the owner's next read opens the file
+   * again wherever its clone then lies. */
+  releaseRepositories(keys: readonly string[]): void {
+    for (const [name, entry] of [...this.readers]) {
+      if (entry.repository !== undefined && keys.includes(entry.repository)) void this.release(name, entry);
+    }
   }
 
   /** Whether an owner stands now, as an upload's admission reads it. */

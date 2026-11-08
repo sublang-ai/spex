@@ -9,8 +9,7 @@
 // refuses to remove a read-only file, and the Node the app's Electron
 // ships no longer makes one writable first; there a watched folder also
 // holds its clone where it lies. CI runs this file on Windows on that
-// Node, where the join waits for a credential an instance brokers to
-// reach Git.
+// Node.
 
 import assert from "node:assert/strict";
 import { syncBuiltinESMExports } from "node:module";
@@ -28,7 +27,7 @@ import { scratchDir } from "./testing/scratch.js";
 import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, bareRepo, holdingGit, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
+const { git, gitFolder, bareRepo, holdingGit, sleep, snapshot, startHome, startHost, signIn, addFolder, writeForeignSession: writeSession, announced: listed } = fixture;
 test.after(() => fixture.dispose());
 
 /** The environment a set-up's Git runs with: no configuration of the
@@ -46,21 +45,7 @@ const filesOf = (dir: string): string[] =>
  * the commit its `spex` branch holds. */
 const standing = (clone: string): { files: Map<string, Buffer>; head: string } => ({ files: snapshot(clone), head: git(clone, "rev-parse", "HEAD") });
 
-/** A session another host wrote into a clone, as the playbook CLI writes
- * one (core-service-60). */
-function writeSession(clone: string, cwd: string, prompt: string): string {
-  const id = randomUUID();
-  const sessions = join(clone, "sessions");
-  writeFileSync(join(sessions, `${id}.json`), JSON.stringify({ schemaVersion: 6, sessionId: id, state: "settled", cwd }), { mode: 0o600 });
-  writeFileSync(join(sessions, `${id}.records.jsonl`), turnRecords(prompt, 1).map((record, index) => JSON.stringify({ v: 1, seq: index + 1, record })).join("\n") + "\n", { mode: 0o600 });
-  return id;
-}
-
 type StartedHome = Awaited<ReturnType<typeof startHome>>;
-
-/** Whether the core announces the session `id` within 20 seconds. */
-const listed = (home: StartedHome, id: string): Promise<boolean> =>
-  home.client.waitFor((message) => message.type === "session.state" && message.session.id === id, 20_000).then(() => true, () => false);
 
 /** What a removal left beside the clone: its folder, or what it set
  * aside. */
@@ -86,7 +71,7 @@ async function watchedProject(name: string, options: { folderName?: string; with
   const { key, clone } = await addFolder(home, folder);
   assert.ok(filesOf(join(clone, ".git", "objects")).some(readOnly), "the clone's first commit stored Git's read-only objects");
   if (!withSession) return { home, key, clone, session: "" };
-  const session = writeSession(clone, folder, "written by another host");
+  const session = await writeSession(clone, folder, "written by another host");
   assert.ok(await listed(home, session), "the core read the clone's sessions");
   return { home, key, clone, session };
 }
@@ -139,7 +124,7 @@ test("projects-46: a removal whose rename is refused changes nothing, the clone 
     // The scan a refusal makes once settles first, so only the watch
     // resumed reads a session written after it.
     await sleep(500);
-    const later = writeSession(clone, home.projectDir, "written after the refusal");
+    const later = await writeSession(clone, home.projectDir, "written after the refusal");
     assert.ok(await listed(home, later), "[projects-10] the core reads the clone's sessions again");
   } finally { release(); }
   assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null);
@@ -394,14 +379,11 @@ test("projects-46: a removal whose write of home.yaml fails puts the clone back 
 });
 
 test("space-76: a join whose place is taken while its clone runs stops, leaving what stands there, and no private folder of it remains", async (t) => {
-  // On Windows no join clones yet: the credential an instance brokers is
-  // refused there, the runtime's path holding backslashes Git's helper
-  // line is not quoted for.
-  if (process.platform === "win32") { t.skip("no brokered credential reaches Git on Windows yet"); return; }
   const host = await startHost();
   // A name of 250 characters, near the longest a folder takes: the
-  // join's private folder is named apart from it.
-  const name = `${"t".repeat(245)}-spex`;
+  // join's private folder is named apart from it. Git for Windows takes
+  // no path so long without core.longpaths, so a short one stands there.
+  const name = process.platform === "win32" ? "taken-spex" : `${"t".repeat(245)}-spex`;
   const listing = host.script.addRepository({ group: "acme", name });
   const key = hostKey(host, `acme/${name}`);
   const home = await startHome("join-taken", { host, project: false, extra: { signIn: "browser" } });

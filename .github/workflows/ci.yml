@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: |
           env -u ELECTRON_SKIP_BINARY_DOWNLOAD node node_modules/electron/install.js
-          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js packages/core/dist/git-credential.integration.test.js
+          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --test packages/core/dist/store-removal.integration.test.js packages/core/dist/git-removal.integration.test.js packages/core/dist/git-credential.integration.test.js packages/core/dist/clone-moves.integration.test.js
 
   journeys:
     needs: changes

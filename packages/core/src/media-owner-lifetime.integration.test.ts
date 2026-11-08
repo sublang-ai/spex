@@ -351,6 +351,41 @@ test("media-18: a project's removal closes the cached readers of every owner wit
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
+test("media-18: a clone's move closes the cached readers of every owner within it, the next read opening the file where the clone now lies", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-moved-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const nested = draft("nested");
+  const closed: string[] = [];
+  class WatchedClose extends ApplicationMedia {
+    override ownerStore(owner: MediaUploadOwner, write = false) {
+      const store = super.ownerStore(owner, write);
+      return {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+        const reader = await store.openAsset(...args);
+        return {...reader, close: async () => { closed.push(mediaOwnerKey(owner)); await reader.close(); }};
+      }};
+    }
+  }
+  const {options, place} = fixture(home);
+  const media = new WatchedClose({...options, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    await media.read(nested, asset.assetId, 0, 1);
+    // Another clone's move closes nothing here.
+    media.releaseRepositories(["tester/other-spex"]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(closed, [], "[media-22] another clone's move leaves the reader open");
+    // The move lets go of the readers within the moving clone first: on
+    // Windows an open one holds the clone where it lies.
+    media.releaseRepositories([PROJECT]);
+    for (let i = 0; i < 100 && closed.length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(closed, [mediaOwnerKey(nested)], "[media-22] the reader within the moving clone closes");
+    await rename(cloneOf(home), cloneOf(home, true));
+    place.moved = true;
+    assert.equal((await media.read(nested, asset.assetId, 1, 5)).data, Buffer.from("ested").toString("base64"), "[media-22] the next read opens the file where the clone now lies");
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
 test("media-18: removal waits for no reader, closing its owner's cached readers", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-reader-"));
   await mkdir(cloneOf(home), {recursive: true});

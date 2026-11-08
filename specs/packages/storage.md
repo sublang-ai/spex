@@ -172,7 +172,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 
 When, for a clone under your own group's folder holding no placement with an instance, the host accepts a pick that creates or joins a spex repository at an instance [[space-58](space.md#space-58)], or an Attach adds its first placement [[space-99](space.md#space-99)], the core shall move the clone under that instance's folder at the repository's path there [[storage-1](#storage-1)] in one rename, as a host's rename moves a clone [[space-60](space.md#space-60)], a legacy environment's built-in spec package's lock, where its pairing's stands, taking that instance's registry whether or not the clone moves [[environments-11](environments.md#environments-11)], while an explicitly selected registry and package pins remain unchanged as only the Space binding and a current lock's request digest follow the placement [[environments-38](environments.md#environments-38)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], the pick or the Attach stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
+- where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], or something else holds the clone open through every try of it as it holds a sync's move [[space-60](space.md#space-60)], the pick or the Attach stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
 
 ### storage-31
 
@@ -217,6 +217,8 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one beneath which a session lease does not read as a dead owner of this machine by steps 3 and 4 of the root lease's rule [[storage-26](#storage-26)] | neither dropped nor moved, the drop refused to the act that asked, naming the session |
 | one whose destination something other than the clone itself takes | neither dropped nor moved, refused as a sync's move is [[space-60](space.md#space-60)] |
 | one whose next placement no read of this run has placed [[git-host-5](git-host.md#git-host-5)] | neither dropped nor moved, the drop refused to the act that asked, naming that placement's instance |
+| one something else holds open through every try of its move, as it holds a sync's move [[space-60](space.md#space-60)] | neither dropped nor moved, the drop refused to the act that asked, naming the project as in use |
+| one whose drop Git refuses once it moved | moved back, neither dropped nor moved, the drop refused in Git's words |
 | any other | dropped and moved |
 
 ### storage-7
@@ -619,6 +621,13 @@ Where CI runs on Windows, the integration suite shall verify real Windows storag
 ### storage-59
 
 When the integration suite makes a scratch clone a repository whose first commit fails after Git stored its files, on every platform and on Windows on the Node the app ships, it shall assert that the clone is left a plain folder with no `.git`, its files standing, and that the failure reported is the commit's own [[storage-6](#storage-6)].
+
+### storage-60
+
+When the integration suite starts a real core on a scratch home reading its clones' sessions as they change, signed in to the stand-in host, on every platform and on Windows on the Node the app ships, it shall assert:
+
+- a pick creating a local-only project's repository in a group moves its clone, holding a session another host wrote, under the stand-in's folder, its first sync pushing from there, its pair following, and a session written there afterwards read [[storage-35](#storage-35)];
+- on Windows, a confirmed Leave of that clone's only placement while another program holds the clone open is refused naming the project as in use, its remote, its placement file and its pair standing, and once let go, the Leave drops the placement and moves the clone under your own group's folder [[storage-38](#storage-38)].
 
 ## References
 

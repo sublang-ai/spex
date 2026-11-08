@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Native Windows moves a project's records where Spex moves them: at the first sign-in, which names your own group's folder after your login, when a project is added to a group, when a Space renames or moves it, and when one of its places is left or followed; Spex's own watching of the records held them in place before. While another program holds them open, the move changes nothing and stops naming the project, with Retry.
+
 - Native Windows reaches a Space's Git with the credential the Space brokers, so a group's project opens, its records sync and a Git source at a Space installs there; the app's own path, holding backslashes, was refused before.
 
 - Native Windows removes a project's records, cleans up after a join or a new project's first commit fails, and keeps one mirror when two of its own fetches of a Git source meet; Git's read-only files, and Spex's own watching of a project's records, refused these before. A removal refused, such as while another program holds a file of the project's records open, leaves the project as it was. Replacing or removing installed packages no longer empties the folders their links point to, such as the app's own playbook engine.
