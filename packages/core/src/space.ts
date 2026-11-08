@@ -4773,8 +4773,8 @@ export class SpaceManager {
   /** Whether a clone holds a placement at an instance other than the
    * one whose remote bears `except` (storage-34: at most one per
    * instance). */
-  private holdsAt(machine: RepositorySync, instance: HostInstance, except: string | undefined): boolean {
-    return machine.placements.some((placement) => placement.name !== except && placement.instance !== null && canonicalOrigin(placement.instance) === instance.origin);
+  private holdsAt(machine: RepositorySync, instance: HostInstance, except: string | undefined, placements: readonly Placement[] = machine.placements): boolean {
+    return placements.some((placement) => placement.name !== except && placement.instance !== null && canonicalOrigin(placement.instance) === instance.origin);
   }
 
   /** The instance at an origin, as a placement's turn takes its
@@ -5604,9 +5604,10 @@ export class SpaceManager {
     if (facts.id === null) machine.recordId(listing.repository.id, facts.remote);
     if (!machine.recordsNow(facts.remote, listing.repository.id)) return "kept";
     // What chose that instance, read again at each try: still signed in,
-    // governing the clone and listing its host repository at `to`.
+    // governing the clone, holding no placement of it, and listing its
+    // host repository at `to`.
     const stillGoverned = (): boolean => {
-      if (!this.signedInAt(governing) || this.governingOf(machine) !== governing) return false;
+      if (!this.signedInAt(governing) || this.governingOf(machine) !== governing || this.holdsAt(machine, governing, undefined, machine.placementsNow())) return false;
       const now = this.listingOf(governing, facts);
       return now !== undefined && this.keyAtHost(now.repository, governing) === to && !this.collides(now.repository.group, this.viewOf(governing));
     };
@@ -8041,10 +8042,11 @@ export class SpaceManager {
     const key = moves ? this.keyAtHost(listing.repository, to) : from;
     if (key === null) throw movedMeanwhile(from);
     const source = machine.repository.dir;
-    // The instance followed, read again at each try: still signed in and
-    // listing the host repository, at `key` where the clone moves.
+    // The instance followed, read again at each try: still signed in,
+    // holding no other placement of the clone, and listing the host
+    // repository at `key` where the clone moves.
     const listed = (): boolean => {
-      if (!this.signedInAt(to)) return false;
+      if (!this.signedInAt(to) || this.holdsAt(machine, to, placement.name, machine.placementsNow())) return false;
       const now = this.listingOf(to, { remote: placement.url, id: placement.id });
       return now !== undefined && (!moves || this.keyAtHost(now.repository, to) === key);
     };
