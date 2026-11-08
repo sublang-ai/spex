@@ -5893,8 +5893,10 @@ export class SpaceManager {
    * clones already moved back. What the core holds open within the
    * clones is let go of across the step (atMoveInstant), which a rename
    * something else holds a clone open against runs again, whole, a
-   * conflict after every try. Writers beneath the clones resolve their
-   * paths at their own instants. */
+   * conflict after every try. Each try reads again the clones beneath,
+   * letting go of any that came meanwhile, and that the sign-in still
+   * stands: one signed out or replaced meanwhile renames nothing. Writers
+   * beneath the clones resolve their paths at their own instants. */
   private async renameOwn(account: Pick<HostAccount, "login">, instance: HostInstance, generation: number): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
@@ -5903,9 +5905,10 @@ export class SpaceManager {
     const identity = await this.machineIdentity();
     if (generation !== instance.accountGeneration) return "none";
     const beneath = (name: string): string[] => store.listRepositories().map((repository) => repository.key).filter((key) => key.startsWith(`${name}/`));
+    const signedIn = (): boolean => generation === instance.accountGeneration && this.signedInAt(instance);
     let outcome: "none" | "conflict" | { from: string; to: string }[];
     try {
-      outcome = await this.atMoveInstant(beneath(store.home.ownName), () => this.renameOwnNow(target, device, identity, beneath));
+      outcome = await this.atMoveInstant(() => beneath(store.home.ownName), () => this.renameOwnNow(target, device, identity, beneath, signedIn));
     } catch (error) {
       console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
       return "conflict";
@@ -5916,14 +5919,14 @@ export class SpaceManager {
   }
 
   /** One try of renameOwn's step, nothing awaited from its reads to its
-   * last rename: the moves it made, else "none" or "conflict" with
-   * nothing moved; a rename something holds a clone open against moves
-   * the others back and throws FolderInUseError, for the step to run
-   * again. */
-  private renameOwnNow(target: string, device: string, identity: string | undefined, beneath: (name: string) => string[]): "none" | "conflict" | { from: string; to: string }[] {
+   * last rename: the moves it made, else "none" — the sign-in no longer
+   * standing among them — or "conflict" with nothing moved; a rename
+   * something holds a clone open against moves the others back and
+   * throws FolderInUseError, for the step to run again. */
+  private renameOwnNow(target: string, device: string, identity: string | undefined, beneath: (name: string) => string[], signedIn: () => boolean): "none" | "conflict" | { from: string; to: string }[] {
     const store = this.host.store;
     const current = store.home.ownName;
-    if (target === current || current !== device) return "none";
+    if (target === current || current !== device || !signedIn()) return "none";
     const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
     // Your own group's clone moves last, so the home names its folder
@@ -6637,7 +6640,7 @@ export class SpaceManager {
       const count = await machine.unreceivedUnits(placement.name);
       if (count > 0) return { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: unreceivedRecords(count), guidance: confirmToRemove(), retry: true, count };
     }
-    await this.dropByFile(machine, placement, await this.machineIdentity(), true);
+    await this.dropByFile(machine, placement, await this.machineIdentity(), { leaves: true });
     this.endWaiting(machine.key, origin);
     return undefined;
   }
@@ -7951,12 +7954,15 @@ export class SpaceManager {
       const placement = machine.placementsNow().find((candidate) => candidate.name === name);
       if (!placement?.instance || this.fileNames(machine, placement)) continue;
       const follows = this.followedByFile(machine, placement);
+      // What decided the follow or the drop, read again at each try of
+      // its move: a file changed meanwhile leaves the placement to its
+      // next turn (storage-41).
+      const still = (): boolean => !this.fileNames(machine, placement) && this.followedByFile(machine, placement)?.to.origin === follows?.to.origin;
       try {
-        if (follows) fates.set(name, { kind: "followed", name: await this.followByFile(machine, placement, follows.to, follows.listing, identity) });
-        else {
-          await this.dropByFile(machine, placement, identity);
-          fates.set(name, { kind: "dropped" });
-        }
+        if (follows) {
+          const followed = await this.followByFile(machine, placement, follows.to, follows.listing, identity, still);
+          if (followed !== undefined) fates.set(name, { kind: "followed", name: followed });
+        } else if (await this.dropByFile(machine, placement, identity, { still })) fates.set(name, { kind: "dropped" });
       } catch (error) {
         if (!(error instanceof SpaceStopped)) throw error;
         fates.set(name, { kind: "withheld", stop: error });
@@ -8007,9 +8013,10 @@ export class SpaceManager {
    * it (renameClone, whose refusal refuses the follow whole), then its
    * remote renamed to that instance's folder with its file rewritten and
    * this device's records re-keyed (followRemote). The name its remote
-   * then bears.
+   * then bears; none, nothing changed, where what decided the follow,
+   * `still`, no longer stands at a try of its step.
    */
-  private async followByFile(machine: RepositorySync, placement: Placement, to: HostInstance, listing: HostListing, identity: string | undefined): Promise<string> {
+  private async followByFile(machine: RepositorySync, placement: Placement, to: HostInstance, listing: HostListing, identity: string | undefined, still: () => boolean = () => true): Promise<string | undefined> {
     const store = this.host.store;
     const from = machine.key;
     const folder = to.folder() as string;
@@ -8017,13 +8024,15 @@ export class SpaceManager {
     const key = moves ? this.keyAtHost(listing.repository, to) : from;
     if (key === null) throw movedMeanwhile(from);
     const source = machine.repository.dir;
-    const step = (): ReturnType<RepositorySync["followRemote"]> => {
+    const step = (): ReturnType<RepositorySync["followRemote"]> | "kept" => {
       if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
+      if (!still()) return "kept";
       if (key !== from) this.renameClone(machine, key, identity);
       return machine.followRemote(placement, folder);
     };
     // Nothing is awaited from here to the rename, at each try.
     const followed = key === from ? step() : await this.atMoveInstant([from], step);
+    if (followed === "kept") return undefined;
     if (!followed) console.error(`spex: the remote of ${machine.key} keeps its name until its next sync`);
     if (key !== from) await this.afterMove([{ from, to: key }]);
     return followed?.name ?? placement.name;
@@ -8048,9 +8057,12 @@ export class SpaceManager {
    * move back, left where it moved for its next sync — stops the act with
    * its placement standing. A Leave's drop, `leaves`, deletes that
    * placement's file in the same step (space-98), a local change the
-   * clone's next sync carries.
+   * clone's next sync carries. Whether it was dropped: not, nothing
+   * changed, where what decided the drop, `still`, no longer stands at a
+   * try of its move.
    */
-  private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined, leaves = false): Promise<void> {
+  private async dropByFile(machine: RepositorySync, placement: Placement, identity: string | undefined, how: { leaves?: boolean; still?: () => boolean } = {}): Promise<boolean> {
+    const { leaves = false, still = () => true } = how;
     const store = this.host.store;
     const from = machine.key;
     const placements = machine.placementsNow();
@@ -8067,7 +8079,7 @@ export class SpaceManager {
       const refused = machine.dropOrStop(placement);
       if (refused) throw refused;
       deleteFile();
-      return;
+      return true;
     }
     const leased = heldSessionLease(machine.repository.dir, identity);
     if (leased !== undefined) throw inUseStop("check", `sessions/${leased}`, store);
@@ -8084,7 +8096,7 @@ export class SpaceManager {
       const refused = machine.dropOrStop(placement);
       if (refused) throw refused;
       deleteFile();
-      return;
+      return true;
     }
     // The clone moves first, its move's refusals read before it, then
     // the placement is dropped, nothing awaited between at each try: a
@@ -8095,12 +8107,14 @@ export class SpaceManager {
     // words.
     const source = machine.repository.dir;
     let stays = false;
+    let dropped: boolean;
     try {
-      await this.atMoveInstant([from], () => {
+      dropped = await this.atMoveInstant([from], () => {
         if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
+        if (!still()) return false;
         this.renameClone(machine, to, identity);
         const refused = machine.dropOrStop(placement);
-        if (!refused) return;
+        if (!refused) return true;
         try { this.renameClone(machine, from, identity); }
         catch (error) {
           stays = true;
@@ -8112,8 +8126,10 @@ export class SpaceManager {
       if (stays) await this.afterMove([{ from, to }]);
       throw error;
     }
+    if (!dropped) return false;
     deleteFile();
     await this.afterMove([{ from, to }]);
+    return true;
   }
 
   /** After a merge, two placement files of a clone naming one host
@@ -8182,21 +8198,40 @@ export class SpaceManager {
    * One step moving the clones at `keys` at its instant (space-59,
    * space-60, storage-35, storage-38): what the core holds open within
    * them is let go of first (releaseClones) and taken up again after,
-   * wherever they then lie. `step` — its own checks, then its renames
-   * (renameClone), `home.yaml` written with them — undoes what it moved
-   * before it throws; while something holds a folder it renames open,
-   * as Windows refuses, it runs again, whole, as a removal does
-   * (projects-10), and held after every try, the move stops, naming the
-   * project of the first key (heldStop). The first try runs at once,
-   * within its caller's step.
+   * wherever they then lie — `keys` read again before each try where it
+   * is a function, so a clone the step's own reads list since is let go
+   * of too. `step` — its own checks, then its renames (renameClone),
+   * `home.yaml` written with them — undoes what it moved before it
+   * throws; while something holds a folder it renames open, as Windows
+   * refuses, it runs again, whole, as a removal does (projects-10), and
+   * held after every try, the move stops, naming the project of the
+   * first key (heldStop). The first try runs at once, within its
+   * caller's step.
    */
-  private async atMoveInstant<T>(keys: readonly string[], step: () => T): Promise<T> {
-    const resume = this.host.releaseClones?.(keys);
-    try { return await retryWhileInUse(step); }
-    catch (error) {
-      if (error instanceof FolderInUseError) throw heldStop(keys[0] ?? "");
+  private async atMoveInstant<T>(keys: readonly string[] | (() => readonly string[]), step: () => T): Promise<T> {
+    const listed = typeof keys === "function" ? keys : () => keys;
+    const released = new Set<string>();
+    const resumes: (() => void)[] = [];
+    let first: string | undefined;
+    const letGo = (): void => {
+      const fresh = listed().filter((key) => !released.has(key));
+      if (fresh.length === 0) return;
+      first ??= fresh[0];
+      for (const key of fresh) released.add(key);
+      const resume = this.host.releaseClones?.(fresh);
+      if (resume) resumes.push(resume);
+    };
+    try {
+      return await retryWhileInUse(() => {
+        letGo();
+        return step();
+      });
+    } catch (error) {
+      if (error instanceof FolderInUseError) throw heldStop(first ?? "");
       throw error;
-    } finally { resume?.(); }
+    } finally {
+      for (const resume of resumes.reverse()) resume();
+    }
   }
 
   /** What refuses a clone's move to `to` (renameClone), thrown as its
