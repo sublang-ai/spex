@@ -218,7 +218,7 @@ When the core drops a clone's first placement — by Leave [[space-98](space.md#
 | one whose destination something other than the clone itself takes | neither dropped nor moved, refused as a sync's move is [[space-60](space.md#space-60)] |
 | one whose next placement no read of this run has placed [[git-host-5](git-host.md#git-host-5)] | neither dropped nor moved, the drop refused to the act that asked, naming that placement's instance |
 | one something else holds open through every try of its move, as it holds a sync's move [[space-60](space.md#space-60)] | neither dropped nor moved, the drop refused to the act that asked, naming the project as in use |
-| one whose drop Git refuses once it moved | moved back, neither dropped nor moved, the drop refused in Git's words — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
+| one whose drop Git refuses once it moved | moved back, neither dropped nor moved, the drop refused in Git's words [[space-15](space.md#space-15)] — one that cannot move back staying where it moved, its placement standing until its next sync moves it [[space-60](space.md#space-60)] |
 | any other | dropped and moved |
 
 ### storage-7
