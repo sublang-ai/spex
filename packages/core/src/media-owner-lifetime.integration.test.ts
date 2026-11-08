@@ -50,6 +50,14 @@ async function replace(path: string): Promise<{original: string; successor: stri
   return {original, successor: identity(await stat(path, {bigint: true}))};
 }
 
+/** Whether `promise` still stands unsettled `ms` from now. */
+async function stillPending(promise: Promise<unknown>, ms = 50): Promise<boolean> {
+  let settled = false;
+  promise.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  return !settled;
+}
+
 /** Media one of whose steps waits while a gate is armed — a
  * publication's private preparation ("import"), or an owner store's own
  * preparation ("prepare", a validation's) — the first such step taking
@@ -351,7 +359,31 @@ test("media-18: a project's removal closes the cached readers of every owner wit
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
-test("media-18: a clone's move closes the cached readers of every owner within it, the next read opening the file where the clone now lies", {timeout: 10_000}, async () => {
+test("media-18: a project's removal opens no reader within its clone until it ends, a read arriving meanwhile then refused", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-removed-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const nested = draft("nested");
+  let gone = false;
+  const {options} = fixture(home);
+  const media = new ApplicationMedia({...options, assertOwner() { if (gone) throw new Error("The project is gone"); }, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    // The removal lets go of the clone across its every try, as the
+    // core's does (projects-10).
+    const resume = media.releaseRepositories([PROJECT]);
+    const reading = media.read(nested, asset.assetId, 0, 1);
+    assert.ok(await stillPending(reading), "[media-20] a read arriving while the removal holds the clone waits for its end");
+    await media.retireOwner({kind: "project", id: PROJECT}, async () => {
+      gone = true;
+      await rm(cloneOf(home), {recursive: true, force: true});
+    });
+    resume();
+    await assert.rejects(reading, /The project is gone/, "[media-20] then refused, its owner gone");
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: a clone's move closes the cached readers of every owner within it and opens none there until it ends, the next read opening the file where the clone now lies", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-moved-reader-"));
   await mkdir(cloneOf(home), {recursive: true});
   const nested = draft("nested");
@@ -372,17 +404,25 @@ test("media-18: a clone's move closes the cached readers of every owner within i
     const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
     await media.read(nested, asset.assetId, 0, 1);
     // Another clone's move closes nothing here.
-    media.releaseRepositories(["tester/other-spex"]);
+    const other = media.releaseRepositories(["tester/other-spex"]);
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.deepEqual(closed, [], "[media-22] another clone's move leaves the reader open");
+    other();
     // The move lets go of the readers within the moving clone first: on
     // Windows an open one holds the clone where it lies.
-    media.releaseRepositories([PROJECT]);
+    const resume = media.releaseRepositories([PROJECT]);
     for (let i = 0; i < 100 && closed.length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
     assert.deepEqual(closed, [mediaOwnerKey(nested)], "[media-22] the reader within the moving clone closes");
+    // A read arriving while the move holds the clone opens nothing there
+    // — on Windows it would hold the clone again through the move's
+    // every try — until the move ends.
+    const reading = media.read(nested, asset.assetId, 1, 5);
+    assert.ok(await stillPending(reading), "[media-22] a read arriving while the move holds the clone waits for its end");
     await rename(cloneOf(home), cloneOf(home, true));
     place.moved = true;
-    assert.equal((await media.read(nested, asset.assetId, 1, 5)).data, Buffer.from("ested").toString("base64"), "[media-22] the next read opens the file where the clone now lies");
+    resume();
+    assert.equal((await reading).data, Buffer.from("ested").toString("base64"), "[media-22] then opens the file where the clone now lies");
+    assert.equal((await media.read(nested, asset.assetId, 1, 5)).data, Buffer.from("ested").toString("base64"), "[media-22] as the next read does");
   } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 

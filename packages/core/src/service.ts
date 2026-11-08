@@ -1754,14 +1754,17 @@ export class CoreService {
 
   /** Let go of what this core holds open within the clones at `keys` —
    * its watches of their sessions and config, and the attachments it
-   * reads there — for a step that moves or removes them, until the
-   * function returned takes them up again wherever the clones then lie:
-   * on Windows each one holds its clone where it lies (projects-10,
-   * space-59, space-60). */
+   * reads there — for a step that moves or removes them, across its
+   * every try, until the function returned takes them up again wherever
+   * the clones then lie: on Windows each one holds its clone where it
+   * lies (projects-10, space-59, space-60, media-22). */
   private letGoOfClones(keys: readonly string[]): () => void {
-    const resume = this.watches.release(keys);
-    this.media.releaseRepositories(keys);
-    return resume;
+    const watches = this.watches.release(keys);
+    const media = this.media.releaseRepositories(keys);
+    return () => {
+      media();
+      watches();
+    };
   }
 
   /** A config file changed on disk: reload once the writes settle. */
@@ -3057,11 +3060,11 @@ export class CoreService {
         // forgotten and the clone deleted. No other work is waited for.
         const { leases, check, changed } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
-        // On Windows what the core watches in the clone holds it where it
-        // lies, refusing its rename: let go of across every try, so a
-        // watch rebuilt between tries never reopens it, and taken up again
-        // where the clone stays.
-        const resume = this.watches.release([key]);
+        // On Windows what the core watches and reads in the clone holds
+        // it where it lies, refusing its rename: let go of across every
+        // try, so neither a watch rebuilt nor an attachment read between
+        // tries reopens it, and taken up again where the clone stays.
+        const resume = this.letGoOfClones([key]);
         try {
           // Tried again, whole, while the clone is held open or the
           // records it counted changed before it committed.

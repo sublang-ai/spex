@@ -116,6 +116,10 @@ export class ApplicationMedia {
    * own, private, emptied at start under the home lease. */
   private readonly assetStaging: string;
   private readonly readers = new Map<string, ReaderEntry>();
+  /** The clones a step moving or removing them holds let go of, by
+   * spex repository: how many steps hold each, and the end the reads
+   * arriving meanwhile wait for (media-20, media-22). */
+  private readonly held = new Map<string, { steps: number; ended: Promise<void>; end: () => void }>();
   private readonly timer: ReturnType<typeof setInterval>;
   private readonly prepared = new Map<string, Promise<void>>();
   private closed = false;
@@ -276,7 +280,7 @@ export class ApplicationMedia {
     for (const [name, entry] of [...this.readers]) {
       if (entry.ownerKey === key) void this.release(name, entry);
     }
-    if (owner.kind === "project") this.releaseRepositories([owner.id]);
+    if (owner.kind === "project") this.closeReadersIn([owner.id]);
     let removed: T;
     try {
       const running = remove();
@@ -289,15 +293,51 @@ export class ApplicationMedia {
     return removed;
   }
 
+  /**
+   * Let go of the clones of the spex repositories `keys` for a step
+   * moving or removing them, until the function returned is called
+   * (media-20, media-22): the cached readers of every owner within them
+   * closed now, and none opened there meanwhile — on Windows an open
+   * reader holds its clone where it lies, refusing its move or removal,
+   * so one opened between the step's tries would refuse every later one.
+   * A read in flight ends its chunk first; one arriving meanwhile waits
+   * for that call, then opens its file wherever its clone then lies.
+   */
+  releaseRepositories(keys: readonly string[]): () => void {
+    for (const key of keys) {
+      const hold = this.held.get(key);
+      if (hold) { hold.steps += 1; continue; }
+      let end!: () => void;
+      const ended = new Promise<void>((resolve) => { end = resolve; });
+      this.held.set(key, { steps: 1, ended, end });
+    }
+    this.closeReadersIn(keys);
+    let resumed = false;
+    return () => {
+      if (resumed) return;
+      resumed = true;
+      for (const key of keys) {
+        const hold = this.held.get(key);
+        if (!hold || (hold.steps -= 1) > 0) continue;
+        this.held.delete(key);
+        hold.end();
+      }
+    };
+  }
+
   /** Close the cached readers of every owner within the clones of the
-   * spex repositories `keys` (media-20): on Windows an open reader holds
-   * its clone where it lies, refusing its move or removal. A read in
-   * flight ends its chunk first; the owner's next read opens the file
-   * again wherever its clone then lies. */
-  releaseRepositories(keys: readonly string[]): void {
+   * spex repositories `keys`, waiting for none: a read in flight ends
+   * its chunk first. */
+  private closeReadersIn(keys: readonly string[]): void {
     for (const [name, entry] of [...this.readers]) {
       if (entry.repository !== undefined && keys.includes(entry.repository)) void this.release(name, entry);
     }
+  }
+
+  /** The spex repository whose clone holds an owner's files, where it
+   * stands. */
+  private repositoryOf(owner: MediaOwner): string | undefined {
+    return owner.kind === "session" ? this.options.repositoryOfSession?.(owner.id) : mediaOwnerRepository(owner);
   }
 
   /** Whether an owner stands now, as an upload's admission reads it. */
@@ -366,19 +406,27 @@ export class ApplicationMedia {
     const key = `${mediaOwnerKey(owner)}:${assetId}`;
     let entry = this.readers.get(key);
     if (!entry) {
-      // No more than 32 verified file handles remain open between chunks.
-      while (!entry && this.readers.size >= 32) {
-        const oldest = [...this.readers.entries()].sort((a, b) => a[1].touched - b[1].touched)[0];
-        if (oldest) await this.release(...oldest);
+      // No reader opens within a clone a step holds let go of until the
+      // step ends (media-22), and no more than 32 verified file handles
+      // remain open between chunks.
+      for (;;) {
+        const repository = this.repositoryOf(owner);
+        const hold = repository === undefined ? undefined : this.held.get(repository);
+        if (hold) await hold.ended;
+        else if (this.readers.size >= 32) {
+          const oldest = [...this.readers.entries()].sort((a, b) => a[1].touched - b[1].touched)[0];
+          if (oldest) await this.release(...oldest);
+        } else break;
         if (this.closed) throw new Error(i18n._({id: "Media storage has stopped.", comment: "Media storage failure"}));
         entry = this.readers.get(key);
+        if (entry) break;
       }
       if (!entry) {
-        // Revalidate after evicting another reader yielded.
+        // Revalidate after waiting or evicting another reader yielded.
         this.options.assertOwner(owner, false);
         entry = {
           ownerKey: mediaOwnerKey(owner),
-          repository: owner.kind === "session" ? this.options.repositoryOfSession?.(owner.id) : mediaOwnerRepository(owner),
+          repository: this.repositoryOf(owner),
           opened: owner.kind === "session"
             ? this.options.openSessionAsset(owner.id, assetId)
             : this.openOwnerAsset(owner, assetId),
@@ -436,6 +484,9 @@ export class ApplicationMedia {
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.timer);
+    // A read waiting for a step that holds its clone ends, refused.
+    for (const hold of this.held.values()) hold.end();
+    this.held.clear();
     await this.uploads.close();
     await this.closeReaders();
     if (this.stagingReady) {
