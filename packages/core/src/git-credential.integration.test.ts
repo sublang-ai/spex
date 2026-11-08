@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The credential helper's line (git-host-36): Git runs it with `sh` on
-// every platform — on Windows, Git for Windows' own — so each path in it
-// is one word in single quotes, and a path holding no line break or NUL
-// runs as it is. CI runs this file on Windows on the Node the app's
-// Electron ships, whose path holds backslashes.
+// The credential helper's line (git-host-36, git-host-37) and its
+// answers (git-host-38): Git runs the line with `sh` on every platform —
+// on Windows, Git for Windows' own — so each path in it is one word in
+// single quotes, and a path holding no line break or NUL runs as it is.
+// CI runs this file on Windows on the Node the app's Electron ships,
+// whose path holds backslashes.
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -55,7 +56,7 @@ test("git-host-36: Git runs the helper's line on this runtime, each path one wor
   }
 });
 
-test("git-host-36: the helper's line quotes each path as one word and refuses only a path no line carries", async () => {
+test("git-host-37: the helper's line quotes each path as one word and refuses only a path no line carries", async () => {
   const electron = await withGitCredential({ username: "oauth2", secret: "s3cret" }, { execPath: "/Applications/Spex.app/Contents/MacOS/Spex", electron: true });
   try {
     assert.equal(electron.env.ELECTRON_RUN_AS_NODE, "1");
@@ -77,7 +78,7 @@ test("git-host-36: the helper's line quotes each path as one word and refuses on
   await assert.rejects(withGitCredential({ username: "oauth2", secret: "x\ny" }, currentRuntime()), /cannot carry/);
 });
 
-test("git-host-36: the shipped helper answers get from the file at its origin alone and ignores store and erase", async () => {
+test("git-host-38: the shipped helper answers get from the file at its origin alone and ignores store and erase", async () => {
   const handle = await withGitCredential({ username: "oauth2", secret: "tok" }, currentRuntime());
   try {
     const ask = (operation: string) => execFileSync(process.execPath, [gitCredentialHelperPath(), operation], { input: "protocol=https\nhost=example.test\n\n", encoding: "utf8", env: { ...process.env, ...handle.env } });
