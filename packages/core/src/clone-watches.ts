@@ -14,7 +14,7 @@
 // on every platform alike, so nothing above asks which one it runs on
 // (projects-10, space-59, space-60, storage-35, storage-38).
 
-import { existsSync, watch, type FSWatcher } from "node:fs";
+import { existsSync, realpathSync, watch, type FSWatcher } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 import type { SpexRepository } from "./store.js";
@@ -190,12 +190,16 @@ export class CloneWatches {
     }
   }
 
-  /** A watch of `dir`, closed and forgotten (`gone`) on its error — its
-   * folder removed under it — or none where the folder left between the
-   * check and the watch: the next update watches again. */
+  /** A watch of `dir` by its real path, closed and forgotten (`gone`) on
+   * its error — its folder removed under it — or none where the folder
+   * left between the check and the watch: the next update watches again.
+   * The real path, as the platform spells it: on Windows a watch of a
+   * path spelled with an 8.3 short name, as a temporary folder's often
+   * is, names each change by a part of the long path cut at the short
+   * one's length, which no filter reads. */
   private open(dir: string, changed: (filename: string | null) => void, gone: () => void): Watched | undefined {
     let watcher: FSWatcher;
-    try { watcher = watch(dir, (_eventType, filename) => changed(filename)); }
+    try { watcher = watch(realpathSync.native(dir), (_eventType, filename) => changed(filename)); }
     catch { return undefined; }
     watcher.on("error", () => {
       watcher.close();
