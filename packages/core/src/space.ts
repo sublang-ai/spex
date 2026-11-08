@@ -5597,11 +5597,18 @@ export class SpaceManager {
     if (!listing || !to || to === from || folder === null || this.collides(listing.repository.group, this.viewOf(governing))) return "kept";
     if (facts.id === null) machine.recordId(listing.repository.id, facts.remote);
     if (!machine.recordsNow(facts.remote, listing.repository.id)) return "kept";
+    // What chose that instance, read again at each try: still signed in,
+    // governing the clone and listing its host repository at `to`.
+    const stillGoverned = (): boolean => {
+      if (!this.signedInAt(governing) || this.governingOf(machine) !== governing) return false;
+      const now = this.listingOf(governing, facts);
+      return now !== undefined && this.keyAtHost(now.repository, governing) === to && !this.collides(now.repository.group, this.viewOf(governing));
+    };
     let moved: boolean;
     try {
       // Read again at each try, nothing awaited from there to the rename.
       moved = await this.atMoveInstant([from], () => {
-        if (store.repository(from)?.dir !== source || machine.key !== from || !machine.recordsNow(facts.remote, listing.repository.id)) return false;
+        if (store.repository(from)?.dir !== source || machine.key !== from || !machine.recordsNow(facts.remote, listing.repository.id) || !stillGoverned()) return false;
         const named = machine.remoteNameNow();
         this.renameClone(machine, to, identity);
         machine.renameRemote(named, folder);
@@ -6616,7 +6623,9 @@ export class SpaceManager {
       const to = this.governingOfPlacement(machine, placement);
       const listing = to ? this.listingOf(to, { remote: placement.url, id: placement.id }) : undefined;
       if (to && to !== instance && listing) {
-        await this.followByFile(machine, placement, to, listing, await this.machineIdentity());
+        // An instance signed out or no longer listing it meanwhile leaves
+        // the placement as it stands, the leave stopped to retry.
+        if (await this.followByFile(machine, placement, to, listing, await this.machineIdentity()) === undefined) throw movedMeanwhile(machine.key);
         // A step the host left waiting at the instance it left is no more
         // this placement's.
         this.endWaiting(machine.key, origin);
@@ -8013,8 +8022,10 @@ export class SpaceManager {
    * it (renameClone, whose refusal refuses the follow whole), then its
    * remote renamed to that instance's folder with its file rewritten and
    * this device's records re-keyed (followRemote). The name its remote
-   * then bears; none, nothing changed, where what decided the follow,
-   * `still`, no longer stands at a try of its step.
+   * then bears; none, nothing changed, where at a try of its step that
+   * instance no longer reads as signed in and listing the host
+   * repository, or what else decided the follow, `still`, no longer
+   * stands.
    */
   private async followByFile(machine: RepositorySync, placement: Placement, to: HostInstance, listing: HostListing, identity: string | undefined, still: () => boolean = () => true): Promise<string | undefined> {
     const store = this.host.store;
@@ -8024,9 +8035,16 @@ export class SpaceManager {
     const key = moves ? this.keyAtHost(listing.repository, to) : from;
     if (key === null) throw movedMeanwhile(from);
     const source = machine.repository.dir;
+    // The instance followed, read again at each try: still signed in and
+    // listing the host repository, at `key` where the clone moves.
+    const listed = (): boolean => {
+      if (!this.signedInAt(to)) return false;
+      const now = this.listingOf(to, { remote: placement.url, id: placement.id });
+      return now !== undefined && (!moves || this.keyAtHost(now.repository, to) === key);
+    };
     const step = (): ReturnType<RepositorySync["followRemote"]> | "kept" => {
       if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
-      if (!still()) return "kept";
+      if (!still() || !listed()) return "kept";
       if (key !== from) this.renameClone(machine, key, identity);
       return machine.followRemote(placement, folder);
     };
@@ -8083,15 +8101,19 @@ export class SpaceManager {
     }
     const leased = heldSessionLease(machine.repository.dir, identity);
     if (leased !== undefined) throw inUseStop("check", `sessions/${leased}`, store);
-    const next = placements.find((candidate) => candidate.name !== placement.name && candidate.instance !== null);
-    let to = `${store.home.ownName}/${splitKey(from).name}`;
-    if (next?.instance) {
+    // Where the clone goes: the path of its next placement with an
+    // instance, as a read of this run placed it, else under your own
+    // group's folder — read again at each try of its move.
+    const destination = (): string => {
+      const next = machine.placementsNow().find((candidate) => candidate.name !== placement.name && candidate.instance !== null);
+      if (!next?.instance) return `${store.home.ownName}/${splitKey(from).name}`;
       const at = this.instanceAt(next.instance);
       const listing = this.listingOf(at, { remote: next.url, id: next.id });
       const key = listing ? this.keyAtHost(listing.repository, at) : null;
       if (key === null) throw nextUnread(this.nameOf(at));
-      to = key;
-    }
+      return key;
+    };
+    const to = destination();
     if (to === from) {
       const refused = machine.dropOrStop(placement);
       if (refused) throw refused;
@@ -8112,6 +8134,7 @@ export class SpaceManager {
       dropped = await this.atMoveInstant([from], () => {
         if (store.repository(from)?.dir !== source || machine.key !== from || !machine.stillReads(placement)) throw movedMeanwhile(from);
         if (!still()) return false;
+        if (destination() !== to) throw movedMeanwhile(from);
         this.renameClone(machine, to, identity);
         const refused = machine.dropOrStop(placement);
         if (!refused) return true;
