@@ -89,8 +89,17 @@ test("space-119: the first sign-in moves your own group's folder its core watche
   // Watched where they now lie: a session another host writes, and a
   // change of your own group's config (space-59).
   assert.ok(await announced(home, await writeForeignSession(movedClone, home.projectDir, "written after the sign-in")), "[space-59] the moved clone's sessions are read as they are written");
-  writeFileSync(join(clonePath(home.dataDir, own), "config", "playbook.config.yaml"), config("claude-moved"));
-  await home.client.waitFor(reloadedTo("claude-moved"), 20_000);
+  // A reload whose files change while it reads them — the environment
+  // still installing beneath your own group's clone — announces nothing
+  // (DR-111): the change is written again until one reload announces it,
+  // each write read by the watch alone.
+  let reloaded = false;
+  for (let attempt = 0; attempt < 6 && !reloaded; attempt += 1) {
+    const model = `claude-moved-${attempt}`;
+    writeFileSync(join(clonePath(home.dataDir, own), "config", "playbook.config.yaml"), config(model));
+    reloaded = await home.client.waitFor(reloadedTo(model), 5_000).then(() => true, () => false);
+  }
+  assert.ok(reloaded, "[space-59] a change of your own group's config where it now lies is read as it is written");
 });
 
 test("space-119: a sync follows the host's rename of a clone its core watches, and watches it where it now lies", async (t) => {
