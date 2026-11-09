@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# Electron's and dugite's Git archives from the Actions cache (release-49,
+# DR-228). Each archive is keyed by the runner's platform and its
+# package's locked version; a miss downloads it from its GitHub release
+# as before, and a successful job saves what it fetched. Run before
+# `npm ci`: dugite's install script reads DUGITE_CACHE_DIR. Electron's
+# archive is restored to @electron/get's default cache, which Electron's
+# installer and electron-builder both read when neither names a cache.
+name: Download caches
+description: Restore Electron's and dugite's Git archives keyed by platform and locked version
+runs:
+  using: composite
+  steps:
+    - id: locked
+      shell: bash
+      run: |
+        node -e '
+          const { homedir } = require("node:os");
+          const { join } = require("node:path");
+          const lock = require("./package-lock.json").packages;
+          for (const name of ["electron", "dugite"]) {
+            const version = lock[`node_modules/${name}`]?.version;
+            if (!version) throw new Error(`package-lock.json locks no ${name}`);
+            console.log(`${name}=${version}`);
+          }
+          // The default cache of @electron/get: env-paths("electron", { suffix: "" }).cache.
+          const env = process.env;
+          const cache = process.platform === "darwin" ? join(homedir(), "Library", "Caches", "electron")
+            : process.platform === "win32" ? join(env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "electron", "Cache")
+            : join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "electron");
+          console.log(`electron-cache=${cache}`);' >> "$GITHUB_OUTPUT"
+        printf '%s\n' "DUGITE_CACHE_DIR=$RUNNER_TEMP/dugite-cache" >> "$GITHUB_ENV"
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.locked.outputs.electron-cache }}
+        key: electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.electron }}
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/dugite-cache
+        key: dugite-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.dugite }}

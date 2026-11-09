@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
 
 const root = resolve(import.meta.dirname, "..");
@@ -40,7 +41,7 @@ test("release-33: PRs cancel only their superseded run; CI has reusable/manual f
   assert.deepEqual(workflow.permissions, { contents: "read" });
 });
 
-test("release-33: the matrix runs affected Linux/Windows PR suites and retains every full platform row (release-34)", () => {
+test("release-33: the matrix runs affected Linux/Windows PR suites, the core's in four parts beside the rest, and retains every full platform row (release-34)", () => {
   const matrix = (full, affected) => {
     const run = spawnSync(process.execPath, [join(root, "scripts/ci-verdict.mjs"), "--matrix"], {
       encoding: "utf8", env: { ...process.env, CI_FULL: String(full), CI_AFFECTED: affected },
@@ -48,17 +49,26 @@ test("release-33: the matrix runs affected Linux/Windows PR suites and retains e
     assert.equal(run.status, 0, run.stderr);
     return JSON.parse(run.stdout.trim().replace(/^matrix=/, ""));
   };
-  const row = (os, version) => ({ os, "node-version": version });
+  const row = (os, version, part = "all") => ({ os, "node-version": version, part });
+  // A row whose selection reaches the core: one runner for the rest, four for the core's parts.
+  const split = (os, version) => ["rest", "core 1/4", "core 2/4", "core 3/4", "core 4/4"].map((part) => row(os, version, part));
   const linux = row("ubuntu-latest", 22);
   const windows = row("windows-latest", 22);
   for (const affected of ["", "apps/desktop", "apps/server", "e2e"]) {
     assert.deepEqual(matrix(false, affected), { include: [linux] }, affected);
   }
-  for (const affected of ["all", "packages/cli", "packages/core apps/desktop", "packages/ui", "packages/ui-extra packages/cli"]) {
+  for (const affected of ["packages/cli", "packages/ui", "packages/ui-extra packages/cli"]) {
     assert.deepEqual(matrix(false, affected), { include: [linux, windows] }, affected);
   }
+  for (const affected of ["all", "packages/core apps/desktop"]) {
+    assert.deepEqual(matrix(false, affected), { include: [...split("ubuntu-latest", 22), windows] }, affected);
+  }
   assert.deepEqual(matrix(false, "packages/ui-extra"), { include: [linux] });
-  for (const affected of ["all", "packages/cli"]) assert.deepEqual(matrix(true, affected), { include: [
+  assert.deepEqual(matrix(false, "packages/core-extra"), { include: [linux] });
+  assert.deepEqual(matrix(true, "all"), { include: [
+    ...split("ubuntu-latest", 22), ...split("ubuntu-latest", 24), ...split("macos-latest", 22), ...split("macos-latest", 24), windows,
+  ] });
+  assert.deepEqual(matrix(true, "packages/cli"), { include: [
     linux, row("ubuntu-latest", 24), row("macos-latest", 22), row("macos-latest", 24), windows,
   ] });
   assert.equal(workflow.jobs.test.strategy.matrix, "${{ fromJSON(needs.changes.outputs.matrix) }}");
@@ -119,15 +129,20 @@ test("release-33: classification chooses the exact full channel and keeps shared
   assert.equal(workflow.jobs.test.if, SUITE_CONDITION);
 });
 
-test("release-33: fast gates precede selected suites; Windows retains its supported subset (release-34)", () => {
+test("release-33: fast gates precede selected suites, once per row; Windows retains its supported subset (release-34)", () => {
   const steps = workflow.jobs.test.steps;
-  const gateAt = steps.findIndex((step) => step.name === "Build, catalogs, types and specifications");
-  assert.ok(gateAt > steps.findIndex((step) => step.run === "npm ci"));
+  const buildAt = steps.findIndex((step) => step.name === "Build and catalogs");
+  assert.ok(buildAt > steps.findIndex((step) => step.run === "npm ci"));
+  assert.equal(steps[buildAt].run, "npm run build");
+  assert.equal(steps[buildAt].if, undefined, "every part builds what its suites run");
+  const gateAt = steps.findIndex((step) => step.name === "Types and specifications");
+  assert.ok(gateAt > buildAt);
   assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
-  assert.equal(steps[gateAt].run.trim(), "npm run build\nnode packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
+  assert.equal(steps[gateAt].run.trim(), "node packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
+  assert.equal(steps[gateAt].if, "${{ !startsWith(matrix.part, 'core') }}", "the rest's runner or the whole row's runs the gates; no core part repeats them");
   const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
   assert.ok(reachAt > gateAt);
-  assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);
+  assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}" --part "\${{ matrix.part }}"`);
   assert.equal(steps[reachAt].if, "runner.os != 'Windows'");
   const lfs = steps.find((step) => step.run === "git lfs version");
   assert.equal(lfs.if, `runner.os != 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, 'packages/core'))`);
@@ -441,4 +456,146 @@ test("release-46: release CI injects the same version before installs, including
   assert(archive >= 0 && stamp > archive);
   assert.equal(hubSteps[stamp].if, "inputs.release-tag != ''");
   assert.match(hubSteps[stamp].run, /release-version\.mjs.*--channel=app/);
+});
+
+const workflowsByName = Object.fromEntries(["ci", "app-release", "release", "hub-lane", "caches"]
+  .map((name) => [name, parse(readFileSync(join(root, `.github/workflows/${name}.yml`), "utf8"))]));
+const DOWNLOAD_CACHES = "./.github/actions/download-caches";
+const installs = (step) => /(^|\n)\s*npm ci(\s|$)/.test(step.run ?? "");
+
+test("release-33: every workflow step running npm ci restores the download caches first, and a job installing nothing saves no npm cache (release-49)", () => {
+  let seen = 0;
+  for (const [name, current] of Object.entries(workflowsByName)) {
+    for (const [jobName, job] of Object.entries(current.jobs)) {
+      const steps = job.steps ?? [];
+      const installAt = steps.findIndex(installs);
+      const node = steps.find((step) => step.uses?.startsWith("actions/setup-node@"));
+      if (node?.with?.cache === "npm") assert.ok(installAt >= 0, `${name}/${jobName} saves an npm cache without installing`);
+      steps.forEach((step, at) => {
+        if (!installs(step)) return;
+        seen += 1;
+        const caches = steps.slice(0, at).find((candidate) => candidate.uses === DOWNLOAD_CACHES);
+        assert.ok(caches, `${name}/${jobName} installs before restoring the download caches`);
+        assert.equal(caches.if, step.if, `${name}/${jobName} restores the caches whenever it installs`);
+      });
+    }
+  }
+  assert.ok(seen >= 7, "every workflow install was inspected");
+  assert.equal(workflow.jobs.changes.steps.find((step) => step.uses?.startsWith("actions/setup-node@")).with.cache, undefined, "the classifier saves no npm cache");
+});
+
+test("release-33: the download caches key each archive by platform and locked version, restoring Electron's where its installer and packager both read it (release-49)", () => {
+  const action = parse(readFileSync(join(root, ".github/actions/download-caches/action.yml"), "utf8"));
+  assert.equal(action.runs.using, "composite");
+  const [locked, electron, dugite] = action.runs.steps;
+  assert.equal(locked.id, "locked");
+  assert.equal(electron.uses, "actions/cache@v4");
+  assert.deepEqual(electron.with, { path: "${{ steps.locked.outputs.electron-cache }}", key: "electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.electron }}" });
+  assert.equal(dugite.uses, "actions/cache@v4");
+  assert.deepEqual(dugite.with, { path: "${{ runner.temp }}/dugite-cache", key: "dugite-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.dugite }}" });
+
+  // The step itself, run over the repository's lockfile under a scratch home.
+  const dir = mkdtempSync(join(tmpdir(), "spex-download-caches-"));
+  const home = join(dir, "home");
+  mkdirSync(home);
+  const output = join(dir, "output");
+  const env = join(dir, "env");
+  writeFileSync(output, "");
+  writeFileSync(env, "");
+  const { XDG_CACHE_HOME: _xdg, LOCALAPPDATA: _local, electron_config_cache: _cache, ...base } = process.env;
+  const run = spawnSync("bash", ["-e", "-c", locked.run], {
+    cwd: root, encoding: "utf8", env: { ...base, HOME: home, GITHUB_OUTPUT: output, GITHUB_ENV: env, RUNNER_TEMP: dir },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages;
+
+  // Electron's installer and electron-builder each use their own copy of
+  // @electron/get, neither naming a cache; under the same home both
+  // default to the directory the action restores (release-49).
+  const resolveFrom = (from, request) => execFileSync(process.execPath, ["-p", `require("node:module").createRequire(${JSON.stringify(join(root, from))}).resolve(${JSON.stringify(request)})`], { encoding: "utf8" }).trim();
+  const installerCache = resolveFrom("node_modules/electron/install.js", "@electron/get").replace(/index\.js$/, "Cache.js");
+  const packagerCache = resolveFrom("node_modules/app-builder-lib/out/util/electronGet.js", "@electron/get").replace(/index\.js$/, "Cache.js");
+  const defaultRoot = (cacheModule) => {
+    const probe = spawnSync(process.execPath, ["--input-type=module", "-e", `const { Cache } = await import(${JSON.stringify(pathToFileURL(cacheModule).href)}); console.log(new Cache().cacheRoot);`], {
+      encoding: "utf8", env: { ...base, HOME: home },
+    });
+    assert.equal(probe.status, 0, probe.stderr);
+    return probe.stdout.trim();
+  };
+  const shared = defaultRoot(installerCache);
+  assert.equal(defaultRoot(packagerCache), shared, "the packager reuses the installer's archive");
+  assert.equal(readFileSync(output, "utf8"), `electron=${lock["node_modules/electron"].version}\ndugite=${lock["node_modules/dugite"].version}\nelectron-cache=${shared}\n`);
+  assert.equal(readFileSync(env, "utf8"), `DUGITE_CACHE_DIR=${dir}/dugite-cache\n`, "no Electron cache override parts the installer from the packager");
+  for (const [name, current] of Object.entries(workflowsByName)) assert.doesNotMatch(JSON.stringify(current), /electron_config_cache|electronDownload/, name);
+  assert.equal(JSON.parse(readFileSync(join(root, "apps/desktop/package.json"), "utf8")).build.electronDownload, undefined, "the packager names no cache of its own");
+  assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
+});
+
+test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request on main, refusing any other ref, installing and fetching on every platform and running nothing else (release-50)", () => {
+  const seed = workflowsByName.caches;
+  assert.deepEqual(Object.keys(seed.on).sort(), ["push", "workflow_dispatch"]);
+  assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml"] });
+  assert.deepEqual(seed.permissions, { contents: "read" });
+  assert.deepEqual(Object.keys(seed.jobs), ["ref", "seed"]);
+  // A request on any other ref would save caches no pull request or release reads.
+  const ref = seed.jobs.ref;
+  assert.equal(ref["runs-on"], "ubuntu-latest");
+  assert.deepEqual(ref.steps.map((step) => step.uses ?? step.name), ["Seed only under main"]);
+  assert.deepEqual(ref.steps[0].env, { REF: "${{ github.ref }}" });
+  for (const [value, ok] of [["refs/heads/main", true], ["refs/heads/faster-ci", false], ["refs/tags/app-v1.0.0", false], ["refs/heads/main-old", false], ["", false]]) {
+    const guard = spawnSync("bash", ["-e", "-c", ref.steps[0].run], { encoding: "utf8", env: { ...process.env, REF: value } });
+    assert.equal(guard.status === 0, ok, value);
+    if (!ok) assert.match(guard.stdout, /::error::.*main.*\b(dispatch|run) it on main\b/, value);
+  }
+  const job = seed.jobs.seed;
+  assert.equal(job.needs, "ref", "no platform installs or saves before the ref is main");
+  assert.deepEqual(job.strategy.matrix.os, ["ubuntu-latest", "macos-latest", "windows-latest"]);
+  assert.equal(job["runs-on"], "${{ matrix.os }}");
+  assert.deepEqual(job.steps.map((step) => step.uses ?? step.run), [
+    "actions/checkout@v4", "actions/setup-node@v4", DOWNLOAD_CACHES, "npm ci", "node node_modules/electron/install.js",
+  ]);
+  assert.equal(job.steps[1].with.cache, "npm");
+  // No other workflow gained a push-to-main or scheduled trigger.
+  for (const [name, current] of Object.entries(workflowsByName)) {
+    if (name === "caches") continue;
+    assert.equal(current.on.schedule, undefined, name);
+    assert.ok(!(current.on.push?.branches ?? []).includes("main"), name);
+  }
+});
+
+test("release-33: the core's parts deal its test files largest first, every file in exactly one part (release-34)", () => {
+  // The real runner over a fixture suite: files whose sizes order them f1 (largest) to f8.
+  const dir = mkdtempSync(join(tmpdir(), "spex-core-parts-"));
+  mkdirSync(join(dir, "scripts"));
+  mkdirSync(join(dir, "dist", "nested"), { recursive: true });
+  writeFileSync(join(dir, "scripts", "run-tests.cjs"), readFileSync(join(root, "packages/core/scripts/run-tests.cjs")));
+  const names = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"];
+  names.forEach((name, at) => {
+    const file = at === 4 ? join(dir, "dist", "nested", `${name}.test.js`) : join(dir, "dist", `${name}.test.js`);
+    writeFileSync(file, `require("node:test").test("file-${name}", () => {});\n//${"x".repeat((names.length - at) * 100)}\n`);
+  });
+  writeFileSync(join(dir, "dist", "helper.js"), `//${"x".repeat(5000)}\n`);
+  // Without this suite's own test context, so the nested run reports as a top-level one.
+  const { NODE_TEST_CONTEXT: _context, ...env } = process.env;
+  const run = (shard) => {
+    const result = spawnSync(process.execPath, [join(dir, "scripts", "run-tests.cjs")], {
+      cwd: dir, encoding: "utf8", env: { ...env, SPEX_TEST_SHARD: shard ?? "" },
+    });
+    const ran = [...result.stdout.matchAll(/^(?:ok \d+ - |\s*✔ )file-(f\d)\b/gm)].map((match) => match[1]).sort();
+    return { status: result.status, stderr: result.stderr, stdout: result.stdout, ran };
+  };
+  const whole = run();
+  assert.equal(whole.status, 0, whole.stderr);
+  assert.deepEqual(whole.ran, names, "with no part named, every file runs");
+  const parts = ["1/3", "2/3", "3/3"].map(run);
+  for (const part of parts) assert.equal(part.status, 0, part.stderr);
+  assert.deepEqual(parts.map((part) => part.ran), [["f1", "f4", "f7"], ["f2", "f5", "f8"], ["f3", "f6"]], "dealt in turn, largest first");
+  assert.deepEqual(parts.flatMap((part) => part.ran).sort(), names, "every file in exactly one part");
+  assert.match(parts[0].stdout, /run-tests: part 1 of 3, 3 of 8 files/);
+  const empty = run("9/9");
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.deepEqual(empty.ran, []);
+  for (const shard of ["4/3", "0/3", "3", "a/b"]) assert.equal(run(shard).status, 2, shard);
+  // The core's own suite runs through this runner.
+  assert.match(JSON.parse(readFileSync(join(root, "packages/core/package.json"), "utf8")).scripts.test, /node scripts\/run-tests\.cjs$/);
 });

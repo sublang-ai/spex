@@ -11,9 +11,10 @@
 //       prints {"docsOnly":bool,"all":bool,"workspaces":[...]}
 //   ... --github-output
 //       prints docs-only=true|false and affected=all|<folders>
-//   ... --run [all|"<folders>"]
+//   ... --run [all|"<folders>"] [--part all|rest|"core <i>/<n>"]
 //       runs the script tests, then the tests of everything or of each folder
-//       with no explicit selection, documentation alone runs CLI tests and lint
+//       with no explicit selection, documentation alone runs CLI tests and lint;
+//       a part runs a share of that on a runner of its own (DR-229)
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -29,6 +30,8 @@ const ROOT_OWNERS = new Map([
     ".github/workflows/app-release.yml",
     ".github/workflows/release.yml",
     ".github/workflows/hub-lane.yml",
+    ".github/workflows/caches.yml",
+    ".github/actions/download-caches/action.yml",
     "scripts/affected-tests.mjs",
     "scripts/affected-tests.test.mjs",
     "scripts/ci-verdict.mjs",
@@ -177,21 +180,44 @@ export function affectedValue(result) {
   return result.all ? "all" : result.workspaces.join(" ");
 }
 
-/** The commands `--run` runs for an `affected` value: `all`, or space-separated folders, empty for none. */
-export function commandsFor(affected) {
-  const commands = [["run", "test:scripts"]];
-  if (affected.trim() === "all") {
-    commands.push(["test", "--workspaces", "--if-present"]);
-  } else {
-    for (const folder of affected.split(/\s+/).filter(Boolean)) commands.push(["test", "-w", folder, "--if-present"]);
+/** The workspace whose suite runs in parts on runners of their own (release-34, DR-229). */
+export const CORE = "packages/core";
+
+/**
+ * The commands `--run` runs for an `affected` value -- `all`, or space-separated
+ * folders, empty for none -- and a part of that work:
+ * - `all`, the default: the script tests, then every selected suite;
+ * - `rest`: the script tests, then every selected suite but the core's;
+ * - `core <i>/<n>`: the core's suite alone, where selected, its runner taking
+ *   the i-th of n parts of its files (SPEX_TEST_SHARD).
+ * `folders` names every workspace, in order, for `all` with the `rest` part.
+ */
+export function commandsFor(affected, part = "all", folders = []) {
+  const everything = affected.trim() === "all";
+  const selected = everything ? folders : affected.split(/\s+/).filter(Boolean);
+  if (part === "all") {
+    const commands = [["run", "test:scripts"]];
+    if (everything) commands.push(["test", "--workspaces", "--if-present"]);
+    else for (const folder of selected) commands.push(["test", "-w", folder, "--if-present"]);
+    return commands;
   }
-  return commands;
+  if (part === "rest") {
+    return [["run", "test:scripts"], ...selected.filter((folder) => folder !== CORE).map((folder) => ["test", "-w", folder, "--if-present"])];
+  }
+  if (corePart(part) !== undefined) return everything || selected.includes(CORE) ? [["test", "-w", CORE, "--if-present"]] : [];
+  throw new Error(`unknown part: ${part}`);
 }
 
-function runCommand(root, executable, args) {
+/** The `<i>/<n>` of a `core <i>/<n>` part, undefined for any other. */
+function corePart(part) {
+  const match = /^core ([1-9]\d*)\/([1-9]\d*)$/.exec(part);
+  return match && Number(match[1]) <= Number(match[2]) ? `${match[1]}/${match[2]}` : undefined;
+}
+
+function runCommand(root, executable, args, env = {}) {
   const label = executable === process.execPath ? "node" : executable;
   console.log(`affected-tests: ${label} ${args.join(" ")}`);
-  const result = spawnSync(executable, args, { cwd: root, stdio: "inherit", shell: executable === "npm" && process.platform === "win32" });
+  const result = spawnSync(executable, args, { cwd: root, stdio: "inherit", env: { ...process.env, ...env }, shell: executable === "npm" && process.platform === "win32" });
   if (result.error) {
     console.error(`affected-tests: ${label} could not start: ${result.error.message}`);
     return 1;
@@ -199,16 +225,16 @@ function runCommand(root, executable, args) {
   return result.status ?? 1;
 }
 
-function run(root, commands) {
+function run(root, commands, env = {}) {
   for (const args of commands) {
-    const status = runCommand(root, "npm", args);
+    const status = runCommand(root, "npm", args, env);
     if (status !== 0) return status;
   }
   return 0;
 }
 
 function parseArgs(argv) {
-  const options = { base: "origin/main", paths: undefined, root: resolve(import.meta.dirname, ".."), githubOutput: false, run: false, runValue: undefined };
+  const options = { base: "origin/main", paths: undefined, root: resolve(import.meta.dirname, ".."), githubOutput: false, run: false, runValue: undefined, part: "all" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const value = () => {
@@ -220,6 +246,7 @@ function parseArgs(argv) {
     else if (arg === "--paths") options.paths = value();
     else if (arg === "--root") options.root = resolve(value());
     else if (arg === "--github-output") options.githubOutput = true;
+    else if (arg === "--part") options.part = value();
     else if (arg === "--run") {
       options.run = true;
       // An argument that is an empty string means none; no argument means compute it.
@@ -247,7 +274,9 @@ function main(argv) {
       affected = affectedValue(result);
       console.log(`affected-tests: the change reaches ${affected === "" ? "no workspace" : affected}`);
     }
-    return run(options.root, commandsFor(affected));
+    const commands = commandsFor(affected, options.part, readWorkspaces(options.root).map((workspace) => workspace.folder));
+    const shard = corePart(options.part);
+    return run(options.root, commands, shard === undefined ? {} : { SPEX_TEST_SHARD: shard });
   }
   const result = compute();
   if (options.githubOutput) {

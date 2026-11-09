@@ -92,6 +92,7 @@ jobs:
 
       - name: Prepare version from tag
         run: node scripts/release-version.mjs prepare --channel=cli
+      - uses: ./.github/actions/download-caches
       - run: npm ci
       - run: npm run build -w packages/cli
 

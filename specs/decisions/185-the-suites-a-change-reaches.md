@@ -10,6 +10,7 @@ Amends [DR-145](145-merge-on-green.md) and [DR-166](166-pull-requests-run-withou
 Amends [DR-169](169-documentation-alone-reports-the-suites-names.md) in the stand-in's names, which follow this matrix.
 
 Amended by [DR-199](199-release-gated-full-validation.md) in root tooling ownership, local untracked and documentation selection, validation timing and the merge gate: selected checks on pull requests, full channel checks at publication or on request, one required `checks` result, and no main or nightly run.
+Extended by [DR-229](229-the-cores-suite-in-four-parts.md): a Linux or macOS row reaching the core runs the core's suite in four parts beside one runner for the rest.
 
 ## Context
 

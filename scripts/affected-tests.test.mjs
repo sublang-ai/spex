@@ -81,6 +81,7 @@ test("dependency tooling and unknown root paths still reach everything", () => {
 test("known workflows and root tooling select script tests alone, without hiding product changes", () => {
   for (const path of [
     ".github/workflows/ci.yml", ".github/workflows/app-release.yml", ".github/workflows/release.yml", ".github/workflows/hub-lane.yml",
+    ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml",
     "scripts/affected-tests.mjs", "scripts/affected-tests.test.mjs", "scripts/ci-verdict.mjs", "scripts/ci-workflow.test.mjs", "scripts/app-release-workflow.test.mjs",
     "scripts/prepush.sh", "scripts/merge-on-green.sh", "scripts/test-linux.sh", "scripts/linux-ci/Dockerfile",
     "scripts/release-notes.mjs", "scripts/release-notes.test.mjs", "scripts/smoke.mjs", "scripts/smoke.test.mjs", "scripts/install-smoke.mjs", "scripts/cli-smoke.mjs", "scripts/desktop-smoke.mjs", "scripts/migration-smoke.mjs",
@@ -202,14 +203,14 @@ function runWithNpm(args, failOn = "") {
   writeFileSync(log, "");
   writeFileSync(join(bin, "npm"), [
     "#!/usr/bin/env bash",
-    'echo "$*" >> "$NPM_LOG"',
+    'echo "$*${SPEX_TEST_SHARD:+ [shard $SPEX_TEST_SHARD]}" >> "$NPM_LOG"',
     '[ -n "$NPM_FAIL_ON" ] && [ "$*" = "$NPM_FAIL_ON" ] && exit 3',
     "exit 0",
     "",
   ].join("\n"), { mode: 0o755 });
   const run = spawnSync(process.execPath, [script, ...args], {
     encoding: "utf8",
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, NPM_LOG: log, NPM_FAIL_ON: failOn },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, NPM_LOG: log, NPM_FAIL_ON: failOn, SPEX_TEST_SHARD: "" },
   });
   return { status: run.status, stderr: run.stderr, calls: readFileSync(log, "utf8").split("\n").filter(Boolean) };
 }
@@ -224,6 +225,32 @@ test("--run runs the script tests, then everything's, each folder's or none", { 
   const none = runWithNpm(["--run", ""]);
   assert.equal(none.status, 0, none.stderr);
   assert.deepEqual(none.calls, ["run test:scripts"]);
+});
+
+test("--part rest and the core's parts run the whole selection between them, each part's runner taking its share of the core's files (DR-229)", { skip: posixOnly }, () => {
+  const folders = repositoryWorkspaces().map((workspace) => workspace.folder);
+  const rest = runWithNpm(["--run", "all", "--part", "rest"]);
+  assert.equal(rest.status, 0, rest.stderr);
+  assert.deepEqual(rest.calls, ["run test:scripts", ...folders.filter((folder) => folder !== "packages/core").map((folder) => `test -w ${folder} --if-present`)]);
+  for (const affected of ["all", "packages/core packages/ui"]) {
+    for (const part of ["1/4", "4/4"]) {
+      const core = runWithNpm(["--run", affected, "--part", `core ${part}`]);
+      assert.equal(core.status, 0, core.stderr);
+      assert.deepEqual(core.calls, [`test -w packages/core --if-present [shard ${part}]`], `${affected} core ${part}`);
+    }
+  }
+  const selected = runWithNpm(["--run", "packages/core packages/ui", "--part", "rest"]);
+  assert.deepEqual(selected.calls, ["run test:scripts", "test -w packages/ui --if-present"]);
+  const noCore = runWithNpm(["--run", "packages/ui", "--part", "core 1/4"]);
+  assert.equal(noCore.status, 0, noCore.stderr);
+  assert.deepEqual(noCore.calls, [], "a selection without the core gives its parts nothing to run");
+  const whole = runWithNpm(["--run", "packages/core packages/ui", "--part", "all"]);
+  assert.deepEqual(whole.calls, runWithNpm(["--run", "packages/core packages/ui"]).calls, "all is the default part");
+  for (const part of ["core 5/4", "core 0/4", "core", "bogus"]) {
+    const refused = runWithNpm(["--run", "all", "--part", part]);
+    assert.equal(refused.status, 2, part);
+    assert.deepEqual(refused.calls, [], part);
+  }
 });
 
 test("--run without an argument runs what the change reaches", { skip: posixOnly }, () => {

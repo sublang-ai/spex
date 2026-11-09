@@ -11,18 +11,27 @@ function boolean(value, name) {
   return value === "true";
 }
 
+/** Where the selection reaches the core, a Linux or macOS row runs it in
+ * this many parts on runners of their own, beside one runner for the rest
+ * of its suites (release-34, DR-229). */
+export const CORE_PARTS = 4;
+
 export function testMatrix(full, affected) {
   const all = boolean(full, "full");
   if (typeof affected !== "string") throw new Error("affected is missing");
-  const row = (os, node) => ({ os, "node-version": node });
-  if (all) return { include: [
-    row("ubuntu-latest", 22), row("ubuntu-latest", 24),
-    row("macos-latest", 22), row("macos-latest", 24), row("windows-latest", 22),
-  ] };
-  const include = [row("ubuntu-latest", 22)];
   const workspaces = new Set(affected.split(/\s+/));
+  const reachesCore = workspaces.has("all") || workspaces.has("packages/core");
+  // Windows runs its own subset in one job; see the workflow's Windows steps.
+  const rows = (os, node) => reachesCore && os !== "windows-latest"
+    ? ["rest", ...Array.from({ length: CORE_PARTS }, (_, i) => `core ${i + 1}/${CORE_PARTS}`)].map((part) => ({ os, "node-version": node, part }))
+    : [{ os, "node-version": node, part: "all" }];
+  if (all) return { include: [
+    ...rows("ubuntu-latest", 22), ...rows("ubuntu-latest", 24),
+    ...rows("macos-latest", 22), ...rows("macos-latest", 24), ...rows("windows-latest", 22),
+  ] };
+  const include = rows("ubuntu-latest", 22);
   if (["all", "packages/cli", "packages/core", "packages/ui"].some((name) => workspaces.has(name))) {
-    include.push(row("windows-latest", 22));
+    include.push(...rows("windows-latest", 22));
   }
   return { include };
 }

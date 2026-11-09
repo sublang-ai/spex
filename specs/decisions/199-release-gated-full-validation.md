@@ -10,6 +10,8 @@ Amends [DR-040](040-source-only-app-releases.md) in the publication gate, [DR-08
 Supersedes [DR-169](169-documentation-alone-reports-the-suites-names.md): one result gate replaces stand-ins for skipped suite names.
 
 Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+Amended by [DR-228](228-ci-keeps-its-downloads.md) for the cache seed: a push to `main` changing the lockfile or the cache tooling refreshes caches, running no validation.
+Extended by [DR-229](229-the-cores-suite-in-four-parts.md): a Linux or macOS row reaching the core runs the core's suite in four parts beside one runner for the rest, its selection and gates unchanged.
 
 ## Context
 
