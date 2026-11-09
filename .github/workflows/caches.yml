@@ -27,7 +27,22 @@ permissions:
   contents: read
 
 jobs:
+  # A request may name any ref, but caches saved there serve no pull
+  # request or release (release-50): refuse it before any platform runs.
+  ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seed only under main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != refs/heads/main ]; then
+            echo "::error::The cache seed saves caches only under main, where pull requests and releases restore them; dispatch it on main, not '${REF}'."
+            exit 1
+          fi
+
   seed:
+    needs: ref
     strategy:
       fail-fast: false
       matrix:

@@ -531,13 +531,24 @@ test("release-33: the download caches key each archive by platform and locked ve
   assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
 });
 
-test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request, installing and fetching on every platform and running nothing else (release-50)", () => {
+test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request on main, refusing any other ref, installing and fetching on every platform and running nothing else (release-50)", () => {
   const seed = workflowsByName.caches;
   assert.deepEqual(Object.keys(seed.on).sort(), ["push", "workflow_dispatch"]);
   assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml"] });
   assert.deepEqual(seed.permissions, { contents: "read" });
-  assert.deepEqual(Object.keys(seed.jobs), ["seed"]);
+  assert.deepEqual(Object.keys(seed.jobs), ["ref", "seed"]);
+  // A request on any other ref would save caches no pull request or release reads.
+  const ref = seed.jobs.ref;
+  assert.equal(ref["runs-on"], "ubuntu-latest");
+  assert.deepEqual(ref.steps.map((step) => step.uses ?? step.name), ["Seed only under main"]);
+  assert.deepEqual(ref.steps[0].env, { REF: "${{ github.ref }}" });
+  for (const [value, ok] of [["refs/heads/main", true], ["refs/heads/faster-ci", false], ["refs/tags/app-v1.0.0", false], ["refs/heads/main-old", false], ["", false]]) {
+    const guard = spawnSync("bash", ["-e", "-c", ref.steps[0].run], { encoding: "utf8", env: { ...process.env, REF: value } });
+    assert.equal(guard.status === 0, ok, value);
+    if (!ok) assert.match(guard.stdout, /::error::.*main.*\b(dispatch|run) it on main\b/, value);
+  }
   const job = seed.jobs.seed;
+  assert.equal(job.needs, "ref", "no platform installs or saves before the ref is main");
   assert.deepEqual(job.strategy.matrix.os, ["ubuntu-latest", "macos-latest", "windows-latest"]);
   assert.equal(job["runs-on"], "${{ matrix.os }}");
   assert.deepEqual(job.steps.map((step) => step.uses ?? step.run), [

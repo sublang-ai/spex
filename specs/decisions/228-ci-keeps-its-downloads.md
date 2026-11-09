@@ -23,6 +23,7 @@ Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push t
 - Only a job that installs saves npm's package cache.
 - A cache seed workflow runs on a push to `main` that changes the lockfile or the cache tooling, and on request.
   On Linux, macOS and Windows it installs the dependencies and fetches Electron, saving npm's cache and both archives under `main`; it runs no build, suite or check.
+  A request on another ref fails before installing: caches saved under that ref would serve no pull request or release while the run looked successful.
 
 ## Consequences
 

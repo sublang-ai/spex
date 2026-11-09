@@ -295,7 +295,9 @@ When a CI or release job installs the app's dependencies, it shall first restore
 
 #### release-50
 
-When the cache seed is triggered by a push to `main` changing the lockfile or the cache tooling, or by an explicit request, it shall install the dependencies and fetch Electron on Linux, macOS and Windows, saving npm's package cache and the archives [[release-49](#release-49)] under `main` for pull requests and releases to restore, while running no build, suite or check ([DR-228](../decisions/228-ci-keeps-its-downloads.md)).
+When the cache seed is triggered by a push to `main` changing the lockfile or the cache tooling, or by an explicit request, it shall install the dependencies and fetch Electron on Linux, macOS and Windows, saving npm's package cache and the archives [[release-49](#release-49)] under `main` for pull requests and releases to restore, while running no build, suite or check ([DR-228](../decisions/228-ci-keeps-its-downloads.md)):
+
+- a request on any ref other than `main` fails before any platform installs, naming `main`, and saves nothing.
 
 ### Shared Runtime Dependencies
 
@@ -358,7 +360,7 @@ When the repository-system audit reads the CI, release, hub and cache workflows,
 | Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
 | Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
 | Automatic triggers | CI and the hub lane have no schedules or push-to-main trigger; the hub lane accepts only reusable full-app invocation or explicit requests [[release-34](#release-34)] [[release-36](#release-36)]. |
-| Download caches | Every install restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, Electron's where its installer's and the packager's own download libraries both default with no override set, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, installing and fetching on all three platforms and running nothing else [[release-50](#release-50)]. |
+| Download caches | Every install restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, Electron's where its installer's and the packager's own download libraries both default with no override set, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, refusing a request on any other ref with a message naming `main` before any platform runs, installing and fetching on all three platforms and running nothing else [[release-50](#release-50)]. |
 | Existing local gates | Prepush rejects conflict markers [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
 
 #### release-45
