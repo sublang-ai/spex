@@ -66,6 +66,12 @@
       "kind": "final",
       "description": "REVIEW completed: the review scope was evaluated at the returned revision and no unsettled findings remain.",
       "tags": []
+    },
+    {
+      "id": "unsettled",
+      "kind": "final",
+      "description": "REVIEW stopped after its third round: findings remain unsettled within the review scope, and no further fix round runs.",
+      "tags": []
     }
   ],
   "edges": [
@@ -144,17 +150,23 @@
     {
       "id": "reviewAfterFix::done::1::0",
       "from": "reviewAfterFix",
-      "to": "done",
+      "to": "unsettled",
       "event": "done"
     },
     {
       "id": "reviewAfterFix::done::2::0",
       "from": "reviewAfterFix",
-      "to": "awaitBossReply",
+      "to": "done",
       "event": "done"
     },
     {
       "id": "reviewAfterFix::done::3::0",
+      "from": "reviewAfterFix",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterFix::done::4::0",
       "from": "reviewAfterFix",
       "to": "failed",
       "event": "done"
@@ -174,17 +186,23 @@
     {
       "id": "reviewAfterRejection::done::1::0",
       "from": "reviewAfterRejection",
-      "to": "done",
+      "to": "unsettled",
       "event": "done"
     },
     {
       "id": "reviewAfterRejection::done::2::0",
       "from": "reviewAfterRejection",
-      "to": "awaitBossReply",
+      "to": "done",
       "event": "done"
     },
     {
       "id": "reviewAfterRejection::done::3::0",
+      "from": "reviewAfterRejection",
+      "to": "awaitBossReply",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterRejection::done::4::0",
       "from": "reviewAfterRejection",
       "to": "failed",
       "event": "done"

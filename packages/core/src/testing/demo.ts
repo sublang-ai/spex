@@ -685,7 +685,7 @@ export function demoCaptain(
       stateId: "firstPhase",
       status: "ok",
     });
-    await move("firstPhase", "reviewNewIntentPhase", "done");
+    await move("firstPhase", "reviewIntent", "done");
     const reviewId = `${runId}-review`;
     let reviewSequence = 0;
     const reviewTrace = async (
@@ -724,7 +724,7 @@ export function demoCaptain(
     };
     await session.emitStatus("⮕ /review: first commit");
     await trace("playbook.call.started", {
-      stateId: "reviewNewIntentPhase",
+      stateId: "reviewIntent",
       playbookId: "review",
       text: "review the first commit",
     });
@@ -746,11 +746,11 @@ export function demoCaptain(
       state: { value: "done", status: "done" },
     });
     await trace("playbook.call.finished", {
-      stateId: "reviewNewIntentPhase",
+      stateId: "reviewIntent",
       playbookId: "review",
       result: "approved",
     });
-    await move("reviewNewIntentPhase", "done", "done", "done");
+    await move("reviewIntent", "done", "done", "done");
     await trace("status.emitted", { message: "settled", stateId: "done" });
     // Opt in only for journeys exercising advancement from a typed
     // governed result; the ordinary demo remains narration alone.

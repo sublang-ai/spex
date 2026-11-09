@@ -1021,10 +1021,10 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // its calling state in the call voice naming the callee, and the
     // strip's sentence still names both for the accessible name.
     expect(cards[0].getAttribute("data-expanded")).toBe("true");
-    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
+    expect(cards[0].getAttribute("aria-label")).toContain("review intent");
     expect(cards[0].getAttribute("aria-label")).toContain("/review");
     const delegating = within(cards[0]).getByTestId(
-      "machine-state-t-code-reviewNewIntentPhase",
+      "machine-state-t-code-reviewIntent",
     );
     expect(delegating.getAttribute("data-delegating")).toBe("true");
     expect(within(delegating).getByText("call /review")).toBeTruthy();
@@ -1035,7 +1035,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The running leaf is drawn too, and its header names the state
     // that called it.
     expect(cards[1].getAttribute("data-expanded")).toBe("true");
-    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewNewIntentPhase");
+    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewIntent");
     expect(reviewing.getAttribute("data-active")).toBe("true");
 
     // The running mark is the app's one pulse, and it says so.
@@ -1064,7 +1064,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The strip names the calling state and the callee, and the
     // connector still leaves it — containment survives the fold.
     expect(cards[0].getAttribute("data-expanded")).toBe("false");
-    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
+    expect(cards[0].getAttribute("aria-label")).toContain("review intent");
     expect(screen.getByTestId("machine-connector-t-code")).toBeTruthy();
     // The child is untouched: the same tree, differently disclosed.
     expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
@@ -1095,7 +1095,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     );
     // The settled child stays anchored to the state that called it.
     expect(settled[1].getAttribute("data-caller-state")).toBe(
-      "reviewNewIntentPhase",
+      "reviewIntent",
     );
   });
 
@@ -1143,28 +1143,32 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("boxes take their column's longest label; a long caption falls back to its role", () => {
     renderRun(MACHINE_RUN.slice(0, 13), true);
     const code = screen.getByTestId("machine-card-t-code");
-    // "review new intent phase" sets its column's width, so it reads
-    // whole at 13px and the shorter names share the box width.
-    const reported = within(code).getByTestId(
-      "machine-state-t-code-reviewNewIntentPhase",
+    const review = screen.getByTestId("machine-card-t-review");
+    // REVIEW's "review after rejection" sets its column's width, so it
+    // reads whole at 13px and the shorter "await boss reply" under it
+    // shares the box width. (Playbook 18.2's CODE has no column a name
+    // widens with another box in it.)
+    const reported = within(review).getByTestId(
+      "machine-state-t-review-reviewAfterRejection",
     );
     expect(reported.querySelector("text")!.textContent).toBe(
-      "review new intent phase",
+      "review after rejection",
     );
     const reportedBox = reported.querySelector("rect")!;
-    const readyBox = within(code)
-      .getByTestId("machine-state-t-code-ready")
+    const waitBox = within(review)
+      .getByTestId("machine-state-t-review-awaitBossReply")
       .querySelector("rect")!;
     expect(Number(reportedBox.getAttribute("width"))).toBeGreaterThan(132);
-    expect(readyBox.getAttribute("width")).toBe(reportedBox.getAttribute("width"));
+    expect(waitBox.getAttribute("x")).toBe(reportedBox.getAttribute("x"));
+    expect(waitBox.getAttribute("width")).toBe(reportedBox.getAttribute("width"));
     // Exit labels sit one step under the small step, never lower.
     const exit = within(code).getAllByTestId(/^machine-exit-/)[0];
     expect(exit.getAttribute("font-size")).toBe("11");
   });
 
   test("a running call names role and player at the caption step, or the role alone", () => {
-    // Through the coder's call: the code machine's first column is as
-    // wide as "review new intent phase", so the pair reads whole.
+    // Through the coder's call: the caption reads whole at the
+    // caption step.
     renderRun(MACHINE_RUN.slice(0, 8));
     const running = screen.getByTestId("machine-state-t-code-firstPhase");
     const caption = within(running).getByTestId(
@@ -1234,18 +1238,21 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     ).toBeNull();
     fireEvent.mouseLeave(first);
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
-    // An exit into working state stays a label; the one into failed
-    // beside it folds to "+1".
-    const review = within(code).getByTestId(
-      "machine-state-t-code-reviewNewIntentPhase",
+    // An exit into a state that does not rest — REVIEW's success
+    // terminal — stays a label; the two into failed beside it fold to
+    // "+2". (Playbook 18.2's CODE has no box mixing the two kinds.)
+    const reviewCard = screen.getByTestId("machine-card-t-review");
+    const review = within(reviewCard).getByTestId(
+      "machine-state-t-review-firstReview",
     );
     const labels = within(review).getAllByTestId(/^machine-exit-/);
     expect(labels).toHaveLength(1);
-    expect(labels[0].textContent).toContain("→ ir task phase");
-    expect(
-      within(review).getByTestId("machine-exits-folded-t-code-reviewNewIntentPhase")
-        .textContent,
-    ).toContain("+1");
+    expect(labels[0].textContent).toContain("→ done");
+    const reviewFolded = within(review).getByTestId(
+      "machine-exits-folded-t-review-firstReview",
+    );
+    expect(reviewFolded.textContent).toContain("+2");
+    expect(reviewFolded.querySelector("title")!.textContent).toContain("→ failed");
   });
 
   test("the split's row form is a query on its wrapper, never on itself", () => {

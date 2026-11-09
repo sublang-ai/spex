@@ -10,6 +10,7 @@ import type { MachineGraph } from "@sublang/spex-core/protocol";
 
 import codeGraph from "../fixtures/machines/code.json";
 import decideGraph from "../fixtures/machines/decide.json";
+import reviewGraph from "../fixtures/machines/review.json";
 import { layoutMachine, STATE_W, type MachineFrame } from "./machine-frames.js";
 import {
   drawingWidthRule,
@@ -45,22 +46,30 @@ describe("widenLayout", () => {
   const layout = layoutMachine(graph);
 
   test("each column takes its longest label's width, from the floor to the cap", () => {
-    const widened = widenLayout(layout, graph, frame());
-    const reported = widened.nodes.get("reviewNewIntentPhase")!;
-    const ready = widened.nodes.get("ready")!;
-    expect(reported.width).toBe(labelWidth("review new intent phase"));
+    // REVIEW's graph: playbook 18.2's CODE has no column a name widens
+    // with another box in it.
+    const review = reviewGraph as MachineGraph;
+    const reviewLayout = layoutMachine(review);
+    const widened = widenLayout(reviewLayout, review, frame({ playbookId: "review" }));
+    const reported = widened.nodes.get("reviewAfterRejection")!;
+    const waiting = widened.nodes.get("awaitBossReply")!;
+    expect(reported.width).toBe(labelWidth("review after rejection"));
     expect(reported.width).toBeGreaterThan(STATE_W);
     // Boxes in one column share the width; another column keeps the
     // floor when nothing in it needs more.
-    expect(ready.width).toBe(reported.width);
+    expect(waiting.x).toBe(reported.x);
+    expect(waiting.width).toBe(reported.width);
+    expect(waiting.width).toBeGreaterThan(labelWidth("await boss reply"));
     const failed = widened.nodes.get("failed")!;
     expect(failed.width).toBe(STATE_W);
     // Columns shift right to make room, and the drawing's width follows.
-    expect(failed.x).toBeGreaterThan(layout.nodes.get("failed")!.x);
-    expect(widened.width).toBeGreaterThan(layout.width);
+    expect(failed.x).toBeGreaterThan(reviewLayout.nodes.get("failed")!.x);
+    expect(widened.width).toBeGreaterThan(reviewLayout.width);
     // Rank heights and kinds are the geometry's own, untouched.
-    expect(reported.height).toBe(layout.nodes.get("reviewNewIntentPhase")!.height);
-    expect(widened.kinds).toBe(layout.kinds);
+    expect(reported.height).toBe(
+      reviewLayout.nodes.get("reviewAfterRejection")!.height,
+    );
+    expect(widened.kinds).toBe(reviewLayout.kinds);
   });
 
   test("a caption the run adds can widen its column once", () => {

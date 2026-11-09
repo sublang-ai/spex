@@ -13,17 +13,9 @@
       "id": "firstPhase",
       "kind": "state",
       "role": "coder",
-      "description": "Coder runs the first coding phase: a direct implementation, a new IR, or the next task of an existing IR.",
+      "description": "Coder runs the first phase: a direct change, a new IR, or an existing IR's next unfinished task.",
       "tags": [
         "playbook.busy"
-      ]
-    },
-    {
-      "id": "reviewNewIntentPhase",
-      "kind": "state",
-      "description": "REVIEW examines the commit of the direct implementation or new-IR phase.",
-      "tags": [
-        "playbook.suspended"
       ]
     },
     {
@@ -36,9 +28,9 @@
       ]
     },
     {
-      "id": "reviewIrTaskPhase",
+      "id": "reviewIntent",
       "kind": "state",
-      "description": "REVIEW examines the commit of the IR-task phase.",
+      "description": "REVIEW examines every commit of this coding intent.",
       "tags": [
         "playbook.suspended"
       ]
@@ -62,13 +54,13 @@
     {
       "id": "reviewFailed",
       "kind": "final",
-      "description": "CODE stopped because review did not pass a phase and reports the failure with its last code-owned commit.",
+      "description": "CODE stopped because review did not pass the intent's commits and reports the failure with its last code-owned commit.",
       "tags": []
     },
     {
       "id": "done",
       "kind": "final",
-      "description": "CODE completed: every phase's review passed with no unsettled findings.",
+      "description": "CODE completed: the intent's review passed with no unsettled findings.",
       "tags": []
     }
   ],
@@ -88,25 +80,25 @@
     {
       "id": "firstPhase::done::1::0",
       "from": "firstPhase",
-      "to": "reviewNewIntentPhase",
+      "to": "reviewIntent",
       "event": "done"
     },
     {
       "id": "firstPhase::done::2::0",
       "from": "firstPhase",
-      "to": "reviewNewIntentPhase",
+      "to": "irTaskPhase",
       "event": "done"
     },
     {
       "id": "firstPhase::done::3::0",
       "from": "firstPhase",
-      "to": "reviewIrTaskPhase",
+      "to": "irTaskPhase",
       "event": "done"
     },
     {
       "id": "firstPhase::done::4::0",
       "from": "firstPhase",
-      "to": "reviewIrTaskPhase",
+      "to": "reviewIntent",
       "event": "done"
     },
     {
@@ -122,36 +114,6 @@
       "event": "error"
     },
     {
-      "id": "reviewNewIntentPhase::done::0::0",
-      "from": "reviewNewIntentPhase",
-      "to": "done",
-      "event": "done"
-    },
-    {
-      "id": "reviewNewIntentPhase::done::1::0",
-      "from": "reviewNewIntentPhase",
-      "to": "irTaskPhase",
-      "event": "done"
-    },
-    {
-      "id": "reviewNewIntentPhase::done::2::0",
-      "from": "reviewNewIntentPhase",
-      "to": "reviewFailed",
-      "event": "done"
-    },
-    {
-      "id": "reviewNewIntentPhase::error::0::0",
-      "from": "reviewNewIntentPhase",
-      "to": "reviewFailed",
-      "event": "error"
-    },
-    {
-      "id": "reviewNewIntentPhase::error::1::0",
-      "from": "reviewNewIntentPhase",
-      "to": "failed",
-      "event": "error"
-    },
-    {
       "id": "irTaskPhase::done::0::0",
       "from": "irTaskPhase",
       "to": "awaitBossReply",
@@ -160,13 +122,13 @@
     {
       "id": "irTaskPhase::done::1::0",
       "from": "irTaskPhase",
-      "to": "reviewIrTaskPhase",
+      "to": "irTaskPhase",
       "event": "done"
     },
     {
       "id": "irTaskPhase::done::2::0",
       "from": "irTaskPhase",
-      "to": "reviewIrTaskPhase",
+      "to": "reviewIntent",
       "event": "done"
     },
     {
@@ -182,32 +144,26 @@
       "event": "error"
     },
     {
-      "id": "reviewIrTaskPhase::done::0::0",
-      "from": "reviewIrTaskPhase",
-      "to": "irTaskPhase",
-      "event": "done"
-    },
-    {
-      "id": "reviewIrTaskPhase::done::1::0",
-      "from": "reviewIrTaskPhase",
+      "id": "reviewIntent::done::0::0",
+      "from": "reviewIntent",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewIrTaskPhase::done::2::0",
-      "from": "reviewIrTaskPhase",
+      "id": "reviewIntent::done::1::0",
+      "from": "reviewIntent",
       "to": "reviewFailed",
       "event": "done"
     },
     {
-      "id": "reviewIrTaskPhase::error::0::0",
-      "from": "reviewIrTaskPhase",
+      "id": "reviewIntent::error::0::0",
+      "from": "reviewIntent",
       "to": "reviewFailed",
       "event": "error"
     },
     {
-      "id": "reviewIrTaskPhase::error::1::0",
-      "from": "reviewIrTaskPhase",
+      "id": "reviewIntent::error::1::0",
+      "from": "reviewIntent",
       "to": "failed",
       "event": "error"
     },
