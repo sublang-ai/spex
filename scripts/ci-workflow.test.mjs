@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
 
 const root = resolve(import.meta.dirname, "..");
@@ -483,32 +484,50 @@ test("release-33: every install restores the download caches first, and a job in
   assert.equal(workflow.jobs.changes.steps.find((step) => step.uses?.startsWith("actions/setup-node@")).with.cache, undefined, "the classifier saves no npm cache");
 });
 
-test("release-33: the download caches key each archive by platform and locked version where Electron's and dugite's installers read them (release-49)", () => {
+test("release-33: the download caches key each archive by platform and locked version, restoring Electron's where its installer and packager both read it (release-49)", () => {
   const action = parse(readFileSync(join(root, ".github/actions/download-caches/action.yml"), "utf8"));
   assert.equal(action.runs.using, "composite");
   const [locked, electron, dugite] = action.runs.steps;
   assert.equal(locked.id, "locked");
   assert.equal(electron.uses, "actions/cache@v4");
-  assert.deepEqual(electron.with, { path: "${{ runner.temp }}/electron-cache", key: "electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.electron }}" });
+  assert.deepEqual(electron.with, { path: "${{ steps.locked.outputs.electron-cache }}", key: "electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.electron }}" });
   assert.equal(dugite.uses, "actions/cache@v4");
   assert.deepEqual(dugite.with, { path: "${{ runner.temp }}/dugite-cache", key: "dugite-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.dugite }}" });
 
-  // The step itself, run over the repository's lockfile.
+  // The step itself, run over the repository's lockfile under a scratch home.
   const dir = mkdtempSync(join(tmpdir(), "spex-download-caches-"));
+  const home = join(dir, "home");
+  mkdirSync(home);
   const output = join(dir, "output");
   const env = join(dir, "env");
   writeFileSync(output, "");
   writeFileSync(env, "");
+  const { XDG_CACHE_HOME: _xdg, LOCALAPPDATA: _local, electron_config_cache: _cache, ...base } = process.env;
   const run = spawnSync("bash", ["-e", "-c", locked.run], {
-    cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_ENV: env, RUNNER_TEMP: dir },
+    cwd: root, encoding: "utf8", env: { ...base, HOME: home, GITHUB_OUTPUT: output, GITHUB_ENV: env, RUNNER_TEMP: dir },
   });
   assert.equal(run.status, 0, run.stderr);
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages;
-  assert.equal(readFileSync(output, "utf8"), `electron=${lock["node_modules/electron"].version}\ndugite=${lock["node_modules/dugite"].version}\n`);
-  assert.equal(readFileSync(env, "utf8"), `electron_config_cache=${dir}/electron-cache\nDUGITE_CACHE_DIR=${dir}/dugite-cache\n`);
 
-  // The installed tools still read those variables, so a cached archive is used in place of a download.
-  assert.match(readFileSync(join(root, "node_modules/electron/install.js"), "utf8"), /cacheRoot: process\.env\.electron_config_cache/);
+  // Electron's installer and electron-builder each use their own copy of
+  // @electron/get, neither naming a cache; under the same home both
+  // default to the directory the action restores (release-49).
+  const resolveFrom = (from, request) => execFileSync(process.execPath, ["-p", `require("node:module").createRequire(${JSON.stringify(join(root, from))}).resolve(${JSON.stringify(request)})`], { encoding: "utf8" }).trim();
+  const installerCache = resolveFrom("node_modules/electron/install.js", "@electron/get").replace(/index\.js$/, "Cache.js");
+  const packagerCache = resolveFrom("node_modules/app-builder-lib/out/util/electronGet.js", "@electron/get").replace(/index\.js$/, "Cache.js");
+  const defaultRoot = (cacheModule) => {
+    const probe = spawnSync(process.execPath, ["--input-type=module", "-e", `const { Cache } = await import(${JSON.stringify(pathToFileURL(cacheModule).href)}); console.log(new Cache().cacheRoot);`], {
+      encoding: "utf8", env: { ...base, HOME: home },
+    });
+    assert.equal(probe.status, 0, probe.stderr);
+    return probe.stdout.trim();
+  };
+  const shared = defaultRoot(installerCache);
+  assert.equal(defaultRoot(packagerCache), shared, "the packager reuses the installer's archive");
+  assert.equal(readFileSync(output, "utf8"), `electron=${lock["node_modules/electron"].version}\ndugite=${lock["node_modules/dugite"].version}\nelectron-cache=${shared}\n`);
+  assert.equal(readFileSync(env, "utf8"), `DUGITE_CACHE_DIR=${dir}/dugite-cache\n`, "no Electron cache override parts the installer from the packager");
+  for (const [name, current] of Object.entries(workflowsByName)) assert.doesNotMatch(JSON.stringify(current), /electron_config_cache|electronDownload/, name);
+  assert.equal(JSON.parse(readFileSync(join(root, "apps/desktop/package.json"), "utf8")).build.electronDownload, undefined, "the packager names no cache of its own");
   assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
 });
 
