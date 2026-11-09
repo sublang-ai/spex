@@ -17,10 +17,11 @@ Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push t
 
 ## Decision
 
-- Every CI and release install first restores Electron's and dugite's Git archives from caches keyed by the runner's platform and the locked package version.
+- Every `npm ci` a CI or release workflow step runs first restores Electron's and dugite's Git archives from caches keyed by the runner's platform and the locked package version.
   A miss downloads as before, and a successful job saves what it fetched.
 - Electron's archive is restored to the default download cache, which Electron's installer and electron-builder both read when neither names another; a cache of CI's own would leave packaging downloading the archive again.
 - Only a job that installs saves npm's package cache.
+- The privileged hub lane's root install, run by its install script inside the lane, keeps its own downloads, leaving the lane's root environment as an administrator's install has it.
 - A cache seed workflow runs on a push to `main` that changes the lockfile or the cache tooling, and on request.
   On Linux, macOS and Windows it installs the dependencies and fetches Electron, saving npm's cache and both archives under `main`; it runs no build, suite or check.
   A request on another ref fails before installing: caches saved under that ref would serve no pull request or release while the run looked successful.

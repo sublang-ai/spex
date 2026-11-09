@@ -463,7 +463,7 @@ const workflowsByName = Object.fromEntries(["ci", "app-release", "release", "hub
 const DOWNLOAD_CACHES = "./.github/actions/download-caches";
 const installs = (step) => /(^|\n)\s*npm ci(\s|$)/.test(step.run ?? "");
 
-test("release-33: every install restores the download caches first, and a job installing nothing saves no npm cache (release-49)", () => {
+test("release-33: every workflow step running npm ci restores the download caches first, and a job installing nothing saves no npm cache (release-49)", () => {
   let seen = 0;
   for (const [name, current] of Object.entries(workflowsByName)) {
     for (const [jobName, job] of Object.entries(current.jobs)) {
