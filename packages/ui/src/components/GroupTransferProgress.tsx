@@ -8,6 +8,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { dismissSharedOpen, retrySharedOpen, type SharedOpen } from "../state/server-opens.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
+import { ALERT_INK } from "./SpacePanel.js";
 import { SECONDARY } from "./SpaceSurface.js";
 
 /** One requested Add continuing to its server; each check reflects an
@@ -45,7 +46,7 @@ export function GroupTransferProgress({ transfer, onDismiss }: { transfer: Share
             : index === current ? (transfer.stage === "failed" ? "failed" : "current") : "pending";
           return (
             <li key={index} data-state={state} className={`flex min-w-0 items-center gap-2 ${state === "failed"
-              ? "text-red-600 dark:text-red-400"
+              ? ALERT_INK
               : state === "current" ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"}`}>
               <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center">
                 {state === "complete" ? <Icon name="check" />
@@ -63,7 +64,7 @@ export function GroupTransferProgress({ transfer, onDismiss }: { transfer: Share
       </ol>
       {transfer.stage === "failed" ? (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p role="alert" className="min-w-0 break-words text-xs text-red-600 dark:text-red-400">{transfer.error}</p>
+          <p role="alert" className={`min-w-0 break-words text-xs ${ALERT_INK}`}>{transfer.error}</p>
           <button type="button" className={SECONDARY} disabled={!connected}
             onClick={() => void retrySharedOpen(store, transfer.key)}>{i18n._("Try again")}</button>
         </div>

@@ -51,7 +51,9 @@ export function InlineConfirm({
       {question}
       <button
         type="button"
-        className="min-h-6 rounded border border-red-300 px-1.5 py-0.5 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+        // Red one step darker than stock holds WCAG AA on the warm page
+        // and the attached tint, where most confirms stand (DR-010 §7).
+        className="min-h-6 rounded border border-red-300 px-1.5 py-0.5 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
         onClick={onConfirm}
         disabled={disabled}
       >

@@ -44,6 +44,7 @@ import {
 import { Icon } from "./Icon.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { Markdown } from "./Markdown.js";
+import { ALERT_INK, ATTENTION_INK } from "./SpacePanel.js";
 import { PathControls, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** A tree node: one catalog entry, or a session's files grouped under
@@ -140,7 +141,7 @@ function updateNode(nodes: Node[], id: string, patch: (node: Node) => Node): Nod
 function SharingChip({ sync }: { sync: SpaceEntry["sync"] }) {
   const tone =
     sync === "pending"
-      ? "border border-amber-500 text-amber-700 dark:text-amber-300"
+      ? `border border-amber-500 ${ATTENTION_INK}`
       : sync === "local"
         ? "border border-neutral-400 text-neutral-600 dark:border-neutral-600 dark:text-neutral-400"
         : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400";
@@ -365,7 +366,7 @@ function PreviewBody({
   }
   if (error) {
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+      <p role="alert" className={`text-sm ${ALERT_INK}`}>
         {i18n._("Couldn't read it: {reason}", { reason: error })}
       </p>
     );
@@ -637,7 +638,7 @@ export function ExploreTab({
             </span>
           </div>
           {rootError ? (
-            <p role="alert" className="p-2 text-sm text-red-600 dark:text-red-400">
+            <p role="alert" className={`p-2 text-sm ${ALERT_INK}`}>
               {i18n._("Couldn't read the files: {reason}", { reason: rootError })}
             </p>
           ) : !roots ? (
@@ -716,7 +717,7 @@ export function ExploreTab({
                       <span className="text-xs text-neutral-500">…</span>
                     ) : null}
                     {node.kind === "entry" && node.error ? (
-                      <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+                      <span role="alert" className={`text-xs ${ALERT_INK}`}>
                         {node.error}
                       </span>
                     ) : null}

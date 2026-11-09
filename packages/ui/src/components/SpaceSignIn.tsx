@@ -34,6 +34,7 @@ import {
   type ResolvedChoice,
   type SpaceChoice,
 } from "./SpaceDirectory.js";
+import { ALERT_INK } from "./SpacePanel.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 type StartReply = CommandResults["space.signin.start"];
@@ -300,7 +301,7 @@ export function signInLines(signIn: SignInFlow, space: string): ReactNode {
   }
   if (signIn.failure !== undefined) {
     return (
-      <p data-testid="space-signin-error" role="alert" className="text-red-600 dark:text-red-400">
+      <p data-testid="space-signin-error" role="alert" className={ALERT_INK}>
         {causePhrase(signIn.failure)}
       </p>
     );

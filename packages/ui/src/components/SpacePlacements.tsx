@@ -39,7 +39,7 @@ import { cloneHere, lineOutcome, personalLabel, phraseNames, placementPhrase, se
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { MembersPanel } from "./SpaceMembers.js";
-import { ATTACHED_OWNER } from "./SpacePanel.js";
+import { ALERT_INK, ATTACHED_OWNER, ATTENTION_INK } from "./SpacePanel.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** How an entry an instance lists is named where records are shared
@@ -101,8 +101,8 @@ export function CombineConfirm({ onConfirm, onCancel }: { onConfirm(): void; onC
 const TONES: Record<LinePhrase["tone"], string> = {
   idle: "text-neutral-500",
   running: "text-neutral-500",
-  attention: "text-amber-700 dark:text-amber-300",
-  stopped: "text-red-600 dark:text-red-400",
+  attention: ATTENTION_INK,
+  stopped: ALERT_INK,
 };
 
 /** The lines of a row whose clone is here (space-87); none otherwise. */
@@ -422,7 +422,7 @@ function PlacementLine({
         ) : null}
       </div>
       {error ? (
-        <p data-testid="space-line-error" role="alert" className="px-2 text-xs text-red-600 dark:text-red-400">
+        <p data-testid="space-line-error" role="alert" className={`px-2 text-xs ${ALERT_INK}`}>
           {error}
         </p>
       ) : null}
