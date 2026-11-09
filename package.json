@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@lingui/conf": "^6.7.0",
-    "@sublang/playbook": "^18.1.4",
+    "@sublang/playbook": "^18.2.0",
     "node-gyp": "^12.4.0"
   },
   "allowScripts": {

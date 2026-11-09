@@ -509,12 +509,12 @@ export const MACHINE_RUN: FixtureEntry[] = [
   }),
   trace(408, 9_011, "t-code", "code", "fsm.transition", moved(
     "firstPhase",
-    "reviewNewIntentPhase",
+    "reviewIntent",
     "done",
   )),
   // The caller names the state that delegates, and to whom.
   trace(409, 9_012, "t-code", "code", "playbook.call.started", {
-    stateId: "reviewNewIntentPhase",
+    stateId: "reviewIntent",
     playbookId: "review",
     text: "review the first commit",
   }),
@@ -538,12 +538,12 @@ export const MACHINE_RUN: FixtureEntry[] = [
     stateId: "done",
   }, "t-code"),
   trace(416, 9_024, "t-code", "code", "playbook.call.finished", {
-    stateId: "reviewNewIntentPhase",
+    stateId: "reviewIntent",
     playbookId: "review",
     result: "approved",
   }),
   trace(417, 9_030, "t-code", "code", "fsm.transition",
-    moved("reviewNewIntentPhase", "done", "APPROVED", "done")),
+    moved("reviewIntent", "done", "APPROVED", "done")),
   trace(418, 9_031, "t-code", "code", "status.emitted", {
     message: "\u2192 settled",
     stateId: "done",

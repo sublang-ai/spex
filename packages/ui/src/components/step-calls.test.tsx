@@ -350,7 +350,7 @@ describe("run-view-192: outcomes reach their own calls", () => {
       rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
       started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(3, "dev.coder"), finishOf(4, "dev.coder"),
       ended(5, "c", "code", "firstPhase", "player-1"),
-      moved(6, "c", "code", "firstPhase", "reviewNewIntentPhase", { latestCommit: "abcdef0123456789" }), accepted(7, "c", "code", "firstPhase", "directCommit"),
+      moved(6, "c", "code", "firstPhase", "reviewIntent", { latestCommit: "abcdef0123456789" }), accepted(7, "c", "code", "firstPhase", "directCommit"),
     ], { turnActive: true });
     expect(within(screen.getByTestId("return-line-dev.coder")).getByTestId("return-head").textContent).toBe("← coder committed");
     expect(screen.queryAllByTestId("return-identity")).toHaveLength(0);
@@ -433,7 +433,7 @@ describe("run-view-192: batches, lost calls and stops kept apart", () => {
       rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
       started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(3, "dev.coder"), finishOf(4, "dev.coder"),
       ended(5, "c", "code", "firstPhase", "player-1"),
-      moved(6, "c", "code", "firstPhase", "reviewNewIntentPhase", { latestCommit: "abcdef0123456789" }),
+      moved(6, "c", "code", "firstPhase", "reviewIntent", { latestCommit: "abcdef0123456789" }),
       moved(7, "r", "review", "start", "firstReview"),
       traced(8, "r", "review", "session.disposed", { state: { status: "active" } }),
       accepted(9, "c", "code", "firstPhase", "directCommit"), emitted(10, "c", "code"),
@@ -449,7 +449,7 @@ describe("run-view-192: batches, lost calls and stops kept apart", () => {
       rec(1, { type: "turn_started", turn: { id: 1, prompt: "/code" } }),
       started(2, "c", "code", "firstPhase", "coder", "dev.coder", "player-1"), promptOf(3, "dev.coder"), finishOf(4, "dev.coder"),
       ended(5, "c", "code", "firstPhase", "player-1"),
-      moved(6, "c", "code", "firstPhase", "reviewNewIntentPhase", { latestCommit: "abcdef0123456789" }),
+      moved(6, "c", "code", "firstPhase", "reviewIntent", { latestCommit: "abcdef0123456789" }),
       accepted(7, "c", "code", "firstPhase", "directCommit"), accepted(8, "c", "code", "otherBranch", "done"), emitted(9, "c", "code"),
     ]);
     expect(within(screen.getByTestId("return-line-dev.coder")).getByTestId("return-head").textContent).toBe("← coder committed");

@@ -33,6 +33,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook 18.2.0 ([changelog](https://github.com/sublang-ai/playbook/blob/v18.2.0/CHANGELOG.md)), and the built-in playbooks stage as `sublang/playbooks` 18.2.0.
+
 - App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
 
 - Mac desktop downloads require Developer ID signatures, Accepted Apple notarization and stapled tickets on both the App and DMG, verified before publication; Windows signing status and the two-platform release gate are unchanged ([DR-219](specs/decisions/219-developer-id-macos-downloads.md)).
