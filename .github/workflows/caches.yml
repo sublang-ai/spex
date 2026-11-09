@@ -1,12 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-# The cache seed (release-50, DR-228). A pull request restores caches
-# saved under its own merge ref or under `main`, never another pull
-# request's, and CI runs on no push to `main` (DR-199), so this is what
-# saves npm's package cache and Electron's and dugite's archives under
-# `main` for every pull request and release to restore. It installs and
-# fetches only: no build, no suite, no check.
+# The cache seed (release-50, DR-228, DR-230). A pull request restores
+# caches saved under its own merge ref or under `main`, never another
+# pull request's, and CI runs on no push to `main` (DR-199), so this is
+# what saves npm's package cache and Electron's and dugite's archives
+# under `main` for every pull request and release to restore. It
+# installs and fetches only: no build, no suite, no check.
+#
+# A job saves its caches only when it succeeds, and only what a
+# successful step verified belongs in a cache. So the install and
+# Electron's fetch are jobs of their own: the install's success, which
+# verified dugite's archive, saves npm's cache and that archive; the
+# fetch's success, which verified Electron's archive, saves that one.
+# Neither waits on the other's downloads, and each retries its own.
 name: Caches
 
 on:
@@ -41,7 +48,9 @@ jobs:
             exit 1
           fi
 
-  seed:
+  # npm's package cache and dugite's Git archive, which `npm ci` fetches
+  # and verifies against its checksum.
+  install:
     needs: ref
     strategy:
       fail-fast: false
@@ -55,6 +64,50 @@ jobs:
           node-version: 22
           cache: npm
       - uses: ./.github/actions/download-caches
-      - run: npm ci
-      - name: Fetch Electron into its cache
-        run: node node_modules/electron/install.js
+      - name: Install, retrying a failed download
+        shell: bash
+        env:
+          RETRY_SECONDS: 60
+        run: |
+          for attempt in 1 2 3; do
+            npm ci && exit 0
+            [ "$attempt" = 3 ] && break
+            # A download cut short leaves a partial archive that the next
+            # try would read; drop it so that try downloads afresh.
+            rm -rf "$DUGITE_CACHE_DIR"
+            echo "::warning::npm ci failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
+            sleep $((attempt * RETRY_SECONDS))
+          done
+          exit 1
+
+  # Electron's archive, which its installer fetches and verifies against
+  # the checksums Electron's package ships.
+  electron:
+    needs: ref
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      # No npm cache here: an install without its scripts would save one
+      # lacking what those scripts fetch.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./.github/actions/download-caches
+      # The installer's packages from the registry; no GitHub release.
+      - run: npm ci --ignore-scripts
+      - name: Fetch Electron into its cache, retrying a failed download
+        shell: bash
+        env:
+          RETRY_SECONDS: 60
+        run: |
+          for attempt in 1 2 3; do
+            node node_modules/electron/install.js && exit 0
+            [ "$attempt" = 3 ] && break
+            echo "::warning::Electron's download failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
+            sleep $((attempt * RETRY_SECONDS))
+          done
+          exit 1

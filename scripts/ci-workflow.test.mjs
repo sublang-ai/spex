@@ -2,7 +2,7 @@
 // The repository-system audit of the merge gate (release-33, DR-145).
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -531,12 +531,12 @@ test("release-33: the download caches key each archive by platform and locked ve
   assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
 });
 
-test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request on main, refusing any other ref, installing and fetching on every platform and running nothing else (release-50)", () => {
+test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request on main, refusing any other ref, installing and fetching Electron in jobs of their own on every platform, each retried, and running nothing else (release-50)", () => {
   const seed = workflowsByName.caches;
   assert.deepEqual(Object.keys(seed.on).sort(), ["push", "workflow_dispatch"]);
   assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml"] });
   assert.deepEqual(seed.permissions, { contents: "read" });
-  assert.deepEqual(Object.keys(seed.jobs), ["ref", "seed"]);
+  assert.deepEqual(Object.keys(seed.jobs), ["ref", "install", "electron"]);
   // A request on any other ref would save caches no pull request or release reads.
   const ref = seed.jobs.ref;
   assert.equal(ref["runs-on"], "ubuntu-latest");
@@ -547,14 +547,58 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
     assert.equal(guard.status === 0, ok, value);
     if (!ok) assert.match(guard.stdout, /::error::.*main.*\b(dispatch|run) it on main\b/, value);
   }
-  const job = seed.jobs.seed;
-  assert.equal(job.needs, "ref", "no platform installs or saves before the ref is main");
-  assert.deepEqual(job.strategy.matrix.os, ["ubuntu-latest", "macos-latest", "windows-latest"]);
-  assert.equal(job["runs-on"], "${{ matrix.os }}");
-  assert.deepEqual(job.steps.map((step) => step.uses ?? step.run), [
-    "actions/checkout@v4", "actions/setup-node@v4", DOWNLOAD_CACHES, "npm ci", "node node_modules/electron/install.js",
+  // Two jobs per platform, each saving only what its own success verified (DR-230).
+  for (const name of ["install", "electron"]) {
+    const job = seed.jobs[name];
+    assert.equal(job.needs, "ref", `${name}: no platform installs or saves before the ref is main`);
+    assert.deepEqual(job.strategy.matrix.os, ["ubuntu-latest", "macos-latest", "windows-latest"], name);
+    assert.equal(job["runs-on"], "${{ matrix.os }}", name);
+    assert.equal(job["continue-on-error"], undefined, `${name}: a failed fetch fails its job, which then saves nothing`);
+  }
+  const install = seed.jobs.install;
+  assert.deepEqual(install.steps.map((step) => step.uses ?? step.name), [
+    "actions/checkout@v4", "actions/setup-node@v4", DOWNLOAD_CACHES, "Install, retrying a failed download",
   ]);
-  assert.equal(job.steps[1].with.cache, "npm");
+  assert.equal(install.steps[1].with.cache, "npm", "the install's success saves npm's cache");
+  const electron = seed.jobs.electron;
+  assert.deepEqual(electron.steps.map((step) => step.uses ?? step.run ?? step.name), [
+    "actions/checkout@v4", "actions/setup-node@v4", DOWNLOAD_CACHES, "npm ci --ignore-scripts", electron.steps[4].run,
+  ]);
+  assert.equal(electron.steps[4].name, "Fetch Electron into its cache, retrying a failed download");
+  assert.equal(electron.steps[1].with.cache, undefined, "an install without its scripts saves no npm cache");
+
+  // Each retry loop, run with a stand-in that fails a given number of times.
+  const retry = (step, failures, standIn) => {
+    const dir = mkdtempSync(join(tmpdir(), "spex-seed-retry-"));
+    const count = join(dir, "count");
+    const dugite = join(dir, "dugite-cache");
+    mkdirSync(dugite);
+    writeFileSync(join(dugite, "partial.tar.gz"), "cut short");
+    writeFileSync(count, "");
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const fake = [
+      "#!/usr/bin/env bash",
+      `echo "$*" >> "${count}"`,
+      `[ "$(wc -l < "${count}")" -gt ${failures} ]`,
+      "",
+    ].join("\n");
+    writeFileSync(join(bin, standIn), fake, { mode: 0o755 });
+    assert.equal(step.shell, "bash");
+    assert.deepEqual(step.env, { RETRY_SECONDS: 60 });
+    const run = spawnSync("bash", ["-c", step.run], {
+      encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RETRY_SECONDS: "0", DUGITE_CACHE_DIR: dugite },
+    });
+    const calls = readFileSync(count, "utf8").split("\n").filter(Boolean);
+    return { status: run.status, calls, warnings: (run.stdout.match(/::warning::/g) ?? []).length, partialKept: existsSync(join(dugite, "partial.tar.gz")) };
+  };
+  const installRun = install.steps[3];
+  assert.deepEqual(retry(installRun, 0, "npm"), { status: 0, calls: ["ci"], warnings: 0, partialKept: true });
+  assert.deepEqual(retry(installRun, 2, "npm"), { status: 0, calls: ["ci", "ci", "ci"], warnings: 2, partialKept: false }, "a failed try drops dugite's partial archive");
+  assert.deepEqual(retry(installRun, 3, "npm"), { status: 1, calls: ["ci", "ci", "ci"], warnings: 2, partialKept: false }, "three failed tries fail the job");
+  const fetchRun = electron.steps[4];
+  assert.deepEqual(retry(fetchRun, 1, "node"), { status: 0, calls: ["node_modules/electron/install.js", "node_modules/electron/install.js"], warnings: 1, partialKept: true });
+  assert.deepEqual(retry(fetchRun, 3, "node"), { status: 1, calls: Array(3).fill("node_modules/electron/install.js"), warnings: 2, partialKept: true });
   // No other workflow gained a push-to-main or scheduled trigger.
   for (const [name, current] of Object.entries(workflowsByName)) {
     if (name === "caches") continue;
