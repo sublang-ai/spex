@@ -20,7 +20,8 @@ Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and 
 - On each platform the seed runs the install and Electron's fetch as jobs of their own, so a failed download fails only its own job.
   The install's success saves npm's package cache and dugite's archive, both verified by that install; the fetch's success saves Electron's archive, verified by its installer against the checksums Electron's package ships.
 - The fetch's job installs packages without their scripts, from the registry alone, and saves no npm cache, which would lack what those scripts fetch.
-- Each of the two downloads is tried up to three times, waiting longer before each retry; a failed install drops dugite's archive before its next try, so a download cut short is fetched afresh.
+- Each of the two downloads is tried up to three times, waiting longer before each retry.
+  Before an install's next try, dugite's archive is checked against dugite's own checksum: one a download cut short left behind is dropped and fetched afresh, while one restored or fetched intact is kept, since the install may have failed before or beside dugite.
 - A failure after the last try still fails its job, so a cache no job verified is never saved.
 
 ## Consequences

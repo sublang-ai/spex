@@ -72,9 +72,20 @@ jobs:
           for attempt in 1 2 3; do
             npm ci && exit 0
             [ "$attempt" = 3 ] && break
-            # A download cut short leaves a partial archive that the next
-            # try would read; drop it so that try downloads afresh.
-            rm -rf "$DUGITE_CACHE_DIR"
+            # Keep an archive that matches dugite's checksum, restored or
+            # fetched; drop one a download cut short left behind, which the
+            # next try could not unpack. With dugite not yet installed its
+            # script never ran, so the archive is the one restored.
+            node -e '
+              let config;
+              try { config = require("./node_modules/dugite/script/config.js")(); } catch { process.exit(0); }
+              const { existsSync, readFileSync, rmSync } = require("node:fs");
+              if (!config.tempFile || !existsSync(config.tempFile)) process.exit(0);
+              const hash = require("node:crypto").createHash("sha256").update(readFileSync(config.tempFile)).digest("hex");
+              if (hash !== config.checksum) {
+                rmSync(config.tempFile);
+                console.log("Dropped a dugite archive failing its checksum.");
+              }'
             echo "::warning::npm ci failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
             sleep $((attempt * RETRY_SECONDS))
           done
