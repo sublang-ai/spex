@@ -125,10 +125,13 @@ jobs:
         run: node scripts/release-version.mjs prepare
       - uses: ./.github/actions/download-caches
       - run: npm ci
-      - name: Build, catalogs, types and specifications
+      - name: Build and catalogs
+        run: npm run build
+      # Once per row: a part of the core's suite repeats no gate (DR-229).
+      - name: Types and specifications
+        if: ${{ !startsWith(matrix.part, 'core') }}
         shell: bash
         run: |
-          npm run build
           node packages/cli/dist/cli.js lint
           npm run typecheck -w e2e
       - name: Require Git LFS for real transport and local Apply coverage
@@ -136,7 +139,7 @@ jobs:
         run: git lfs version
       - name: Tests the change reaches
         if: runner.os != 'Windows'
-        run: node scripts/affected-tests.mjs --run "${{ needs.changes.outputs.affected }}"
+        run: node scripts/affected-tests.mjs --run "${{ needs.changes.outputs.affected }}" --part "${{ matrix.part }}"
       - name: Windows scaffold tests
         if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/cli'))
         run: npm test -w packages/cli

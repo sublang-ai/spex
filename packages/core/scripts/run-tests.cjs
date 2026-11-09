@@ -6,7 +6,7 @@
 // relying on shell glob expansion. Recurses into dist/ so tests
 // may live in subdirectories.
 
-const { readdirSync } = require("fs");
+const { readdirSync, statSync } = require("fs");
 const { join, relative } = require("path");
 const { execFileSync } = require("child_process");
 const { availableParallelism } = require("os");
@@ -33,11 +33,37 @@ function collect(dir) {
   return out;
 }
 
-const files = collect(join(root, "dist"));
+const all = collect(join(root, "dist"));
 
-if (files.length === 0) {
+if (all.length === 0) {
   console.error(`No test files matching ${pattern}`);
   process.exit(1);
+}
+
+// One part of the suite on a runner of its own (release-34, DR-229):
+// SPEX_TEST_SHARD=<part>/<parts> sorts the files largest first, a rough
+// measure of how long each runs, and deals them to the parts in turn,
+// this run taking its part's. Every file lands in exactly one part.
+const files = (() => {
+  const shard = process.env.SPEX_TEST_SHARD;
+  if (!shard) return all;
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(shard);
+  if (!match || Number(match[1]) > Number(match[2])) {
+    console.error(`SPEX_TEST_SHARD must be <part>/<parts>, as 2/3: ${shard}`);
+    process.exit(2);
+  }
+  const [part, parts] = [Number(match[1]), Number(match[2])];
+  const size = (file) => statSync(join(root, file)).size;
+  const dealt = [...all]
+    .sort((a, b) => size(b) - size(a) || (a < b ? -1 : a > b ? 1 : 0))
+    .filter((_, index) => index % parts === part - 1);
+  console.log(`run-tests: part ${part} of ${parts}, ${dealt.length} of ${all.length} files`);
+  return dealt;
+})();
+
+if (files.length === 0) {
+  console.log("run-tests: this part holds no file");
+  process.exit(0);
 }
 
 // --test-timeout turns a hung test into a named failure; force-exit

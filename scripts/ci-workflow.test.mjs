@@ -40,7 +40,7 @@ test("release-33: PRs cancel only their superseded run; CI has reusable/manual f
   assert.deepEqual(workflow.permissions, { contents: "read" });
 });
 
-test("release-33: the matrix runs affected Linux/Windows PR suites and retains every full platform row (release-34)", () => {
+test("release-33: the matrix runs affected Linux/Windows PR suites, the core's in four parts beside the rest, and retains every full platform row (release-34)", () => {
   const matrix = (full, affected) => {
     const run = spawnSync(process.execPath, [join(root, "scripts/ci-verdict.mjs"), "--matrix"], {
       encoding: "utf8", env: { ...process.env, CI_FULL: String(full), CI_AFFECTED: affected },
@@ -48,17 +48,26 @@ test("release-33: the matrix runs affected Linux/Windows PR suites and retains e
     assert.equal(run.status, 0, run.stderr);
     return JSON.parse(run.stdout.trim().replace(/^matrix=/, ""));
   };
-  const row = (os, version) => ({ os, "node-version": version });
+  const row = (os, version, part = "all") => ({ os, "node-version": version, part });
+  // A row whose selection reaches the core: one runner for the rest, four for the core's parts.
+  const split = (os, version) => ["rest", "core 1/4", "core 2/4", "core 3/4", "core 4/4"].map((part) => row(os, version, part));
   const linux = row("ubuntu-latest", 22);
   const windows = row("windows-latest", 22);
   for (const affected of ["", "apps/desktop", "apps/server", "e2e"]) {
     assert.deepEqual(matrix(false, affected), { include: [linux] }, affected);
   }
-  for (const affected of ["all", "packages/cli", "packages/core apps/desktop", "packages/ui", "packages/ui-extra packages/cli"]) {
+  for (const affected of ["packages/cli", "packages/ui", "packages/ui-extra packages/cli"]) {
     assert.deepEqual(matrix(false, affected), { include: [linux, windows] }, affected);
   }
+  for (const affected of ["all", "packages/core apps/desktop"]) {
+    assert.deepEqual(matrix(false, affected), { include: [...split("ubuntu-latest", 22), windows] }, affected);
+  }
   assert.deepEqual(matrix(false, "packages/ui-extra"), { include: [linux] });
-  for (const affected of ["all", "packages/cli"]) assert.deepEqual(matrix(true, affected), { include: [
+  assert.deepEqual(matrix(false, "packages/core-extra"), { include: [linux] });
+  assert.deepEqual(matrix(true, "all"), { include: [
+    ...split("ubuntu-latest", 22), ...split("ubuntu-latest", 24), ...split("macos-latest", 22), ...split("macos-latest", 24), windows,
+  ] });
+  assert.deepEqual(matrix(true, "packages/cli"), { include: [
     linux, row("ubuntu-latest", 24), row("macos-latest", 22), row("macos-latest", 24), windows,
   ] });
   assert.equal(workflow.jobs.test.strategy.matrix, "${{ fromJSON(needs.changes.outputs.matrix) }}");
@@ -119,15 +128,20 @@ test("release-33: classification chooses the exact full channel and keeps shared
   assert.equal(workflow.jobs.test.if, SUITE_CONDITION);
 });
 
-test("release-33: fast gates precede selected suites; Windows retains its supported subset (release-34)", () => {
+test("release-33: fast gates precede selected suites, once per row; Windows retains its supported subset (release-34)", () => {
   const steps = workflow.jobs.test.steps;
-  const gateAt = steps.findIndex((step) => step.name === "Build, catalogs, types and specifications");
-  assert.ok(gateAt > steps.findIndex((step) => step.run === "npm ci"));
+  const buildAt = steps.findIndex((step) => step.name === "Build and catalogs");
+  assert.ok(buildAt > steps.findIndex((step) => step.run === "npm ci"));
+  assert.equal(steps[buildAt].run, "npm run build");
+  assert.equal(steps[buildAt].if, undefined, "every part builds what its suites run");
+  const gateAt = steps.findIndex((step) => step.name === "Types and specifications");
+  assert.ok(gateAt > buildAt);
   assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
-  assert.equal(steps[gateAt].run.trim(), "npm run build\nnode packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
+  assert.equal(steps[gateAt].run.trim(), "node packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
+  assert.equal(steps[gateAt].if, "${{ !startsWith(matrix.part, 'core') }}", "the rest's runner or the whole row's runs the gates; no core part repeats them");
   const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
   assert.ok(reachAt > gateAt);
-  assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);
+  assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}" --part "\${{ matrix.part }}"`);
   assert.equal(steps[reachAt].if, "runner.os != 'Windows'");
   const lfs = steps.find((step) => step.run === "git lfs version");
   assert.equal(lfs.if, `runner.os != 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, 'packages/core'))`);
@@ -517,4 +531,41 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
     assert.equal(current.on.schedule, undefined, name);
     assert.ok(!(current.on.push?.branches ?? []).includes("main"), name);
   }
+});
+
+test("release-33: the core's parts deal its test files largest first, every file in exactly one part (release-34)", () => {
+  // The real runner over a fixture suite: files whose sizes order them f1 (largest) to f8.
+  const dir = mkdtempSync(join(tmpdir(), "spex-core-parts-"));
+  mkdirSync(join(dir, "scripts"));
+  mkdirSync(join(dir, "dist", "nested"), { recursive: true });
+  writeFileSync(join(dir, "scripts", "run-tests.cjs"), readFileSync(join(root, "packages/core/scripts/run-tests.cjs")));
+  const names = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"];
+  names.forEach((name, at) => {
+    const file = at === 4 ? join(dir, "dist", "nested", `${name}.test.js`) : join(dir, "dist", `${name}.test.js`);
+    writeFileSync(file, `require("node:test").test("file-${name}", () => {});\n//${"x".repeat((names.length - at) * 100)}\n`);
+  });
+  writeFileSync(join(dir, "dist", "helper.js"), `//${"x".repeat(5000)}\n`);
+  // Without this suite's own test context, so the nested run reports as a top-level one.
+  const { NODE_TEST_CONTEXT: _context, ...env } = process.env;
+  const run = (shard) => {
+    const result = spawnSync(process.execPath, [join(dir, "scripts", "run-tests.cjs")], {
+      cwd: dir, encoding: "utf8", env: { ...env, SPEX_TEST_SHARD: shard ?? "" },
+    });
+    const ran = [...result.stdout.matchAll(/^(?:ok \d+ - |\s*✔ )file-(f\d)\b/gm)].map((match) => match[1]).sort();
+    return { status: result.status, stderr: result.stderr, stdout: result.stdout, ran };
+  };
+  const whole = run();
+  assert.equal(whole.status, 0, whole.stderr);
+  assert.deepEqual(whole.ran, names, "with no part named, every file runs");
+  const parts = ["1/3", "2/3", "3/3"].map(run);
+  for (const part of parts) assert.equal(part.status, 0, part.stderr);
+  assert.deepEqual(parts.map((part) => part.ran), [["f1", "f4", "f7"], ["f2", "f5", "f8"], ["f3", "f6"]], "dealt in turn, largest first");
+  assert.deepEqual(parts.flatMap((part) => part.ran).sort(), names, "every file in exactly one part");
+  assert.match(parts[0].stdout, /run-tests: part 1 of 3, 3 of 8 files/);
+  const empty = run("9/9");
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.deepEqual(empty.ran, []);
+  for (const shard of ["4/3", "0/3", "3", "a/b"]) assert.equal(run(shard).status, 2, shard);
+  // The core's own suite runs through this runner.
+  assert.match(JSON.parse(readFileSync(join(root, "packages/core/package.json"), "utf8")).scripts.test, /node scripts\/run-tests\.cjs$/);
 });
