@@ -69,23 +69,38 @@ jobs:
         env:
           RETRY_SECONDS: 60
         run: |
+          # Between tries, keep in dugite's cache only an archive the job
+          # restored, which a successful job saved after its install
+          # verified it, or one matching dugite's checksum; drop anything
+          # else, such as what a download cut short left behind, which the
+          # next try could not unpack. The restored archives are recorded
+          # outside node_modules, since npm may roll dugite back once its
+          # script fails, taking its checksum with it.
+          archives='
+            const { createHash } = require("node:crypto");
+            const { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
+            const { join } = require("node:path");
+            const [mode, record] = process.argv.slice(1);
+            const dir = process.env.DUGITE_CACHE_DIR;
+            const hash = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
+            const names = existsSync(dir) ? readdirSync(dir) : [];
+            if (mode === "record") {
+              writeFileSync(record, JSON.stringify(names.map((name) => hash(join(dir, name)))));
+            } else {
+              const keep = new Set(JSON.parse(readFileSync(record, "utf8")));
+              try { keep.add(require(join(process.cwd(), "node_modules/dugite/script/config.js"))().checksum); } catch {}
+              for (const name of names) {
+                if (keep.has(hash(join(dir, name)))) continue;
+                rmSync(join(dir, name), { recursive: true, force: true });
+                console.log(`Dropped ${name} from the dugite cache: neither restored nor matching its checksum.`);
+              }
+            }'
+          restored="$RUNNER_TEMP/dugite-restored.json"
+          node -e "$archives" record "$restored"
           for attempt in 1 2 3; do
             npm ci && exit 0
             [ "$attempt" = 3 ] && break
-            # Keep an archive that matches dugite's checksum, restored or
-            # fetched; drop one a download cut short left behind, which the
-            # next try could not unpack. With dugite not yet installed its
-            # script never ran, so the archive is the one restored.
-            node -e '
-              let config;
-              try { config = require("./node_modules/dugite/script/config.js")(); } catch { process.exit(0); }
-              const { existsSync, readFileSync, rmSync } = require("node:fs");
-              if (!config.tempFile || !existsSync(config.tempFile)) process.exit(0);
-              const hash = require("node:crypto").createHash("sha256").update(readFileSync(config.tempFile)).digest("hex");
-              if (hash !== config.checksum) {
-                rmSync(config.tempFile);
-                console.log("Dropped a dugite archive failing its checksum.");
-              }'
+            node -e "$archives" prune "$restored"
             echo "::warning::npm ci failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
             sleep $((attempt * RETRY_SECONDS))
           done

@@ -14,6 +14,7 @@ Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and 
 - A job saves its caches only when it succeeds, so each platform's one job saved none, not even npm's cache and dugite's archive that its install had already verified.
 - With nothing under `main`, the next pull request missed both archives and failed the same way twice before a rerun passed.
 - A cache may hold only what a step verified: a dugite archive cut short and saved would fail every later install that restored it.
+- dugite 3.3.2, finding an archive that fails its checksum, removes it and then fails unpacking it, so a partial archive left in the cache wastes the next try.
 
 ## Decision
 
@@ -21,7 +22,8 @@ Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and 
   The install's success saves npm's package cache and dugite's archive, both verified by that install; the fetch's success saves Electron's archive, verified by its installer against the checksums Electron's package ships.
 - The fetch's job installs packages without their scripts, from the registry alone, and saves no npm cache, which would lack what those scripts fetch.
 - Each of the two downloads is tried up to three times, waiting longer before each retry.
-  Before an install's next try, dugite's archive is checked against dugite's own checksum: one a download cut short left behind is dropped and fetched afresh, while one restored or fetched intact is kept, since the install may have failed before or beside dugite.
+  Before an install's next try, dugite's cache keeps only an archive the job restored, which a successful job saved after its install verified it, or one matching dugite's own checksum; anything else, such as what a download cut short left behind, is dropped and fetched afresh, while an archive restored or fetched intact survives a failure before or beside dugite.
+  The restored archives are recorded outside `node_modules`, since npm may roll dugite's package back once its script fails, taking its checksum with it.
 - A failure after the last try still fails its job, so a cache no job verified is never saved.
 
 ## Consequences
