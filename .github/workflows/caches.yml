@@ -69,38 +69,41 @@ jobs:
         env:
           RETRY_SECONDS: 60
         run: |
-          # Between tries, keep in dugite's cache only an archive the job
-          # restored, which a successful job saved after its install
-          # verified it, or one matching dugite's checksum; drop anything
-          # else, such as what a download cut short left behind, which the
-          # next try could not unpack. The restored archives are recorded
-          # outside node_modules, since npm may roll dugite back once its
-          # script fails, taking its checksum with it.
-          archives='
+          # Between tries, dugite's cache keeps only an archive matching the
+          # locked dugite's checksum: what a download cut short left behind
+          # would fail the next try's unpacking, while an archive restored
+          # or fetched whole must survive another package's failure. npm
+          # may roll the whole install back once any package's script
+          # fails, taking the project's dugite with it, so before any try
+          # the locked dugite is also installed apart, from the registry or
+          # npm's cache and without its scripts.
+          version=$(node -p 'require("./package-lock.json").packages["node_modules/dugite"].version')
+          locked="$RUNNER_TEMP/dugite-locked"
+          prune='
             const { createHash } = require("node:crypto");
-            const { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
+            const { existsSync, readdirSync, readFileSync, rmSync } = require("node:fs");
             const { join } = require("node:path");
-            const [mode, record] = process.argv.slice(1);
             const dir = process.env.DUGITE_CACHE_DIR;
-            const hash = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
-            const names = existsSync(dir) ? readdirSync(dir) : [];
-            if (mode === "record") {
-              writeFileSync(record, JSON.stringify(names.map((name) => hash(join(dir, name)))));
-            } else {
-              const keep = new Set(JSON.parse(readFileSync(record, "utf8")));
-              try { keep.add(require(join(process.cwd(), "node_modules/dugite/script/config.js"))().checksum); } catch {}
-              for (const name of names) {
-                if (keep.has(hash(join(dir, name)))) continue;
-                rmSync(join(dir, name), { recursive: true, force: true });
-                console.log(`Dropped ${name} from the dugite cache: neither restored nor matching its checksum.`);
-              }
+            let checksum;
+            for (const root of [process.argv[1], process.cwd()]) {
+              try { checksum = require(join(root, "node_modules/dugite/script/config.js"))().checksum; break; } catch {}
+            }
+            if (!checksum) {
+              console.log("::warning::No dugite checksum to check its cache against; keeping it as it is.");
+              process.exit(0);
+            }
+            for (const name of existsSync(dir) ? readdirSync(dir) : []) {
+              if (createHash("sha256").update(readFileSync(join(dir, name))).digest("hex") === checksum) continue;
+              rmSync(join(dir, name), { recursive: true, force: true });
+              console.log(`Dropped ${name} from the dugite cache: it fails the locked checksum.`);
             }'
-          restored="$RUNNER_TEMP/dugite-restored.json"
-          node -e "$archives" record "$restored"
           for attempt in 1 2 3; do
+            [ -f "$locked/node_modules/dugite/script/config.js" ] ||
+              npm install --prefix "$locked" --no-save --ignore-scripts --no-audit --no-fund --prefer-offline "dugite@$version" > /dev/null ||
+              echo "::warning::The locked dugite could not be installed apart (attempt $attempt of 3)."
             npm ci && exit 0
             [ "$attempt" = 3 ] && break
-            node -e "$archives" prune "$restored"
+            node -e "$prune" "$locked"
             echo "::warning::npm ci failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
             sleep $((attempt * RETRY_SECONDS))
           done

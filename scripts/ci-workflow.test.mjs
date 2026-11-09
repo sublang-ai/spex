@@ -578,14 +578,18 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
   assert.equal(resolve(dugiteConfig.tempFile, ".."), resolve(dugiteCache));
   assert.match(dugiteConfig.checksum, /^[0-9a-f]{64}$/);
 
-  // Each retry loop, run with stand-ins: the command fails a given number
-  // of times, writing what a cut-short or a whole download leaves in
-  // dugite's cache when told to; `sleep` records its delays without
-  // waiting; and a fixture's dugite configuration, unless npm rolled it
-  // back, names the archive and its checksum.
+  // Each retry loop, run with stand-ins: `npm ci` (or Electron's
+  // installer) fails a given number of times, writing what a cut-short or
+  // a whole download leaves in dugite's cache when told to, and npm's
+  // rollback taking the project's dugite with it unless it stays installed;
+  // `npm install --prefix` installs the locked dugite apart, unless the
+  // registry is down; `sleep` records its delays without waiting. Each
+  // fixture dugite configuration names the archive and its checksum.
   const GOOD = "a complete archive";
   const PARTIAL = "cut short";
-  const retry = (step, failures, standIn, { restored, written, dugiteInstalled = true } = {}) => {
+  const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages;
+  const configModule = (tempFile) => `module.exports = () => ({ tempFile: ${JSON.stringify(tempFile)}, checksum: ${JSON.stringify(createHash("sha256").update(GOOD).digest("hex"))} });\n`;
+  const retry = (step, failures, standIn, { restored, written, dugiteInstalled = false, registry = true } = {}) => {
     const dir = mkdtempSync(join(tmpdir(), "spex-seed-retry-"));
     const log = (name) => join(dir, `${name}.log`);
     const cache = join(dir, "dugite-cache");
@@ -594,16 +598,27 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
     if (restored !== undefined) writeFileSync(tempFile, restored);
     if (dugiteInstalled) {
       mkdirSync(join(dir, "node_modules", "dugite", "script"), { recursive: true });
-      const checksum = createHash("sha256").update(GOOD).digest("hex");
-      writeFileSync(join(dir, "node_modules", "dugite", "script", "config.js"),
-        `module.exports = () => ({ tempFile: ${JSON.stringify(tempFile)}, checksum: ${JSON.stringify(checksum)} });\n`);
+      writeFileSync(join(dir, "node_modules", "dugite", "script", "config.js"), configModule(tempFile));
     }
+    writeFileSync(join(dir, "package-lock.json"), JSON.stringify({ packages: { "node_modules/dugite": { version: lock["node_modules/dugite"].version } } }));
+    const lockedConfig = join(dir, "locked-config.js");
+    writeFileSync(lockedConfig, configModule(tempFile));
     const bin = join(dir, "bin");
     mkdirSync(bin);
     const fake = (name, body) => writeFileSync(join(bin, name), ["#!/usr/bin/env bash", `echo "$*" >> "${log(name)}"`, body, ""].join("\n"), { mode: 0o755 });
     // A failing try writes, if told to, only where dugite would: a download is fetched afresh only when no archive stands.
     const write = written === undefined ? "" : `[ -e "${tempFile}" ] || printf %s ${JSON.stringify(written)} > "${tempFile}"; `;
-    fake(standIn, `[ "$(wc -l < "${log(standIn)}")" -gt ${failures} ] && exit 0; ${write}exit 1`);
+    const tries = (counted) => `[ "$(grep -c '${counted}' "${log(standIn)}")" -gt ${failures} ] && exit 0; ${write}exit 1`;
+    if (standIn === "npm") {
+      fake("npm", [
+        'if [ "$1" = install ]; then',
+        registry ? `  prefix=$(printf '%s\\n' "$@" | sed -n '/^--prefix$/{n;p;}'); mkdir -p "$prefix/node_modules/dugite/script" && cp "${lockedConfig}" "$prefix/node_modules/dugite/script/config.js"; exit 0` : "  exit 1",
+        "fi",
+        tries("^ci"),
+      ].join("\n"));
+    } else {
+      fake(standIn, tries("install.js"));
+    }
     fake("sleep", "exit 0");
     assert.equal(step.shell, "bash");
     const runnerTemp = join(dir, "runner-temp");
@@ -613,21 +628,27 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ...step.env, RETRY_SECONDS: String(step.env.RETRY_SECONDS), DUGITE_CACHE_DIR: cache, RUNNER_TEMP: runnerTemp },
     });
     const lines = (name) => (existsSync(log(name)) ? readFileSync(log(name), "utf8").split("\n").filter(Boolean) : []);
-    return { status: run.status, calls: lines(standIn).length, delays: lines("sleep"), archive: existsSync(tempFile) ? readFileSync(tempFile, "utf8") : null };
+    const calls = lines(standIn).filter((line) => standIn !== "npm" || line.startsWith("ci")).length;
+    return { status: run.status, calls, delays: lines("sleep"), archive: existsSync(tempFile) ? readFileSync(tempFile, "utf8") : null, installs: standIn === "npm" ? lines("npm").filter((line) => line.startsWith("install")) : [], warned: /::warning::No dugite checksum/.test(run.stdout) };
   };
   assert.deepEqual(install.steps[3].env, { RETRY_SECONDS: 60 });
   const installRun = install.steps[3];
-  assert.deepEqual(retry(installRun, 0, "npm", { restored: GOOD }), { status: 0, calls: 1, delays: [], archive: GOOD });
-  assert.deepEqual(retry(installRun, 1, "npm", { restored: GOOD }), { status: 0, calls: 2, delays: ["60"], archive: GOOD }, "a failure before or beside dugite keeps the restored archive");
-  assert.deepEqual(retry(installRun, 1, "npm", { restored: GOOD, dugiteInstalled: false }), { status: 0, calls: 2, delays: ["60"], archive: GOOD }, "the restored archive stays though npm rolled dugite back");
-  assert.deepEqual(retry(installRun, 2, "npm", { written: PARTIAL }), { status: 0, calls: 3, delays: ["60", "120"], archive: null }, "a partial archive is dropped before the next try");
-  assert.deepEqual(retry(installRun, 2, "npm", { written: PARTIAL, dugiteInstalled: false }), { status: 0, calls: 3, delays: ["60", "120"], archive: null }, "a partial archive is dropped though npm rolled dugite back");
-  assert.deepEqual(retry(installRun, 1, "npm", { written: GOOD }), { status: 0, calls: 2, delays: ["60"], archive: GOOD }, "an archive this job fetched whole, matching dugite's checksum, stays");
-  assert.deepEqual(retry(installRun, 3, "npm", { restored: GOOD }), { status: 1, calls: 3, delays: ["60", "120"], archive: GOOD }, "three failed attempts fail the job");
+  const pass = (calls, archive, extra = {}) => ({ status: 0, calls, delays: ["60", "120"].slice(0, calls - 1), archive, warned: false, ...extra });
+  const strip = ({ installs: _installs, ...rest }) => rest;
+  const first = retry(installRun, 0, "npm", { restored: GOOD });
+  assert.deepEqual(strip(first), pass(1, GOOD));
+  assert.equal(first.installs.length, 1, "the locked dugite is installed apart once");
+  assert.match(first.installs[0], new RegExp(`^install --prefix \\S+ --no-save --ignore-scripts .*\\bdugite@${lock["node_modules/dugite"].version.replace(/\./g, "\\.")}$`), "the locked version, its scripts never run");
+  assert.deepEqual(strip(retry(installRun, 1, "npm", { restored: GOOD })), pass(2, GOOD), "a restored archive stays though npm rolled the install back");
+  assert.deepEqual(strip(retry(installRun, 2, "npm", { written: PARTIAL })), pass(3, null), "a partial archive is dropped though npm rolled dugite back");
+  assert.deepEqual(strip(retry(installRun, 1, "npm", { written: GOOD })), pass(2, GOOD), "a cold cache keeps the archive dugite verified though another script's failure rolled the install back");
+  assert.deepEqual(strip(retry(installRun, 2, "npm", { written: PARTIAL, dugiteInstalled: true, registry: false })), pass(3, null), "without the locked copy, the installed dugite's checksum still drops a partial archive");
+  assert.deepEqual(strip(retry(installRun, 1, "npm", { written: PARTIAL, registry: false })), pass(2, PARTIAL, { warned: true }), "with no checksum at all, the cache is kept as it is and the run warns");
+  assert.deepEqual(strip(retry(installRun, 3, "npm", { restored: GOOD })), { status: 1, calls: 3, delays: ["60", "120"], archive: GOOD, warned: false }, "three failed attempts fail the job");
   const fetchRun = electron.steps[4];
   assert.deepEqual(fetchRun.env, { RETRY_SECONDS: 60 });
-  assert.deepEqual(retry(fetchRun, 1, "node"), { status: 0, calls: 2, delays: ["60"], archive: null });
-  assert.deepEqual(retry(fetchRun, 3, "node"), { status: 1, calls: 3, delays: ["60", "120"], archive: null });
+  assert.deepEqual(strip(retry(fetchRun, 1, "node")), { status: 0, calls: 2, delays: ["60"], archive: null, warned: false });
+  assert.deepEqual(strip(retry(fetchRun, 3, "node")), { status: 1, calls: 3, delays: ["60", "120"], archive: null, warned: false });
   // No other workflow gained a push-to-main or scheduled trigger.
   for (const [name, current] of Object.entries(workflowsByName)) {
     if (name === "caches") continue;
