@@ -8,6 +8,8 @@
 Accepted (2026-11-09) after GitHub's release-asset timeouts of 2026-11-08 failed the required checks of pull requests whose tests all passed.
 Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push to `main`: the cache seed runs there, validating nothing.
 
+Extended by [DR-230](230-the-seed-keeps-what-it-verified.md): the seed installs and fetches Electron in jobs of their own, each saving what it verified and retrying its downloads.
+
 ## Context
 
 - Every install downloads dugite's Git, and the jobs running Electron download it, from GitHub releases without authentication; during the timeouts five jobs failed on those downloads, and reruns failed the same way.
