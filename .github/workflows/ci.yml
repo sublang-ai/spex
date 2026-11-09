@@ -55,10 +55,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # No npm cache here: this job installs only for documentation
+      # alone, and a save from a job that installed nothing would hold the
+      # install's key empty for every later job (release-49).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Prepare release version
         if: inputs.release-tag != ''
         env:
@@ -89,6 +91,8 @@ jobs:
       - name: Require published runtime dependencies before app validation
         if: steps.classify.outputs.full == 'true' && steps.classify.outputs.channel == 'app'
         run: node scripts/dependency-closure.mjs --registry-only
+      - uses: ./.github/actions/download-caches
+        if: steps.classify.outputs.docs-only == 'true'
       - name: Documentation alone keeps the spec gates
         if: steps.classify.outputs.docs-only == 'true'
         env:
@@ -119,6 +123,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.release-tag }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: node scripts/release-version.mjs prepare
+      - uses: ./.github/actions/download-caches
       - run: npm ci
       - name: Build, catalogs, types and specifications
         shell: bash
@@ -180,6 +185,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.release-tag }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: node scripts/release-version.mjs prepare
+      - uses: ./.github/actions/download-caches
       - run: npm ci
       - run: npm run build
 
@@ -246,6 +252,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.release-tag }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: node scripts/release-version.mjs prepare
+      - uses: ./.github/actions/download-caches
       - run: npm ci
       - run: npm run build
       - name: Install Electron and native browser libraries

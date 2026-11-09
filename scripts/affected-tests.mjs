@@ -29,6 +29,8 @@ const ROOT_OWNERS = new Map([
     ".github/workflows/app-release.yml",
     ".github/workflows/release.yml",
     ".github/workflows/hub-lane.yml",
+    ".github/workflows/caches.yml",
+    ".github/actions/download-caches/action.yml",
     "scripts/affected-tests.mjs",
     "scripts/affected-tests.test.mjs",
     "scripts/ci-verdict.mjs",

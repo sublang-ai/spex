@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The cache seed (release-50, DR-228). A pull request restores caches
+# saved under its own merge ref or under `main`, never another pull
+# request's, and CI runs on no push to `main` (DR-199), so this is what
+# saves npm's package cache and Electron's and dugite's archives under
+# `main` for every pull request and release to restore. It installs and
+# fetches only: no build, no suite, no check.
+name: Caches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package-lock.json
+      - .github/workflows/caches.yml
+      - .github/actions/download-caches/action.yml
+  workflow_dispatch:
+
+# A newer push supersedes a seed still running; its own seed saves.
+concurrency:
+  group: caches-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: ./.github/actions/download-caches
+      - run: npm ci
+      - name: Fetch Electron into its cache
+        run: node node_modules/electron/install.js

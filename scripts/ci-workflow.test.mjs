@@ -442,3 +442,79 @@ test("release-46: release CI injects the same version before installs, including
   assert.equal(hubSteps[stamp].if, "inputs.release-tag != ''");
   assert.match(hubSteps[stamp].run, /release-version\.mjs.*--channel=app/);
 });
+
+const workflowsByName = Object.fromEntries(["ci", "app-release", "release", "hub-lane", "caches"]
+  .map((name) => [name, parse(readFileSync(join(root, `.github/workflows/${name}.yml`), "utf8"))]));
+const DOWNLOAD_CACHES = "./.github/actions/download-caches";
+const installs = (step) => /(^|\n)\s*npm ci(\s|$)/.test(step.run ?? "");
+
+test("release-33: every install restores the download caches first, and a job installing nothing saves no npm cache (release-49)", () => {
+  let seen = 0;
+  for (const [name, current] of Object.entries(workflowsByName)) {
+    for (const [jobName, job] of Object.entries(current.jobs)) {
+      const steps = job.steps ?? [];
+      const installAt = steps.findIndex(installs);
+      const node = steps.find((step) => step.uses?.startsWith("actions/setup-node@"));
+      if (node?.with?.cache === "npm") assert.ok(installAt >= 0, `${name}/${jobName} saves an npm cache without installing`);
+      steps.forEach((step, at) => {
+        if (!installs(step)) return;
+        seen += 1;
+        const caches = steps.slice(0, at).find((candidate) => candidate.uses === DOWNLOAD_CACHES);
+        assert.ok(caches, `${name}/${jobName} installs before restoring the download caches`);
+        assert.equal(caches.if, step.if, `${name}/${jobName} restores the caches whenever it installs`);
+      });
+    }
+  }
+  assert.ok(seen >= 7, "every workflow install was inspected");
+  assert.equal(workflow.jobs.changes.steps.find((step) => step.uses?.startsWith("actions/setup-node@")).with.cache, undefined, "the classifier saves no npm cache");
+});
+
+test("release-33: the download caches key each archive by platform and locked version where Electron's and dugite's installers read them (release-49)", () => {
+  const action = parse(readFileSync(join(root, ".github/actions/download-caches/action.yml"), "utf8"));
+  assert.equal(action.runs.using, "composite");
+  const [locked, electron, dugite] = action.runs.steps;
+  assert.equal(locked.id, "locked");
+  assert.equal(electron.uses, "actions/cache@v4");
+  assert.deepEqual(electron.with, { path: "${{ runner.temp }}/electron-cache", key: "electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.electron }}" });
+  assert.equal(dugite.uses, "actions/cache@v4");
+  assert.deepEqual(dugite.with, { path: "${{ runner.temp }}/dugite-cache", key: "dugite-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.dugite }}" });
+
+  // The step itself, run over the repository's lockfile.
+  const dir = mkdtempSync(join(tmpdir(), "spex-download-caches-"));
+  const output = join(dir, "output");
+  const env = join(dir, "env");
+  writeFileSync(output, "");
+  writeFileSync(env, "");
+  const run = spawnSync("bash", ["-e", "-c", locked.run], {
+    cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_ENV: env, RUNNER_TEMP: dir },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages;
+  assert.equal(readFileSync(output, "utf8"), `electron=${lock["node_modules/electron"].version}\ndugite=${lock["node_modules/dugite"].version}\n`);
+  assert.equal(readFileSync(env, "utf8"), `electron_config_cache=${dir}/electron-cache\nDUGITE_CACHE_DIR=${dir}/dugite-cache\n`);
+
+  // The installed tools still read those variables, so a cached archive is used in place of a download.
+  assert.match(readFileSync(join(root, "node_modules/electron/install.js"), "utf8"), /cacheRoot: process\.env\.electron_config_cache/);
+  assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
+});
+
+test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request, installing and fetching on every platform and running nothing else (release-50)", () => {
+  const seed = workflowsByName.caches;
+  assert.deepEqual(Object.keys(seed.on).sort(), ["push", "workflow_dispatch"]);
+  assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml"] });
+  assert.deepEqual(seed.permissions, { contents: "read" });
+  assert.deepEqual(Object.keys(seed.jobs), ["seed"]);
+  const job = seed.jobs.seed;
+  assert.deepEqual(job.strategy.matrix.os, ["ubuntu-latest", "macos-latest", "windows-latest"]);
+  assert.equal(job["runs-on"], "${{ matrix.os }}");
+  assert.deepEqual(job.steps.map((step) => step.uses ?? step.run), [
+    "actions/checkout@v4", "actions/setup-node@v4", DOWNLOAD_CACHES, "npm ci", "node node_modules/electron/install.js",
+  ]);
+  assert.equal(job.steps[1].with.cache, "npm");
+  // No other workflow gained a push-to-main or scheduled trigger.
+  for (const [name, current] of Object.entries(workflowsByName)) {
+    if (name === "caches") continue;
+    assert.equal(current.on.schedule, undefined, name);
+    assert.ok(!(current.on.push?.branches ?? []).includes("main"), name);
+  }
+});

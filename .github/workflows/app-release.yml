@@ -105,6 +105,7 @@ jobs:
           cache: npm
       - name: Prepare version from tag
         run: node scripts/release-version.mjs prepare --channel=app
+      - uses: ./.github/actions/download-caches
       - run: npm ci
       - run: npm run build
       - name: Check module scope for package diagnostics

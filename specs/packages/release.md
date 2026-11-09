@@ -244,7 +244,7 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 | Exact root paths | Owner seeds |
 | --- | --- |
-| `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/hub-lane.yml` | Script tests alone |
+| `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/hub-lane.yml`, `.github/workflows/caches.yml`, `.github/actions/download-caches/action.yml` | Script tests alone |
 | `scripts/affected-tests.mjs`, `scripts/affected-tests.test.mjs`, `scripts/ci-verdict.mjs`, `scripts/ci-workflow.test.mjs`, `scripts/app-release-workflow.test.mjs`, `scripts/prepush.sh`, `scripts/merge-on-green.sh`, `scripts/test-linux.sh`, `scripts/linux-ci/Dockerfile` | Script tests alone |
 | `scripts/release-notes.mjs`, `scripts/release-notes.test.mjs`, `scripts/smoke.mjs`, `scripts/smoke.test.mjs`, `scripts/install-smoke.mjs`, `scripts/cli-smoke.mjs`, `scripts/desktop-smoke.mjs`, `scripts/migration-smoke.mjs` | Script tests alone |
 | `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/team-server-local.test.mjs` | Script tests alone |
@@ -281,6 +281,19 @@ A suite shall be deterministic by construction ([DR-145](../decisions/145-merge-
 #### release-32
 
 When the developer/agent runs `npm run test:linux`, optionally naming a workspace and the test command's arguments, the repository shall run that workspace's tests in a Linux container holding the CI runners' Node and Git versions over a copy of the working tree, so a difference between the developer's platform and the CI platform shows before a push ([DR-145](../decisions/145-merge-on-green.md)).
+
+### CI Downloads
+
+#### release-49
+
+When a CI or release job installs the app's dependencies, it shall first restore Electron's and dugite's Git archives from Actions caches keyed by the runner's platform and each package's locked version, fetching an archive from its GitHub release only on a miss ([DR-228](../decisions/228-ci-keeps-its-downloads.md)):
+
+- a successful job saves what a miss fetched under that key;
+- npm's package cache is saved only by a job that installs, so no job saves it empty under an install's key.
+
+#### release-50
+
+When the cache seed is triggered by a push to `main` changing the lockfile or the cache tooling, or by an explicit request, it shall install the dependencies and fetch Electron on Linux, macOS and Windows, saving npm's package cache and the archives [[release-49](#release-49)] under `main` for pull requests and releases to restore, while running no build, suite or check ([DR-228](../decisions/228-ci-keeps-its-downloads.md)).
 
 ### Shared Runtime Dependencies
 
@@ -329,7 +342,7 @@ When the release-notes integration suite runs the actual notes command over isol
 
 #### release-33
 
-When the repository-system audit reads the CI and hub workflows, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
+When the repository-system audit reads the CI, release, hub and cache workflows, the download-caches action, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
 
 | Case | Assertions |
 | --- | --- |
@@ -343,6 +356,7 @@ When the repository-system audit reads the CI and hub workflows, merge script an
 | Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
 | Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
 | Automatic triggers | CI and the hub lane have no schedules or push-to-main trigger; the hub lane accepts only reusable full-app invocation or explicit requests [[release-34](#release-34)] [[release-36](#release-36)]. |
+| Download caches | Every install restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, installing and fetching on all three platforms and running nothing else [[release-50](#release-50)]. |
 | Existing local gates | Prepush rejects conflict markers [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
 
 #### release-45

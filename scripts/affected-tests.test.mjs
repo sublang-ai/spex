@@ -81,6 +81,7 @@ test("dependency tooling and unknown root paths still reach everything", () => {
 test("known workflows and root tooling select script tests alone, without hiding product changes", () => {
   for (const path of [
     ".github/workflows/ci.yml", ".github/workflows/app-release.yml", ".github/workflows/release.yml", ".github/workflows/hub-lane.yml",
+    ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml",
     "scripts/affected-tests.mjs", "scripts/affected-tests.test.mjs", "scripts/ci-verdict.mjs", "scripts/ci-workflow.test.mjs", "scripts/app-release-workflow.test.mjs",
     "scripts/prepush.sh", "scripts/merge-on-green.sh", "scripts/test-linux.sh", "scripts/linux-ci/Dockerfile",
     "scripts/release-notes.mjs", "scripts/release-notes.test.mjs", "scripts/smoke.mjs", "scripts/smoke.test.mjs", "scripts/install-smoke.mjs", "scripts/cli-smoke.mjs", "scripts/desktop-smoke.mjs", "scripts/migration-smoke.mjs",
