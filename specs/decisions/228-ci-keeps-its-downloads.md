@@ -29,5 +29,6 @@ Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push t
 ## Consequences
 
 - A pull request's first run restores the archives seeded under `main`, so a release-asset outage fails only installs whose locked versions were never seeded.
+- Packaging reuses the restored Electron archive only once the checksum file electron-builder's downloader still fetches from the release validates it; while that request fails, packaging downloads the archive again.
 - A cache unused for seven days expires; until the seed runs again, runs download as before.
 - Each lockfile change on `main` costs three short seed jobs; validation scope, the merge gate and release validation are unchanged.

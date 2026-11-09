@@ -289,7 +289,7 @@ When the developer/agent runs `npm run test:linux`, optionally naming a workspac
 
 When a step of a CI or release workflow runs `npm ci`, its job shall first restore Electron's and dugite's Git archives from Actions caches keyed by the runner's platform and each package's locked version, fetching an archive from its GitHub release only on a miss ([DR-228](../decisions/228-ci-keeps-its-downloads.md)):
 
-- Electron's archive is restored to the default download cache that Electron's installer and the app packager both read, neither naming another, so packaging reuses the archive the installer verified;
+- Electron's archive is restored to the default download cache that Electron's installer and the app packager both read, neither naming another, so packaging reuses that archive once the checksums it still fetches from the release validate it, and downloads the archive again otherwise;
 - a successful job saves what a miss fetched under that key;
 - npm's package cache is saved only by a job that installs, so no job saves it empty under an install's key.
 - the privileged hub lane's install, which its install script runs as root inside the lane [[release-36](#release-36)], restores none of these caches.
