@@ -101,9 +101,11 @@ jobs:
             [ -f "$locked/node_modules/dugite/script/config.js" ] ||
               npm install --prefix "$locked" --no-save --ignore-scripts --no-audit --no-fund --prefer-offline "dugite@$version" > /dev/null ||
               echo "::warning::The locked dugite could not be installed apart (attempt $attempt of 3)."
+            # Checked just before each retry, with the newest checksum
+            # there is, so a copy installed only now still guards this try.
+            [ "$attempt" = 1 ] || node -e "$prune" "$locked"
             npm ci && exit 0
             [ "$attempt" = 3 ] && break
-            node -e "$prune" "$locked"
             echo "::warning::npm ci failed (attempt $attempt of 3); retrying in $((attempt * RETRY_SECONDS))s"
             sleep $((attempt * RETRY_SECONDS))
           done

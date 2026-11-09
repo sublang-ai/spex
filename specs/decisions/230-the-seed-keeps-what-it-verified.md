@@ -25,6 +25,7 @@ Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and 
 - Each of the two downloads is tried up to three times, waiting longer before each retry.
   Before an install's next try, dugite's cache keeps only an archive matching the locked dugite's checksum; anything else, such as what a download cut short left behind, is dropped and fetched afresh, while an archive restored or fetched intact survives a failure before or beside dugite.
   The checksum comes from a copy of the locked dugite release installed apart from the project, from the registry and without its scripts, since npm may roll the project's install back, dugite with it, whichever package's script failed.
+  The copy is retried before each try and the cache checked just before each retry, with the newest checksum there is.
   Without that copy the project's dugite gives it; with neither, the cache is kept as it is and the run warns, since a partial archive kept costs one try while an intact one dropped costs a download.
 - A failure after the last try still fails its job, so a cache no job verified is never saved.
 

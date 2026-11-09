@@ -612,6 +612,7 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
     if (standIn === "npm") {
       fake("npm", [
         'if [ "$1" = install ]; then',
+        registry === "recovers" ? `  [ "$(grep -c '^install' "${log("npm")}")" -gt 1 ] || exit 1` : "",
         registry ? `  prefix=$(printf '%s\\n' "$@" | sed -n '/^--prefix$/{n;p;}'); mkdir -p "$prefix/node_modules/dugite/script" && cp "${lockedConfig}" "$prefix/node_modules/dugite/script/config.js"; exit 0` : "  exit 1",
         "fi",
         tries("^ci"),
@@ -644,6 +645,7 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
   assert.deepEqual(strip(retry(installRun, 1, "npm", { written: GOOD })), pass(2, GOOD), "a cold cache keeps the archive dugite verified though another script's failure rolled the install back");
   assert.deepEqual(strip(retry(installRun, 2, "npm", { written: PARTIAL, dugiteInstalled: true, registry: false })), pass(3, null), "without the locked copy, the installed dugite's checksum still drops a partial archive");
   assert.deepEqual(strip(retry(installRun, 1, "npm", { written: PARTIAL, registry: false })), pass(2, PARTIAL, { warned: true }), "with no checksum at all, the cache is kept as it is and the run warns");
+  assert.deepEqual(strip(retry(installRun, 1, "npm", { written: PARTIAL, registry: "recovers" })), pass(2, null), "a locked copy installed just before a retry checks the cache before that retry");
   assert.deepEqual(strip(retry(installRun, 3, "npm", { restored: GOOD })), { status: 1, calls: 3, delays: ["60", "120"], archive: GOOD, warned: false }, "three failed attempts fail the job");
   const fetchRun = electron.steps[4];
   assert.deepEqual(fetchRun.env, { RETRY_SECONDS: 60 });
