@@ -31,7 +31,7 @@ import { seatName } from "../lib/space.js";
 import { spaceNameOf, SpaceChooser } from "./SpaceDirectory.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
-import { ATTACHED_OWNER } from "./SpacePanel.js";
+import { ALERT_INK, ATTACHED_OWNER } from "./SpacePanel.js";
 import {
   causePhrase,
   focusCardField,
@@ -49,7 +49,7 @@ import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 /** The heading's fields: stacked below 20rem, a wrapping row above it
  * (space-28). */
 const ROW = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
-const ALERT = "min-w-0 text-xs text-red-600 dark:text-red-400";
+const ALERT = `min-w-0 text-xs ${ALERT_INK}`;
 
 /** Whether focus has nowhere to stand: the control it stood on is gone
  * or disabled (DR-010 §6). */

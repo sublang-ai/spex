@@ -52,6 +52,7 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { ALERT_INK, ATTENTION_INK } from "./SpacePanel.js";
 import { PlacementLines } from "./SpacePlacements.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -113,7 +114,7 @@ function DiffBox({
 
   if (error) {
     return (
-      <p role="alert" data-testid={testId} className="text-xs text-red-600 dark:text-red-400">
+      <p role="alert" data-testid={testId} className={`text-xs ${ALERT_INK}`}>
         {i18n._("Couldn't load the diff: {reason}", { reason: error })}
       </p>
     );
@@ -245,7 +246,7 @@ function UnitRow({
         {conflict ? (
           <span
             data-testid={`space-choose-${unit.unit}`}
-            className="shrink-0 text-xs text-amber-700 dark:text-amber-300"
+            className={`shrink-0 text-xs ${ATTENTION_INK}`}
             title={i18n._({ id: "Changed here and at {name}", values: { name }, comment: "a project's row or placement line: a sync found records changed both on this computer and at that Space, choices owed; {name} is the Space's display name; Resolve stands beside it" })}
           >
             <span aria-hidden>⚠ </span>
@@ -1001,7 +1002,7 @@ export function SyncTab({
               {i18n._({ id: "Dismiss", comment: "put this outcome card away" })}
             </button>
             {error?.where === "retry" ? (
-              <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+              <span role="alert" className={`text-xs ${ALERT_INK}`}>
                 {error.message}
               </span>
             ) : null}
@@ -1061,7 +1062,7 @@ export function SyncTab({
       <section aria-label={i18n._({ id: "Incoming", comment: "the Sync tab's part listing what each Space holds that this computer lacks" })} className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-end gap-2">
           {error?.where === "check" ? (
-            <span role="alert" className="min-w-0 flex-1 text-xs text-red-600 dark:text-red-400">
+            <span role="alert" className={`min-w-0 flex-1 text-xs ${ALERT_INK}`}>
               {error.message}
             </span>
           ) : null}
@@ -1398,7 +1399,7 @@ export function ConflictsPicker({
           </button>
         )}
         {error ? (
-          <span role="alert" className="text-xs text-red-600 dark:text-red-400">
+          <span role="alert" className={`text-xs ${ALERT_INK}`}>
             {error}
           </span>
         ) : null}

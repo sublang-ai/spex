@@ -52,7 +52,7 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
-import { ATTACHED_PANEL } from "./SpacePanel.js";
+import { ALERT_INK, ATTACHED_PANEL, ATTENTION_INK } from "./SpacePanel.js";
 import { ChoicesContext, SyncTab, createChoices, forgetCompleted } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList } from "./SpaceGroups.js";
@@ -509,7 +509,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
             ) : null}
           </div>
           {spaceError ? (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            <p role="alert" className={`text-sm ${ALERT_INK}`}>
               {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
             </p>
           ) : null}
@@ -637,7 +637,7 @@ function HomeHeader({
     : issuesLabel;
   const issues = groups.diagnostics.length > 0 ? (
     <button type="button" data-testid="space-issues" aria-expanded={issuesOpen} aria-label={issuesName} disabled={issuesPending}
-      className={`flex min-w-0 max-w-full items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
+      className={`flex min-w-0 max-w-full items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? ATTENTION_INK : "text-neutral-500"}`}
       onClick={(event) => onIssuesOpen(!issuesOpen, event.currentTarget)}
     >
       {noticeCount > 0 ? <span aria-hidden>⚠</span> : null}
@@ -672,7 +672,7 @@ function HomeHeader({
         <div className={row}>
           {issues}
           {refreshError ? (
-            <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
+            <span role="alert" className={`min-w-0 text-xs ${ALERT_INK}`}>
               {refreshError}
             </span>
           ) : null}

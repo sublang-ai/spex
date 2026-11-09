@@ -33,6 +33,7 @@ import { resumeSharedOpens, sendServerAct, serverPlace, useServerOpens } from ".
 import { isLocalPlace } from "../state/store.js";
 import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
+import { ALERT_INK } from "./SpacePanel.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** How long a connection runs before the line's title says the first
@@ -187,7 +188,7 @@ export function InstanceServers({
   return (
     <section data-testid={`space-servers-${instance.origin}`} aria-label={title} className="flex min-w-0 flex-col gap-1">
       {failure ? (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+        <p role="alert" className={`text-xs ${ALERT_INK}`}>
           {i18n._({
             id: "Couldn't read the servers: {reason}",
             values: { reason: failure.message },
@@ -362,7 +363,7 @@ function ServerLine({
         // The server's sign-in failed: its cause, as the server said it,
         // and the sign-in started afresh (run-view-170, core-service-142).
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pl-3.5">
-          <p role="alert" data-testid={`space-server-signin-error-${place}`} className="min-w-0 text-xs text-red-600 dark:text-red-400">
+          <p role="alert" data-testid={`space-server-signin-error-${place}`} className={`min-w-0 text-xs ${ALERT_INK}`}>
             {causePhrase(signIn.cause)}
           </p>
           <button
@@ -377,7 +378,7 @@ function ServerLine({
         </div>
       ) : null}
       {refusal ? (
-        <p role="alert" data-testid={`space-server-refusal-${place}`} className="pl-3.5 text-xs text-red-600 dark:text-red-400">
+        <p role="alert" data-testid={`space-server-refusal-${place}`} className={`pl-3.5 text-xs ${ALERT_INK}`}>
           {refusal}
         </p>
       ) : null}

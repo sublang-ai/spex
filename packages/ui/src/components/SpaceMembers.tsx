@@ -23,12 +23,12 @@ import { instanceName } from "../lib/instances.js";
 import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
-import { ATTACHED_PANEL } from "./SpacePanel.js";
+import { ALERT_INK, ATTACHED_PANEL } from "./SpacePanel.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 const FIELD =
   "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm dark:border-neutral-700 dark:bg-neutral-900";
-const REFUSAL = "min-w-0 text-xs text-red-600 dark:text-red-400";
+const REFUSAL = `min-w-0 text-xs ${ALERT_INK}`;
 
 /** Focus a control once the editor or confirm that stood in its place
  * is gone: closing never strands focus (DR-010 §6). */

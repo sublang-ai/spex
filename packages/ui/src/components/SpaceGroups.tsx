@@ -120,7 +120,7 @@ import { GroupServers, InstanceServers, useServers } from "./SpaceServers.js";
 import { GroupTransferProgress } from "./GroupTransferProgress.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
-import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
+import { ALERT_INK, ATTACHED_OWNER, ATTACHED_PANEL, ATTENTION_INK } from "./SpacePanel.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, combineLabel, combiningLabel, entryName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
@@ -845,7 +845,7 @@ function GroupSection({
                 {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
               </button>
             ) : null}
-            {deleteError ? <p role="alert" className="w-full break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+            {deleteError ? <p role="alert" className={`w-full break-words text-xs ${ALERT_INK}`}>{deleteError}</p> : null}
           </div>
         ) : null}
         {opened === "delete" && hostGroup !== null && instance ? (
@@ -882,7 +882,7 @@ function GroupSection({
               ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
             </div>
             {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
-            {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+            {deleteError ? <p role="alert" className={`break-words text-xs ${ALERT_INK}`}>{deleteError}</p> : null}
             <div className="flex flex-wrap justify-end gap-2">
               {(deleteError || (review && review.contents.length > 0)) ? <button type="button" className={`${SECONDARY} mr-auto`} disabled={!connected || checking || deleting} onClick={() => { setDeleteError(undefined); setReviewAgain((value) => value + 1); }}>{i18n._("Check again")}</button> : null}
               <button ref={deleteCancelRef} autoFocus type="button" className={SECONDARY} disabled={deleting} onClick={close}>
@@ -1542,8 +1542,8 @@ function RepositoryRow({
   const TONES: Record<string, string> = {
     idle: "text-neutral-500",
     running: "text-neutral-500",
-    attention: "text-amber-700 dark:text-amber-300",
-    stopped: "text-red-600 dark:text-red-400",
+    attention: ATTENTION_INK,
+    stopped: ALERT_INK,
   };
 
   /** The words of the phrase's way forward (space-120). */
@@ -1727,7 +1727,7 @@ function RepositoryRow({
         </div>
       ) : null}
       {caption ? (
-        <p id={captionId} data-testid={captionId} role="alert" className="flex flex-wrap items-center gap-2 pl-6 text-xs text-red-600 dark:text-red-400">
+        <p id={captionId} data-testid={captionId} role="alert" className={`flex flex-wrap items-center gap-2 pl-6 text-xs ${ALERT_INK}`}>
           <span className="min-w-0">{caption}</span>
           {failedOpen && !error ? (
             <button type="button" className={SECONDARY} onClick={() => dismissOpen(failedOpen.key)}>
@@ -1898,7 +1898,7 @@ function FolderEditor({
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
         {refusal ? (
-          <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
+          <span role="alert" className={`min-w-0 text-xs ${ALERT_INK}`}>
             {refusal}
           </span>
         ) : null}
@@ -2150,11 +2150,11 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
         </div>
       ) : null}
       {serversPending ? <p role="status" className="text-xs text-neutral-500">{i18n._({ id: "Loading servers…", comment: "reading available servers before the project's group destination is committed" })}</p> : null}
-      {serverFailure ? <div role="alert" className="flex min-w-0 items-center gap-2 text-sm text-red-600 dark:text-red-400">
+      {serverFailure ? <div role="alert" className={`flex min-w-0 items-center gap-2 text-sm ${ALERT_INK}`}>
         <span className="min-w-0 break-words">{serverFailure}</span>
         <button type="button" className={SECONDARY} disabled={disabled} onClick={serverRead.reload}>{i18n._({ id: "Retry", comment: "run the stopped step again" })}</button>
       </div> : null}
-      {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
+      {refusal ? <p role="alert" className={`break-words text-sm ${ALERT_INK}`}>{refusal}</p> : null}
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-700">
         <button ref={cancelRef} type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}

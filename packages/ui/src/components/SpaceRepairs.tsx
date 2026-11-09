@@ -15,6 +15,7 @@ import { seatName, tildify } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
+import { ALERT_INK } from "./SpacePanel.js";
 import { LINK, PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The pending merge's file, which a row reads in plain words. */
@@ -167,7 +168,7 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
     setRefusal(undefined);
     firstRef.current?.focus();
   };
-  const refusalLine = refusal ? <p id={errorId} role="alert" className="text-xs text-red-600 dark:text-red-400">{refusal}</p> : null;
+  const refusalLine = refusal ? <p id={errorId} role="alert" className={`text-xs ${ALERT_INK}`}>{refusal}</p> : null;
   const showUse = proposal !== undefined && local;
   const first = showUse ? "use" : local ? "choose" : "defer";
 
@@ -297,7 +298,7 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
           comment: "additional saved conversations beyond the preview; every conversation is included in the folder choice",
         })}</p> : null}
       </div> : null}
-      {readError ? <p role="alert" data-testid="space-conversation-error" className="text-xs text-red-600 dark:text-red-400">{readError}</p> : null}
+      {readError ? <p role="alert" data-testid="space-conversation-error" className={`text-xs ${ALERT_INK}`}>{readError}</p> : null}
       {folderRepair ? <p className="text-xs text-neutral-500">{seat === undefined
         ? i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })
         : i18n._({ id: "The saved work for this folder is no longer on {place}.", values: { place: seat }, comment: "a server's saved project records are gone" })}</p>
@@ -434,7 +435,7 @@ function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged, onPendingCh
             ? i18n._({ id: "Show again", comment: "restore a dismissed folder task or saved-file notice to active review" })
             : i18n._({ id: "Dismiss", comment: "move this folder task or saved-file notice to Dismissed without deleting saved work" })}
         </button>
-        {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+        {error ? <p role="alert" className={`text-xs ${ALERT_INK}`}>{error}</p> : null}
       </div> : null}
     </li>
   );
