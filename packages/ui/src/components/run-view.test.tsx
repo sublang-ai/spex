@@ -39,7 +39,9 @@ import type {
 } from "@sublang/spex-core/protocol";
 import {
   MACHINE_ANSWERED,
+  CHECK_ENDED_REASON,
   MACHINE_ASKED,
+  MACHINE_ENDED_IN_FAILURE,
   MACHINE_FAILED,
   MACHINE_INTERRUPTED,
   MACHINE_ORPHAN,
@@ -47,6 +49,7 @@ import {
   MACHINE_RUN,
   MACHINE_STOPPED,
   PARKED_FAILURE,
+  VERIFY_ENDED_REASON,
   machineRestored,
   type FixtureEntry,
 } from "../fixtures/sample-run.js";
@@ -1093,6 +1096,9 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(screen.getByTestId("machine-outcome-t-review").textContent).toBe(
       "done",
     );
+    // A settlement carrying a success terminal record, or none, puts
+    // no reason on a card (run-view-197).
+    expect(screen.queryByTestId(/^machine-reason-/)).toBeNull();
     // The settled child stays anchored to the state that called it.
     expect(settled[1].getAttribute("data-caller-state")).toBe(
       "reviewIntent",
@@ -1107,6 +1113,27 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(
       within(card).getByTestId("machine-state-t-code-done"),
     ).toBeTruthy();
+  });
+
+  test("a run that ends in a failure terminal reads failed, with its reason", () => {
+    renderRun(MACHINE_ENDED_IN_FAILURE);
+    // One card per run: the root in the thread, its child under the
+    // state that called it (run-view-62).
+    expect(screen.queryByTestId("live-machines")).toBeNull();
+    const settled = screen.getAllByTestId(/^machine-card-/);
+    expect(settled.map((card) => card.getAttribute("data-playbook"))).toEqual(["check", "verify"]);
+    expect(settled[1].getAttribute("data-caller-state")).toBe("verifyTree");
+    // Each final state reported the status "done"; the run's own
+    // failure terminal record is what says how it ended (run-view-197).
+    for (const [id, reason] of [["t-check", CHECK_ENDED_REASON], ["t-check-verify", VERIFY_ENDED_REASON]]) {
+      const outcome = screen.getByTestId(`machine-outcome-${id}`);
+      expect(outcome.textContent).toBe("failed");
+      expect(outcome.getAttribute("data-status")).toBe("failed");
+      const shown = screen.getByTestId(`machine-reason-${id}`);
+      expect(shown.textContent).toBe(reason);
+      expect(shown.getAttribute("title")).toBe(reason);
+      expect(shown.className).toContain("truncate");
+    }
   });
 
   test("a run disposed where it stands settles unfinished", () => {

@@ -551,6 +551,7 @@ export const MACHINE_RUN: FixtureEntry[] = [
   trace(419, 9_032, "t-code", "code", "boss.input.settled", {
     outcome: "terminal",
     stateId: "done",
+    terminal: { stateId: "done", kind: "success", description: "CODE completed: every phase's review passed." },
   }),
   trace(420, 9_033, "t-code", "code", "session.disposed", {
     state: { value: "done", status: "done" },
@@ -576,6 +577,69 @@ export const MACHINE_STOPPED: FixtureEntry[] = [
     stateId: "firstPhase",
   }),
   rec(505, { type: "turn_finished", turnId: 11, timestamp: 11_011 }),
+];
+
+/** The reasons the failure terminals below give, each in its
+ * workflow's own words (run-view-197). */
+export const VERIFY_ENDED_REASON = "verify ended in failure: the tree does not pass its checks at the returned revision.";
+export const CHECK_ENDED_REASON = "check ended in failure: verify reported failure, and the next /check starts over.";
+
+/** A /check run whose /verify child, and then the run itself, end in
+ * a final state the workflow declares a failure (run-view-197). Each
+ * final state reports the status `done` like any other; the run's own
+ * turn settlement, after its closing transition, carries the terminal
+ * record that says how it ended — shapes as a real runtime emits them. */
+export const MACHINE_ENDED_IN_FAILURE: FixtureEntry[] = [
+  rec(521, {
+    type: "turn_started",
+    turnId: 17,
+    timestamp: 17_000,
+    turn: { id: 17, prompt: "/check the tree" },
+  }),
+  trace(522, 17_001, "t-check", "check", "session.started", {}),
+  trace(523, 17_002, "t-check", "check", "fsm.transition",
+    moved("ready", "verifyTree", "START_CHECK")),
+  trace(524, 17_003, "t-check", "check", "playbook.call.started", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    text: "verify the tree",
+  }),
+  trace(525, 17_004, "t-check-verify", "verify", "session.started", {}, "t-check"),
+  trace(526, 17_005, "t-check-verify", "verify", "fsm.transition",
+    moved("ready", "verifying", "START_VERIFY"), "t-check"),
+  trace(527, 17_010, "t-check-verify", "verify", "fsm.transition",
+    moved("verifying", "checksFailed", "CHECKS_FAILED", "done"), "t-check"),
+  trace(528, 17_011, "t-check-verify", "verify", "boss.input.settled", {
+    outcome: "terminal",
+    stateDescription: VERIFY_ENDED_REASON,
+    terminal: { stateId: "checksFailed", kind: "failure", description: VERIFY_ENDED_REASON },
+  }, "t-check"),
+  trace(529, 17_012, "t-check-verify", "verify", "session.disposed", {
+    state: { value: "checksFailed", status: "done" },
+    stateId: "checksFailed",
+  }, "t-check"),
+  trace(530, 17_013, "t-check", "check", "playbook.call.finished", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    result: {
+      status: "ok",
+      playbookId: "verify",
+      childSessionId: "t-check-verify",
+      terminal: { stateId: "checksFailed", kind: "failure", description: VERIFY_ENDED_REASON },
+    },
+  }),
+  trace(531, 17_020, "t-check", "check", "fsm.transition",
+    moved("verifyTree", "verifyFailed", "xstate.error.actor.0.verifyTree", "done")),
+  trace(532, 17_021, "t-check", "check", "boss.input.settled", {
+    outcome: "terminal",
+    stateDescription: CHECK_ENDED_REASON,
+    terminal: { stateId: "verifyFailed", kind: "failure", description: CHECK_ENDED_REASON },
+  }),
+  trace(533, 17_022, "t-check", "check", "session.disposed", {
+    state: { value: "verifyFailed", status: "done" },
+    stateId: "verifyFailed",
+  }),
+  rec(534, { type: "turn_finished", turnId: 17, timestamp: 17_023 }),
 ];
 
 /** A child whose caller the pane never saw — it draws where it can be

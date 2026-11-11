@@ -8,6 +8,7 @@
 Accepted.
 Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a drawn call tree; the trace-folded frames and the artifacts contract stand.
 Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md): a run standing in a parallel state shows each of its active steps running with its own call, and a step a player runs wears that player's mark.
+Amended by [DR-231](231-a-failure-terminal-reads-failed.md): a settled run's own failure terminal record changes its card to read failed; every other later record still changes nothing.
 
 ## Context
 

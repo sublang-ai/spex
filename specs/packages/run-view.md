@@ -655,8 +655,15 @@ While a machine card is drawn, every state whose calls reach a player shall wear
 
 When a playbook run's trace settles, the Captain pane shall settle that run where it belongs — a child run as a strip under its calling state's position, in invocation order among that state's calls, a root run into the thread at the position of the record that settled it [[run-view-75](#run-view-75)] — and shall empty the live region of that frame ([DR-031](../decisions/031-machine-call-tree.md)):
 
-- the settled run carries its own reported final status in the status vocabulary [[run-view-189](#run-view-189)]: a finished run "done", a failed one "failed", and "aborted" reserved for a run that ended unfinished;
+- the settled run carries its own reported final status in the status vocabulary [[run-view-189](#run-view-189)]: a finished run "done" until a failure terminal record says otherwise [[run-view-197](#run-view-197)], a failed one "failed", and "aborted" reserved for a run that ended unfinished;
 - a disposal report closes only a frame still open, with that same status rule.
+
+#### run-view-197
+
+When a settled playbook run's own turn-settlement trace carries a terminal record of kind failure — the run ended in a final state its workflow declares a failure — the Captain pane shall read that run as "failed" in the status vocabulary [[run-view-189](#run-view-189)] where it settled [[run-view-62](#run-view-62)] ([DR-231](../decisions/231-a-failure-terminal-reads-failed.md)):
+
+- the record's description, where it carries one, stands on the settled card's header as the reason, trimmed to the header's width with its whole in a tooltip;
+- a settlement trace carrying a terminal record of kind success, or none, changes nothing.
 
 #### run-view-63
 
@@ -678,7 +685,7 @@ While trace records fold into the run view's state [[run-view-14](#run-view-14)]
 
 - a frame opens only on evidence that a run is underway — its start, a transition, or a call it makes;
 - events that merely report on a run — statuses, turn settlements, disposal — never open one;
-- a settled run's trace session is tombstoned in the folded state, so later records for it change nothing, in live folding and replay alike;
+- a settled run's trace session is tombstoned in the folded state, so later records for it change nothing save its own failure terminal record [[run-view-197](#run-view-197)], in live folding and replay alike;
 - a restore's recorded position [[core-service-82](core-service.md#core-service-82)] is where every run stands after it: each run it names stands underway in its named state with no call running, on its card or on any lane [[run-view-7](#run-view-7)], and every other open frame settles unfinished;
 - the captain shell's own frame is not a playbook run and never draws a card.
 
@@ -1220,7 +1227,8 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 - the boxes take their column's longest label's width with names at 13px, captions at 12px, and exit labels at 11px, and a role-and-player caption no box holds falls back to the role with the pair in the tooltip [[run-view-60](#run-view-60)] [[run-view-61](#run-view-61)] [[run-view-76](#run-view-76)];
 - a state's unwalked exits into rest states fold to one counted marker listing them, unfolding while the box is hovered, while an exit into a working state stays a label [[run-view-76](#run-view-76)];
 - the child's settled finish lands as a strip under its calling state, and the root's settles into the thread as a strip whose expansion shows the final drawing [[run-view-62](#run-view-62)] [[run-view-75](#run-view-75)];
-- the post-terminal reports open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)];
+- the post-terminal reports — one settlement carrying a success terminal record, one carrying none — open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)] [[run-view-197](#run-view-197)];
+- a fixture run whose root and child each end in a failure terminal settles exactly one card per run reading "failed" — the root's in the thread, the child's under its calling state — each header carrying its record's description with its whole in the tooltip [[run-view-197](#run-view-197)];
 - a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "aborted" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
 - a fixture child naming an unknown caller renders at the top level [[run-view-78](#run-view-78)];
 - removing the module or changing current configuration leaves the stored graph unchanged; with no historical definition, the same replay renders observed states alone [[run-view-64](#run-view-64)];

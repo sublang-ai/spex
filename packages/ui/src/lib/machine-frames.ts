@@ -76,6 +76,10 @@ export interface MachineFrame {
    * (run-view-62); each carries its own settled calls in turn. */
   settledCalls: MachineFrame[];
   outcome?: "done" | "failed" | "stopped";
+  /** The failure terminal the run ended in, as its settlement trace
+   * recorded it: the reason its workflow authored, where it gave one
+   * (run-view-197). */
+  failureTerminal?: { description?: string };
   openedAt: number;
   closedAt?: number;
 }
@@ -330,6 +334,48 @@ function settleFrame(
     return { open: next, settled: nextSettled };
   }
   return { open: stillOpen, settled: nextSettled, closed: complete };
+}
+
+/** A run's failure terminal record (run-view-197). */
+export interface FailureTerminal {
+  traceSessionId: string;
+  description?: string;
+}
+
+/** The failure terminal a trace record carries for its own run, where
+ * it is that run's turn settlement and names one (run-view-197). */
+export function failureTerminal(payload: unknown): FailureTerminal | undefined {
+  const trace = payload as TraceLike;
+  const traceSessionId = asString(trace?.sessionId);
+  if (!traceSessionId || trace.type !== "boss.input.settled") return undefined;
+  const terminal = (trace.payload as { terminal?: { kind?: unknown; description?: unknown } } | undefined)?.terminal;
+  if (terminal?.kind !== "failure") return undefined;
+  const description = asString(terminal.description);
+  return { traceSessionId, ...(description ? { description } : {}) };
+}
+
+/** A frame with the settled run a failure terminal record names read
+ * as failed, itself or among the runs settled inside it; undefined
+ * where it holds no such run (run-view-197). */
+export function withFailureTerminal(
+  frame: MachineFrame,
+  record: FailureTerminal,
+): MachineFrame | undefined {
+  if (frame.traceSessionId === record.traceSessionId) {
+    if (frame.outcome !== "done") return undefined;
+    return {
+      ...frame,
+      outcome: "failed",
+      failureTerminal: record.description ? { description: record.description } : {},
+    };
+  }
+  let found = false;
+  const settledCalls = frame.settledCalls.map((child) => {
+    const next = found ? undefined : withFailureTerminal(child, record);
+    if (next) found = true;
+    return next ?? child;
+  });
+  return found ? { ...frame, settledCalls } : undefined;
 }
 
 /** One run a restore's recorded position holds engaged (run-view-74,
