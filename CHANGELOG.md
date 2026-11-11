@@ -27,6 +27,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Native Windows adds packages in any project folder, and starts and keeps writing after another tool, such as the Codex sandbox, grants itself read access to the Spex home; Spex still creates its storage owner-only, as on macOS ([DR-223](specs/decisions/223-windows-storage-checks-what-macos-checks.md)). Playbook 18.1.4 applies the same rule to its sessions and machine identity ([DR-224](specs/decisions/224-playbook-18-1-4-adoption.md)).
 
+- A playbook run that ends in a failure its workflow declares reads "failed" on its card, with the workflow's own reason beside it; it read "done" before, and only the Captain's reply said otherwise ([DR-231](specs/decisions/231-a-failure-terminal-reads-failed.md)).
+
 - Agent process discovery no longer consumes the shutdown grace between SIGTERM and SIGKILL.
 
 - Browser setup keeps Retry visible when long diagnostics expand, and narrow spec outlines leave room for their package identifiers beside item counts.

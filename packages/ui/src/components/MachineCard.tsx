@@ -369,6 +369,31 @@ export function MachineCard({
     </>
   );
 
+  const reason = settled ? frame.failureTerminal?.description : undefined;
+  // Where a running card stands, or the state that called a settled one.
+  const where = running
+    ? frame.delegating
+      ? i18n._("at {state} → calling /{playbookId}", {
+          state: statePath(frame.delegating.stateId),
+          playbookId: frame.delegating.playbookId,
+        })
+      : frame.active
+        ? i18n._({
+            id: "at {state}",
+            values: { state: statePath(frame.active) },
+            comment: "where a running machine stands",
+          })
+        : i18n._({
+            id: "starting",
+            comment: "a run that has entered no state yet",
+          })
+    : frame.callerStateId
+      ? i18n._({
+          id: "from {state}",
+          values: { state: statePath(frame.callerStateId) },
+          comment: "on a settled run's card: the state that called it",
+        })
+      : "";
   const header = (
     <div className="flex items-center gap-1 px-1.5 py-1.5 text-xs @sm:gap-2 @sm:px-2.5">
       <button
@@ -405,31 +430,22 @@ export function MachineCard({
       <span className="font-mono font-semibold text-neutral-700 dark:text-neutral-200">
         /{frame.playbookId}
       </span>
-      <span className="min-w-0 flex-1 truncate text-neutral-500 dark:text-neutral-400">
-        {running
-          ? frame.delegating
-            ? i18n._("at {state} → calling /{playbookId}", {
-                state: statePath(frame.delegating.stateId),
-                playbookId: frame.delegating.playbookId,
-              })
-            : frame.active
-              ? i18n._({
-                  id: "at {state}",
-                  values: { state: statePath(frame.active) },
-                  comment: "where a running machine stands",
-                })
-              : i18n._({
-                  id: "starting",
-                  comment: "a run that has entered no state yet",
-                })
-          : frame.callerStateId
-            ? i18n._({
-                id: "from {state}",
-                values: { state: statePath(frame.callerStateId) },
-                comment: "on a settled run's card: the state that called it",
-              })
-            : ""}
-      </span>
+      {(where || !reason) && (
+        <span className={`min-w-0 truncate text-neutral-500 dark:text-neutral-400 ${reason ? "shrink" : "flex-1"}`}>
+          {where}
+        </span>
+      )}
+      {reason && (
+        // The failure terminal's reason, in the workflow's own words
+        // (run-view-197): trimmed to the header, whole in its tooltip.
+        <span
+          data-testid={`machine-reason-${frame.traceSessionId}`}
+          title={reason}
+          className="min-w-0 flex-1 truncate text-neutral-600 dark:text-neutral-300"
+        >
+          {reason}
+        </span>
+      )}
       <span
         data-testid={`machine-outcome-${frame.traceSessionId}`}
         data-status={status}

@@ -142,9 +142,11 @@ export interface PlayerView {
 
 import {
   FAILURE_STATE_ID,
+  failureTerminal,
   foldRestored,
   foldTrace,
   parkedFailure,
+  withFailureTerminal,
   type MachineFrame,
 } from "../lib/machine-frames.js";
 
@@ -305,6 +307,13 @@ function failurePosition(frame: MachineFrame | undefined): CaptainLine["failure"
     transitionAt: frame.lastFired?.at ?? frame.openedAt,
     transitionCount: frame.transitions.length,
   };
+}
+
+/** A settled run's stand-in text: the playbook id and the run's
+ * outcome are machine words the trace carries; only the stand-in for
+ * a missing outcome is a text. */
+function machineLineText(frame: MachineFrame): string {
+  return `${frame.playbookId} ${frame.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`;
 }
 
 function pushCaptain(view: SessionView, line: CaptainLine): void {
@@ -994,7 +1003,7 @@ export function applyRecord(
         for (const closed of fold.closed) {
           pushCaptain(view, {
             kind: "machine",
-            text: `${closed.playbookId} ${closed.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`,
+            text: machineLineText(closed),
             frame: closed,
             turnId: r.turnId,
             at: r.timestamp,
@@ -1072,13 +1081,24 @@ export function applyRecord(
         if (fold.closed) {
           pushCaptain(view, {
             kind: "machine",
-            // The playbook id and the run's outcome are machine words
-            // the trace carries; only the stand-in is a text.
-            text: `${fold.closed.playbookId} ${fold.closed.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`,
+            text: machineLineText(fold.closed),
             frame: fold.closed,
             turnId: r.turnId,
             at: r.timestamp,
           });
+        }
+        // A settled run's own failure terminal record is the one later
+        // record that changes its card (run-view-197): the run reads
+        // failed where it settled, under its caller or in the thread.
+        const ended = failureTerminal(r.payload);
+        if (ended) {
+          view.frames = view.frames.map((frame) => withFailureTerminal(frame, ended) ?? frame);
+          for (const line of view.captain) {
+            const failed = line.kind === "machine" && line.frame ? withFailureTerminal(line.frame, ended) : undefined;
+            if (!failed) continue;
+            line.frame = failed;
+            line.text = machineLineText(failed);
+          }
         }
       }
       break;
