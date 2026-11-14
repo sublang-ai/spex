@@ -250,7 +250,7 @@ meta.md       The spec of specs
 | [DR-229](decisions/229-the-cores-suite-in-four-parts.md) | 229-the-cores-suite-in-four-parts.md | A Linux or macOS row reaching the core runs on five runners: four parts of the core's suite, files sorted by size and dealt in turn, and one for the rest with the gates; extends DR-185 and DR-199 |
 | [DR-230](decisions/230-the-seed-keeps-what-it-verified.md) | 230-the-seed-keeps-what-it-verified.md | The cache seed installs and fetches Electron in jobs of their own per platform, each saving only what it verified, each download tried up to three times; extends DR-228 |
 | [DR-231](decisions/231-a-failure-terminal-reads-failed.md) | 231-a-failure-terminal-reads-failed.md | A settled run whose settlement trace carries a failure terminal record reads failed with the record's description on its card; the one later record that changes a settled card; ledger, attention and advancement unchanged; amends DR-031 |
-| [DR-234](decisions/234-translation-source-pins-stay-in-the-overlay.md) | 234-translation-source-pins-stay-in-the-overlay.md | Localized scaffolds omit translation source pins while updates recognize previously distributed templates. |
+| [DR-234](decisions/234-translation-source-pins-stay-in-the-overlay.md) | 234-translation-source-pins-stay-in-the-overlay.md | Translation hashes move to each language's `source-pins.json` and updates recognize older templates with inline hashes |
 
 ## Packages
 
