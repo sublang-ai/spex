@@ -7,6 +7,7 @@
 
 Accepted (2026-10-02).
 Amends [DR-001](001-scaffold-localization.md) in translation coverage and source pins for the added seed overlays.
+[DR-234](234-translation-source-pins-stay-in-the-overlay.md) moves the source pins out of the translated Markdown.
 
 ## Context
 

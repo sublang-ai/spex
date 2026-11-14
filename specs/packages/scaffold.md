@@ -117,6 +117,7 @@ Where the `scaffold` subcommand is invoked without `--update`, when `--lang <cod
 
 - supported language codes are `en` and `zh`, with `zh` meaning Simplified Chinese;
 - the Chinese overlay translates the complete bundled spec tree's human-readable content while preserving requirement meanings, identifiers, machine-readable markers, code syntax, and citation targets ([DR-101](../decisions/101-chinese-scaffolds-for-chinese-only-teams.md));
+- generated localized specs contain no translation source-pin comments, and the project receives no source-pin manifest ([DR-234](../decisions/234-translation-source-pins-stay-in-the-overlay.md));
 - when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`;
 - when an unsupported language code is provided, the CLI exits non-zero and lists the supported language codes.
 
@@ -252,7 +253,7 @@ The manifest satisfies the following invariants:
 - It contains an entry for every file under `scaffold/specs/`, regardless of framework/seed classification, and every file under `scaffold/i18n/<lang>/specs/`, so that any caller can detect whether a target file matches a recognized bundled version.
 - Each entry's hash array lists, in chronological order, the canonical SHA-256 of every released version of that file's content, followed by one working entry for the current bundled content; the final entry equals the current bundled file content's canonical SHA-256.
 - When bundled content changes between releases, the working entry is rewritten in place rather than appended, so the array grows by one entry per release and not one per commit: only a released version can be the content of a target file, so only a released hash can make a target pristine ([[scaffold-22](#scaffold-22)]).
-- When a release is cut, the working entry becomes that release's frozen entry, and a new working entry is added by the next bundled change; a frozen entry is never removed or reordered.
+- When a release is cut, the working entry becomes that release's frozen entry, and a new working entry is added by the next bundled change; a frozen entry is never removed or reordered, including the hash of a localized template released with inline source pins.
 
 The manifest schema is a flat JSON object mapping POSIX relative paths to arrays of `sha256-`-prefixed hex strings, e.g.:
 
@@ -324,15 +325,12 @@ Where bundled scaffold content is resolved for a language, the resolver shall re
 
 #### scaffold-32
 
-Where a localized bundled spec overlay exists, every difference from its English source except the file title shall carry a current source pin:
+Where a localized bundled spec overlay exists, its `scaffold/i18n/<lang>/source-pins.json` shall record exactly the English source hashes required by its translations ([DR-234](../decisions/234-translation-source-pins-stay-in-the-overlay.md)):
 
-- a localized `meta.md` includes every English `meta-*` item;
-- translated non-item content in `meta.md` carries `<!-- spex-i18n-source: meta.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file;
-- an unchanged item body remains byte-identical and carries no source marker;
-- a changed item is preceded by `<!-- spex-i18n-source: <item-id> sha256-<digest> -->`, carrying the canonical SHA-256 hash of its English source item;
-- a translated `map.md` body carries `<!-- spex-i18n-source: map.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file, and preserves its Markdown link targets.
-- any other translated bundled spec file carries one `<!-- spex-i18n-source: <relative-path> sha256-<digest> -->`, naming the English file relative to `scaffold/` and its canonical SHA-256 hash, and preserves its item IDs and Markdown link targets;
-- these markers travel into generated trees as provenance of the English source a translation was made from, and no generated tree consults them.
+- Each key names an English file relative to `scaffold/`, with a heading fragment for an item. Each value is its canonical `sha256-<digest>` [[scaffold-21](#scaffold-21)]. A file title alone requires no pin.
+- A localized `meta.md` includes every English `meta-*` item. Each changed item body has a pin keyed by `specs/meta.md#<item-id>` for its English source item. Translated non-item content has a pin keyed by `specs/meta.md` for the whole English file.
+- A translated `map.md` body has a pin keyed by `specs/map.md` for the whole English file and preserves its Markdown link targets.
+- Each other translated spec file has one whole-file pin keyed by its path and preserves its item IDs and Markdown link targets.
 
 ### Agent Instruction Reconciliation
 
@@ -410,9 +408,9 @@ Where the `scaffold` subcommand creates a project, the test suite shall run the 
 
 Where the `scaffold` subcommand is exercised with language selection, the test suite shall cover a Chinese fresh scaffold ([[scaffold-28](#scaffold-28)]), a localized update refresh on a Chinese specs tree, an unsupported language code ([[scaffold-28](#scaffold-28)]), a mismatched language on an existing scaffold ([[scaffold-29](#scaffold-29)]), and `--update` with `--lang` ([[scaffold-30](#scaffold-30)]):
 
-- the Chinese fresh scaffold case asserts that localized overlay files are written for paths that have overlays and that fallback files remain byte-identical to their English bundled templates ([[scaffold-31](#scaffold-31)]);
+- the Chinese fresh scaffold case asserts that translated specs contain no source-pin comments, the project has no source-pin manifest [[scaffold-28](#scaffold-28)], and fallback files remain byte-identical to their English bundled templates [[scaffold-31](#scaffold-31)];
 - the Chinese fresh scaffold includes the translated meta rules, structure decision, index, Git and licensing packages, and starter intent with the Chinese authoring declaration and localized record/package headings [[scaffold-28](#scaffold-28)];
-- the localized update case asserts that `--update` on a Chinese specs tree ([[scaffold-30](#scaffold-30)]) refreshes a pristine framework ([[scaffold-14](#scaffold-14)]) or seed ([[scaffold-23](#scaffold-23)]) file from the active Chinese overlay ([[scaffold-18](#scaffold-18)]) rather than the English base template.
+- the localized update case asserts that released pristine Chinese framework and seed files with inline source pins [[scaffold-21](#scaffold-21)] update to the current Chinese templates without a user-modification warning [[scaffold-14](#scaffold-14)] [[scaffold-18](#scaffold-18)], that a customized seed stays byte-identical, and that a subsequent update reports the refreshed files unchanged [[scaffold-23](#scaffold-23)];
 - the language-switch cases assert that `--update --lang` converts the overlay-bearing bundled files in both directions with no user-modified warning and prints the translation prompt, and that a code matching the declared language is an ordinary update ([[scaffold-39](#scaffold-39)]);
 - the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, that a tree with no `specs/meta.md` proceeds as `en` with a warning, and that each diagnostic states the marker, commit, and rerun steps its recovery needs before the test performs exactly those steps and reaches the Chinese overlay ([[scaffold-53](#scaffold-53)]).
 

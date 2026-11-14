@@ -606,31 +606,27 @@ describe("CLI integration", () => {
     }
   });
 
-  it("scaffold --lang zh applies localized overlays and English fallbacks", () => {
+  it("scaffold --lang zh writes localized specs without translation source pins", () => {
     const dir = makeTmp();
     try {
       initGit(dir);
       const result = run(["scaffold", "--lang", "zh", dir]);
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
-      assert.deepEqual(
-        readFileSync(join(dir, "specs", "meta.md")),
-        readFileSync(overlayPath("zh", "specs/meta.md")),
-      );
-      assert.deepEqual(
-        readFileSync(join(dir, "specs", "map.md")),
-        readFileSync(overlayPath("zh", "specs/map.md")),
-      );
-      assert.deepEqual(
-        readFileSync(join(dir, "specs", "packages", "git.md")),
-        readFileSync(overlayPath("zh", "specs/packages/git.md")),
-      );
+      const generatedPaths = readdirSync(dir, { recursive: true, encoding: "utf8" });
+      assert.ok(!generatedPaths.some((path) => basename(path) === "source-pins.json"));
       for (const relPath of [
+        "specs/meta.md",
+        "specs/map.md",
+        "specs/packages/git.md",
         "specs/decisions/000-spec-structure-format.md",
         "specs/intents/000-spdx-headers.md",
       ]) {
-        assert.deepEqual(readFileSync(join(dir, relPath)), readFileSync(overlayPath("zh", relPath)));
+        const generated = readFileSync(join(dir, relPath));
+        assert.doesNotMatch(generated.toString("utf8"), /spex-i18n-source/, relPath);
+        assert.deepEqual(generated, readFileSync(overlayPath("zh", relPath)));
       }
       const licensing = readFileSync(join(dir, "specs/packages/licensing.md"), "utf-8");
+      assert.doesNotMatch(licensing, /spex-i18n-source/);
       assert.equal(
         licensing,
         readFileSync(overlayPath("zh", "specs/packages/licensing.md"), "utf-8")
@@ -787,22 +783,77 @@ describe("CLI integration", () => {
         join(dir, "specs", "map.md"),
         readFileSync(bundledPath("specs/map.md")),
       );
-      gitCommit(dir, "zh scaffold with english map");
+      const crlfPaths = ["specs/meta.md", "specs/packages/git.md"];
+      for (const relPath of crlfPaths) {
+        write(dir, relPath, toCrlf(readFileSync(overlayPath("zh", relPath), "utf8")));
+      }
+      gitCommit(dir, "zh scaffold with english map and pristine crlf files");
 
       const result = run(["scaffold", "--update"], { cwd: dir });
       assert.equal(result.exitCode, 0, result.stderr);
-      assert.equal(
-        parseIndicators(result.stdout).get("specs/map.md"),
-        "updated",
-      );
+      const indicators = parseIndicators(result.stdout);
+      assert.equal(indicators.get("specs/map.md"), "updated");
       assert.deepEqual(
         readFileSync(join(dir, "specs", "map.md")),
         readFileSync(overlayPath("zh", "specs/map.md")),
       );
+      for (const relPath of crlfPaths) {
+        assert.equal(indicators.get(relPath), "unchanged", relPath);
+        assert.equal(
+          readFileSync(join(dir, relPath), "utf8"),
+          toCrlf(readFileSync(overlayPath("zh", relPath), "utf8")),
+          relPath,
+        );
+      }
     } finally {
       rmSync(dir, { recursive: true });
     }
   });
+
+  for (const targetLanguage of ["zh", "en"] as const) {
+    it(`scaffold --update recognizes marked Chinese 5.0.0 files when writing ${targetLanguage}`, () => {
+      const dir = makeTmp();
+      try {
+        initGit(dir);
+        assert.equal(run(["scaffold", "--lang", "zh"], { cwd: dir }).exitCode, 0);
+        const licensingPath = "specs/packages/licensing.md";
+        const licensing = readFileSync(join(dir, licensingPath));
+        assert.match(licensing.toString("utf8"), /Test <test@example\.com>/);
+        const paths = ["specs/decisions/000-spec-structure-format.md", "specs/map.md"];
+        for (const relPath of paths) {
+          const oldFile = readFileSync(join(ROOT, "src", "__fixtures__", "zh-scaffold-5.0.0", relPath));
+          assert.match(oldFile.toString("utf8"), /spex-i18n-source:/);
+          write(dir, relPath, oldFile);
+        }
+        gitCommit(dir, "initial specs with released Chinese framework and seed");
+
+        const args = ["scaffold", "--update"];
+        if (targetLanguage === "en") args.push("--lang", "en");
+        const result = run(args, { cwd: dir });
+        assert.equal(result.exitCode, 0, result.stderr);
+        assert.doesNotMatch(result.stderr, /warning/i);
+        const indicators = parseIndicators(result.stdout);
+        assert.equal(indicators.get(licensingPath), "kept — user-modified");
+        assert.deepEqual(readFileSync(join(dir, licensingPath)), licensing);
+        for (const relPath of paths) {
+          assert.equal(indicators.get(relPath), "updated", relPath);
+          const generated = readFileSync(join(dir, relPath));
+          assert.doesNotMatch(generated.toString("utf8"), /spex-i18n-source/, relPath);
+          const expected = targetLanguage === "en" ? bundledPath(relPath) : overlayPath("zh", relPath);
+          assert.deepEqual(generated, readFileSync(expected), relPath);
+        }
+
+        gitCommit(dir, "refresh the marked specs");
+        const rerun = run(["scaffold", "--update"], { cwd: dir });
+        assert.equal(rerun.exitCode, 0, rerun.stderr);
+        const current = parseIndicators(rerun.stdout);
+        for (const relPath of paths) assert.equal(current.get(relPath), "unchanged", relPath);
+        assert.equal(execSync("git diff -- specs", { cwd: dir, encoding: "utf8" }), "");
+      } finally {
+        rmSync(dir, { recursive: true });
+      }
+    });
+  }
 
   // SCAF-24 cell: framework, hash equals bundled current.
   it("update: framework at bundled current → (unchanged), bytes unchanged", () => {

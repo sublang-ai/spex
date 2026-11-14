@@ -1,6 +1,5 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- spex-i18n-source: specs/intents/000-spdx-headers.md sha256-d2246bb72b8a1be75cf8dd293e80c51e5f5de6f810a8d1fbc71982a52d3fecc3 -->
 
 # IR-000: SPDX 头
 

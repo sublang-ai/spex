@@ -1,6 +1,5 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- spex-i18n-source: specs/packages/git.md sha256-f4bdc7cf1ea7be17575fb189abb9fa3cfbc9eeb8a7bccefbbffdbea3d4210608 -->
 
 # git: Git 工作流程
 
