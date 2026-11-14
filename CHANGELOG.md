@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Projects created in the Chinese interface now have Chinese specs free of translation hash comments, including `meta.md`.
+
 - Native Windows moves a project's records where Spex moves them: at the first sign-in, which names your own group's folder after your login, when a project is added to a group, when a Space renames or moves it, and when one of its places is left or followed; Spex's own watching of the records held them in place before. While another program holds them open, the move changes nothing and stops naming the project, with Retry.
 
 - Native Windows reloads a changed configuration where the folder holding it is reached through a short 8.3 name, as a temporary folder often is; the change was read as a file of another name and ignored before.

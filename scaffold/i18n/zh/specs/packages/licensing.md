@@ -1,6 +1,5 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- spex-i18n-source: specs/packages/licensing.md sha256-b059af6fb2ddc8ec81628bab0b14d0deb1974b6ec840d5b9cabdfeebcab0f077 -->
 
 # licensing: 许可证头
 

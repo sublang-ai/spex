@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canonicalContentHash } from "./copy-templates.js";
+import { canonicalContentHash, listFiles } from "./copy-templates.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAFFOLD_ROOT = join(REPO_ROOT, "scaffold");
@@ -27,6 +27,7 @@ function extractMetaItems(text: string): Map<string, string> {
 
   function flush(): void {
     if (id !== undefined) {
+      assert.ok(!items.has(id), `meta.md repeats ${id}`);
       items.set(id, lines.join("\n").trimEnd());
     }
   }
@@ -45,26 +46,12 @@ function extractMetaItems(text: string): Map<string, string> {
       lines = [];
       continue;
     }
-    if (id !== undefined && !line.startsWith("<!-- spex-i18n-source:")) {
+    if (id !== undefined) {
       lines.push(line);
     }
   }
   flush();
   return items;
-}
-
-function extractSourcePins(text: string): Map<string, string> {
-  const pins = new Map<string, string>();
-  const pinPattern =
-    /^<!-- spex-i18n-source: (meta-\d+) (sha256-[a-f0-9]{64}) -->$/gm;
-  for (const match of text.matchAll(pinPattern)) {
-    pins.set(match[1], match[2]);
-  }
-  return pins;
-}
-
-function hashItem(item: string): string {
-  return canonicalContentHash(Buffer.from(item));
 }
 
 function normalizeFileTitle(text: string): string {
@@ -92,7 +79,6 @@ function extractMetaShell(text: string): string {
   const lines: string[] = [];
   let inItem = false;
   for (const line of normalizeFileTitle(text).split("\n")) {
-    if (line.startsWith("<!-- spex-i18n-source:")) continue;
     if (/^### meta-\d+$/.test(line)) {
       inItem = true;
       continue;
@@ -105,186 +91,52 @@ function extractMetaShell(text: string): string {
   return lines.join("\n");
 }
 
-function duplicateItemHeadings(text: string): string[] {
-  const counts = new Map<string, number>();
-  for (const match of text.replace(/\r\n?/g, "\n").matchAll(/^### (meta-\d+)$/gm)) {
-    counts.set(match[1], (counts.get(match[1]) ?? 0) + 1);
-  }
-  return [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+function itemIds(text: string): string[] {
+  return [...text.matchAll(/^### ([a-z][a-z0-9-]*-\d+)$/gm)].map((match) => match[1]);
 }
 
-function malformedSourcePins(text: string): string[] {
-  return text
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .filter(
-      (line) =>
-        line.startsWith("<!-- spex-i18n-source:") &&
-        !/^<!-- spex-i18n-source: (?:meta-\d+|meta\.md|map\.md) sha256-[a-f0-9]{64} -->$/.test(
-          line,
-        ),
-    );
+function codeBlocks(text: string): string[] {
+  return [...text.matchAll(/^```[^\n]*\n[\s\S]*?^```$/gm)].map((match) => match[0]);
 }
 
 describe("localized spec overlays", () => {
-  it("allows only source-pinned meta translations and localized file titles", () => {
-    const baseText = readFileSync(join(SCAFFOLD_ROOT, "specs", "meta.md"), "utf-8");
-    assert.deepEqual(
-      duplicateItemHeadings(baseText),
-      [],
-      "base meta.md repeats an item heading",
-    );
-    const baseItems = extractMetaItems(baseText);
+  for (const language of listOverlayLanguages()) {
+    it(`checks ${language} against its canonical sources and source-pin manifest`, () => {
+      const root = join(I18N_ROOT, language);
+      const expectedPins: Record<string, string> = {};
+      for (const overlayPath of listFiles(join(root, "specs"))) {
+        const path = relative(root, overlayPath).split(sep).join("/");
+        const base = readFileSync(join(SCAFFOLD_ROOT, path), "utf-8");
+        const overlay = readFileSync(overlayPath, "utf-8");
+        assert.doesNotMatch(overlay, /<!--\s*spex-i18n-source:/, `${language} ${path} contains a source pin`);
 
-    for (const language of listOverlayLanguages()) {
-      const overlayPath = join(I18N_ROOT, language, "specs", "meta.md");
-      if (!existsSync(overlayPath)) continue;
+        if (path === "specs/meta.md") {
+          const baseItems = extractMetaItems(base);
+          const overlayItems = extractMetaItems(overlay);
+          assert.deepEqual([...overlayItems.keys()].sort(), [...baseItems.keys()].sort(), `${path} item set`);
+          for (const [id, item] of baseItems) {
+            if (overlayItems.get(id) !== item) {
+              expectedPins[`${path}#${id}`] = canonicalContentHash(Buffer.from(item));
+            }
+          }
+          if (extractMetaShell(overlay) !== extractMetaShell(base)) {
+            expectedPins[path] = canonicalContentHash(Buffer.from(base));
+          }
+          continue;
+        }
 
-      const overlayText = readFileSync(overlayPath, "utf-8");
-      assert.deepEqual(
-        duplicateItemHeadings(overlayText),
-        [],
-        `${language} meta.md repeats an item heading`,
-      );
-      assert.deepEqual(
-        malformedSourcePins(overlayText),
-        [],
-        `${language} meta.md carries a malformed source pin`,
-      );
-      const overlayItems = extractMetaItems(overlayText);
-      const pins = extractSourcePins(overlayText);
-      const fileMarkers = [
-        ...overlayText.matchAll(
-          /^<!-- spex-i18n-source: meta\.md (sha256-[a-f0-9]{64}) -->$/gm,
-        ),
-      ];
-      const changedIds = [...baseItems]
-        .filter(([id, item]) => overlayItems.get(id) !== item)
-        .map(([id]) => id)
-        .sort();
-
-      const shellDiffers =
-        extractMetaShell(overlayText) !== extractMetaShell(baseText);
-      assert.equal(
-        fileMarkers.length,
-        shellDiffers ? 1 : 0,
-        `${language} meta.md should carry one file pin exactly when non-item content is translated`,
-      );
-      if (shellDiffers) {
-        assert.equal(
-          fileMarkers[0][1],
-          canonicalContentHash(Buffer.from(baseText)),
-          `${language} meta.md file hash is stale`,
-        );
-      }
-
-      assert.deepEqual(
-        [...overlayItems.keys()].sort(),
-        [...baseItems.keys()].sort(),
-        `${language} meta.md should contain every base META item`,
-      );
-      assert.deepEqual(
-        [...pins.keys()].sort(),
-        changedIds,
-        `${language} source pins should match its differing META items`,
-      );
-
-      for (const [id, baseItem] of baseItems) {
-        const overlayItem = overlayItems.get(id);
-        assert.ok(overlayItem !== undefined, `${language} missing ${id}`);
-        if (overlayItem !== baseItem) {
-          assert.equal(
-            pins.get(id),
-            hashItem(baseItem),
-            `${language} ${id} source hash is stale or missing`,
-          );
-        } else {
-          assert.equal(
-            overlayItem,
-            baseItem,
-            `${language} ${id} should remain byte-identical to English`,
-          );
-          assert.equal(
-            pins.has(id),
-            false,
-            `${language} ${id} has an unexpected translation source pin`,
-          );
+        if (normalizeFileTitle(overlay) !== normalizeFileTitle(base)) {
+          expectedPins[path] = canonicalContentHash(Buffer.from(base));
+        }
+        assert.deepEqual(markdownLinkTargets(overlay), markdownLinkTargets(base), `${path} link targets`);
+        if (path !== "specs/map.md") {
+          assert.deepEqual(itemIds(overlay), itemIds(base), `${path} item IDs`);
+          assert.deepEqual(codeBlocks(overlay), codeBlocks(base), `${path} code examples`);
         }
       }
-    }
-  });
 
-  it("keeps localized map overlays source-pinned and link-equivalent", () => {
-    const baseText = readFileSync(join(SCAFFOLD_ROOT, "specs", "map.md"), "utf-8");
-    for (const language of listOverlayLanguages()) {
-      const overlayPath = join(I18N_ROOT, language, "specs", "map.md");
-      if (!existsSync(overlayPath)) continue;
-
-      const overlayText = readFileSync(overlayPath, "utf-8");
-      assert.deepEqual(
-        malformedSourcePins(overlayText),
-        [],
-        `${language} map.md carries a malformed source pin`,
-      );
-      const markers = [
-        ...overlayText.matchAll(
-          /^<!-- spex-i18n-source: map\.md (sha256-[a-f0-9]{64}) -->$/gm,
-        ),
-      ];
-      const withoutMarker = overlayText.replace(
-        /^<!-- spex-i18n-source: map\.md sha256-[a-f0-9]{64} -->\n/gm,
-        "",
-      );
-      const bodyDiffers =
-        normalizeFileTitle(withoutMarker) !== normalizeFileTitle(baseText);
-
-      assert.equal(
-        markers.length,
-        bodyDiffers ? 1 : 0,
-        `${language} map.md should carry one source pin exactly when its body is translated`,
-      );
-      if (bodyDiffers) {
-        assert.equal(
-          markers[0][1],
-          canonicalContentHash(Buffer.from(baseText)),
-          `${language} map.md source hash is stale`,
-        );
-      }
-      assert.deepEqual(
-        markdownLinkTargets(overlayText),
-        markdownLinkTargets(baseText),
-        `${language} map.md should preserve the English index targets`,
-      );
-    }
-  });
-
-  it("keeps Chinese authoring seed overlays source-pinned and contract-equivalent", () => {
-    for (const relPath of [
-      "decisions/000-spec-structure-format.md",
-      "packages/git.md",
-      "packages/licensing.md",
-      "intents/000-spdx-headers.md",
-    ]) {
-      const baseText = readFileSync(join(SCAFFOLD_ROOT, "specs", relPath), "utf-8");
-      const overlayText = readFileSync(
-        join(I18N_ROOT, "zh", "specs", relPath),
-        "utf-8",
-      );
-      const markers = [...overlayText.matchAll(/^<!-- spex-i18n-source: (\S+) (sha256-[a-f0-9]{64}) -->$/gm)];
-      assert.deepEqual(
-        markers.map((match) => [match[1], match[2]]),
-        [[`specs/${relPath}`, canonicalContentHash(Buffer.from(baseText))]],
-        `${relPath} must name its current canonical source`,
-      );
-      assert.deepEqual(
-        markdownLinkTargets(overlayText),
-        markdownLinkTargets(baseText),
-        `${relPath} must preserve every citation target`,
-      );
-      const itemIds = (text: string): string[] => [...text.matchAll(/^### ([a-z][a-z0-9-]*-\d+)$/gm)].map((match) => match[1]);
-      assert.deepEqual(itemIds(overlayText), itemIds(baseText), `${relPath} must preserve every item ID in order`);
-      const codeBlocks = (text: string): string[] => [...text.matchAll(/^```[^\n]*\n[\s\S]*?^```$/gm)].map((match) => match[0]);
-      assert.deepEqual(codeBlocks(overlayText), codeBlocks(baseText), `${relPath} must preserve literal code examples`);
-    }
-  });
+      const pins = JSON.parse(readFileSync(join(root, "source-pins.json"), "utf-8"));
+      assert.deepEqual(pins, expectedPins, `${language} source pins must match the English sources of the translations`);
+    });
+  }
 });
