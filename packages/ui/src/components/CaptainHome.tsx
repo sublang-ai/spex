@@ -26,7 +26,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { anySignedIn } from "../lib/instances.js";
 import { STEP_LINES, stoppedPhrase, type OpeningProject } from "../lib/space.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
-import { AgentChip, agentChipText, fastModeWord, readinessWord, unconfirmedNote } from "./AgentChip.js";
+import { AgentChip, useAgentChipText, fastModeWord, readinessWord, unconfirmedNote } from "./AgentChip.js";
 import { agentName, faultGuidance, faultsOf } from "../lib/agent-cards.js";
 import { WORKSHOP } from "../lib/workshop.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -289,10 +289,11 @@ export function CaptainHome(props: CaptainHomeProps) {
   const captainReadiness = captain
     ? readiness.find((entry) => entry.adapter === captain.adapter)
     : undefined;
+  const captainChipText = useAgentChipText(captain);
   const captainControlName = captain
     ? [
         i18n._("Configure the Captain agent"),
-        agentChipText({ ...captain, fastMode: false }),
+        captainChipText,
         captain.fastMode ? fastModeWord() : undefined,
         captainReadiness ? readinessWord(captainReadiness.ready) : undefined,
       ].filter(Boolean).join(", ")

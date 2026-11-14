@@ -36,6 +36,36 @@ function chooseModel(testId: string, value: string) {
 
 const CUSTOM_ROW = "__spex_custom__";
 
+test("Codex discovery exposes subagent inheritance, model pins and native efforts through the shared editor", async () => {
+  useAppStore.setState({ loadAgentOptions: vi.fn(async (): Promise<AgentOptions> => ({
+    adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+    fastModeSupported: true, subagentModelSupported: true,
+    subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
+    discovery: { status: "available", defaultModel: "codex-parent", models: [{ id: "codex-child", name: "Child" }] },
+  })) });
+  const save = vi.fn();
+  render(<AgentEditor initial={{ adapter: "codex" }} onSave={save} />);
+  await ready();
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Same as agent");
+  const efforts = screen.getByTestId("agent-subagent-effort") as HTMLSelectElement;
+  expect(Array.from(efforts.options).map((option) => option.value)).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  expect(efforts.options[0]!.text).toBe("Agent chooses");
+  fireEvent.change(efforts, { target: { value: "high" } });
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ adapter: "codex", subagentEffort: "high" }));
+  chooseModel("agent-subagent-model", "codex-child");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: "codex-child", subagentEffort: "high" }));
+  cleanup();
+
+  render(<AgentEditor initial={{ adapter: "codex", subagentModel: false }} onSave={save} />);
+  await ready();
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Off");
+  chooseModel("agent-subagent-model", "");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: null }));
+});
+
 test("runtime model selection narrows tuning and preserves a draft needing correction", async () => {
   const save = vi.fn();
   render(<AgentEditor initial={{ adapter: "claude", model: "claude-fable-5.1", effort: "max", fastMode: true }} onSave={save} />);

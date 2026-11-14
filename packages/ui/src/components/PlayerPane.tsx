@@ -15,7 +15,7 @@ import { mediaOrigin } from "../lib/media.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
-import { AgentChipButton, agentReading, reportedPhrase } from "./AgentSettings.js";
+import { AgentChipButton, useAgentReading, reportedPhrase } from "./AgentSettings.js";
 import {
   AgentActiveTime,
   activeTimeDescription,
@@ -564,8 +564,9 @@ export function PlayerPane({
   // A folded lane's rail carries its chip's reading, what is set kept
   // beside a reported model as on the chip itself (run-view-139).
   const reported = settings ? reportedPhrase(settings) : undefined;
+  const reading = useAgentReading(settings);
   const railLabel = settings
-    ? `${view.id} · ${agentReading(settings)}${reported ? ` — ${reported}` : ""}`
+    ? `${view.id} · ${reading}${reported ? ` — ${reported}` : ""}`
     : view.id;
   // The role the latest call served reads before the name, unless it
   // is the name again (run-view-177).

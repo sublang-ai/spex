@@ -553,7 +553,8 @@ export interface AppState extends AttachmentState {
   consumeNewPlaybookRequest(): boolean;
   consumeRevealPlaybook(): string | undefined;
 
-  loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
+  modelCatalogs: Partial<Record<AdapterName, AgentOptions["discovery"]>>;
+  loadAgentOptions(adapter: AdapterName, refresh?: boolean): Promise<AgentOptions>;
   /** One agent's settings for one conversation (DR-067, DR-068). It
    * writes no configuration: the defaults in Settings are untouched. */
   setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; browser?: boolean | null}): Promise<void>;
@@ -988,6 +989,7 @@ function placeState(
   const framePrefix = `${prefKey("spex.frame")}:`;
 
   let client = initialClient;
+  const modelReads = new Map<AdapterName, Promise<AgentOptions>>();
 
   function getClient(): SpexClient {
     if (!client) throw new Error(i18n._("client not connected"));
@@ -1829,6 +1831,8 @@ function placeState(
   seams.getClient = getClient;
   seams.setClient = (next) => {
     client = next;
+    modelReads.clear();
+    set({ modelCatalogs: {} });
     // What a page asked of the clones goes with its client.
     lastActs.clear();
   };
@@ -1837,6 +1841,8 @@ function placeState(
     // The client is let go first, so its closing reports nothing here.
     const closing = client;
     client = undefined;
+    modelReads.clear();
+    set({ modelCatalogs: {} });
     closing?.close();
   };
 
@@ -1849,6 +1855,7 @@ function placeState(
     everConnected: false,
     seats: [],
     readiness: [],
+    modelCatalogs: {},
     projects: [],
     projectMeta: {},
     machineGraphs: {},
@@ -2125,6 +2132,8 @@ function placeState(
         onStatus: (connection) => {
           if (client !== dialing) return;
           if (connection !== "open") {
+            modelReads.clear();
+            set({ modelCatalogs: {} });
             sessionConnection += 1;
             sessionReads += 1;
             sessionReadPending = false;
@@ -2469,7 +2478,24 @@ function placeState(
       return { version: reply.version };
     },
 
-    loadAgentOptions: (adapter) => getClient().command("agent.options", { adapter }),
+    async loadAgentOptions(adapter, refresh = false) {
+      const existing = modelReads.get(adapter);
+      if (existing && !refresh) return existing;
+      const source = getClient();
+      const read = Promise.resolve().then(() => source.command("agent.options", { adapter }));
+      modelReads.set(adapter, read);
+      const publish = (catalog: AgentOptions["discovery"]) => {
+        // A refresh or a new connection may have overtaken this read.
+        if (modelReads.get(adapter) !== read) return;
+        modelReads.delete(adapter);
+        set({ modelCatalogs: { ...get().modelCatalogs, [adapter]: catalog } });
+      };
+      void read.then(
+        (options) => publish(options?.discovery),
+        (cause: unknown) => publish({ status: "unavailable", reason: String(cause) }),
+      );
+      return read;
+    },
 
     async setAgentSettings(sessionId, agentId, change): Promise<void> {
       const session = await getClient().command("session.agent.set", { sessionId, agentId, ...change });

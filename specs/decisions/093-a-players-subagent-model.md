@@ -15,6 +15,8 @@ Amended by [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in that one-Cli
 Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md): the field's choices are "Same as agent" and the adapter's models, "Same as agent" by default; a subagent effort joins it; the two pair on one row; and in its floors: Cligent `^0.30.0`, Playbook `^17.3.0`.
 Cites [DR-052](052-runtime-model-options.md) for where the choices come from and [DR-041](041-chrome-that-fits.md) for why the chip does not read it.
 
+Amended by [DR-232](232-codex-subagent-selection.md) for Codex, where the subagent selection requests native spawn defaults.
+
 ## Context
 
 A conversation that puts a strong, slow model on a player pays that model for every file read and every small edit.

@@ -248,6 +248,43 @@ describe("SET: adapter readiness panel", () => {
 });
 
 describe("SET: the session-player roster", () => {
+  test("a chosen alias stays in the config and the chips show its specific model", async () => {
+    const summary = CONFIG.summary!;
+    const catalog = { status: "available", models: [{ id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5" }] };
+    commandMock.mockImplementation(async (type, payload) => {
+      if (type === "agent.options") return {
+        adapter: payload.adapter, effortValues: ["high"], subagentEffortValues: [],
+        discovery: payload.adapter === "claude" ? catalog : { status: "available", models: [] },
+      };
+      if (type === "config.edit") {
+        useAppStore.setState({ configState: {
+          ...CONFIG, summary: { ...summary, captain: { ...summary.captain, ...payload.op.patch } },
+        } as ConfigState });
+      }
+      return CONFIG;
+    });
+    const prior = useAppStore.getState().connection;
+    onTestFinished(() => useAppStore.setState({ connection: prior }));
+    useAppStore.setState({ connection: "open", configState: {
+      ...CONFIG, summary: { ...summary, players: [
+        { ...summary.players[0]!, agent: { adapter: "claude", model: "opus" } },
+      ] },
+    } as ConfigState, readiness: READINESS });
+    render(<SettingsSurface />);
+    const words = "claude · claude-opus-5-5";
+    expect(await within(screen.getByTestId("player-row-dev.coder")).findByLabelText(`dev.coder: ${words} (ready)`)).toBeTruthy();
+    expect(commandMock.mock.calls.filter(([type, data]) => type === "agent.options" && data.adapter === "claude")).toHaveLength(1);
+    fireEvent.click(screen.getByTestId("captain-edit"));
+    fireEvent.click(await screen.findByTestId("agent-model-trigger"));
+    fireEvent.click(screen.getByRole("option", { name: "Opus claude-opus-5-5" }));
+    fireEvent.click(screen.getByTestId("agent-save"));
+    await vi.waitFor(() => expect(screen.queryByTestId("agent-editor")).toBeNull());
+    expect(commandMock).toHaveBeenCalledWith("config.edit", {
+      op: { kind: "captain.set", patch: expect.objectContaining({ model: "opus" }) },
+    });
+    expect(within(screen.getByTestId("captain-row")).getByTestId("agent-chip").title).toContain(words);
+  });
+
   test("each lane prints its id, its agent, and the roles it answers", () => {
     renderSettings();
     const row = screen.getByTestId("player-row-dev.coder");

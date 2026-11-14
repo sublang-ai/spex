@@ -10,6 +10,7 @@ import { parse as parseYaml } from "yaml";
 import {
   AGENT_RUNTIME_TARGETS,
   classifyRuntime,
+  isSubagentModelSupported,
   type AgentExecutable,
 } from "@sublang/cligent";
 
@@ -522,18 +523,18 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   await expectError(blank, /^captain\.subagentModel must be a nonblank string$/);
 
   const unsupported = baseConfig();
-  roster(unsupported)[coderId] = { adapter: "codex", subagentModel: "gpt-6" };
-  await expectError(unsupported, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentModel is not supported for adapter "codex"$`));
+  roster(unsupported)[coderId] = { adapter: "gemini", subagentModel: "gemini-test" };
+  await expectError(unsupported, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentModel is not supported for adapter "gemini"$`));
 
   // A binding's pin is checked against its player's adapter; `false`
   // asks nothing of it and composes.
-  const onCodex = baseConfig();
-  roster(onCodex)[coderId] = { adapter: "codex" };
-  codeRoles(onCodex).coder = { player: coderId, subagentModel: "gpt-6" };
-  await expectError(onCodex, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "codex"$/);
-  codeRoles(onCodex).coder = { player: coderId, subagentModel: false };
-  reviewRoles(onCodex).coder = { player: coderId, subagentModel: false };
-  await compose(onCodex, stubLoader);
+  const onGemini = baseConfig();
+  roster(onGemini)[coderId] = { adapter: "gemini" };
+  codeRoles(onGemini).coder = { player: coderId, subagentModel: "gemini-test" };
+  await expectError(onGemini, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "gemini"$/);
+  codeRoles(onGemini).coder = { player: coderId, subagentModel: false };
+  reviewRoles(onGemini).coder = { player: coderId, subagentModel: false };
+  await compose(onGemini, stubLoader);
 });
 
 test("a subagent effort and the inherit literal compose; an effort outside the vocabulary, beside no model, or off its adapter is refused", async () => {
@@ -612,12 +613,12 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   await expectError(overOff, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
 
   // An adapter cligent serves no subagent model for takes no effort.
-  const onCodex = baseConfig();
-  roster(onCodex)[coderId] = { adapter: "codex", subagentEffort: "low" };
-  await expectError(onCodex, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "codex"$`));
-  // `false` asks nothing of the adapter, so a codex lane may carry it.
-  roster(onCodex)[coderId] = { adapter: "codex", subagentModel: false };
-  await compose(onCodex, stubLoader);
+  const onGemini = baseConfig();
+  roster(onGemini)[coderId] = { adapter: "gemini", subagentEffort: "low" };
+  await expectError(onGemini, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "gemini"$`));
+  // `false` asks nothing of the adapter, so a gemini lane may carry it.
+  roster(onGemini)[coderId] = { adapter: "gemini", subagentModel: false };
+  await compose(onGemini, stubLoader);
 
   // A binding's effort is one of its keys, its blank refused as the others are.
   const blank = baseConfig();
@@ -632,7 +633,7 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   const top = baseConfig();
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
-  roster(top)[reviewerId] = { adapter: "codex" };
+  roster(top)[reviewerId] = { adapter: "gemini" };
   const composed = await compose(top, stubLoader);
   const agents = composed.captainOptions.sessionAgents;
   assert.equal(agents.captain.subagentModel, "inherit");
@@ -661,6 +662,53 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   assert.ok(!("subagentModel" in projection.players.find((p) => p.id === coderId)!), "Off sends none");
   assert.ok(!("subagentModel" in projection.catalog.code!.roles.coder!), "nor at the binding inheriting it");
   assert.equal(projection.catalog.review!.roles.coder!.subagentModel, "claude-haiku-5", "a binding's pin over an Off stands");
+});
+
+test("Codex delegation follows Cligent support through config inheritance, pins and Off", async () => {
+  const top = baseConfig();
+  const coderId = String(codeRoles(top).coder);
+  top.captain = { adapter: "codex", model: "codex-parent" };
+  roster(top)[coderId] = { adapter: "codex", model: "codex-player" };
+  const supported = isSubagentModelSupported("codex");
+  const initial = await compose(top, stubLoader);
+  assert.equal(initial.captainOptions.sessionAgents.captain.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(initial.captainOptions.sessionAgents.players[coderId]?.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(initial.captainOptions.playbooks.code.roles.coder.subagentModel, supported ? "inherit" : undefined);
+
+  Object.assign(top.captain as object, { subagentModel: "codex-child", subagentEffort: "high" });
+  if (!supported) {
+    await expectError(top, /^captain\.subagentModel is not supported for adapter "codex"$/);
+    top.captain = { adapter: "codex", subagentEffort: "high" };
+    await expectError(top, /^captain\.subagentEffort is not supported for adapter "codex"$/);
+    return;
+  }
+  Object.assign(roster(top)[coderId] as object, { subagentEffort: "low" });
+  reviewRoles(top).coder = { player: coderId, subagentModel: "codex-review", subagentEffort: "medium" };
+  const pinned = await compose(top, stubLoader);
+  assert.equal(pinned.captainOptions.sessionAgents.captain.subagentModel, "codex-child");
+  assert.equal(pinned.captainOptions.sessionAgents.captain.subagentEffort, "high");
+  assert.equal(pinned.captainOptions.playbooks.code.roles.coder.subagentModel, "inherit");
+  assert.equal(pinned.captainOptions.playbooks.code.roles.coder.subagentEffort, "low");
+  assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentModel, "codex-review");
+  assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentEffort, "medium");
+
+  top.captain = { adapter: "codex", subagentModel: false };
+  roster(top)[coderId] = { adapter: "codex", subagentModel: false };
+  const off = await compose(top, stubLoader);
+  assert.equal(off.captainOptions.sessionAgents.captain.subagentModel, false);
+  assert.equal(off.captainOptions.playbooks.code.roles.coder.subagentModel, false);
+  const projection = executionConfig(off, "/work") as unknown as {
+    captain: { subagentModel?: string }; players: { id: string; subagentModel?: string }[];
+    catalog: Record<string, { roles: Record<string, { subagentModel?: string }> }>;
+  };
+  assert.equal(projection.captain.subagentModel, undefined);
+  assert.equal(projection.players.find((p) => p.id === coderId)?.subagentModel, undefined);
+  assert.equal(projection.catalog.code!.roles.coder!.subagentModel, undefined);
+  assert.equal(projection.catalog.review!.roles.coder!.subagentModel, "codex-review");
+  Object.assign(top.captain as object, { subagentEffort: "low" });
+  await expectError(top, /^captain\.subagentEffort for adapter "codex" requires subagentModel$/);
+  top.captain = { adapter: "codex", subagentEffort: "ultra" };
+  await expectError(top, /^captain\.subagentEffort for adapter "codex" must be one of:/);
 });
 
 test("a player no binding names is listed as bound to no role and opens no session lane", async () => {

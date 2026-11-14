@@ -536,8 +536,8 @@ describe("DR-093: a subagent model where the adapter serves one", () => {
   });
 
   test("a stale choice on an adapter that serves none stays clearable", () => {
-    const editor = renderEditor({ adapter: "codex", subagentModel: "gpt-6" });
-    expect(subagent().value).toBe("gpt-6");
+    const editor = renderEditor({ adapter: "gemini", subagentModel: "gemini-test" });
+    expect(subagent().value).toBe("gemini-test");
     fireEvent.change(subagent(), { target: { value: "" } });
     expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
     fireEvent.click(editor.save());

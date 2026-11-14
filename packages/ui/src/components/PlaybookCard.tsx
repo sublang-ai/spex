@@ -363,9 +363,12 @@ function RoleLine({
       </span>
       {lane ? (
         <AgentChip
-          // The row says what the role effectively runs: a binding's
-          // own fast mode over the lane's.
-          agent={binding.fastMode !== undefined ? { ...lane.agent, fastMode: binding.fastMode } : lane.agent}
+          agent={{
+            ...lane.agent,
+            model: binding.model === false ? undefined : binding.model ?? lane.agent.model,
+            effort: binding.effort === false ? undefined : binding.effort ?? lane.agent.effort,
+            fastMode: binding.fastMode ?? lane.agent.fastMode,
+          }}
           readiness={ready}
           label={lane.id}
         />

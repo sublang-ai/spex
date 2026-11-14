@@ -464,11 +464,11 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   // runtime's words, and the file does not move.
   const refused = await edit(
     path,
-    { kind: "player.set", playerId: "dev.reviewer", patch: { adapter: "codex", model: null, effort: null, subagentModel: "gpt-6" } },
+    { kind: "player.set", playerId: "dev.reviewer", patch: { adapter: "gemini", model: null, effort: null, subagentModel: "gemini-test" } },
     stubLoader,
   );
   assert.ok(!refused.ok);
-  assert.match(refused.error ?? "", /players\.dev\.reviewer\.subagentModel is not supported for adapter "codex"/);
+  assert.match(refused.error ?? "", /players\.dev\.reviewer\.subagentModel is not supported for adapter "gemini"/);
   assert.equal(readFileSync(path, "utf8"), after);
 });
 

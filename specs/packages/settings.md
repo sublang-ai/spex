@@ -115,7 +115,8 @@ When an agent editor or conversation settings opens, the UI shall bind its brows
 When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md), [DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
 - Offer runtime model IDs, provider default, and explicit custom entry in the model field [[settings-39](#settings-39)], each model named by the display rule [[settings-38](#settings-38)]; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
-- Where Cligent reports the adapter serves a subagent model, or a value already stands, offer the subagent-model field [[settings-39](#settings-39)]: "Same as agent" first — the configured omission, running every subagent on the agent's own model — then the same runtime model IDs and custom entry, and "Off" — a `false`, which switches delegation off — only while one stands, in the block or in the editor's draft ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
+- Where Cligent reports the adapter serves a subagent model, or a value already stands, offer the subagent-model field [[settings-39](#settings-39)]: "Same as agent" first — the configured omission, requesting the agent's own model for its subagents — then the same runtime model IDs and custom entry, and "Off" — a `false`, which switches delegation off — only while one stands, in the block or in the editor's draft ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
+- A Codex model and effort selection requests the native spawn defaults ([DR-232](../decisions/232-codex-subagent-selection.md)).
 - Beside it, offer the subagent-effort field: "Agent chooses" first — the configured omission, leaving each subagent's effort to the agent — then the adapter's subagent efforts [[settings-35](#settings-35)], a standing value outside them shown as requiring correction ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
@@ -145,11 +146,19 @@ Where a model editor [[settings-34](#settings-34)] names a model value against t
 | only a row's `resolvedModel` | itself, a canonical pin recognized without rewriting it [[settings-34](#settings-34)] |
 | no row's id or `resolvedModel` | itself |
 | empty, taking the provider's default | "Provider default", then the runtime's `defaultModel` read by this rule where reported |
-| empty, or the literal `inherit`, in a subagent-model field | "Same as agent" alone: every subagent runs on the agent's own model, so the catalog's `defaultModel` never follows ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| empty, or the literal `inherit`, in a subagent-model field | "Same as agent" alone: the selection requests the agent's own model, so the catalog's `defaultModel` never follows ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 | `false`, in a subagent-model field | "Off": no subagent model is sent, and the runtime chooses a subagent's model by its own order ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 
 - in one line of text the name and the specific model join with " · ", and so do "Provider default" and the default model, as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]", "GPT-6-Astra" and "Provider default · opus[1m]";
 - a name, an id, a resolved model and a description are the runtime's words, rendered as they came [[localization-1](localization.md#localization-1)].
+
+#### settings-74
+
+Where an agent chip shows a configured model, it shall identify that model using its own core's adapter catalog [[settings-35](#settings-35)] ([DR-233](../decisions/233-model-versions-on-agent-chips.md)):
+
+- The chip shows the saved ID immediately, then the alias's specific model when the catalog resolves it, preserving a selected ID that extends the resolution, such as a context-window variant.
+- Other values follow the field's model display [[settings-38](#settings-38)].
+- Chips on the same connection share the adapter's discovery result, and an editor or agent card refreshing it updates the chips.
 
 #### settings-39
 
@@ -534,7 +543,7 @@ Where Settings is asked for the Captain's row and, separately, for `dev.reviewer
 
 #### settings-28
 
-Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its name and mark with its id in the tooltip, its agent with the adapter's readiness, and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
+Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its name and mark with its id in the tooltip, its agent with the adapter's readiness and the specific model behind a configured alias [[settings-74](#settings-74)], and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
 
 ### External Edit Coverage
 

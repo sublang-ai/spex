@@ -15,7 +15,7 @@
 import { useState, type RefObject } from "react";
 import type { MediaUploadOwner, SessionAgentSettings } from "@sublang/spex-core/protocol";
 
-import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { useAgentOptions, modelTuning, useChipModel } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { usePopover } from "../lib/usePopover.js";
 import { useFitInBox } from "../lib/popover-fit.js";
@@ -63,10 +63,13 @@ export interface AgentSettingsChange {
 /** What an agent runs, as a chip reads it: the model its runtime
  * reported for its latest call while the settings that call began under
  * still stand, else the model it is set to run (run-view-139, DR-091). */
-export function agentReading(agent: SessionAgent): string {
-  const effective = effectiveSettings(agent);
-  let text = reportedModel(agent) ?? effective.model ?? agent.adapter;
-  if (effective.effort) text += ` @ ${effective.effort}`;
+export function useAgentReading(agent?: SessionAgent): string {
+  const effective = agent && effectiveSettings(agent);
+  const reported = agent && reportedModel(agent);
+  const model = reported === undefined && agent?.settings?.model !== false ? effective?.model : undefined;
+  const configured = useChipModel(agent?.adapter, model);
+  let text = reported ?? configured ?? effective?.model ?? agent?.adapter ?? "";
+  if (effective?.effort) text += ` @ ${effective.effort}`;
   return text;
 }
 
@@ -104,7 +107,7 @@ export function AgentChipButton({
   anchorRef?: RefObject<HTMLButtonElement | null>;
   open?: boolean;
 }) {
-  const reading = agentReading(agent);
+  const reading = useAgentReading(agent);
   const reported = reportedPhrase(agent);
   const changed = changedFields(agent.settings).length > 0;
   const fastMode = effectiveSettings(agent).fastMode;

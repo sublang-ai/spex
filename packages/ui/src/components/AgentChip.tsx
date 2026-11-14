@@ -12,6 +12,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { useChipModel } from "../lib/agent-options.js";
 
 /** The words a chip lends its tooltip and its accessible name: one
  * for fast mode, one per readiness state. Functions, never constants:
@@ -68,16 +69,13 @@ export type ChipAgent = AgentBlockInput & { fastMode?: boolean };
 /** The mark fast mode wears (DR-038, run-view-25). */
 export const FAST_MODE_MARK = "⚡";
 
-function chipBase(agent: ChipAgent): string {
+export function useAgentChipText(agent: ChipAgent | undefined): string {
+  const model = useChipModel(agent?.adapter, agent?.model);
+  if (!agent) return "";
   let text = agent.adapter;
-  if (agent.model) text += ` · ${agent.model}`;
+  if (model) text += ` · ${model}`;
   if (agent.effort) text += ` @ ${agent.effort}`;
   return text;
-}
-
-export function agentChipText(agent: ChipAgent): string {
-  const base = chipBase(agent);
-  return agent.fastMode ? `${base} ${FAST_MODE_MARK}` : base;
 }
 
 export function AgentChip({
@@ -91,13 +89,14 @@ export function AgentChip({
   /** Position context for assistive tech, e.g. "Captain" or a role. */
   label?: string;
 }) {
-  const text = chipBase(agent);
+  const text = useAgentChipText(agent);
   const state = readiness === undefined ? undefined : entryReadinessWord(readiness);
   // The name is a position, a run of ids, and the words above: only
   // the punctuation between them is assembled here.
   return (
     <span
       data-testid="agent-chip"
+      title={text}
       aria-label={`${label ? `${label}: ` : ""}${text}${agent.fastMode ? `, ${fastModeWord()}` : ""}${state ? ` (${state})` : ""}`}
       className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
     >

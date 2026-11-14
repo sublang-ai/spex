@@ -19,6 +19,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
 import { foldDiagnostics } from "./app-storage.js";
 import { WebSocket } from "ws";
+import { isSubagentModelSupported } from "@sublang/cligent";
 import { loadTmuxPlayConfig } from "@sublang/cligent/tmux-play";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
@@ -1168,7 +1169,10 @@ test("settings-36: model discovery uses the captured environment without opening
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "codex" }), {
     adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-    fastModeSupported: true, subagentModelSupported: false, subagentEffortValues: [],
+    fastModeSupported: true, subagentModelSupported: isSubagentModelSupported("codex"),
+    subagentEffortValues: isSubagentModelSupported("codex")
+      ? ["minimal", "low", "medium", "high", "xhigh", "max"]
+      : [],
     discovery: { status: "unavailable", reason: "Fixture discovery failed" },
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "gemini" }), {
@@ -5920,6 +5924,71 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
   assert.deepEqual(guards(),migratedGuards,"successful migration is not retried on the next startup");
 });
 
+test("core-service-101: Codex delegation reaches session projections and the adapter boundary", async (t) => {
+  const config = VALID_CONFIG.replaceAll("adapter: claude", "adapter: codex").replaceAll("model: claude-test", "model: codex-parent");
+  const harness = await startHarness(config, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  const supported = isSubagentModelSupported("codex");
+  const run = async (sessionId: string, turn: number) => {
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId } });
+    await client.expectOk("turn.submit", { sessionId, text: `delegation turn ${turn}` });
+    await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && m.session.turns === turn && m.session.live === false);
+    return (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${sessionId}.json`))).lastAppliedExecutionProjection as {
+      captain: { subagentModel?: string; subagentEffort?: string };
+      players: { id: string; subagentModel?: string; subagentEffort?: string }[];
+      catalog: Record<string, { roles: Record<string, { subagentModel?: string; subagentEffort?: string }> }>;
+    };
+  };
+  const original = await run(session.id, 1);
+  assert.equal(original.captain.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(original.players[0]?.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(original.catalog.code?.roles.coder?.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(harness.stats.runs.at(-1)?.agent, "codex");
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, supported ? "inherit" : undefined);
+  if (!supported) {
+    for (const patch of [{ subagentModel: "codex-child" }, { subagentEffort: "high" }]) {
+      const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
+      assert.ok(!refused.ok && refused.error.code === "invalid_config");
+      assert.match(refused.error.message, /is not supported for adapter "codex"/);
+    }
+    assert.equal((await client.expectOk("session.list", {})).find((s) => s.id === session.id)?.agentSettings, undefined);
+    return;
+  }
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", subagentModel: "codex-child", subagentEffort: "high" });
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "dev.coder", subagentEffort: "medium" });
+  const pinned = await run(session.id, 2);
+  assert.equal(pinned.captain.subagentModel, "codex-child");
+  assert.equal(pinned.captain.subagentEffort, "high");
+  assert.equal(pinned.players[0]?.subagentModel, "inherit");
+  assert.equal(pinned.players[0]?.subagentEffort, "medium");
+  assert.equal(pinned.catalog.code?.roles.coder?.subagentModel, "inherit");
+  assert.equal(pinned.catalog.code?.roles.coder?.subagentEffort, "medium");
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, "codex-child");
+  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, "high");
+  for (const patch of [{ subagentModel: false as const }, { subagentEffort: "ultra" }]) {
+    const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
+    assert.ok(!refused.ok && refused.error.code === "invalid_config");
+    assert.match(refused.error.message, /subagentEffort for adapter "codex"/);
+  }
+  assert.deepEqual((await client.expectOk("session.list", {})).find((s) => s.id === session.id)?.agentSettings?.captain,
+    { subagentModel: "codex-child", subagentEffort: "high" }, "refusals preserve the session's valid settings");
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", subagentModel: false, subagentEffort: null });
+  const off = await run(session.id, 3);
+  assert.equal(off.captain.subagentModel, undefined);
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined);
+  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, undefined);
+  const other = await client.expectOk("session.create", { projectId: project.id });
+  const inherited = await run(other.id, 1);
+  assert.equal(inherited.captain.subagentModel, "inherit");
+  assert.equal(inherited.captain.subagentEffort, undefined);
+  assert.equal(inherited.catalog.code?.roles.coder?.subagentEffort, undefined);
+  assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), config);
+});
+
 test("core-service-101: a session's own tuning reaches its runtime, its config file, and nothing else", async (t) => {
   const dir = scratchDir("spex-tuning-");
   const configPath = join(dir, "playbook.config.yaml");
@@ -6095,14 +6164,14 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   // continuing the session tuned with one is refused as the adapter's
   // drift, offering a new session (core-service-92).
   await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", subagentModel: "claude-sub-tuned" });
-  const onCodexConfig = config.replace(
+  const onGeminiConfig = config.replace(
     "  dev.coder:\n    adapter: claude\n    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\n",
-    "  dev.coder:\n    adapter: codex\n    model: claude-test\n",
+    "  dev.coder:\n    adapter: gemini\n    model: claude-test\n",
   );
-  assert.notEqual(onCodexConfig, config, "the player's adapter moved");
-  writeFileSync(configPath, onCodexConfig);
+  assert.notEqual(onGeminiConfig, config, "the player's adapter moved");
+  writeFileSync(configPath, onGeminiConfig);
   await service.reloadConfig();
-  const drift = await client.command("turn.submit", { sessionId: tuned.id, text: "on codex" });
+  const drift = await client.command("turn.submit", { sessionId: tuned.id, text: "on gemini" });
   assert.ok(!drift.ok && drift.error.code === "invalid_config", `refused as drift: ${JSON.stringify(drift)}`);
   assert.match(drift.error.message, /dev\.coder's adapter changed/, "names the adapter change");
   assert.match(drift.error.message, /new session/, "offers a new session");
@@ -6110,17 +6179,17 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
 
   // A subagent model on a player whose adapter cligent serves none for is
   // refused in cligent's words, with nothing written (DR-093).
-  const reviewerOnCodex = config.replace(
+  const reviewerOnGemini = config.replace(
     "  dev.reviewer:\n    adapter: claude\n    model: claude-test\n",
-    "  dev.reviewer:\n    adapter: codex\n",
+    "  dev.reviewer:\n    adapter: gemini\n",
   );
-  assert.notEqual(reviewerOnCodex, config, "the second player moved to codex");
-  writeFileSync(configPath, reviewerOnCodex);
+  assert.notEqual(reviewerOnGemini, config, "the second player moved to gemini");
+  writeFileSync(configPath, reviewerOnGemini);
   await service.reloadConfig();
   const mixed = await client.expectOk("session.create", { projectId: project.id });
-  const onCodex = await client.command("session.agent.set", { sessionId: mixed.id, agentId: "dev.reviewer", subagentModel: "gpt-6" });
-  assert.ok(!onCodex.ok && onCodex.error.code === "invalid_config", `refused: ${JSON.stringify(onCodex)}`);
-  assert.match(onCodex.error.message, /subagentModel is not supported for adapter "codex"/);
+  const onGemini = await client.command("session.agent.set", { sessionId: mixed.id, agentId: "dev.reviewer", subagentModel: "gemini-test" });
+  assert.ok(!onGemini.ok && onGemini.error.code === "invalid_config", `refused: ${JSON.stringify(onGemini)}`);
+  assert.match(onGemini.error.message, /subagentModel is not supported for adapter "gemini"/);
   const untouched = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === mixed.id);
   assert.equal(untouched?.agentSettings, undefined, "the refusal wrote nothing");
 
