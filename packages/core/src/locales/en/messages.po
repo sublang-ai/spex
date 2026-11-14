@@ -2879,8 +2879,8 @@ msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; c
 msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
 
 #: src/compile.ts
-msgid "The compiler does not support {variable}; update the compiler before using Ultracode."
-msgstr "The compiler does not support {variable}; update the compiler before using Ultracode."
+msgid "Update the compiler to use {variable}."
+msgstr "Update the compiler to use {variable}."
 
 #. Draft thread error; Settings is the surface's own name
 #: src/authoring.ts

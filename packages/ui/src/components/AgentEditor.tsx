@@ -22,7 +22,7 @@ import { agentChoosesLabel, useAgentOptions, modelTuning } from "../lib/agent-op
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
-import type { AgentPatch } from "../lib/config-ops.js";
+import { newPlayerModels, type AgentPatch } from "../lib/config-ops.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import {
   FAST_MODE_MARK,
@@ -102,6 +102,8 @@ export interface AgentEditorProps {
   /** Creation forms save an untouched draft: the seeded block is
    * already a deliberate choice, so there is nothing to dirty. */
   allowUnchanged?: boolean;
+  /** Apply the new roster defaults when selecting a different adapter. */
+  newPlayerDefaults?: boolean;
   onSave: (patch: AgentPatch) => Promise<unknown> | void;
   onCancel?: () => void;
 }
@@ -178,8 +180,9 @@ export function AgentEditor(props: AgentEditorProps) {
   function pickAdapter(next: AdapterName): void {
     if (next === adapter) return;
     setAdapter(next);
-    setModel("");
-    setSubagentModel("");
+    const defaults = props.newPlayerDefaults ? newPlayerModels(next, readinessByAdapter.get(next)) : {};
+    setModel(defaults.model ?? "");
+    setSubagentModel(defaults.subagentModel ?? "");
     setSubagentEffort("");
     setEffort("");
     setUltracode(undefined);

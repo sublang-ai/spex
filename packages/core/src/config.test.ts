@@ -31,6 +31,7 @@ import {
   seedConfig,
   summarizeConfig,
   templatePath,
+  withoutOfficialModels,
   validateProjectConfig,
   type LoadModule,
   ConfigViolation,
@@ -181,6 +182,13 @@ function roster(top: Record<string, unknown>): Record<string, unknown> {
   return top.players as Record<string, unknown>;
 }
 
+function configWithoutChildModels(): Record<string, unknown> {
+  const top = baseConfig();
+  const agents = [top.captain, ...Object.values(roster(top))] as Record<string, unknown>[];
+  for (const agent of agents) delete agent.subagentModel;
+  return top;
+}
+
 function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
   return (top.playbooks as Record<string, Record<string, unknown>>).review;
 }
@@ -188,6 +196,22 @@ function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
 function reviewRoles(top: Record<string, unknown>): Record<string, unknown> {
   return reviewBlock(top).roles as Record<string, unknown>;
 }
+
+test("a third-party service removes each official Claude pin independently", () => {
+  const config = {
+    captain: { adapter: "claude", model: "custom-parent", subagentModel: "claude-opus-5-5" },
+    players: {
+      custom: { adapter: "claude", model: "fable", subagentModel: "custom-child" },
+      disabled: { adapter: "claude", subagentModel: false },
+      inherits: { adapter: "claude", subagentModel: "inherit" },
+      codex: { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" },
+    },
+  };
+  assert.deepEqual(parseYaml(withoutOfficialModels(JSON.stringify(config))), {
+    captain: { adapter: "claude", model: "custom-parent" },
+    players: { ...config.players, custom: { adapter: "claude", subagentModel: "custom-child" } },
+  });
+});
 
 test("bundled template composes with launcher-equivalent output", async () => {
   // The template is the installed playbook's own (core-service-3), so
@@ -203,6 +227,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
     model: captain.model,
     effort: captain.effort,
     permissions: captain.permissions,
+    ...(captain.subagentModel !== undefined ? { subagentModel: captain.subagentModel } : {}),
   });
   assert.equal(composed.captainOptions.captainAdapter, captain.adapter);
   assert.deepEqual(composed.players.map((player) => player.id), ids);
@@ -543,7 +568,7 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   // `false` sends none; a subagent effort is the adapter's effort less
   // its orchestration value, beside a subagent model — an unset one
   // composing as `inherit`, as Playbook's launcher resolves it.
-  const top = baseConfig();
+  const top = configWithoutChildModels();
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
   Object.assign(top.captain as Record<string, unknown>, { subagentModel: "inherit", subagentEffort: "high" });
@@ -631,7 +656,7 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   // DR-095 (core-service-16): with or without an effort beside it, at
   // the Captain, each player and each binding; the summary keeps the
   // omission, and an adapter cligent serves none for composes none.
-  const top = baseConfig();
+  const top = configWithoutChildModels();
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
   roster(top)[reviewerId] = { adapter: "gemini" };

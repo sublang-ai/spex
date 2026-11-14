@@ -4742,6 +4742,7 @@ test("core-service-136: the first-run config takes the agents Playbook seeds for
     const settings = (agent: Record<string, unknown>) => ({
       adapter: agent.adapter,
       model: agent.model,
+      subagentModel: agent.subagentModel,
       effort: agent.effort,
       writablePaths: (agent.permissions as { writablePaths?: unknown } | undefined)?.writablePaths,
     });
@@ -4810,16 +4811,22 @@ test("core-service-136, core-service-138: behind a third-party service the seed'
     return { text, top, reseeded: state.status === "valid" && state.reseeded === true };
   };
   const first = await start(official);
-  assert.equal(first.top.captain.model, "claude-opus-5-5", "Anthropic's own service keeps the official name");
+  const { seedConfigText } = await import("@sublang/playbook/seed-config");
+  const upstream = parseYaml(seedConfigText({ env: official, homeDir: home }).text);
+  assert.equal(first.top.captain.model, upstream.captain.model);
+  assert.equal(first.top.captain.subagentModel, upstream.captain.subagentModel);
   // The base URL changed: the untouched seed is written again, its
   // Claude agents on the provider default, Codex's model and the
   // template's comments kept.
   const second = await start(deepseek);
   assert.equal(second.reseeded, true);
   assert.equal(Object.hasOwn(second.top.captain, "model"), false, "the Captain on the provider default");
+  assert.equal(Object.hasOwn(second.top.captain, "subagentModel"), false);
   for (const [id, player] of Object.entries(second.top.players)) {
-    if (player.adapter === "claude") assert.equal(Object.hasOwn(player, "model"), false, `${id} on the provider default`);
-    else assert.equal(player.model, first.top.players[id]?.model, `${id} keeps its model`);
+    for (const field of ["model", "subagentModel"]) {
+      if (player.adapter === "claude") assert.equal(Object.hasOwn(player, field), false, `${id} on the provider default`);
+      else assert.equal(player[field], first.top.players[id]?.[field], `${id} keeps its ${field}`);
+    }
   }
   assert.ok(Object.values(second.top.players).some((player) => player.adapter === "codex"), "a Codex agent stands");
   assert.match(second.text, /# The Captain\/Judge agent\./, "comments kept");
@@ -4914,7 +4921,9 @@ test("core-service-138: a re-check reseeds an untouched seed as a start would", 
   await client.open();
   try {
     const agents = () => parseYaml(readFileSync(ownConfig(dataDir), "utf8")) as { captain: Record<string, unknown>; players: Record<string, Record<string, unknown>> };
-    assert.equal(agents().captain.model, "claude-opus-5-5", "seeded with nothing set up");
+    const { seedConfigText } = await import("@sublang/playbook/seed-config");
+    const upstream = parseYaml(seedConfigText({ env: {}, homeDir: home }).text);
+    assert.equal(agents().captain.model, upstream.captain.model, "seeded with nothing set up");
 
     // A third-party key written to Claude Code's settings after the
     // start: the re-check reseeds, the Claude agents on the provider default.

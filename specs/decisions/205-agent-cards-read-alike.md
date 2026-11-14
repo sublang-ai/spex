@@ -12,6 +12,8 @@ Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "the core chooses no 
 The reseed of [DR-156](156-an-untouched-seed-follows-the-credentials.md) applies that seed unchanged, so an untouched seed follows a base URL as it follows a credential.
 Amended by [DR-206](206-the-workshop-points-to-its-guide.md) in "The online service before its address": the action is removed.
 
+Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the child model in a third-party Claude seed.
+
 ## Context
 
 - A not-ready card took a muted tone where no position used its agent and an alarm where one did, so one state had two looks; an attendee who reopened Spex after setting up Claude found the Codex card changed though nothing about Codex had.

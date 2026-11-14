@@ -321,6 +321,7 @@ const SLC_AGENT_IDS: Readonly<Record<string, string>> = {
 export interface CompilerAgent {
   adapter: string;
   model?: string;
+  subagentModel?: string | false;
   effort?: string;
   /** `false` is a literal request, not omission. */
   fastMode?: boolean;
@@ -331,6 +332,7 @@ export interface CompilerAgent {
 export function compilerAgentOf(agent: {
   adapter: string;
   model?: string;
+  subagentModel?: string | false;
   effort?: string;
   fastMode?: boolean;
   ultracode?: boolean;
@@ -338,6 +340,7 @@ export function compilerAgentOf(agent: {
   return {
     adapter: agent.adapter,
     ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
     ...(agent.effort ? { effort: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { fastMode: agent.fastMode } : {}),
     ...(typeof agent.ultracode === "boolean" ? { ultracode: agent.ultracode } : {}),
@@ -350,7 +353,7 @@ export function compilerAgentOf(agent: {
 const SLC_EMPTY_CONFIG = fileURLToPath(new URL("../assets/slc/empty.config.yaml", import.meta.url));
 
 /** The variables slc reads its agent from. */
-const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE", "SLC_ULTRACODE"] as const;
+const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_SUBAGENT_MODEL", "SLC_EFFORT", "SLC_FAST_MODE", "SLC_ULTRACODE"] as const;
 
 /** Supply the block's agent and tuning unless the environment already
  * configures the compiler's agent (playbook-library-42). */
@@ -364,6 +367,7 @@ export function compilerAgentEnv(
   return {
     SLC_AGENT: id,
     ...(agent.model ? { SLC_MODEL: agent.model } : {}),
+    ...(agent.subagentModel !== undefined ? { SLC_SUBAGENT_MODEL: String(agent.subagentModel) } : {}),
     ...(agent.effort ? { SLC_EFFORT: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { SLC_FAST_MODE: String(agent.fastMode) } : {}),
     ...(typeof agent.ultracode === "boolean" ? { SLC_ULTRACODE: String(agent.ultracode) } : {}),
@@ -1137,16 +1141,16 @@ async function compileAdmitted(
       );
     }
     const compilerEnv = { ...env, ...toolchain.slc.env, ...agentEnv };
-    const ultracodeVariables = ["SLC_ULTRACODE", "SLC_REVIEWER_ULTRACODE"].filter((key) => compilerEnv[key]?.trim());
-    if (ultracodeVariables.length) {
+    const requestedSettings = ["SLC_ULTRACODE", "SLC_REVIEWER_ULTRACODE", "SLC_SUBAGENT_MODEL", "SLC_REVIEWER_SUBAGENT_MODEL"].filter((key) => compilerEnv[key]?.trim());
+    if (requestedSettings.length) {
       const help: string[] = [];
       const result = await spawner(slcCommand, [...slcArgs, "--help"], dir, (line) => help.push(line), signal, compilerEnv);
       signal?.throwIfAborted();
       const output = help.join("\n");
-      for (const variable of ultracodeVariables) {
+      for (const variable of requestedSettings) {
         if (result !== 0 || !new RegExp(`\\b${variable}\\b`).test(output)) {
           throw new Error(i18n._({
-            id: "The compiler does not support {variable}; update the compiler before using Ultracode.",
+            id: "Update the compiler to use {variable}.",
             values: { variable },
           }));
         }

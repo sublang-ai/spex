@@ -6,7 +6,7 @@
 // a merge patch — only the provided keys change, so hand-written
 // fields (instruction, granular permissions) survive.
 
-import type { AgentBlockInput } from "@sublang/spex-core/protocol";
+import type { AgentBlockInput, ReadinessEntry } from "@sublang/spex-core/protocol";
 
 import type { SpexClient } from "./client.js";
 import { getClient } from "../state/store.js";
@@ -92,17 +92,28 @@ export function bindRole(
   });
 }
 
-/** Fixed neutral default for a new role assignment (DR-019), leaving
- * the subagent model and its effort unset — "Same as agent", "Agent
- * chooses" (DR-095); the "Same as Captain" action in the editor copies
- * the Captain's adapter, model, effort, subagent model, subagent
- * effort, fast mode, and permissions instead. */
+/** A new roster player's defaults. Existing blocks continue to own their
+ * selections, including an omitted model or child. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-opus-5-5",
+  model: "claude-fable-5-2",
+  subagentModel: "claude-opus-5-5",
   effort: "high",
   permissions: { mode: "auto" },
 };
+
+export function newPlayerModels(adapter: string, readiness?: ReadinessEntry): Pick<AgentBlockInput, "model" | "subagentModel"> {
+  if (adapter === "claude" && readiness?.baseUrl?.state !== "third-party") {
+    return {
+      model: NEUTRAL_BLOCK.model,
+      ...(readiness?.subagentModelSupported !== false ? { subagentModel: NEUTRAL_BLOCK.subagentModel } : {}),
+    };
+  }
+  if (adapter === "codex") {
+    return { model: "gpt-6-astra", ...(readiness?.subagentModelSupported ? { subagentModel: "gpt-6.1-sol" } : {}) };
+  }
+  return {};
+}
 
 /** Apply an editor patch to a local (not yet registered) block with
  * the same semantics the core uses: provided keys change, absent

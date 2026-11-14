@@ -97,10 +97,10 @@ const READINESS: ReadinessEntry[] = [
   },
 ];
 
-function renderSettings() {
+function renderSettings(readiness = READINESS) {
   useAppStore.setState({
     configState: CONFIG,
-    readiness: READINESS,
+    readiness,
     refreshReadiness: vi.fn(async () => {}),
   });
   return render(<SettingsSurface />);
@@ -341,6 +341,22 @@ describe("SET: the session-player roster", () => {
     );
   });
 
+  test.each([true, false])("adding a Codex player respects child support %s", async (supported) => {
+    renderSettings(READINESS.map((entry) =>
+      entry.adapter === "codex" ? { ...entry, subagentModelSupported: supported } : entry));
+    fireEvent.click(screen.getByTestId("player-add"));
+    fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
+    const form = within(screen.getByTestId("player-add-form"));
+    fireEvent.click(form.getByTestId("agent-adapter-codex"));
+    fireEvent.click(form.getByTestId("agent-save"));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.edit", {
+      op: { kind: "player.set", playerId: "dev.docs", patch: {
+        adapter: "codex", model: "gpt-6-astra", ...(supported ? { subagentModel: "gpt-6.1-sol" } : {}),
+        permissions: { mode: "auto" },
+      } },
+    }));
+  });
+
   test("adding a lane names it and gives it a whole block", async () => {
     renderSettings();
     fireEvent.click(screen.getByTestId("player-add"));
@@ -354,10 +370,24 @@ describe("SET: the session-player roster", () => {
         op: {
           kind: "player.set",
           playerId: "dev.docs",
-          patch: expect.objectContaining({ adapter: "claude" }),
+          patch: expect.objectContaining({ adapter: "claude", model: "claude-fable-5-2", subagentModel: "claude-opus-5-5" }),
         },
       }),
     );
+  });
+
+  test("adding a Claude player on a third-party service leaves both model choices to the provider", async () => {
+    renderSettings(READINESS.map((entry) => entry.adapter === "claude"
+      ? { ...entry, baseUrl: { state: "third-party", host: "provider.example" } } : entry));
+    fireEvent.click(screen.getByTestId("player-add"));
+    fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
+    const form = within(screen.getByTestId("player-add-form"));
+    fireEvent.click(form.getByTestId("agent-save"));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.edit", {
+      op: { kind: "player.set", playerId: "dev.docs", patch: {
+        adapter: "claude", effort: "high", permissions: { mode: "auto" },
+      } },
+    }));
   });
 });
 

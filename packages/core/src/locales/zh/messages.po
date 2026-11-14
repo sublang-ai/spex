@@ -2879,8 +2879,8 @@ msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; c
 msgstr "编译所用的智能体运行在 {adapter} 上，而编译器无法驱动它；请选用 claude、codex、gemini 或 opencode 上的智能体，或设置 SLC_AGENT。"
 
 #: src/compile.ts
-msgid "The compiler does not support {variable}; update the compiler before using Ultracode."
-msgstr "编译器不支持 {variable}；使用 Ultracode 前请更新编译器。"
+msgid "Update the compiler to use {variable}."
+msgstr "请更新编译器以使用 {variable}。"
 
 #. Draft thread error; Settings is the surface's own name
 #: src/authoring.ts

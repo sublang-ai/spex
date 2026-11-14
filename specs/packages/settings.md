@@ -71,7 +71,8 @@ When the run view asks for Settings at an adapter's agent card [[run-view-45](ru
 
 Where the Settings surface is open, the Settings surface shall offer adding a session player by naming its id and giving it a whole agent block ([DR-032](../decisions/032-session-players.md)), and shall report a rejected id in the shared-config write path's own words without writing:
 
-- The seeded block is a complete, deliberate choice, so an untouched draft is savable.
+- The new-player draft starts with Claude Fable 5.2 and Opus 5.5 subagents. Choosing Codex on that draft selects GPT-6 Astra and, where supported, GPT-6.1 Sol subagents ([DR-236](../decisions/236-primary-and-subagent-model-defaults.md)).
+- A third-party Claude service uses provider model defaults. Saving an untouched draft writes its displayed parent and child choices.
 
 ### Workshop Adapters
 
@@ -124,7 +125,7 @@ When an agent, role-binding, or session-tuning editor opens or the adapter it us
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
 - Where an agent editor's or an agent card's [[settings-59](#settings-59)] `claude` model field serves a `third-party` base URL [[settings-14](#settings-14)] and the catalog reports a `defaultModel` [[settings-35](#settings-35)], mark Provider default as recommended [[settings-39](#settings-39)]; with no `defaultModel`, mark nothing ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)).
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
-- Explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, fast mode, and Ultracode to defaults because those settings belong to the previous adapter.
+- Except on the new-player draft [[settings-27](#settings-27)], explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, fast mode, and Ultracode to defaults because those settings belong to the previous adapter.
 
 #### settings-35
 

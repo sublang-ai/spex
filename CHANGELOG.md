@@ -53,6 +53,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Added
 
+- With the updated Playbook and Cligent, fresh agent configs use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents. New players and compiler runs carry the child selection too.
+
 - Claude Ultracode can be set independently of reasoning effort when the installed runtime supports it. Existing Claude shorthand and Codex effort settings remain compatible.
 
 - Fork verification build rebased onto upstream `82961686`, preserving

@@ -108,11 +108,10 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
   // Every comment in the template survives the edit (the patched
   // captain keys carry no inline comments of their own).
   assertCommentsSurvive(before, after);
-  // Only the provided keys changed; the rest of the block and every
-  // unrelated key are untouched: the players keep the model Playbook
-  // 17.1's starter names.
-  assert.match(after, /captain:\n\s+adapter: claude\n\s+model: claude-opus-4-9\n\s+effort: max/);
-  assert.match(after, /model: claude-opus-5-5\n/);
+  const expected = parse(before);
+  expected.captain.model = "claude-opus-4-9";
+  expected.captain.effort = "max";
+  assert.deepEqual(parse(after), expected);
 });
 
 test("player.set merge patch swaps a lane's vendor in place", async () => {
@@ -123,7 +122,7 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
     {
       kind: "player.set",
       playerId: "dev.reviewer",
-      patch: { adapter: "codex", model: "gpt-5.5" },
+      patch: { adapter: "codex", model: "gpt-5.5", subagentModel: null },
     },
     stubLoader,
   );
@@ -418,7 +417,6 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
 test("a subagentModel patch and a role binding write the key, null clears it, comments kept (DR-093)", async () => {
   const path = templateFile();
   const seeded = readFileSync(path, "utf8");
-  assert.doesNotMatch(seeded, /^\s+subagentModel:/m);
 
   // The shared editor's merge patch writes it in the lane it names.
   const written = await edit(
@@ -446,7 +444,9 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   assert.ok(inherit.ok, inherit.error ?? "edit refused");
   const inherited = readFileSync(path, "utf8");
   // The template's own comments name the key, so only key lines count.
-  assert.equal(inherited.match(/^\s+subagentModel:/gm)?.length, 1, "only the player's own key remains");
+  const config = parse(inherited);
+  assert.deepEqual(config.playbooks.code.roles.coder, { player: "dev.coder" });
+  assert.equal(config.players["dev.coder"].subagentModel, "claude-sonnet-5-5");
   assertCommentsSurvive(pinned, inherited);
 
   // null removes the player's key again.
@@ -457,7 +457,7 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   );
   assert.ok(cleared.ok, cleared.error ?? "edit refused");
   const after = readFileSync(path, "utf8");
-  assert.doesNotMatch(after, /^\s+subagentModel:/m);
+  assert.equal(parse(after).players["dev.coder"].subagentModel, undefined);
   assertCommentsSurvive(seeded, after);
 
   // An adapter cligent serves no subagent model for is refused in the
@@ -488,7 +488,8 @@ test("a subagent effort, the inherit literal and Off write their keys, null clea
   const off = await edit(path, { kind: "captain.set", patch: { subagentModel: false } }, stubLoader);
   assert.ok(off.ok, off.error ?? "edit refused");
   const pinned = readFileSync(path, "utf8");
-  assert.match(block(pinned, "dev.coder"), /\n\s+subagentModel: inherit\n\s+subagentEffort: high/);
+  assert.match(block(pinned, "dev.coder"), /\n\s+subagentModel: inherit/);
+  assert.match(block(pinned, "dev.coder"), /\n\s+subagentEffort: high/);
   assert.match(block(pinned, "captain"), /\n\s+subagentModel: false/);
   assertCommentsSurvive(seeded, pinned);
 
@@ -524,7 +525,8 @@ test("a subagent effort, the inherit literal and Off write their keys, null clea
     assert.ok(cleared.ok, cleared.error ?? "edit refused");
   }
   const after = readFileSync(path, "utf8");
-  assert.doesNotMatch(after, /^\s+subagent(Model|Effort):/m);
+  assert.doesNotMatch(block(after, "dev.coder"), /^\s+subagent(Model|Effort):/m);
+  assert.doesNotMatch(block(after, "captain"), /^\s+subagent(Model|Effort):/m);
   assertCommentsSurvive(seeded, after);
 });
 

@@ -893,8 +893,8 @@ export function isOfficialModel(value: unknown): boolean {
   return /^claude-/i.test(value) || /^(opus|sonnet|haiku|fable)(\[1m\])?$/i.test(value);
 }
 
-/** The seed with each Claude agent's official `model` removed, so it
- * runs on the provider's default; comments kept. */
+/** A third-party Claude service chooses both models unless the starter
+ * names one of its own. Preserve unrelated settings and comments. */
 export function withoutOfficialModels(text: string): string {
   const document = parseDocument(text);
   if (document.errors.length > 0) return text;
@@ -906,9 +906,12 @@ export function withoutOfficialModels(text: string): string {
   let removed = false;
   for (const path of agents) {
     if (document.getIn([...path, "adapter"]) !== "claude") continue;
-    if (!isOfficialModel(document.getIn([...path, "model"]))) continue;
-    document.deleteIn([...path, "model"]);
-    removed = true;
+    for (const field of ["model", "subagentModel"]) {
+      if (isOfficialModel(document.getIn([...path, field]))) {
+        document.deleteIn([...path, field]);
+        removed = true;
+      }
+    }
   }
   return removed ? document.toString() : text;
 }

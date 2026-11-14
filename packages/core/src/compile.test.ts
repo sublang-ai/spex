@@ -796,14 +796,14 @@ test("the compile's agent reaches slc unless the environment configures it (play
   helpText = "old compiler help";
   await compileWith("blank-review-ultra", { SLC_REVIEWER_ULTRACODE: " " }, { adapter: "claude" });
   assert.equal(helpCalls, 0, "a blank workflow variable leaves the compiler default");
-  await assert.rejects(compileWith("old-ultra", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
-  await assert.rejects(compileWith("old-review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined), /does not support SLC_REVIEWER_ULTRACODE/);
+  await assert.rejects(compileWith("old-ultra", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
+  await assert.rejects(compileWith("old-review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined), /Update the compiler to use SLC_REVIEWER_ULTRACODE/);
   helpText = "";
-  await assert.rejects(compileWith("empty-help", {}, { adapter: "claude", ultracode: false }), /does not support SLC_ULTRACODE/);
+  await assert.rejects(compileWith("empty-help", {}, { adapter: "claude", ultracode: false }), /Update the compiler to use SLC_ULTRACODE/);
   helpText = "SLC_ULTRACODE_EXTRA";
-  await assert.rejects(compileWith("partial-help", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
+  await assert.rejects(compileWith("partial-help", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
   helpText = "SLC_ULTRACODE"; helpCode = 1;
-  await assert.rejects(compileWith("failed-help", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
+  await assert.rejects(compileWith("failed-help", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
   helpCode = 0;
   const beforeOverride = helpCalls;
   await compileWith("override-ultra", { SLC_AGENT: "codex" }, { adapter: "claude", ultracode: true });
@@ -814,6 +814,12 @@ test("the compile's agent reaches slc unless the environment configures it (play
   const ultraEnv = await compileWith("ultracode", {}, { adapter: "claude", effort: "high", ultracode: true });
   assert.equal(ultraEnv.SLC_ULTRACODE, "true");
   assert.equal(ultraEnv.SLC_EFFORT, "high");
+  await assert.rejects(compileWith("old-child", {}, { adapter: "codex", subagentModel: "gpt-6.1-sol" }), /Update the compiler to use SLC_SUBAGENT_MODEL/);
+  helpText = "SLC_SUBAGENT_MODEL SLC_REVIEWER_SUBAGENT_MODEL";
+  const pairEnv = await compileWith("child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
+  assert.equal(pairEnv.SLC_MODEL, "gpt-6-astra");
+  assert.equal(pairEnv.SLC_SUBAGENT_MODEL, "gpt-6.1-sol");
+  assert.equal(compilerAgentEnv({}, { adapter: "claude", subagentModel: false }).SLC_SUBAGENT_MODEL, "false");
   // Fast mode travels as its literal.
   assert.deepEqual(
     pick(await compileWith("fast", {}, { adapter: "claude", model: "claude-opus-5", fastMode: true })),

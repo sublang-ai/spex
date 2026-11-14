@@ -17,6 +17,8 @@ Amended by [DR-154](154-the-seed-follows-playbooks-rule.md) in §"Spex writes on
 
 Amended by [DR-235](235-independent-ultracode.md) for independent Ultracode tuning.
 
+Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the default pair when adding a new player.
+
 ## Context
 
 - Playbook 3.0 removed the shared config's `profiles` map and the agent-block `profile` key: every `captain` and `players.<role>` value is an inline agent block (`adapter`, `model`, `effort`, `permissions`) or a scalar adapter shorthand, and the launcher migrates profiles-era configs in place once, with a backup.
