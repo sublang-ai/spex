@@ -181,6 +181,7 @@ export interface AgentSummary {
   effort?: string;
   /** Adapter-scoped fast mode; the chip wears a lightning mark (DR-038). */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** The model the agent's subagents run on — a model, `inherit` for
    * the agent's own, or `false` for none; absent, the delegation default
    * (DR-093, DR-095). The chip never reads it. */
@@ -233,6 +234,7 @@ export interface RoleBindingSummary {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
+  ultracode?: boolean;
   subagentModel?: string | false;
   subagentEffort?: string | false;
   /** What this role effectively runs, after inheritance. */
@@ -252,6 +254,7 @@ export interface SessionAgentSettings {
    * (DR-095). */
   subagentEffort?: string | false;
   fastMode?: boolean;
+  ultracode?: boolean;
   /** Explicit browser capability for the next turn; omission inherits configuration. */
   browser?: boolean;
 }
@@ -696,7 +699,7 @@ export interface SessionInfo {
   /** Last activity — the checkpoint's last settlement — null while live. */
   endedAt: number | null;
   /** The session's bound player roster, in config order (DR-032). */
-  players: { id: string; adapter: AdapterName; model?: string; fastMode?: boolean }[];
+  players: { id: string; adapter: AdapterName; model?: string; fastMode?: boolean; ultracode?: boolean }[];
   /** Panes visible at session start, before any player_view_changed record. */
   initialVisible: string[];
   /** Legacy host label retained for older history; never recovery authority. */
@@ -779,6 +782,8 @@ export interface AgentOptions {
   adapter: AdapterName;
   effortValues: readonly string[];
   fastModeSupported: boolean;
+  /** Absent on older cores; only true when the runtime serves Ultracode. */
+  ultracodeSupported?: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
   /** The efforts a subagent may run at: the adapter's effort values less
@@ -827,6 +832,8 @@ export interface ReadinessEntry {
   /** Whether the embedded runtime declares fast mode for this adapter
    * (DR-038); the editor offers the switch only then. */
   fastModeSupported: boolean;
+  /** Absent on older cores; only true when the runtime serves Ultracode. */
+  ultracodeSupported?: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
   /** On a team server's seat alone (settings-49): the adapter's
@@ -1100,6 +1107,7 @@ export const agentBlockSchema = z.object({
   instruction: z.string().optional(),
   browser: z.boolean().optional(),
   fastMode: z.boolean().optional(),
+  ultracode: z.boolean().optional(),
   permissions: z
     .object({
       mode: z.string().optional(),
@@ -1123,6 +1131,7 @@ export const agentPatchSchema = z.object({
   subagentEffort: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   fastMode: z.boolean().nullable().optional(),
+  ultracode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
   browser: z.boolean().nullable().optional(),
   permissions: z
@@ -1161,6 +1170,7 @@ const roleBindOpSchema = z.object({
   effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
   // Fast mode is literal: false disables; null inherits the player.
   fastMode: z.boolean().nullable().optional(),
+  ultracode: z.boolean().nullable().optional(),
 });
 
 export const configEditOpSchema = z.discriminatedUnion("kind", [
@@ -1344,6 +1354,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     fastMode: z.boolean().nullable().optional(),
+    ultracode: z.boolean().nullable().optional(),
     browser: z.boolean().nullable().optional(),
   }).strict(),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),

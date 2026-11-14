@@ -27,7 +27,7 @@ import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@subla
 import { CoreService } from "./service.js";
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { speak } from "./i18n.js";
-import { starterText, templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
+import { isUltracodeSupported, starterText, templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
@@ -1161,7 +1161,7 @@ test("settings-36: model discovery uses the captured environment without opening
   const filesBefore = sessionFiles();
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "claude" }), {
     adapter: "claude", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultracode"],
-    fastModeSupported: true, subagentModelSupported: true,
+    fastModeSupported: true, ultracodeSupported: isUltracodeSupported("claude"), subagentModelSupported: true,
     // A subagent runs at the adapter's efforts less its orchestration
     // value (DR-095).
     subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
@@ -1169,7 +1169,7 @@ test("settings-36: model discovery uses the captured environment without opening
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "codex" }), {
     adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-    fastModeSupported: true, subagentModelSupported: isSubagentModelSupported("codex"),
+    fastModeSupported: true, ultracodeSupported: false, subagentModelSupported: isSubagentModelSupported("codex"),
     subagentEffortValues: isSubagentModelSupported("codex")
       ? ["minimal", "low", "medium", "high", "xhigh", "max"]
       : [],
@@ -1177,7 +1177,7 @@ test("settings-36: model discovery uses the captured environment without opening
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "gemini" }), {
     adapter: "gemini", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
-    fastModeSupported: false, subagentModelSupported: false, subagentEffortValues: [],
+    fastModeSupported: false, ultracodeSupported: false, subagentModelSupported: false, subagentEffortValues: [],
     discovery: { status: "unavailable", reason: "Fixture runtime is offline" },
   });
   client.sendRaw(JSON.stringify({ type: "agent.options", id: "unknown-adapter", adapter: "unknown" }));
@@ -6897,4 +6897,76 @@ test("core-service-124: what one home captured runs on it alone, and a second ho
   await client.expectOk("intent.remove", { intentId: worked.id });
   await client.expectOk("session.delete", { sessionId: session.id });
   assert.equal((await client.expectOk("session.list", {})).some((entry) => entry.id === session.id), false);
+});
+
+
+test("Ultracode round-trips independently and unsupported activation preserves config bytes", async (t) => {
+  const harness = await startHarness(VALID_CONFIG);
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const path = join(harness.dir, "playbook.config.yaml");
+  const op = { kind: "playbook.role.bind" as const, playbookId: "code", role: "coder", playerId: "dev.coder" };
+  for (const ultracode of [...(isUltracodeSupported("claude") ? [true, false] : []), null]) {
+    await client.expectOk("config.edit", { op: { ...op, ultracode } });
+    const state = await client.expectOk("config.get", {});
+    assert.ok(state.status === "valid");
+    assert.equal(state.summary.playbooks[0].roles.coder.ultracode, ultracode ?? undefined);
+  }
+  if (!isUltracodeSupported("claude")) {
+    const before = readFileSync(path, "utf8");
+    for (const ultracode of [true, false]) {
+      const refused = await client.command("config.edit", { op: { ...op, ultracode } });
+      assert.equal(refused.ok, false);
+      assert.equal(readFileSync(path, "utf8"), before);
+    }
+  }
+});
+
+
+test("Ultracode session tuning reaches first and resumed calls and clears before first submission", async (t) => {
+  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no Ultracode capability"); return; }
+  const harness = await startHarness(VALID_CONFIG, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  const before = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
+  for (const [index, ultracode] of [true, false, null].entries()) {
+    await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", effort: "high", ultracode });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: `Ultracode turn ${index}` });
+    await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === index + 1 && m.session.live === false);
+    const applied = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${session.id}.json`))).lastAppliedExecutionProjection as { captain: { ultracode?: boolean } };
+    assert.equal(applied.captain.ultracode, ultracode ?? undefined);
+    assert.equal(harness.stats.runs.at(-1)?.ultracode, ultracode ?? undefined);
+  }
+  const reset = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: reset.id } });
+  await client.expectOk("session.agent.set", { sessionId: reset.id, agentId: "captain", effort: "high", ultracode: true });
+  await client.expectOk("session.agent.set", { sessionId: reset.id, agentId: "captain", effort: null, ultracode: null });
+  await client.expectOk("turn.submit", { sessionId: reset.id, text: "reset before first message" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === reset.id && m.session.turns === 1 && m.session.live === false);
+  const resetProjection = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${reset.id}.json`))).lastAppliedExecutionProjection as { captain: { ultracode?: boolean; effort: { kind: string } } };
+  assert.equal(resetProjection.captain.ultracode, undefined);
+  assert.equal(resetProjection.captain.effort.kind, "provider-default");
+  assert.equal(harness.stats.runs.at(-1)?.ultracode, undefined);
+  assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), before);
+});
+
+
+test("first message refreshes a changed global config while retaining session identity", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "first-message-model" } } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "first message" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.live === false);
+  assert.equal(harness.stats.runs.at(-1)?.model, "first-message-model");
+  assert.equal((await client.expectOk("session.list", {})).filter(({id}) => id === session.id).length, 1);
 });

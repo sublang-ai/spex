@@ -15,6 +15,8 @@ Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in §"UX
 Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) on the project home before a session: Captain's identity and current agent chip sit by the task composer; the chip opens its in-place editor.
 Amended by [DR-154](154-the-seed-follows-playbooks-rule.md) in §"Spex writes only blocks": the seeded agents follow Playbook's credential-based seeding rule instead of a single-vendor lineup of Spex's own.
 
+Amended by [DR-235](235-independent-ultracode.md) for independent Ultracode tuning.
+
 ## Context
 
 - Playbook 3.0 removed the shared config's `profiles` map and the agent-block `profile` key: every `captain` and `players.<role>` value is an inline agent block (`adapter`, `model`, `effort`, `permissions`) or a scalar adapter shorthand, and the launcher migrates profiles-era configs in place once, with a backup.

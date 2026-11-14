@@ -20,6 +20,7 @@ import type {
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
 import { listOf } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
+import { UltracodeField } from "./UltracodeField.js";
 import { TuningField } from "./TuningField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
 import { useFitInBox } from "../lib/popover-fit.js";
@@ -38,6 +39,7 @@ export interface BindingChange {
   effort?: string | false | null;
   subagentEffort?: string | false | null;
   fastMode?: boolean | null;
+  ultracode?: boolean | null;
 }
 
 export function BindingEditorPopover({
@@ -80,6 +82,7 @@ export function BindingEditorPopover({
     effort: binding.effort,
     subagentEffort: binding.subagentEffort,
     fastMode: binding.fastMode,
+    ultracode: binding.ultracode,
   });
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -100,7 +103,11 @@ export function BindingEditorPopover({
   const catalog = discovery.options?.discovery.status === "available" ? discovery.options.discovery : undefined;
   const models = catalog?.models ?? [];
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? lane?.agent.effort;
-  const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !tuning.efforts.includes(effectiveEffort));
+  const legacyEffort = tuning.separateUltracode && effectiveEffort === "ultracode";
+  const inheritedUltracode = lane?.agent.ultracode ?? (legacyEffort ? true : undefined);
+  const needsUltracodeReset = Boolean(discovery.options && lane?.agent.adapter === "claude" && !tuning.separateUltracode && draft.ultracode != null);
+  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (draft.ultracode ?? lane?.agent.ultracode) === true && !tuning.ultracodeSupported);
+  const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !legacyEffort && !tuning.efforts.includes(effectiveEffort));
   const effectiveFastMode = draft.fastMode ?? lane?.agent.fastMode ?? false;
   const adapterFastMode = discovery.options?.fastModeSupported;
   const invalidFastMode = (adapterFastMode === false && draft.fastMode != null) || (effectiveFastMode && tuning.fastModeSupported === false);
@@ -195,7 +202,11 @@ export function BindingEditorPopover({
             playerDefault={lane?.agent.effort}
             efforts={tuning.efforts}
             additionalEfforts={tuning.additionalEfforts}
-            onChange={(next) => setDraft((current) => ({ ...current, effort: next }))}
+            onChange={(next) => setDraft((current) => ({
+              ...current, effort: next,
+              ...(legacyEffort && next !== "ultracode" && current.ultracode == null && lane?.agent.ultracode === undefined && tuning.ultracodeSupported
+                ? { ultracode: true } : {}),
+            }))}
           />
           {offersSubagentModel && <>
             <TuningField
@@ -216,6 +227,9 @@ export function BindingEditorPopover({
         </div>
       </div>
 
+      <UltracodeField testId="binding-ultracode" supported={tuning.ultracodeSupported}
+        value={draft.ultracode ?? undefined} inherited={inheritedUltracode} resetOnly={needsUltracodeReset} source="player"
+        onChange={(value) => setDraft((current) => ({ ...current, ultracode: value ?? null }))} />
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && <label className="flex flex-col gap-1 text-xs">
         <span className="text-neutral-500 dark:text-neutral-400">{i18n._({ id: "Fast mode", comment: "switch: run this agent in its adapter's fast mode" })}</span>
         <select data-testid="binding-fast-mode" value={draft.fastMode == null ? "inherit" : draft.fastMode ? "on" : "off"}
@@ -253,7 +267,7 @@ export function BindingEditorPopover({
         <button
           type="button"
           data-testid="binding-save"
-          disabled={busy || (!playerOnly && (invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode))}
+          disabled={busy || (!playerOnly && (invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode || invalidUltracode))}
           onClick={() => {
             setBusy(true);
             setError(undefined);

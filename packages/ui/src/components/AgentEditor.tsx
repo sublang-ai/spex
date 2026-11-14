@@ -31,6 +31,7 @@ import {
   type ChipAgent,
 } from "./AgentChip.js";
 import { useBrowserTools } from "../lib/useBrowserTools.js";
+import { UltracodeField } from "./UltracodeField.js";
 import { BrowserControl } from "./BrowserControl.js";
 import { Rich } from "./Rich.js";
 import { WORKSHOP, WORKSHOP_ADAPTERS } from "../lib/workshop.js";
@@ -114,6 +115,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const [subagentModel, setSubagentModel] = useState<string | false>(subagentModelOf(initial));
   const [subagentEffort, setSubagentEffort] = useState(initial?.subagentEffort ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
+  const [ultracode, setUltracode] = useState(initial?.ultracode);
   const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
   const [browser, setBrowser] = useState(initial?.browser ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
@@ -140,6 +142,7 @@ export function AgentEditor(props: AgentEditorProps) {
     ...(subagentModel !== "" ? { subagentModel } : {}),
     ...(subagentEffort ? { subagentEffort } : {}),
     ...(effort ? { effort } : {}), ...(fastMode ? { fastMode } : {}),
+    ...(ultracode !== undefined ? { ultracode } : {}),
     ...(Object.keys(permissions).length > 0 || initial?.permissions ? { permissions } : {}),
   }, props.context);
 
@@ -160,7 +163,10 @@ export function AgentEditor(props: AgentEditorProps) {
   const modelLabelId = useId();
   const subagentLabelId = useId();
   const supportsFastMode = tuning.fastModeSupported ?? readinessByAdapter.get(adapter)?.fastModeSupported ?? false;
-  const invalidEffort = Boolean(discovery.options && effort && !tuning.efforts.includes(effort));
+  const legacyEffort = tuning.separateUltracode && effort === "ultracode";
+  const invalidEffort = Boolean(discovery.options && effort && !legacyEffort && !tuning.efforts.includes(effort));
+  const needsUltracodeReset = Boolean(discovery.options && adapter === "claude" && !tuning.separateUltracode && ultracode !== undefined);
+  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && ultracode === true && !tuning.ultracodeSupported);
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
@@ -176,6 +182,7 @@ export function AgentEditor(props: AgentEditorProps) {
     setSubagentModel("");
     setSubagentEffort("");
     setEffort("");
+    setUltracode(undefined);
     setFastMode(false);
   }
 
@@ -185,6 +192,7 @@ export function AgentEditor(props: AgentEditorProps) {
     subagentModel !== subagentModelOf(initial) ||
     subagentEffort !== (initial?.subagentEffort ?? "") ||
     effort !== (initial?.effort ?? "") ||
+    ultracode !== initial?.ultracode ||
     fastMode !== (initial?.fastMode ?? false) ||
     browser !== (initial?.browser ?? false) ||
     mode !== initialMode(initial) ||
@@ -226,6 +234,8 @@ export function AgentEditor(props: AgentEditorProps) {
     // Fast mode is off by default, so the switch writes true or unsets
     // the key (DR-038) — the same shape effort takes.
     if (browser !== (initial?.browser ?? false)) patch.browser = browser;
+    if (ultracode !== undefined) patch.ultracode = ultracode;
+    else if (initial?.ultracode !== undefined) patch.ultracode = null;
     if (fastMode) patch.fastMode = true;
     else if (initial?.fastMode) patch.fastMode = null;
     const permissions: NonNullable<AgentPatch["permissions"]> = {
@@ -330,13 +340,16 @@ export function AgentEditor(props: AgentEditorProps) {
             <select
               data-testid="agent-effort"
               value={effort}
-              onChange={(event) => setEffort(event.target.value)}
+              onChange={(event) => {
+                if (legacyEffort && ultracode === undefined && tuning.ultracodeSupported) setUltracode(true);
+                setEffort(event.target.value);
+              }}
               className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
             >
               {/* An effort key is the adapter's wire word; only what
                   stands beside it is a text. */}
               <option value="">{i18n._({ id: "(default)", comment: "effort choice: leave the adapter's own default" })}</option>
-              {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
+              {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options && !legacyEffort ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
               {tuning.efforts.map((name) => (
                 <option key={name} value={name}>
                   {tuning.additionalEfforts.includes(name) ? i18n._("{effort} (adapter-wide)", { effort: name }) : name}
@@ -383,6 +396,9 @@ export function AgentEditor(props: AgentEditorProps) {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
+        <UltracodeField testId="agent-ultracode" supported={tuning.ultracodeSupported}
+          value={ultracode} inherited={legacyEffort ? true : undefined} source="provider"
+          resetOnly={needsUltracodeReset} onChange={setUltracode} />
         {(supportsFastMode || fastMode) ? (
           <label className="col-span-2 flex items-center gap-2">
             <input
@@ -469,7 +485,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
+          disabled={busy || browserUnadmitted || invalidUltracode || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -489,7 +505,7 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions")}
+            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, Ultracode, browser, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
@@ -498,6 +514,7 @@ export function AgentEditor(props: AgentEditorProps) {
               setSubagentModel(subagentModelOf(captain));
               setSubagentEffort(captain.subagentEffort ?? "");
               setEffort(captain.effort ?? "");
+              setUltracode(captain.ultracode);
               setFastMode(Boolean(captain.fastMode));
               setBrowser(Boolean(captain.browser));
               setMode(initialMode(captain));

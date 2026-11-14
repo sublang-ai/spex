@@ -18,7 +18,7 @@ import {
   type AgentPatch,
   type ConfigEditOp,
 } from "./config-edit.js";
-import { starterText, templatePath, type LoadModule, type PlaybookModules } from "./config.js";
+import { isUltracodeSupported, starterText, templatePath, type LoadModule, type PlaybookModules } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -581,4 +581,52 @@ test("native approval acceptance replaces seeded auto mode with explicit ask pol
     shellExecute: "ask", fileWrite: "deny", networkAccess: "deny",
   });
   assert.deepEqual(saved.captain.permissions, { mode: "auto" });
+});
+
+test("an Ultracode patch writes the key, null removes it, comments kept", async (t) => {
+  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no independent Ultracode"); return; }
+  const path = templateFile();
+  const seeded = readFileSync(path, "utf8");
+  // The starter ships no ultracode of its own — the adapter it seeds is
+  // chosen from what the machine has, so no per-adapter flag is assumed
+  // The edit under test puts a value under it.
+  assert.doesNotMatch(seeded, /^\s+ultracode:/m);
+  // Writing the key puts it in the lane it names.
+  const written = await edit(
+    path,
+    { kind: "player.set", playerId: "dev.coder", patch: { ultracode: false } },
+    stubLoader,
+  );
+  assert.ok(written.ok, written.error ?? "edit refused");
+  const before = readFileSync(path, "utf8");
+  assert.match(block(before, "dev.coder"), /\n\s+ultracode: false/);
+
+  // null removes it again, and every comment survives the round trip.
+  const off = await edit(
+    path,
+    { kind: "player.set", playerId: "dev.coder", patch: { ultracode: null } },
+    stubLoader,
+  );
+  assert.ok(off.ok, off.error ?? "edit refused");
+  const afterOff = readFileSync(path, "utf8");
+  assert.doesNotMatch(afterOff, /^\s+ultracode:/m);
+  assertCommentsSurvive(before, afterOff);
+
+  // Literal false is written on Captain and player blocks.
+  const on = await edit(
+    path,
+    { kind: "captain.set", patch: { ultracode: false } },
+    stubLoader,
+  );
+  assert.ok(on.ok, on.error ?? "edit refused");
+  const literalOff = await edit(
+    path,
+    { kind: "player.set", playerId: "dev.reviewer", patch: { ultracode: false } },
+    stubLoader,
+  );
+  assert.ok(literalOff.ok, literalOff.error ?? "edit refused");
+  const afterOn = readFileSync(path, "utf8");
+  assert.match(block(afterOn, "captain"), /\n\s+ultracode: false/);
+  assert.match(block(afterOn, "dev.reviewer"), /\n\s+ultracode: false/);
+  assertCommentsSurvive(afterOff, afterOn);
 });

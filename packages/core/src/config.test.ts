@@ -16,6 +16,7 @@ import {
 
 import {
   ARTIFACT_SCHEMAS,
+  isUltracodeSupported,
   starterText,
   type ComposeOptions,
   type PlaybookModules,
@@ -1310,4 +1311,64 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
   const review = summary.playbooks.find((p) => p.id === "review");
   assert.ok(review && !("fastMode" in review.roles.coder));
+});
+
+test("Ultracode composes independently on agents and roles; a non-boolean is refused", async (t) => {
+  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no independent Ultracode"); return; }
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).ultracode = false;
+  roster(top)["dev.reviewer"] = { adapter: "codex", ultracode: false };
+  codeRoles(top).coder = { player: "dev.coder", ultracode: false };
+  const composed = await compose(top, stubLoader);
+  assert.equal(
+    composed.captainAgent.ultracode,
+    false,
+    "an explicit false survives composition",
+  );
+  const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
+  assert.equal(
+    reviewer?.ultracode,
+    false,
+    "an explicit false is a literal request, not omission",
+  );
+
+  // The summary carries it where an agent is named: the
+  // captain, each player, and a role's own override — absent otherwise.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.equal(summary.captain.ultracode, false);
+  assert.equal(
+    summary.players.find((p) => p.id === "dev.reviewer")?.agent.ultracode,
+    false,
+  );
+  const code = summary.playbooks.find((p) => p.id === "code");
+  assert.equal(code?.roles.coder.ultracode, false);
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.ok(review && !("ultracode" in review.roles.reviewer));
+
+  const unsupported = baseConfig();
+  unsupported.captain = { adapter: "codex", ultracode: true };
+  await expectError(unsupported, /^captain\.ultracode is not supported for adapter "codex"$/);
+  const bad = baseConfig();
+  (bad.captain as Record<string, unknown>).ultracode = "yes";
+  await expectError(bad, /^captain\.ultracode must be a boolean$/);
+});
+
+
+test("supported Ultracode remains independent through session projection and binding inheritance", async (t) => {
+  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no Ultracode capability"); return; }
+  const top = baseConfig();
+  Object.assign(top.captain as object, { effort: "high", ultracode: true });
+  Object.assign(roster(top)["dev.coder"] as object, { ultracode: true });
+  codeRoles(top).coder = { player: "dev.coder", ultracode: false };
+  const composed = await compose(top, stubLoader);
+  const projection = executionConfig(composed, "/project");
+  assert.equal(projection.captain.ultracode, true);
+  assert.equal(projection.captain.effort.kind, "value");
+  assert.equal(projection.players.find(({id}) => id === "dev.coder")?.ultracode, true);
+  assert.equal(projection.catalog.code.roles.coder.ultracode, false);
+  assert.equal(projection.catalog.review.roles.coder.ultracode, true);
+  const tuned = executionConfig(composed, "/project", undefined, { "dev.coder": { ultracode: false } });
+  assert.equal(tuned.players.find(({id}) => id === "dev.coder")?.ultracode, false);
+  assert.equal(tuned.catalog.review.roles.coder.ultracode, false);
+  assert.equal(executionConfig(composed, "/project").catalog.review.roles.coder.ultracode, true);
 });

@@ -199,6 +199,7 @@ export function agentBlockOf(agent: AgentSummary): AgentBlockInput {
   if (agent.model) block.model = agent.model;
   if (agent.subagentModel !== undefined && agent.subagentModel !== "") block.subagentModel = agent.subagentModel;
   if (agent.subagentEffort) block.subagentEffort = agent.subagentEffort;
+  if (agent.ultracode !== undefined) block.ultracode = agent.ultracode;
   if (agent.effort) block.effort = agent.effort;
   block.permissions = agent.permissions?.mode
     ? { mode: agent.permissions.mode }

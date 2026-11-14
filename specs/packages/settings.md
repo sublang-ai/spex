@@ -119,10 +119,12 @@ When an agent, role-binding, or session-tuning editor opens or the adapter it us
 - A Codex model and effort selection requests the native spawn defaults ([DR-232](../decisions/232-codex-subagent-selection.md)).
 - Beside it, offer the subagent-effort field: "Agent chooses" first — the configured omission, leaving each subagent's effort to the agent — then the adapter's subagent efforts [[settings-35](#settings-35)], a standing value outside them shown as requiring correction ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
+- Where the launcher and adapter advertise independent Ultracode [[settings-35](#settings-35)], offer the workflow setting as default, on or off, apart from reasoning effort ([DR-235](../decisions/235-independent-ultracode.md)).
+- A known model lacking xhigh cannot acquire an enabled choice; a standing choice remains clearable. Keep a saved Claude `effort: ultracode` readable, preserve its enabled workflow setting when choosing a different effort on a capable model, and retain the previous effort choices when the independent capability is absent.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
 - Where an agent editor's or an agent card's [[settings-59](#settings-59)] `claude` model field serves a `third-party` base URL [[settings-14](#settings-14)] and the catalog reports a `defaultModel` [[settings-35](#settings-35)], mark Provider default as recommended [[settings-39](#settings-39)]; with no `defaultModel`, mark nothing ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)).
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
-- Explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, and fast mode to defaults because those settings belong to the previous adapter.
+- Explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, fast mode, and Ultracode to defaults because those settings belong to the previous adapter.
 
 #### settings-35
 
@@ -130,6 +132,7 @@ When the core receives `agent.options` for a known adapter, it shall return Clig
 
 - Discovery uses the core's captured environment.
 - Adapter effort values, fast-mode support, subagent-model support and the adapter's subagent efforts — its effort values less its orchestration values, none where it serves no subagent model — accompany the discovery result ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
+- The optional independent Ultracode capability is true only where both the launcher and adapter support it.
 - Available results carry Cligent's optional `unreportedEffortValues` separately from each model's effort list: adapter efforts the discovery interface cannot report.
 - Available results carry each model's optional `description` and the result's optional `defaultModel` — the model the runtime runs when none is configured — as Cligent reported them, absent where it reported none ([DR-091](../decisions/091-models-named-by-the-runtime.md)).
 - Where Cligent reports no `defaultModel` for `claude` while the environment a run inherits sets `ANTHROPIC_MODEL` — Claude Code's user settings included [[core-service-155](core-service.md#core-service-155)] — the result's `defaultModel` is that value, the model a run then selects ([DR-205](../decisions/205-agent-cards-read-alike.md)).
@@ -485,7 +488,7 @@ Where a rendered browser control receives capability and preparation updates fro
 
 #### settings-36
 
-Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, adapter switches resetting model/subagent model/subagent effort/effort/fast mode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery and with each model's description and the catalog's default model carried as reported, and each adapter's subagent-model support and subagent efforts as Cligent reports them, never an orchestration value among the efforts [[settings-35](#settings-35)], and, where Claude's discovery names no default model while Claude Code's user settings set `ANTHROPIC_MODEL`, that value as the default model [[settings-35](#settings-35)].
+Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, independent Ultracode alongside the selected effort on a capable runtime, the legacy effort on an older runtime, and adapter switches resetting model/subagent model/subagent effort/effort/fast mode/Ultracode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery and with each model's description and the catalog's default model carried as reported, and each adapter's subagent-model support and subagent efforts as Cligent reports them, never an orchestration value among the efforts [[settings-35](#settings-35)], and, where Claude's discovery names no default model while Claude Code's user settings set `ANTHROPIC_MODEL`, that value as the default model [[settings-35](#settings-35)].
 
 #### settings-41
 

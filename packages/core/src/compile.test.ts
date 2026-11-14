@@ -53,6 +53,7 @@ function testSpawner(
       onLine(nodeVersion);
       return 0;
     }
+    if (args.includes("--help")) { onLine("SLC_ULTRACODE SLC_REVIEWER_ULTRACODE"); return 0; }
     slcCalls?.push({ argv: [command, ...args], ...(env ? { env } : {}) });
     return defaultSpawner(command, args, cwd, onLine);
   };
@@ -684,6 +685,8 @@ test("the compile's agent reaches slc unless the environment configures it (play
   assert.deepEqual(compilerAgentEnv({ SLC_MODEL: "gpt-5" }, captain), {});
   assert.deepEqual(compilerAgentEnv({ SLC_EFFORT: "low" }, captain), {});
   assert.deepEqual(compilerAgentEnv({ SLC_FAST_MODE: "true" }, captain), {});
+  assert.deepEqual(compilerAgentEnv({ SLC_ULTRACODE: "false" }, captain), {});
+  assert.deepEqual(compilerAgentEnv({}, { adapter: "claude", effort: "high", ultracode: false }), { SLC_AGENT: "claude-code", SLC_EFFORT: "high", SLC_ULTRACODE: "false" });
   // An adapter slc does not drive leaves slc's own configuration to choose.
   assert.deepEqual(compilerAgentEnv({}, { adapter: "kimi", model: "k2" }), {});
   assert.deepEqual(compilerAgentEnv({}, undefined), {});
@@ -694,6 +697,9 @@ test("the compile's agent reaches slc unless the environment configures it (play
   const stub = `${process.execPath} ${stubPath}`;
   const lines: string[] = [];
   let argv: string[] = [];
+  let helpText = "SLC_ULTRACODE SLC_REVIEWER_ULTRACODE";
+  let helpCalls = 0;
+  let helpCode = 0;
   const compileWith = async (
     id: string,
     env: NodeJS.ProcessEnv,
@@ -710,7 +716,10 @@ test("the compile's agent reaches slc unless the environment configures it (play
       libraryDir: join(dir, "library"),
       env: { SPEX_SLC: stub, ...env },
       agent,
-      spawner: testSpawner("v24.1.0", slcCalls),
+      spawner: async (...args) => {
+        if (args[1].includes("--help")) { helpCalls++; if (helpText) args[3](helpText); return helpCode; }
+        return testSpawner("v24.1.0", slcCalls)(...args);
+      },
       onProgress: (line) => lines.push(line),
     });
     assert.equal(slcCalls.length, 1);
@@ -783,6 +792,28 @@ test("the compile's agent reaches slc unless the environment configures it (play
   );
   assert.equal(refusedCalls.length, 0, "no compiler ran");
   assert.ok(!refusedLines.some((line) => line.startsWith("running:")));
+  assert.equal(helpCalls, 0, "ordinary compiles never probe Ultracode support");
+  helpText = "old compiler help";
+  await compileWith("blank-review-ultra", { SLC_REVIEWER_ULTRACODE: " " }, { adapter: "claude" });
+  assert.equal(helpCalls, 0, "a blank workflow variable leaves the compiler default");
+  await assert.rejects(compileWith("old-ultra", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
+  await assert.rejects(compileWith("old-review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined), /does not support SLC_REVIEWER_ULTRACODE/);
+  helpText = "";
+  await assert.rejects(compileWith("empty-help", {}, { adapter: "claude", ultracode: false }), /does not support SLC_ULTRACODE/);
+  helpText = "SLC_ULTRACODE_EXTRA";
+  await assert.rejects(compileWith("partial-help", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
+  helpText = "SLC_ULTRACODE"; helpCode = 1;
+  await assert.rejects(compileWith("failed-help", {}, { adapter: "claude", ultracode: true }), /does not support SLC_ULTRACODE/);
+  helpCode = 0;
+  const beforeOverride = helpCalls;
+  await compileWith("override-ultra", { SLC_AGENT: "codex" }, { adapter: "claude", ultracode: true });
+  assert.equal(helpCalls, beforeOverride, "environment override removes the block's Ultracode request");
+  helpText = "SLC_ULTRACODE SLC_REVIEWER_ULTRACODE";
+  const reviewerEnv = await compileWith("review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined);
+  assert.equal(reviewerEnv.SLC_REVIEWER_ULTRACODE, "false");
+  const ultraEnv = await compileWith("ultracode", {}, { adapter: "claude", effort: "high", ultracode: true });
+  assert.equal(ultraEnv.SLC_ULTRACODE, "true");
+  assert.equal(ultraEnv.SLC_EFFORT, "high");
   // Fast mode travels as its literal.
   assert.deepEqual(
     pick(await compileWith("fast", {}, { adapter: "claude", model: "claude-opus-5", fastMode: true })),

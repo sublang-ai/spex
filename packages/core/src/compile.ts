@@ -324,6 +324,7 @@ export interface CompilerAgent {
   effort?: string;
   /** `false` is a literal request, not omission. */
   fastMode?: boolean;
+  ultracode?: boolean;
 }
 
 /** The compile-relevant part of a resolved agent block. */
@@ -332,12 +333,14 @@ export function compilerAgentOf(agent: {
   model?: string;
   effort?: string;
   fastMode?: boolean;
+  ultracode?: boolean;
 }): CompilerAgent {
   return {
     adapter: agent.adapter,
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.effort ? { effort: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { fastMode: agent.fastMode } : {}),
+    ...(typeof agent.ultracode === "boolean" ? { ultracode: agent.ultracode } : {}),
   };
 }
 
@@ -347,11 +350,10 @@ export function compilerAgentOf(agent: {
 const SLC_EMPTY_CONFIG = fileURLToPath(new URL("../assets/slc/empty.config.yaml", import.meta.url));
 
 /** The variables slc reads its agent from. */
-const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE"] as const;
+const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE", "SLC_ULTRACODE"] as const;
 
-/** The compile's agent handed to slc — SLC_AGENT, SLC_MODEL, SLC_EFFORT
- * and SLC_FAST_MODE from the block — unless the environment configures
- * slc itself with any of those variables (playbook-library-42). */
+/** Supply the block's agent and tuning unless the environment already
+ * configures the compiler's agent (playbook-library-42). */
 export function compilerAgentEnv(
   env: NodeJS.ProcessEnv,
   agent?: CompilerAgent,
@@ -364,6 +366,7 @@ export function compilerAgentEnv(
     ...(agent.model ? { SLC_MODEL: agent.model } : {}),
     ...(agent.effort ? { SLC_EFFORT: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { SLC_FAST_MODE: String(agent.fastMode) } : {}),
+    ...(typeof agent.ultracode === "boolean" ? { SLC_ULTRACODE: String(agent.ultracode) } : {}),
   };
 }
 
@@ -1132,6 +1135,22 @@ async function compileAdmitted(
             "Refusal before the compiler runs: the block's adapter has no slc id; the adapter names and `SLC_AGENT` stay as they are",
         }),
       );
+    }
+    const compilerEnv = { ...env, ...toolchain.slc.env, ...agentEnv };
+    const ultracodeVariables = ["SLC_ULTRACODE", "SLC_REVIEWER_ULTRACODE"].filter((key) => compilerEnv[key]?.trim());
+    if (ultracodeVariables.length) {
+      const help: string[] = [];
+      const result = await spawner(slcCommand, [...slcArgs, "--help"], dir, (line) => help.push(line), signal, compilerEnv);
+      signal?.throwIfAborted();
+      const output = help.join("\n");
+      for (const variable of ultracodeVariables) {
+        if (result !== 0 || !new RegExp(`\\b${variable}\\b`).test(output)) {
+          throw new Error(i18n._({
+            id: "The compiler does not support {variable}; update the compiler before using Ultracode.",
+            values: { variable },
+          }));
+        }
+      }
     }
     // The pipeline's own progress lines — `running:`, `packaging:`,
     // `introspected states:`, `derived roles:`, `compile complete` —

@@ -19,7 +19,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
-import { assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
+import { assertUltracode, assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, runsOnPhrase, runtimeRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type AssignedRuntime, type MediaAsset, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
@@ -119,6 +119,7 @@ export interface RecordEnvelope {
   role?: string;
 }
 interface LiveSession {
+  executionProjection?: SessionExecutionProjection;
   info: SessionInfo;
   controller: SessionHostController;
   runtime: SessionHostController["host"];
@@ -189,7 +190,8 @@ export class SettingsDriftError extends Error {
  * block passes through here, tuned or not: a subagent model's `false` —
  * Off, carried this far so an effort beside it is refused — is dropped
  * only now, as the shell takes no sentinel for it (DR-095). */
-function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; subagentModel?: string | false; subagentEffort?: string}>(block: T, tuning: SessionAgentSettings | undefined, agent: {adapter: string; path: string}): Omit<T, "subagentModel"> & {subagentModel?: string} {
+function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; ultracode?: boolean; subagentModel?: string | false; subagentEffort?: string}>(block: T, tuning: SessionAgentSettings | undefined, agent: {adapter: string; path: string}): Omit<T, "subagentModel"> & {subagentModel?: string} {
+  assertUltracode(tuning?.ultracode ?? block.ultracode, agent.adapter, agent.path);
   const selection = (value: string | false): unknown => value === false ? {kind: "provider-default"} : {kind: "value", value};
   // A subagent model is validated where the agent's adapter is known —
   // cligent's support, cligent's words (DR-093).
@@ -211,6 +213,7 @@ function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; s
     ...(tuning?.model !== undefined ? {model: selection(tuning.model)} : {}),
     ...(tuning?.effort !== undefined ? {effort: selection(tuning.effort)} : {}),
     ...(tuning?.fastMode !== undefined ? {fastMode: tuning.fastMode} : {}),
+    ...(tuning?.ultracode !== undefined ? {ultracode: tuning.ultracode} : {}),
     ...(typeof subagentModel === "string" ? {subagentModel} : {}),
     ...(subagentEffort !== undefined ? {subagentEffort} : {}),
   } as Omit<T, "subagentModel"> & {subagentModel?: string};
@@ -538,6 +541,14 @@ export class SessionManager {
     }
     return this.open(project, composed, randomUUID(), "new", assertCurrent);
   }
+  /** Refresh only a never-used host whose effective settings changed. */
+  async refreshInitialHost(project: ProjectInfo, composed: ComposedConfig, sessionId: string): Promise<void> {
+    const held = this.live.get(sessionId);
+    if (!held || held.turnActive || held.info.turns !== 0) return;
+    const stored = await this.storedStructure(sessionId);
+    const next = this.checkedExecution(project, composed, sessionId, stored);
+    if (this.live.get(sessionId) === held && !held.turnActive && !isDeepStrictEqual(held.executionProjection, next)) await this.disposeSession(sessionId);
+  }
   async continueSession(project: ProjectInfo, composed: ComposedConfig, session: SessionInfo): Promise<SessionInfo> {
     return this.open(project, composed, session.id, "continue");
   }
@@ -763,7 +774,7 @@ export class SessionManager {
       // English, deliberately (core-service-111): the shared store just
       // wrote this session, so an unreadable one is an internal failure.
       if (!info) throw new Error("shared session has no readable project history");
-      entry = {info, controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
+      entry = {info, ...(config ? {executionProjection: config} : {}), controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
       this.live.set(sessionId, entry);
       // A new session is assigned to this runtime before its first turn
       // is admitted, under its lease, and before it is reported

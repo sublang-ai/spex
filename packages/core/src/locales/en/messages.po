@@ -775,6 +775,14 @@ msgstr "{path}.subagentModel is not supported for adapter \"{adapter}\""
 msgid "{path}.subagentModel must be a nonblank string"
 msgstr "{path}.subagentModel must be a nonblank string"
 
+#: src/config.ts
+msgid "{path}.ultracode is not supported for adapter \"{adapter}\""
+msgstr "{path}.ultracode is not supported for adapter \"{adapter}\""
+
+#: src/config.ts
+msgid "{path}.ultracode must be a boolean"
+msgstr "{path}.ultracode must be a boolean"
+
 #. The registry answered with an HTTP status Spex does not expect; {registry} is its display name, {status} the status, such as 429
 #: src/environments.ts
 msgid "{registry} answered {status} — Retry later"
@@ -2869,6 +2877,10 @@ msgstr "the Captain"
 #: src/compile.ts
 msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
 msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
+
+#: src/compile.ts
+msgid "The compiler does not support {variable}; update the compiler before using Ultracode."
+msgstr "The compiler does not support {variable}; update the compiler before using Ultracode."
 
 #. Draft thread error; Settings is the surface's own name
 #: src/authoring.ts

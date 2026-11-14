@@ -353,6 +353,7 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
     ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
   };
@@ -1260,7 +1261,7 @@ export class AuthorManager {
     return {
       playerId,
       agent,
-      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), String(agent.subagentModel ?? ""), agent.subagentEffort ?? ""].join("|"),
+      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), String(agent.ultracode ?? ""), String(agent.subagentModel ?? ""), agent.subagentEffort ?? ""].join("|"),
     };
   }
 
@@ -1426,6 +1427,7 @@ export class AuthorManager {
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+      ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
       ...subagentTuningOf(agent),
       permissions: { mode: "auto" },
       ...(agent.browser !== undefined ? {browser: agent.browser} : {}),

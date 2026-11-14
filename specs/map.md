@@ -252,6 +252,7 @@ meta.md       The spec of specs
 | [DR-231](decisions/231-a-failure-terminal-reads-failed.md) | 231-a-failure-terminal-reads-failed.md | A settled run whose settlement trace carries a failure terminal record reads failed with the record's description on its card; the one later record that changes a settled card; ledger, attention and advancement unchanged; amends DR-031 |
 | [DR-232](decisions/232-codex-subagent-selection.md) | 232-codex-subagent-selection.md | Codex subagent model and effort as native spawn defaults when the adapter serves them. |
 | [DR-233](decisions/233-model-versions-on-agent-chips.md) | 233-model-versions-on-agent-chips.md | Configured agent chips show the specific model behind a selected alias. |
+| [DR-235](decisions/235-independent-ultracode.md) | 235-independent-ultracode.md | Independent Claude workflow requests across agent, role and conversation tuning and compilation. |
 
 ## Packages
 

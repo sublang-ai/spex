@@ -149,6 +149,7 @@ import { ArtifactFolderBusy, canonicalFolder, checkToolchain, compilePlaybook, c
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
+import { isUltracodeSupported } from "./config.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
@@ -1967,7 +1968,7 @@ export class CoreService {
    * the projection the session's next message would open on validates
    * with it applied, then persist it and republish the session
    * (DR-067, DR-068). */
-  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; browser?: boolean | null}): Promise<SessionInfo> {
+  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; ultracode?: boolean | null; browser?: boolean | null}): Promise<SessionInfo> {
     const session = this.store.describeSession(command.sessionId);
     if (!session) throw noSession(command.sessionId);
     const project = this.store.getProject(session.projectId);
@@ -1997,6 +1998,8 @@ export class CoreService {
       if (change === null) delete entry[field];
       else entry[field] = change;
     }
+    if (command.ultracode === null) delete entry.ultracode;
+    else if (command.ultracode !== undefined) entry.ultracode = command.ultracode;
     if (command.fastMode === null) delete entry.fastMode;
     else if (command.fastMode !== undefined) entry.fastMode = command.fastMode;
 
@@ -2468,6 +2471,7 @@ export class CoreService {
           // The embedded runtime declares which adapters take fast mode
           // (DR-038); the editor offers the switch only for those.
           fastModeSupported: isFastModeSupported(adapter),
+          ultracodeSupported: isUltracodeSupported(adapter),
           // Likewise for a subagent model (DR-093).
           subagentModelSupported: isSubagentModelSupported(adapter),
         };
@@ -3201,6 +3205,12 @@ export class CoreService {
           // session that is not live opens it first — on the settings the
           // file holds now — then the turn as usual. A turn still settling
           // is waited out, so the message never reaches a closing host.
+          const held = this.sessions.getLive(command.sessionId);
+          if (held && !held.turnActive && held.info.turns === 0) {
+            const project = this.store.getProject(held.info.projectId);
+            if (!project) throw noProject(held.info.projectId);
+            await this.sessions.refreshInitialHost(project, await this.composedFor(project.id), command.sessionId);
+          }
           if (!this.sessions.getLive(command.sessionId)) {
             await this.settledConfig();
             await this.continueSession(command.sessionId);
@@ -4242,7 +4252,7 @@ export class CoreService {
       const player = players[playerId];
       const agent = (player === undefined ? captain ?? {} : typeof player === "string" ? { adapter: player } : player ?? {}) as { adapter?: string; model?: string };
       const tuning: Partial<RoleBindingSummary> = {};
-      for (const field of ["model", "effort", "fastMode", "subagentModel", "subagentEffort"] as const) {
+      for (const field of ["model", "effort", "fastMode", "ultracode", "subagentModel", "subagentEffort"] as const) {
         const tuned = binding?.[field];
         if (typeof tuned === "string" || typeof tuned === "boolean") (tuning as Record<string, unknown>)[field] = tuned;
       }

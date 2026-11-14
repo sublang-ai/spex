@@ -329,6 +329,7 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
     if (held === false || (typeof held === "string" && held.length > 0)) entry[field] = held;
   }
   if (typeof source.fastMode === "boolean") entry.fastMode = source.fastMode;
+  if (typeof source.ultracode === "boolean") entry.ultracode = source.ultracode;
   if (typeof source.browser === "boolean") entry.browser = source.browser;
   return Object.keys(entry).length > 0 ? entry : undefined;
 }
@@ -1199,6 +1200,7 @@ export class Store {
           id: player.id as string, adapter: player.adapter as SessionInfo["players"][number]["adapter"],
           ...(player.model?.kind === "value" ? { model: player.model.value as string } : {}),
           ...(typeof player.fastMode === "boolean" ? { fastMode: player.fastMode } : {}),
+          ...(typeof player.ultracode === "boolean" ? { ultracode: player.ultracode } : {}),
         }));
         initialVisible = [...context.initialVisible];
       } catch { /* Unsupported context does not invalidate other history. */ }

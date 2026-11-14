@@ -53,6 +53,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Added
 
+- Claude Ultracode can be set independently of reasoning effort when the installed runtime supports it. Existing Claude shorthand and Codex effort settings remain compatible.
+
 - Fork verification build rebased onto upstream `82961686`, preserving
   native Windows execution and tag-built macOS arm64 / Windows x64
   installers together with the upstream package-install and Playbooks UI.

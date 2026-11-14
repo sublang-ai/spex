@@ -45,6 +45,8 @@ import {
   type AgentExecutable,
   type RuntimeReadiness,
 } from "@sublang/cligent";
+import * as cligentCapabilities from "@sublang/cligent";
+import * as playbookCapabilities from "@sublang/playbook/playbook-captain";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { seedConfigText } from "@sublang/playbook/seed-config";
@@ -132,7 +134,7 @@ const NO_MODULES: PlaybookModules = { find: () => undefined, repository: "" };
 
 /** Fields a project's file may not hold: what each player runs on is
  * yours alone (core-service-2, DR-103). */
-const MODEL_FIELDS = ["model", "effort", "fastMode", "subagentModel", "subagentEffort", "adapter"];
+const MODEL_FIELDS = ["model", "effort", "fastMode", "ultracode", "subagentModel", "subagentEffort", "adapter"];
 
 const notInProjectFile = (entry: string): Error =>
   new Error(i18n._({
@@ -217,7 +219,7 @@ const AGENT_FIELDS = new Set([
   // Adapter-scoped fast mode (cligent 0.24). Spex accepts and preserves it
   // so a config the launcher accepts is never rejected here
   // (shared-config-roundtrip-1); cligent owns which adapters allow it.
-  "fastMode",
+  "fastMode", "ultracode",
   "browser",
   // The model the agent's subagents run on (cligent 0.29, DR-093) — a
   // model, `inherit` for the agent's own, or `false` to send none
@@ -256,6 +258,7 @@ export interface ResolvedAgent {
   effort?: string;
   /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
   /** Adapter-scoped subagent model (DR-093) as the file says it: a
@@ -291,6 +294,7 @@ export interface SessionAgentBlock {
   /** Adapter-scoped fast mode, forwarded so the setting takes effect
    * (playbook 11: `false` is a literal disabled request). */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
   /** The model every subagent runs on, `inherit` for the agent's own,
@@ -314,6 +318,7 @@ export interface ResolvedBinding {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
+  ultracode?: boolean;
   subagentModel?: string | false;
   subagentEffort?: string | false;
 }
@@ -326,6 +331,7 @@ export interface HostRoleBinding {
   effort: TuningSelection;
   /** A role's own fast-mode override; absent inherits the player's. */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** The role's subagent model with inheritance resolved, `false` — Off —
    * carried until the projection is built, as the player's is
    * (DR-093, DR-095). */
@@ -1211,6 +1217,7 @@ function toResolvedAgent(
       }),
     );
   }
+  assertUltracode(rest.ultracode, adapter, path);
   // `false` is Off and valid on any adapter, as the launcher drops it
   // before cligent sees the block (DR-095).
   if (rest.subagentModel !== undefined && rest.subagentModel !== false) {
@@ -1414,7 +1421,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   }
-  const allowed = new Set(["player", "model", "effort", "fastMode", "subagentModel", "subagentEffort"]);
+  const allowed = new Set(["player", "model", "effort", "fastMode", "ultracode", "subagentModel", "subagentEffort"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
     throw new ConfigViolation("binding-keys", `${path}.${key}`,
@@ -1453,6 +1460,8 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   };
+  const ultracode = value.ultracode;
+  if (ultracode !== undefined && typeof ultracode !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
   const fastMode = value.fastMode;
   if (fastMode !== undefined && typeof fastMode !== "boolean") {
     // Unlike model and effort, fast mode carries no provider-default
@@ -1471,6 +1480,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     ...(tuning("model") !== undefined ? { model: tuning("model") } : {}),
     ...(tuning("effort") !== undefined ? { effort: tuning("effort") } : {}),
     ...(fastMode !== undefined ? { fastMode } : {}),
+    ...(ultracode !== undefined ? { ultracode } : {}),
     ...(tuning("subagentModel") !== undefined
       ? { subagentModel: tuning("subagentModel") }
       : {}),
@@ -1504,6 +1514,7 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined
@@ -2107,11 +2118,14 @@ function composeEntry(
     // binding takes its player's fast mode here, as the launcher's
     // `binding ?? player` does; `false` stays a literal request.
     const fastMode = binding.fastMode ?? player.fastMode;
+    const ultracode = binding.ultracode ?? player.ultracode;
+    assertUltracode(ultracode, player.adapter, path);
     hostBindings[role] = {
       playerId: binding.playerId,
       model: select(binding.model, player.model),
       effort: select(binding.effort, player.effort),
       ...(fastMode !== undefined ? { fastMode } : {}),
+      ...(ultracode !== undefined ? { ultracode } : {}),
       ...(subagentModel !== undefined ? { subagentModel } : {}),
       ...(subagentEffort !== undefined ? { subagentEffort } : {}),
     };
@@ -2288,6 +2302,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(agent.subagentModel !== undefined
       ? { subagentModel: agent.subagentModel }
@@ -2365,6 +2380,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               ...(binding.model !== undefined ? { model: binding.model } : {}),
               ...(binding.effort !== undefined ? { effort: binding.effort } : {}),
               ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
+              ...(binding.ultracode !== undefined ? { ultracode: binding.ultracode } : {}),
               ...(binding.subagentModel !== undefined
                 ? { subagentModel: binding.subagentModel }
                 : {}),
@@ -2730,4 +2746,18 @@ export async function checkAdapterReadiness(
     ...(credential ? { credential } : {}),
     ...(unconfirmed !== undefined ? { unconfirmed } : {}),
   };
+}
+
+/** Older runtime releases expose no independent Ultracode capability. */
+export function isUltracodeSupported(adapter: string): boolean {
+  const capability = (cligentCapabilities as unknown as {isUltracodeSupported?: (adapter: string) => boolean}).isUltracodeSupported;
+  const projectionCapability = (playbookCapabilities as unknown as {isUltracodeSupported?: (adapter: string) => boolean}).isUltracodeSupported;
+  return typeof capability === "function" && capability(adapter) === true
+    && typeof projectionCapability === "function" && projectionCapability(adapter) === true;
+}
+
+export function assertUltracode(value: unknown, adapter: string, path: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
+  if ((value || adapter === "claude") && !isUltracodeSupported(adapter)) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
 }

@@ -94,7 +94,7 @@ export async function writeBinding(
   // Where no entry of the scope stands, saving the player that already
   // plays the role, with nothing pinned, changes nothing and writes
   // nothing (playbook-library-3, playbook-library-4).
-  const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode].some(
+  const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode, change.ultracode].some(
     (value) => value !== undefined && value !== null,
   );
   const unchanged = change.playerId === effectivePlayers(entry)[role];

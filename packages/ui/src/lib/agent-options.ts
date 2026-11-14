@@ -146,9 +146,15 @@ export function modelTuning(options: AgentOptions | undefined, model: string) {
   const available = options?.discovery?.status === "available" ? options.discovery : undefined;
   const selected = available ? findModel(available.models ?? [], model) : undefined;
   const efforts = selected?.effortValues ?? options?.effortValues ?? [];
-  const additionalEfforts = (available?.unreportedEffortValues ?? []).filter((effort) => !efforts.includes(effort));
+  const separateUltracode = options?.ultracodeSupported === true;
+  const reasoningEfforts = separateUltracode ? efforts.filter((value) => value !== "ultracode") : efforts;
+  const additionalEfforts = (available?.unreportedEffortValues ?? []).filter((value) =>
+    !reasoningEfforts.includes(value) && !(separateUltracode && value === "ultracode"));
+  const ultracodeModel = selected ?? (!model && available?.defaultModel ? findModel(available.models, available.defaultModel) : undefined);
   return {
-    efforts: [...new Set([...efforts, ...additionalEfforts])],
+    efforts: [...new Set([...reasoningEfforts, ...additionalEfforts])],
+    separateUltracode,
+    ultracodeSupported: separateUltracode && (ultracodeModel?.effortValues?.includes("xhigh") ?? true),
     additionalEfforts,
     effortKnown: selected?.effortValues !== undefined,
     fastModeSupported: selected?.fastModeSupported ?? options?.fastModeSupported,

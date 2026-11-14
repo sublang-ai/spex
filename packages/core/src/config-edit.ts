@@ -27,6 +27,7 @@ export interface AgentBlock {
   subagentEffort?: string;
   effort?: string;
   fastMode?: boolean;
+  ultracode?: boolean;
   browser?: boolean;
   instruction?: string;
   permissions?: {
@@ -49,6 +50,7 @@ export type AgentPatch = {
   effort?: string | null;
   /** `true`/`false` write the key; null removes it (DR-038). */
   fastMode?: boolean | null;
+  ultracode?: boolean | null;
   browser?: boolean | null;
   instruction?: string | null;
   permissions?: AgentBlock["permissions"] | null;
@@ -74,6 +76,7 @@ export type ConfigEditOp =
       subagentEffort?: string | false | null;
       /** Omitted preserves the override; null inherits; false disables. */
       fastMode?: boolean | null;
+      ultracode?: boolean | null;
     }
   | { kind: "playbook.option.set"; playbookId: string; key: string; value: unknown }
   | { kind: "playbook.delete"; playbookId: string }
@@ -161,7 +164,7 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     case "playbook.role.bind": {
       const path = ["playbooks", op.playbookId, "roles", op.role];
       const existing = doc.getIn(path, true);
-      const keys = ["model", "subagentModel", "effort", "subagentEffort", "fastMode"] as const;
+      const keys = ["model", "subagentModel", "effort", "subagentEffort", "fastMode", "ultracode"] as const;
       if (!isMap(existing)) {
         if (!keys.some((key) => op[key] !== undefined && op[key] !== null)) {
           doc.setIn(path, op.playerId);
