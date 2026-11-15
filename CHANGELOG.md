@@ -61,6 +61,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Claude Ultracode can be set independently of reasoning effort. Existing Claude shorthand and Codex effort settings remain compatible.
 
+- A run's card lists the script steps the run ran, each with its exit status and how long it took, and unfolds to the command as run and what it printed, as plain text. A step that exited nonzero shows on the collapsed card too and starts unfolded, so a failed check says why in the command's own words. The command, the duration and the output show for sessions recorded by a Playbook release that records them; earlier sessions show the exit status alone ([DR-240](specs/decisions/240-a-script-step-shows-what-it-ran.md)).
+
 - Fork verification build rebased onto upstream `82961686`, preserving
   native Windows execution and tag-built macOS arm64 / Windows x64
   installers together with the upstream package-install and Playbooks UI.

@@ -665,6 +665,26 @@ When a settled playbook run's own turn-settlement trace carries a terminal recor
 - the record's description, where it carries one, stands on the settled card's header as the reason, trimmed to the header's width with its whole in a tooltip;
 - a settlement trace carrying a terminal record of kind success, or none, changes nothing.
 
+#### run-view-198
+
+When a script step's record — the runtime's `playbook.script` telemetry: the step's state, its exit status and, where the engine records them, its command as run, its duration and what it printed — arrives while an open playbook run [[run-view-74](#run-view-74)] stands in the record's state, the Captain pane shall list that step in a row on that run's card, live and settled alike ([DR-240](../decisions/240-a-script-step-shows-what-it-ran.md)):
+
+- the record belongs to the innermost open run standing in its state — the run's one state, or a step a parallel state holds active [[run-view-185](#run-view-185)] — and a record no open run stands in lists nothing;
+- a step run again keeps one row, read from its latest record, and the rows stand in the order of their steps' latest runs;
+- a row reads the step's human label as its box does [[run-view-60](#run-view-60)], `exit ⟨status⟩` in quiet ink whatever the status, and, where the record carries a duration, that elapsed span [[run-view-145](#run-view-145)];
+- a row whose step last exited nonzero stands on the card in either form, the drawing or the strip [[run-view-75](#run-view-75)], and a row whose step last exited zero stands only while the card shows its drawing;
+- the rows fold from the record stream alone, so a replay renders them identically [[run-view-14](#run-view-14)].
+
+#### run-view-199
+
+While a script step's row [[run-view-198](#run-view-198)] reads a record carrying the step's command or what it printed, the row shall unfold in place to show them, starting unfolded where the step exited nonzero and folded where it exited zero ([DR-240](../decisions/240-a-script-step-shows-what-it-ran.md)):
+
+- the command and the output each stand under their own label as preformatted plain text wrapping inside the card — nothing in them renders as Markdown, a link or media;
+- the output stands in a box of bounded height that scrolls and takes the keyboard stop itself [[run-view-50](#run-view-50)];
+- where the record says earlier output was dropped, a note above the output says so, and where the output is empty, the row says the command printed nothing;
+- the reader's fold of a row is arrangement only, altering no fold state, as a card's disclosure is [[run-view-75](#run-view-75)];
+- a row whose record carries neither the command nor the output unfolds nothing.
+
 #### run-view-63
 
 While a machine frame has a caller the pane knows, the Captain pane shall draw the call as containment ([DR-031](../decisions/031-machine-call-tree.md)):
@@ -1229,6 +1249,8 @@ Where a fixture stream carries a playbook run's trace records — an invocation 
 - the child's settled finish lands as a strip under its calling state, and the root's settles into the thread as a strip whose expansion shows the final drawing [[run-view-62](#run-view-62)] [[run-view-75](#run-view-75)];
 - the post-terminal reports — one settlement carrying a success terminal record, one carrying none — open no frame and change no settled card — exactly one card per run, its outcome "done" [[run-view-74](#run-view-74)] [[run-view-62](#run-view-62)] [[run-view-197](#run-view-197)];
 - a fixture run whose root and child each end in a failure terminal settles exactly one card per run reading "failed" — the root's in the thread, the child's under its calling state — each header carrying its record's description with its whole in the tooltip [[run-view-197](#run-view-197)];
+- a fixture run whose format step exits zero printing nothing and whose lint step exits nonzero twice, the second run ending the run in a failure terminal, lists on its settled strip one row for the lint step — its label, `exit 1` and the second record's elapsed span, unfolded on that record's command and output as plain text, a Markdown link and an HTML tag in it standing as their characters, in a keyboard-reachable box under the note that earlier output was dropped — and no row for the format step, which stands folded once the drawing is shown and unfolds to its command and the words that it printed nothing [[run-view-198](#run-view-198)] [[run-view-199](#run-view-199)];
+- folding a row and unfolding it again changes no fold state, a record carrying the exit status alone lists its step with no control to unfold, a record whose state no open run stands in lists nothing, and a nested run's record lists on the nested run's card, not its caller's [[run-view-198](#run-view-198)] [[run-view-199](#run-view-199)];
 - a second fixture run that ends by disposal alone, without a terminal transition, settles exactly one card with the outcome "aborted" [[run-view-62](#run-view-62)] [[run-view-74](#run-view-74)];
 - a fixture child naming an unknown caller renders at the top level [[run-view-78](#run-view-78)];
 - removing the module or changing current configuration leaves the stored graph unchanged; with no historical definition, the same replay renders observed states alone [[run-view-64](#run-view-64)];

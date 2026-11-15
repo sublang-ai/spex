@@ -24,6 +24,7 @@ import {
   traceStateId,
   type MachineFrame,
   type RoutedEdge,
+  type ScriptRun,
 } from "../lib/machine-frames.js";
 import {
   CAPTION_PX,
@@ -40,6 +41,7 @@ import {
   widenLayout,
 } from "../lib/machine-labels.js";
 import { humanizeId } from "../lib/labels.js";
+import { duration } from "../lib/time.js";
 import { i18n } from "../i18n.js";
 import { RunningMark } from "./RunningMark.js";
 import { markLetter } from "../lib/player-names.js";
@@ -227,6 +229,106 @@ function walkedBy(frame: MachineFrame, edge: RoutedEdge): boolean {
       t.from === edge.from &&
       t.to === edge.to &&
       (t.event === edge.event || edge.event === ""),
+  );
+}
+
+/** One script step's row on its run's card (run-view-198): the step,
+ * its exit status and how long it took, unfolding to the command as
+ * run and what it printed (run-view-199). Both are text a command
+ * wrote: they render as characters and nothing else. */
+function ScriptRow({ cardId, run }: { cardId: string; run: ScriptRun }) {
+  const id = `${cardId}-${run.stateId}`;
+  const name = stateName(run.stateId);
+  const unfolds = run.command !== undefined || run.output !== undefined;
+  // The reader's fold is arrangement only, as the card's disclosure is.
+  const [override, setOverride] = useState<boolean>();
+  const unfolded = unfolds && (override ?? run.exitStatus !== 0);
+  const label = "text-neutral-500 dark:text-neutral-400";
+  const text =
+    "whitespace-pre-wrap break-words rounded bg-neutral-50 px-2 py-1 font-mono text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200";
+  return (
+    <div
+      data-testid={`machine-script-${id}`}
+      data-exit={run.exitStatus}
+      className="border-t border-neutral-200 px-1.5 py-1.5 text-xs @sm:px-2.5 dark:border-neutral-800"
+    >
+      <div className="flex items-center gap-1 @sm:gap-2">
+        {unfolds ? (
+          <button
+            type="button"
+            data-testid={`machine-script-disclose-${id}`}
+            aria-expanded={unfolded}
+            aria-label={
+              unfolded
+                ? i18n._("Hide what {step} ran", { step: name })
+                : i18n._("Show what {step} ran", { step: name })
+            }
+            onClick={() => setOverride(!unfolded)}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+          >
+            <Icon name={unfolded ? "caretDown" : "caretRight"} className="h-3 w-3" />
+          </button>
+        ) : (
+          <span aria-hidden className="h-4 w-4 shrink-0" />
+        )}
+        <span title={run.stateId} className="min-w-0 truncate text-neutral-700 dark:text-neutral-200">
+          {name}
+        </span>
+        <span className="shrink-0 font-mono text-neutral-500 dark:text-neutral-400">
+          {i18n._({
+            id: "exit {status}",
+            values: { status: run.exitStatus },
+            comment: "a script step's row: the exit status its command ended with",
+          })}
+        </span>
+        {run.durationMs !== undefined ? (
+          <span className="shrink-0 text-neutral-500 dark:text-neutral-400">{duration(run.durationMs)}</span>
+        ) : null}
+      </div>
+      {unfolded ? (
+        <div className="mt-1 flex flex-col gap-1 pl-5 @sm:pl-6">
+          {run.command !== undefined ? (
+            <>
+              <span className={label}>
+                {i18n._({ id: "Command", comment: "label above the command a script step ran" })}
+              </span>
+              <pre data-testid={`machine-script-command-${id}`} className={text}>
+                {run.command}
+              </pre>
+            </>
+          ) : null}
+          {run.output !== undefined ? (
+            <>
+              <span className={label}>
+                {i18n._({ id: "Output", comment: "label above what a script step's command printed" })}
+              </span>
+              {run.outputTruncated ? (
+                <span data-testid={`machine-script-truncated-${id}`} className={label}>
+                  {i18n._("Earlier output was not kept.")}
+                </span>
+              ) : null}
+              {run.output === "" ? (
+                <span data-testid={`machine-script-silent-${id}`} className={label}>
+                  {i18n._("The command printed nothing.")}
+                </span>
+              ) : (
+                // A box that scrolls takes the keyboard stop itself
+                // (run-view-50).
+                <pre
+                  data-testid={`machine-script-output-${id}`}
+                  tabIndex={0}
+                  role="group"
+                  aria-label={i18n._("Output of {step}", { step: name })}
+                  className={`max-h-64 overflow-y-auto ${text}`}
+                >
+                  {run.output}
+                </pre>
+              )}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -800,6 +902,13 @@ export function MachineCard({
           </svg>
         </div>
       ) : null}
+      {/* The run's script steps (run-view-198): one that exited nonzero
+          stands on the strip too, one that exited zero with the drawing. */}
+      {(frame.scripts ?? [])
+        .filter((run) => expanded || run.exitStatus !== 0)
+        .map((run) => (
+          <ScriptRow key={`${run.stateId}:${run.at}`} cardId={frame.traceSessionId} run={run} />
+        ))}
       {frame.settledCalls.length > 0 || openChildren.length > 0 ? (
         <div className="flex">
           {/* The connector leaves the calling state, not the card. */}
