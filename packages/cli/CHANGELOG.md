@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `spex scaffold --lang zh` writes Chinese specs without translation-source
+  hash comments. `spex scaffold --update` refreshes previously generated
+  framework files and pristine seeds, preserving customized seeds.
+
 - On Windows under Node 24, `spex add`, `install`, `update` and `remove` no
   longer empty a folder a removed tree links to, such as the engine the app
   links into an installed playbook, and a Git source fetched twice at once

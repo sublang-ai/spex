@@ -7,6 +7,7 @@
 
 Accepted.
 Amended by [DR-101](101-chinese-scaffolds-for-chinese-only-teams.md) in Chinese translation coverage: the complete bundled spec tree is translated, with whole-file source pins for added overlays.
+[DR-234](234-translation-source-pins-stay-in-the-overlay.md) moves translation source pins to a per-language manifest.
 Language codes shared with [DR-078](078-the-interface-speaks-the-readers-language.md): the interface language is a separate choice from a specs tree's authoring language.
 
 ## Context
