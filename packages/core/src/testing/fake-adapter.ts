@@ -115,6 +115,7 @@ export interface FakeRunOptions {
   /** Accepted as the runtime takes them, and ignored (DR-095). */
   subagentModel?: string;
   subagentEffort?: string;
+  ultracode?: boolean;
   permissions?: Record<string, unknown>;
   allowedTools?: string[];
   disallowedTools?: string[];
@@ -135,6 +136,7 @@ export interface FakeAdapterStats {
     model?: string;
     subagentModel?: string;
     subagentEffort?: string;
+    ultracode?: boolean;
     permissions?: Record<string, unknown>;
     allowedTools?: string[];
     disallowedTools?: string[];
@@ -185,6 +187,7 @@ export function fakeAdapterImports(
         ...(options?.model ? { model: options.model } : {}),
         ...(options?.subagentModel ? { subagentModel: options.subagentModel } : {}),
         ...(options?.subagentEffort ? { subagentEffort: options.subagentEffort } : {}),
+        ...(options?.ultracode !== undefined ? { ultracode: options.ultracode } : {}),
         ...(options?.permissions ? { permissions: options.permissions } : {}),
         ...(options?.allowedTools ? { allowedTools: options.allowedTools } : {}),
         ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),

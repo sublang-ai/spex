@@ -321,23 +321,29 @@ const SLC_AGENT_IDS: Readonly<Record<string, string>> = {
 export interface CompilerAgent {
   adapter: string;
   model?: string;
+  subagentModel?: string | false;
   effort?: string;
   /** `false` is a literal request, not omission. */
   fastMode?: boolean;
+  ultracode?: boolean;
 }
 
 /** The compile-relevant part of a resolved agent block. */
 export function compilerAgentOf(agent: {
   adapter: string;
   model?: string;
+  subagentModel?: string | false;
   effort?: string;
   fastMode?: boolean;
+  ultracode?: boolean;
 }): CompilerAgent {
   return {
     adapter: agent.adapter,
     ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
     ...(agent.effort ? { effort: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { fastMode: agent.fastMode } : {}),
+    ...(typeof agent.ultracode === "boolean" ? { ultracode: agent.ultracode } : {}),
   };
 }
 
@@ -347,11 +353,10 @@ export function compilerAgentOf(agent: {
 const SLC_EMPTY_CONFIG = fileURLToPath(new URL("../assets/slc/empty.config.yaml", import.meta.url));
 
 /** The variables slc reads its agent from. */
-const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE"] as const;
+const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_SUBAGENT_MODEL", "SLC_EFFORT", "SLC_FAST_MODE", "SLC_ULTRACODE"] as const;
 
-/** The compile's agent handed to slc — SLC_AGENT, SLC_MODEL, SLC_EFFORT
- * and SLC_FAST_MODE from the block — unless the environment configures
- * slc itself with any of those variables (playbook-library-42). */
+/** Supply the block's agent and tuning unless the environment already
+ * configures the compiler's agent (playbook-library-42). */
 export function compilerAgentEnv(
   env: NodeJS.ProcessEnv,
   agent?: CompilerAgent,
@@ -362,8 +367,10 @@ export function compilerAgentEnv(
   return {
     SLC_AGENT: id,
     ...(agent.model ? { SLC_MODEL: agent.model } : {}),
+    ...(agent.subagentModel !== undefined ? { SLC_SUBAGENT_MODEL: String(agent.subagentModel) } : {}),
     ...(agent.effort ? { SLC_EFFORT: agent.effort } : {}),
     ...(typeof agent.fastMode === "boolean" ? { SLC_FAST_MODE: String(agent.fastMode) } : {}),
+    ...(typeof agent.ultracode === "boolean" ? { SLC_ULTRACODE: String(agent.ultracode) } : {}),
   };
 }
 
@@ -1133,6 +1140,7 @@ async function compileAdmitted(
         }),
       );
     }
+    const compilerEnv = { ...env, ...toolchain.slc.env, ...agentEnv };
     // The pipeline's own progress lines — `running:`, `packaging:`,
     // `introspected states:`, `derived roles:`, `compile complete` —
     // are wire texts the compile band matches to name its phases, read
@@ -1162,9 +1170,7 @@ async function compileAdmitted(
       progress,
       signal,
       {
-        ...env,
-        ...toolchain.slc.env,
-        ...agentEnv,
+        ...compilerEnv,
         SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT ?? "2400",
       },
     );

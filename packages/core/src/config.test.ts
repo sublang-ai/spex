@@ -179,6 +179,13 @@ function roster(top: Record<string, unknown>): Record<string, unknown> {
   return top.players as Record<string, unknown>;
 }
 
+function configWithoutChildModels(): Record<string, unknown> {
+  const top = baseConfig();
+  const agents = [top.captain, ...Object.values(roster(top))] as Record<string, unknown>[];
+  for (const agent of agents) delete agent.subagentModel;
+  return top;
+}
+
 function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
   return (top.playbooks as Record<string, Record<string, unknown>>).review;
 }
@@ -198,9 +205,10 @@ test("bundled template composes with launcher-equivalent output", async () => {
   const composed = await compose(top, stubLoader);
   assert.deepEqual(composed.captainAgent, {
     adapter: captain.adapter,
-    model: captain.model,
+    ...(captain.model !== undefined ? { model: captain.model } : {}),
     effort: captain.effort,
     permissions: captain.permissions,
+    ...(captain.subagentModel !== undefined ? { subagentModel: captain.subagentModel } : {}),
   });
   assert.equal(composed.captainOptions.captainAdapter, captain.adapter);
   assert.deepEqual(composed.players.map((player) => player.id), ids);
@@ -209,7 +217,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(binding.playerId, codeRoles(top).coder);
   // Inheritance resolves in composition, so the shell is told the
   // outcome rather than left to infer it (DR-032).
-  assert.deepEqual(binding.model, { kind: "value", value: coder.model });
+  assert.deepEqual(binding.model, coder.model === undefined ? { kind: "provider-default" } : { kind: "value", value: coder.model });
   assert.deepEqual(binding.effort, { kind: "value", value: coder.effort });
   assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
   assert.ok(!Object.values(top.playbooks as Record<string, Record<string, unknown>>).some((entry) => "from" in entry), "the starter names no module");
@@ -522,18 +530,18 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   await expectError(blank, /^captain\.subagentModel must be a nonblank string$/);
 
   const unsupported = baseConfig();
-  roster(unsupported)[coderId] = { adapter: "codex", subagentModel: "gpt-6" };
-  await expectError(unsupported, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentModel is not supported for adapter "codex"$`));
+  roster(unsupported)[coderId] = { adapter: "gemini", subagentModel: "gemini-test" };
+  await expectError(unsupported, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentModel is not supported for adapter "gemini"$`));
 
   // A binding's pin is checked against its player's adapter; `false`
   // asks nothing of it and composes.
-  const onCodex = baseConfig();
-  roster(onCodex)[coderId] = { adapter: "codex" };
-  codeRoles(onCodex).coder = { player: coderId, subagentModel: "gpt-6" };
-  await expectError(onCodex, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "codex"$/);
-  codeRoles(onCodex).coder = { player: coderId, subagentModel: false };
-  reviewRoles(onCodex).coder = { player: coderId, subagentModel: false };
-  await compose(onCodex, stubLoader);
+  const onGemini = baseConfig();
+  roster(onGemini)[coderId] = { adapter: "gemini" };
+  codeRoles(onGemini).coder = { player: coderId, subagentModel: "gemini-test" };
+  await expectError(onGemini, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "gemini"$/);
+  codeRoles(onGemini).coder = { player: coderId, subagentModel: false };
+  reviewRoles(onGemini).coder = { player: coderId, subagentModel: false };
+  await compose(onGemini, stubLoader);
 });
 
 test("a subagent effort and the inherit literal compose; an effort outside the vocabulary, beside no model, or off its adapter is refused", async () => {
@@ -541,7 +549,7 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   // `false` sends none; a subagent effort is the adapter's effort less
   // its orchestration value, beside a subagent model — an unset one
   // composing as `inherit`, as Playbook's launcher resolves it.
-  const top = baseConfig();
+  const top = configWithoutChildModels();
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
   Object.assign(top.captain as Record<string, unknown>, { subagentModel: "inherit", subagentEffort: "high" });
@@ -612,12 +620,12 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   await expectError(overOff, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
 
   // An adapter cligent serves no subagent model for takes no effort.
-  const onCodex = baseConfig();
-  roster(onCodex)[coderId] = { adapter: "codex", subagentEffort: "low" };
-  await expectError(onCodex, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "codex"$`));
-  // `false` asks nothing of the adapter, so a codex lane may carry it.
-  roster(onCodex)[coderId] = { adapter: "codex", subagentModel: false };
-  await compose(onCodex, stubLoader);
+  const onGemini = baseConfig();
+  roster(onGemini)[coderId] = { adapter: "gemini", subagentEffort: "low" };
+  await expectError(onGemini, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "gemini"$`));
+  // `false` asks nothing of the adapter, so a gemini lane may carry it.
+  roster(onGemini)[coderId] = { adapter: "gemini", subagentModel: false };
+  await compose(onGemini, stubLoader);
 
   // A binding's effort is one of its keys, its blank refused as the others are.
   const blank = baseConfig();
@@ -625,14 +633,14 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   await expectError(blank, /^playbooks\.code\.roles\.coder\.subagentEffort must be a string or false/);
 });
 
-test("an unset subagent model delegates on the agent's own model wherever cligent serves one, as the launcher resolves it", async () => {
+test("an untuned Claude delegates on its own model and an adapter without delegation sends no child", async () => {
   // DR-095 (core-service-16): with or without an effort beside it, at
   // the Captain, each player and each binding; the summary keeps the
   // omission, and an adapter cligent serves none for composes none.
-  const top = baseConfig();
+  const top = configWithoutChildModels();
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
-  roster(top)[reviewerId] = { adapter: "codex" };
+  roster(top)[reviewerId] = { adapter: "gemini" };
   const composed = await compose(top, stubLoader);
   const agents = composed.captainOptions.sessionAgents;
   assert.equal(agents.captain.subagentModel, "inherit");
@@ -661,6 +669,46 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   assert.ok(!("subagentModel" in projection.players.find((p) => p.id === coderId)!), "Off sends none");
   assert.ok(!("subagentModel" in projection.catalog.code!.roles.coder!), "nor at the binding inheriting it");
   assert.equal(projection.catalog.review!.roles.coder!.subagentModel, "claude-haiku-5", "a binding's pin over an Off stands");
+});
+
+test("Codex delegation follows Cligent support through config inheritance, pins and Off", async () => {
+  const top = baseConfig();
+  const coderId = String(codeRoles(top).coder);
+  top.captain = { adapter: "codex", model: "codex-parent" };
+  roster(top)[coderId] = { adapter: "codex", model: "codex-player" };
+  const initial = await compose(top, stubLoader);
+  assert.equal(initial.captainOptions.sessionAgents.captain.subagentModel, undefined);
+  assert.equal(initial.captainOptions.sessionAgents.players[coderId]?.subagentModel, undefined);
+  assert.equal(initial.captainOptions.playbooks.code.roles.coder.subagentModel, undefined);
+
+  Object.assign(top.captain as object, { subagentModel: "codex-child", subagentEffort: "high" });
+  Object.assign(roster(top)[coderId] as object, { subagentEffort: "low" });
+  reviewRoles(top).coder = { player: coderId, subagentModel: "codex-review", subagentEffort: "medium" };
+  const pinned = await compose(top, stubLoader);
+  assert.equal(pinned.captainOptions.sessionAgents.captain.subagentModel, "codex-child");
+  assert.equal(pinned.captainOptions.sessionAgents.captain.subagentEffort, "high");
+  assert.equal(executionConfig(pinned, "/work").catalog.code.roles.coder.subagentModel, "inherit");
+  assert.equal(pinned.captainOptions.playbooks.code.roles.coder.subagentEffort, "low");
+  assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentModel, "codex-review");
+  assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentEffort, "medium");
+
+  top.captain = { adapter: "codex", subagentModel: false };
+  roster(top)[coderId] = { adapter: "codex", subagentModel: false };
+  const off = await compose(top, stubLoader);
+  assert.equal(off.captainOptions.sessionAgents.captain.subagentModel, false);
+  assert.equal(off.captainOptions.playbooks.code.roles.coder.subagentModel, false);
+  const projection = executionConfig(off, "/work") as unknown as {
+    captain: { subagentModel?: string }; players: { id: string; subagentModel?: string }[];
+    catalog: Record<string, { roles: Record<string, { subagentModel?: string }> }>;
+  };
+  assert.equal(projection.captain.subagentModel, undefined);
+  assert.equal(projection.players.find((p) => p.id === coderId)?.subagentModel, undefined);
+  assert.equal(projection.catalog.code!.roles.coder!.subagentModel, undefined);
+  assert.equal(projection.catalog.review!.roles.coder!.subagentModel, "codex-review");
+  Object.assign(top.captain as object, { subagentEffort: "low" });
+  await expectError(top, /^captain\.subagentEffort for adapter "codex" requires subagentModel$/);
+  top.captain = { adapter: "codex", subagentEffort: "ultra" };
+  await expectError(top, /^captain\.subagentEffort for adapter "codex" must be one of:/);
 });
 
 test("a player no binding names is listed as bound to no role and opens no session lane", async () => {
@@ -1262,4 +1310,62 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
   const review = summary.playbooks.find((p) => p.id === "review");
   assert.ok(review && !("fastMode" in review.roles.coder));
+});
+
+test("Ultracode composes independently on agents and roles; a non-boolean is refused", async (t) => {
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).ultracode = false;
+  roster(top)["dev.reviewer"] = { adapter: "codex", ultracode: false };
+  codeRoles(top).coder = { player: "dev.coder", ultracode: false };
+  const composed = await compose(top, stubLoader);
+  assert.equal(
+    composed.captainAgent.ultracode,
+    false,
+    "an explicit false survives composition",
+  );
+  const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
+  assert.equal(
+    reviewer?.ultracode,
+    false,
+    "an explicit false is a literal request, not omission",
+  );
+
+  // The summary carries it where an agent is named: the
+  // captain, each player, and a role's own override — absent otherwise.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.equal(summary.captain.ultracode, false);
+  assert.equal(
+    summary.players.find((p) => p.id === "dev.reviewer")?.agent.ultracode,
+    false,
+  );
+  const code = summary.playbooks.find((p) => p.id === "code");
+  assert.equal(code?.roles.coder.ultracode, false);
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.ok(review && !("ultracode" in review.roles.reviewer));
+
+  const unsupported = baseConfig();
+  unsupported.captain = { adapter: "codex", ultracode: true };
+  await expectError(unsupported, /^captain\.ultracode is not supported for adapter "codex"$/);
+  const bad = baseConfig();
+  (bad.captain as Record<string, unknown>).ultracode = "yes";
+  await expectError(bad, /^captain\.ultracode must be a boolean$/);
+});
+
+
+test("supported Ultracode remains independent through session projection and binding inheritance", async (t) => {
+  const top = baseConfig();
+  Object.assign(top.captain as object, { effort: "high", ultracode: true });
+  Object.assign(roster(top)["dev.coder"] as object, { ultracode: true });
+  codeRoles(top).coder = { player: "dev.coder", ultracode: false };
+  const composed = await compose(top, stubLoader);
+  const projection = executionConfig(composed, "/project");
+  assert.equal(projection.captain.ultracode, true);
+  assert.equal(projection.captain.effort.kind, "value");
+  assert.equal(projection.players.find(({id}) => id === "dev.coder")?.ultracode, true);
+  assert.equal(projection.catalog.code.roles.coder.ultracode, false);
+  assert.equal(projection.catalog.review.roles.coder.ultracode, true);
+  const tuned = executionConfig(composed, "/project", undefined, { "dev.coder": { ultracode: false } });
+  assert.equal(tuned.players.find(({id}) => id === "dev.coder")?.ultracode, false);
+  assert.equal(tuned.catalog.review.roles.coder.ultracode, false);
+  assert.equal(executionConfig(composed, "/project").catalog.review.roles.coder.ultracode, true);
 });

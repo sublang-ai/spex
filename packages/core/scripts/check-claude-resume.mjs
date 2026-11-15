@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The packaging resume check (app-shell-44, DR-217). Cligent 0.38.0
-// admits a resumed Claude call on the provider default by omitting the
-// model, which holds only while Claude Code resumes on the default
-// current at that resume. The shells take the agent SDKs at any
-// version, so packaging checks the installed one under the attendee's
-// setup — a settings file whose `env.ANTHROPIC_MODEL` is the default —
-// against a loopback model API, and stops where it fails.
+// Packaging model-selection check (app-shell-44, DR-238): fresh omitted
+// selections use settings.model; omitted resumes leave model selection to
+// Claude Code, including its ANTHROPIC_MODEL launch override. All calls use an isolated home
+// and loopback model API because the shells accept any installed SDK version.
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -24,15 +21,17 @@ const CHILD_TIMEOUT_MS = 90_000;
 const EXPLICIT = "probe-explicit";
 const DEFAULT_A = "probe-default-a";
 const DEFAULT_B = "probe-default-b";
+const SWITCHED = "probe-switched";
+const ENV_OVERRIDE = "probe-env-override";
 
 class CheckError extends Error {}
 
-/** A minimal streamed Messages reply naming the requested model. */
+/** A service may report a different name than the requested selection. */
 function reply(response, model) {
   response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   const send = (type, data) => response.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
   send("message_start", {
-    message: { id: "msg_check", type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } },
+    message: { id: "msg_check", type: "message", role: "assistant", model: `service-reported-${model}`, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } },
   });
   send("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
   send("content_block_delta", { index: 0, delta: { type: "text_delta", text: "ok" } });
@@ -120,7 +119,7 @@ function runChild(args, env, cwd) {
 }
 
 function writeDefault(home, model) {
-  return writeFile(join(home, ".claude", "settings.json"), JSON.stringify({ env: { ANTHROPIC_MODEL: model } }));
+  return writeFile(join(home, ".claude", "settings.json"), JSON.stringify({ model }));
 }
 
 async function check() {
@@ -138,20 +137,37 @@ async function check() {
     const env = childEnvironment(home, `http://127.0.0.1:${port}`);
 
     const fresh = await runChild(["fresh", EXPLICIT], env, project);
-    const freshFailure = freshVerdict({ explicit: EXPLICIT, requests });
+    const freshFailure = freshVerdict({ expectedModel: EXPLICIT, requests });
     if (freshFailure) throw new CheckError(freshFailure);
 
     await writeDefault(home, DEFAULT_B);
     requests.length = 0;
     const resumed = await runChild(["resume", fresh.token], env, project);
     const resumeFailure = resumeVerdict({
-      explicit: EXPLICIT,
-      changedDefault: DEFAULT_B,
+      expectedModel: EXPLICIT,
       freshToken: fresh.token,
       resumeToken: resumed.token,
       requests,
     });
     if (resumeFailure) throw new CheckError(resumeFailure);
+
+    for (const model of [SWITCHED, undefined]) {
+      requests.length = 0;
+      const result = await runChild(["resume", fresh.token, ...(model ? [model] : [])], env, project);
+      const failure = resumeVerdict({ expectedModel: SWITCHED, freshToken: fresh.token, resumeToken: result.token, requests });
+      if (failure) throw new CheckError(failure);
+    }
+
+    requests.length = 0;
+    await runChild(["fresh"], env, project);
+    const defaultFailure = freshVerdict({ expectedModel: DEFAULT_B, requests });
+    if (defaultFailure) throw new CheckError(defaultFailure);
+
+    // A launch override is intentionally stronger than native continuity.
+    requests.length = 0;
+    const overridden = await runChild(["resume", fresh.token], { ...env, ANTHROPIC_MODEL: ENV_OVERRIDE }, project);
+    const overrideFailure = resumeVerdict({ expectedModel: ENV_OVERRIDE, freshToken: fresh.token, resumeToken: overridden.token, requests });
+    if (overrideFailure) throw new CheckError(overrideFailure);
   } finally {
     if (server) await new Promise((resolve) => server.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
@@ -160,7 +176,7 @@ async function check() {
 
 try {
   await check();
-  console.log("check-claude-resume: a resumed Claude call with no model runs the current default");
+  console.log("check-claude-resume: Claude native resumes survive differing service reply names and settings.model changes; explicit and ANTHROPIC_MODEL launch selections override; fresh calls use settings.model");
 } catch (cause) {
   console.error(`check-claude-resume: FAILED — ${cause instanceof Error ? cause.message : String(cause)}`);
   process.exit(1);

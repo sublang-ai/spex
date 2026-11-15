@@ -14,6 +14,8 @@ Amended by [DR-074](074-a-parked-run-survives.md): the runtime is released at se
 Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
 Amended by [DR-134](134-execution-ownership.md) in the project's lane: a session assigned to another runtime is never the lane.
 
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+
 ## Context
 
 - Since [DR-042](042-sessions-continue.md) an ended session is a paused conversation a message continues, so "End" kept only two duties: releasing the project's one-live-session slot — a rule Spex enforces itself; Playbook claims a worktree per governed call only — and releasing the Playbook session lease so the terminal can continue the same session.

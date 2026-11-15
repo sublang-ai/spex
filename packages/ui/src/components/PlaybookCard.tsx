@@ -94,7 +94,7 @@ export async function writeBinding(
   // Where no entry of the scope stands, saving the player that already
   // plays the role, with nothing pinned, changes nothing and writes
   // nothing (playbook-library-3, playbook-library-4).
-  const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode].some(
+  const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode, change.ultracode].some(
     (value) => value !== undefined && value !== null,
   );
   const unchanged = change.playerId === effectivePlayers(entry)[role];
@@ -363,9 +363,12 @@ function RoleLine({
       </span>
       {lane ? (
         <AgentChip
-          // The row says what the role effectively runs: a binding's
-          // own fast mode over the lane's.
-          agent={binding.fastMode !== undefined ? { ...lane.agent, fastMode: binding.fastMode } : lane.agent}
+          agent={{
+            ...lane.agent,
+            model: binding.model === false ? undefined : binding.model ?? lane.agent.model,
+            effort: binding.effort === false ? undefined : binding.effort ?? lane.agent.effort,
+            fastMode: binding.fastMode ?? lane.agent.fastMode,
+          }}
           readiness={ready}
           label={lane.id}
         />

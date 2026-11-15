@@ -684,6 +684,8 @@ test("the compile's agent reaches slc unless the environment configures it (play
   assert.deepEqual(compilerAgentEnv({ SLC_MODEL: "gpt-5" }, captain), {});
   assert.deepEqual(compilerAgentEnv({ SLC_EFFORT: "low" }, captain), {});
   assert.deepEqual(compilerAgentEnv({ SLC_FAST_MODE: "true" }, captain), {});
+  assert.deepEqual(compilerAgentEnv({ SLC_ULTRACODE: "false" }, captain), {});
+  assert.deepEqual(compilerAgentEnv({}, { adapter: "claude", effort: "high", ultracode: false }), { SLC_AGENT: "claude-code", SLC_EFFORT: "high", SLC_ULTRACODE: "false" });
   // An adapter slc does not drive leaves slc's own configuration to choose.
   assert.deepEqual(compilerAgentEnv({}, { adapter: "kimi", model: "k2" }), {});
   assert.deepEqual(compilerAgentEnv({}, undefined), {});
@@ -722,6 +724,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
     SLC_MODEL: env.SLC_MODEL,
     SLC_EFFORT: env.SLC_EFFORT,
     SLC_FAST_MODE: env.SLC_FAST_MODE,
+    SLC_ULTRACODE: env.SLC_ULTRACODE,
     SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT,
   });
   // The block reaches the compiler: codex at medium, nothing else, the
@@ -731,6 +734,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
     SLC_MODEL: undefined,
     SLC_EFFORT: "medium",
     SLC_FAST_MODE: undefined,
+    SLC_ULTRACODE: undefined,
     SLC_STALL_TIMEOUT: "2400",
   });
   assert.ok(
@@ -757,6 +761,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       SLC_MODEL: undefined,
       SLC_EFFORT: undefined,
       SLC_FAST_MODE: undefined,
+      SLC_ULTRACODE: undefined,
       SLC_STALL_TIMEOUT: "2400",
     },
   );
@@ -783,6 +788,19 @@ test("the compile's agent reaches slc unless the environment configures it (play
   );
   assert.equal(refusedCalls.length, 0, "no compiler ran");
   assert.ok(!refusedLines.some((line) => line.startsWith("running:")));
+  const overridden = await compileWith("override-ultra", { SLC_AGENT: "codex" }, { adapter: "claude", ultracode: true });
+  assert.equal(overridden.SLC_ULTRACODE, undefined);
+  const reviewerEnv = await compileWith("review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined);
+  assert.equal(reviewerEnv.SLC_REVIEWER_ULTRACODE, "false");
+  const ultraEnv = await compileWith("ultracode", {}, { adapter: "claude", effort: "high", ultracode: true });
+  assert.equal(ultraEnv.SLC_ULTRACODE, "true");
+  assert.equal(ultraEnv.SLC_EFFORT, "high");
+  const disabled = await compileWith("child-off", {}, { adapter: "claude", subagentModel: false });
+  assert.equal(disabled.SLC_SUBAGENT_MODEL, "false");
+  const pairEnv = await compileWith("child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
+  assert.equal(pairEnv.SLC_MODEL, "gpt-6-astra");
+  assert.equal(pairEnv.SLC_SUBAGENT_MODEL, "gpt-6.1-sol");
+  assert.equal(compilerAgentEnv({}, { adapter: "claude", subagentModel: false }).SLC_SUBAGENT_MODEL, "false");
   // Fast mode travels as its literal.
   assert.deepEqual(
     pick(await compileWith("fast", {}, { adapter: "claude", model: "claude-opus-5", fastMode: true })),
@@ -791,6 +809,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       SLC_MODEL: "claude-opus-5",
       SLC_EFFORT: undefined,
       SLC_FAST_MODE: "true",
+      SLC_ULTRACODE: undefined,
       SLC_STALL_TIMEOUT: "2400",
     },
   );

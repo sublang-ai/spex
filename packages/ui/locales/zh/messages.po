@@ -123,6 +123,7 @@ msgstr "{annotation} · {count, plural, other {# 项}}"
 
 #. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
 #: src/components/TuningField.tsx
+#: src/components/UltracodeField.tsx
 msgid "{choice} ({value})"
 msgstr "{choice}（{value}）"
 
@@ -2659,8 +2660,8 @@ msgid "copies made while writing"
 msgstr "写入过程中产生的副本"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
-msgstr "复制 Captain 的适配器、模型、思考强度、子代理模型、子代理思考强度、快速模式、浏览器和权限"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, Ultracode, browser, and permissions"
+msgstr "复制 Captain 的适配器、模型、思考强度、子代理模型、子代理思考强度、快速模式、Ultracode、浏览器和权限"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -3368,8 +3369,8 @@ msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
 
 #: src/components/AgentCards.tsx
-msgid "Every role now uses Provider default."
-msgstr "所有角色都已改为服务商默认。"
+msgid "No roles still name an official Claude model."
+msgstr "所有角色均已不再指定 Claude 官方模型。"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -3594,7 +3595,6 @@ msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
 #. a run that ended with no outcome reported
-#. a run that ended with no outcome reported
 #: src/state/reducer.ts
 msgid "finished"
 msgstr "已结束"
@@ -3761,6 +3761,7 @@ msgstr "来自 Git {source}"
 
 #. tuning choice: take the value the Settings surface configured
 #: src/components/AgentSettings.tsx
+#: src/components/UltracodeField.tsx
 msgid "from Settings"
 msgstr "取自设置"
 
@@ -3995,6 +3996,7 @@ msgstr "来自 Space 的内容"
 
 #. tuning choice: take whatever the player lane resolves
 #: src/components/TuningField.tsx
+#: src/components/UltracodeField.tsx
 msgid "inherit the player"
 msgstr "继承 Player"
 
@@ -5107,6 +5109,7 @@ msgstr "关闭"
 #. subagent-model choice: send no subagent model, so the agent is not told to delegate
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 #: src/lib/agent-options.ts
 msgid "Off"
 msgstr "关闭"
@@ -5118,6 +5121,7 @@ msgstr "关闭（当前）"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "Off (unsupported)"
 msgstr "关闭（不支持）"
 
@@ -5140,6 +5144,7 @@ msgstr "更早…"
 #. fast mode is pinned on
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "On"
 msgstr "开启"
 
@@ -5150,6 +5155,7 @@ msgstr "开启（当前）"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "On (unsupported)"
 msgstr "开启（不支持）"
 
@@ -6552,6 +6558,9 @@ msgstr "对草稿源文运行 slc — 通常几分钟，角色多则更久"
 msgid "Same as agent"
 msgstr "与代理相同"
 
+msgid "Same as agent (from subagent effort)"
+msgstr "与代理相同（由子代理推理强度决定）"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
@@ -6866,10 +6875,6 @@ msgstr "会话与项目视图"
 #: src/lib/agent-cards.ts
 msgid "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
 msgstr "设置 <0>ANTHROPIC_AUTH_TOKEN</0> 和 <1>ANTHROPIC_BASE_URL</1>。"
-
-#: src/components/AgentCards.tsx
-msgid "Set all to Provider default"
-msgstr "全部改为服务商默认"
 
 #. Manual step on Windows; `setx` is the command's name
 #: src/lib/agent-cards.ts
@@ -8190,6 +8195,14 @@ msgstr "就地调整 Captain 智能体"
 msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 msgstr "在输入框输入 <0>/</0>，查看 {count} 个规程"
 
+#: src/components/UltracodeField.tsx
+msgid "Ultracode"
+msgstr "Ultracode"
+
+#: src/components/UltracodeField.tsx
+msgid "Ultracode is unavailable for this selection."
+msgstr "当前选择不支持 Ultracode。"
+
 #. the runtime reported no default model
 #: src/components/AgentCards.tsx
 msgid "Unavailable"
@@ -8363,11 +8376,6 @@ msgstr "使用"
 #: src/components/SpaceRepairs.tsx
 msgid "Use {folder}"
 msgstr "使用 {folder}"
-
-#. sets every role naming an official model to Provider default, named by the model it runs
-#: src/components/AgentCards.tsx
-msgid "Use {model} for all"
-msgstr "全部改为 {model}"
 
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
@@ -8719,3 +8727,7 @@ msgstr "你的项目"
 #: src/lib/space.ts
 msgid "Your sessions"
 msgstr "你的会话"
+
+#: src/components/AgentCards.tsx
+msgid "Clear Claude model pins"
+msgstr "清除 Claude 模型指定"

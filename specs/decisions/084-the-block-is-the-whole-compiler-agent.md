@@ -8,6 +8,10 @@
 Accepted (2026-09-24) on a review finding against [DR-081](081-the-app-supplies-the-compiler.md): a block naming only its adapter reached `slc` as `SLC_AGENT` alone, and `slc` filled the model, effort and fast mode from a configuration of its own — a Codex block ran a Claude model where the reader had once configured `slc` by hand.
 Amends [DR-081](081-the-app-supplies-the-compiler.md), which remains accepted, in the handoff alone: what the block leaves unset stays unset for `slc`.
 
+Amended by [DR-235](235-independent-ultracode.md) to include the compiler agent’s Ultracode setting.
+
+Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in passing the child model to the compiler.
+
 ## Context
 
 - `slc` layers its environment over a configuration file it discovers — `slc.config.yaml` in the working directory, else the one under the user's config home, which it seeds on first run — field by field, so an unset `SLC_MODEL` takes the file's model whatever agent the environment named.

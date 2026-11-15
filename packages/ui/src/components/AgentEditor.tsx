@@ -31,6 +31,7 @@ import {
   type ChipAgent,
 } from "./AgentChip.js";
 import { useBrowserTools } from "../lib/useBrowserTools.js";
+import { UltracodeField } from "./UltracodeField.js";
 import { BrowserControl } from "./BrowserControl.js";
 import { Rich } from "./Rich.js";
 import { WORKSHOP, WORKSHOP_ADAPTERS } from "../lib/workshop.js";
@@ -56,12 +57,11 @@ function knownAdapter(adapter: string | undefined): AdapterName {
     : "claude";
 }
 
-/** The subagent model as the field holds it: "" for "Same as agent" —
- * the omission and the literal `inherit` alike — `false` for "Off", or
- * a model (DR-095). */
+/** Codex distinguishes an omitted child from an explicit request for the
+ * parent model. On Claude both use the empty row (DR-237). */
 function subagentModelOf(agent: ChipAgent | undefined): string | false {
   const value = agent?.subagentModel;
-  return value === undefined || value === "inherit" ? "" : value;
+  return value === undefined || (agent?.adapter !== "codex" && value === "inherit") ? "" : value;
 }
 
 function initialMode(agent: ChipAgent | undefined): Mode {
@@ -101,6 +101,8 @@ export interface AgentEditorProps {
   /** Creation forms save an untouched draft: the seeded block is
    * already a deliberate choice, so there is nothing to dirty. */
   allowUnchanged?: boolean;
+  /** Apply the new roster defaults when selecting a different adapter. */
+  newPlayerDefaults?: boolean;
   onSave: (patch: AgentPatch) => Promise<unknown> | void;
   onCancel?: () => void;
 }
@@ -114,6 +116,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const [subagentModel, setSubagentModel] = useState<string | false>(subagentModelOf(initial));
   const [subagentEffort, setSubagentEffort] = useState(initial?.subagentEffort ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
+  const [ultracode, setUltracode] = useState(initial?.ultracode);
   const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
   const [browser, setBrowser] = useState(initial?.browser ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
@@ -140,6 +143,7 @@ export function AgentEditor(props: AgentEditorProps) {
     ...(subagentModel !== "" ? { subagentModel } : {}),
     ...(subagentEffort ? { subagentEffort } : {}),
     ...(effort ? { effort } : {}), ...(fastMode ? { fastMode } : {}),
+    ...(ultracode !== undefined ? { ultracode } : {}),
     ...(Object.keys(permissions).length > 0 || initial?.permissions ? { permissions } : {}),
   }, props.context);
 
@@ -160,7 +164,9 @@ export function AgentEditor(props: AgentEditorProps) {
   const modelLabelId = useId();
   const subagentLabelId = useId();
   const supportsFastMode = tuning.fastModeSupported ?? readinessByAdapter.get(adapter)?.fastModeSupported ?? false;
-  const invalidEffort = Boolean(discovery.options && effort && !tuning.efforts.includes(effort));
+  const legacyEffort = tuning.separateUltracode && effort === "ultracode";
+  const invalidEffort = Boolean(discovery.options && effort && !legacyEffort && !tuning.efforts.includes(effort));
+  const invalidUltracode = Boolean(discovery.options && (ultracode ?? legacyEffort) && !tuning.ultracodeSupported);
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
@@ -172,19 +178,23 @@ export function AgentEditor(props: AgentEditorProps) {
   function pickAdapter(next: AdapterName): void {
     if (next === adapter) return;
     setAdapter(next);
-    setModel("");
-    setSubagentModel("");
+    const defaults = props.newPlayerDefaults ? readinessByAdapter.get(next)?.defaultModels : undefined;
+    setModel(defaults?.model ?? "");
+    setSubagentModel(defaults?.subagentModel ?? "");
     setSubagentEffort("");
     setEffort("");
+    setUltracode(undefined);
     setFastMode(false);
   }
 
+  const savedChild = adapter === knownAdapter(initial?.adapter) ? subagentModelOf(initial) : (initial?.subagentModel ?? "");
   const dirty =
     adapter !== knownAdapter(initial?.adapter) ||
     model !== (initial?.model ?? "") ||
-    subagentModel !== subagentModelOf(initial) ||
+    subagentModel !== savedChild ||
     subagentEffort !== (initial?.subagentEffort ?? "") ||
     effort !== (initial?.effort ?? "") ||
+    ultracode !== initial?.ultracode ||
     fastMode !== (initial?.fastMode ?? false) ||
     browser !== (initial?.browser ?? false) ||
     mode !== initialMode(initial) ||
@@ -211,10 +221,8 @@ export function AgentEditor(props: AgentEditorProps) {
     const trimmedModel = model.trim();
     if (trimmedModel) patch.model = trimmedModel;
     else if (initial?.model) patch.model = null;
-    // "Same as agent" is the omission, and "Off" the configured `false`
-    // kept only while it stands (DR-095): either is written only when it
-    // changes what the block holds.
-    if (subagentModel !== subagentModelOf(initial)) {
+    // Preserve the saved representation when the child selection is unchanged.
+    if (subagentModel !== savedChild) {
       if (subagentModel === false) patch.subagentModel = false;
       else if (subagentModel.trim()) patch.subagentModel = subagentModel.trim();
       else patch.subagentModel = null;
@@ -226,6 +234,8 @@ export function AgentEditor(props: AgentEditorProps) {
     // Fast mode is off by default, so the switch writes true or unsets
     // the key (DR-038) — the same shape effort takes.
     if (browser !== (initial?.browser ?? false)) patch.browser = browser;
+    if (ultracode !== undefined) patch.ultracode = ultracode;
+    else if (initial?.ultracode !== undefined) patch.ultracode = null;
     if (fastMode) patch.fastMode = true;
     else if (initial?.fastMode) patch.fastMode = null;
     const permissions: NonNullable<AgentPatch["permissions"]> = {
@@ -330,13 +340,16 @@ export function AgentEditor(props: AgentEditorProps) {
             <select
               data-testid="agent-effort"
               value={effort}
-              onChange={(event) => setEffort(event.target.value)}
+              onChange={(event) => {
+                if (legacyEffort && ultracode === undefined && tuning.ultracodeSupported) setUltracode(true);
+                setEffort(event.target.value);
+              }}
               className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
             >
               {/* An effort key is the adapter's wire word; only what
                   stands beside it is a text. */}
               <option value="">{i18n._({ id: "(default)", comment: "effort choice: leave the adapter's own default" })}</option>
-              {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
+              {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options && !legacyEffort ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
               {tuning.efforts.map((name) => (
                 <option key={name} value={name}>
                   {tuning.additionalEfforts.includes(name) ? i18n._("{effort} (adapter-wide)", { effort: name }) : name}
@@ -359,7 +372,8 @@ export function AgentEditor(props: AgentEditorProps) {
                   onChange={setSubagentModel}
                   labelId={subagentLabelId}
                   testId="agent-subagent-model"
-                  subagent="empty"
+                  subagent={adapter === "codex" ? "codex" : "empty"}
+                  subagentEffort={subagentEffort}
                   {...(initial?.subagentModel === false || subagentModel === false
                     ? { off: { selected: subagentModel === false, onSelect: () => setSubagentModel(false) } }
                     : {})}
@@ -383,6 +397,9 @@ export function AgentEditor(props: AgentEditorProps) {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
+        <UltracodeField testId="agent-ultracode" supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
+          value={ultracode} inherited={legacyEffort ? true : undefined} source="provider"
+          onChange={setUltracode} />
         {(supportsFastMode || fastMode) ? (
           <label className="col-span-2 flex items-center gap-2">
             <input
@@ -469,7 +486,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
+          disabled={busy || browserUnadmitted || invalidUltracode || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -489,7 +506,7 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions")}
+            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, Ultracode, browser, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
@@ -498,6 +515,7 @@ export function AgentEditor(props: AgentEditorProps) {
               setSubagentModel(subagentModelOf(captain));
               setSubagentEffort(captain.subagentEffort ?? "");
               setEffort(captain.effort ?? "");
+              setUltracode(captain.ultracode);
               setFastMode(Boolean(captain.fastMode));
               setBrowser(Boolean(captain.browser));
               setMode(initialMode(captain));

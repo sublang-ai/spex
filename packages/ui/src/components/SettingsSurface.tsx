@@ -40,7 +40,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n, type Language } from "../i18n.js";
 import { allRepositories } from "../lib/instances.js";
-import { patchPlayer, setCaptain } from "../lib/config-ops.js";
+import { applyLocalPatch, NEUTRAL_BLOCK, patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { agentBlockOf } from "../lib/drafts.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
 import {
@@ -301,15 +301,6 @@ function ThemeInput({
 function sheetKeys(keys: string): string {
   return keyLabel(modKey() === "⌘" ? keys : keys.replace(/⇧/g, "Shift+"));
 }
-
-/** The starting block for a lane the user is adding: a deliberate,
- * visible choice rather than a blank the launcher would refuse. */
-const NEW_PLAYER_BLOCK: AgentBlockInput = {
-  adapter: "claude",
-  model: "claude-opus-5-5",
-  effort: "high",
-  permissions: { mode: "auto" },
-};
 
 /** Your roster with each player a binding names and the roster lacks —
  * as the global composition flags them, as each project's composition
@@ -780,7 +771,7 @@ function PlayerRoster({
   rows: RowEditing;
 }) {
   const store = usePlaceStore();
-  const [adding, setAdding] = useState(false);
+  const [newPlayer, setNewPlayer] = useState<AgentBlockInput>();
   const [newId, setNewId] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [error, setError] = useState<{ playerId: string; message: string }>();
@@ -917,7 +908,7 @@ function PlayerRoster({
           {i18n._({ id: "No players yet", comment: "Settings' players list while it holds none" })}
         </p>
       ) : null}
-      {adding ? (
+      {newPlayer ? (
         <div
           data-testid="player-add-form"
           className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900"
@@ -942,7 +933,8 @@ function PlayerRoster({
             </p>
           ) : null}
           <AgentEditor
-            initial={NEW_PLAYER_BLOCK}
+            initial={newPlayer}
+            newPlayerDefaults
             readiness={readiness}
             captain={captain}
             saveLabel={i18n._("Add player")}
@@ -963,9 +955,9 @@ function PlayerRoster({
                 });
                 return Promise.reject(new Error("duplicate id"));
               }
-              return patchPlayer(id, patch, store.getClient()).then(
+              return patchPlayer(id, applyLocalPatch(newPlayer, patch), store.getClient()).then(
                 (result) => {
-                  setAdding(false);
+                  setNewPlayer(undefined);
                   setNewId("");
                   setError(undefined);
                   setSaved(id);
@@ -978,7 +970,7 @@ function PlayerRoster({
               );
             }}
             onCancel={() => {
-              setAdding(false);
+              setNewPlayer(undefined);
               setError(undefined);
             }}
           />
@@ -987,7 +979,12 @@ function PlayerRoster({
         <button
           type="button"
           data-testid="player-add"
-          onClick={() => setAdding(true)}
+          onClick={() => setNewPlayer({
+            adapter: "claude",
+            effort: NEUTRAL_BLOCK.effort,
+            permissions: NEUTRAL_BLOCK.permissions,
+            ...readinessByAdapter.get("claude")?.defaultModels,
+          })}
           className="inline-flex items-center gap-1 self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           <Icon name="plus" className="h-3 w-3 shrink-0" />

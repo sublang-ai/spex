@@ -1096,6 +1096,8 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
     readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
   assert.equal(byAdapter.get("claude")?.ready, true);
+  assert.deepEqual(byAdapter.get("claude")?.defaultModels, { model: "claude-fable-5-2", subagentModel: "claude-opus-5-5" });
+  assert.deepEqual(byAdapter.get("codex")?.defaultModels, { model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
   // A position is a player lane and the roles it serves — the written
   // entries' first, then each built-in no entry binds, on its default
   // `dev.<role>` (core-service-2).
@@ -1160,7 +1162,7 @@ test("settings-36: model discovery uses the captured environment without opening
   const filesBefore = sessionFiles();
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "claude" }), {
     adapter: "claude", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultracode"],
-    fastModeSupported: true, subagentModelSupported: true,
+    fastModeSupported: true, ultracodeSupported: true, subagentModelSupported: true,
     // A subagent runs at the adapter's efforts less its orchestration
     // value (DR-095).
     subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
@@ -1168,12 +1170,13 @@ test("settings-36: model discovery uses the captured environment without opening
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "codex" }), {
     adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-    fastModeSupported: true, subagentModelSupported: false, subagentEffortValues: [],
+    fastModeSupported: true, ultracodeSupported: false, subagentModelSupported: true,
+    subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
     discovery: { status: "unavailable", reason: "Fixture discovery failed" },
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "gemini" }), {
     adapter: "gemini", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
-    fastModeSupported: false, subagentModelSupported: false, subagentEffortValues: [],
+    fastModeSupported: false, ultracodeSupported: false, subagentModelSupported: false, subagentEffortValues: [],
     discovery: { status: "unavailable", reason: "Fixture runtime is offline" },
   });
   client.sendRaw(JSON.stringify({ type: "agent.options", id: "unknown-adapter", adapter: "unknown" }));
@@ -4738,6 +4741,7 @@ test("core-service-136: the first-run config takes the agents Playbook seeds for
     const settings = (agent: Record<string, unknown>) => ({
       adapter: agent.adapter,
       model: agent.model,
+      subagentModel: agent.subagentModel,
       effort: agent.effort,
       writablePaths: (agent.permissions as { writablePaths?: unknown } | undefined)?.writablePaths,
     });
@@ -4806,16 +4810,22 @@ test("core-service-136, core-service-138: behind a third-party service the seed'
     return { text, top, reseeded: state.status === "valid" && state.reseeded === true };
   };
   const first = await start(official);
-  assert.equal(first.top.captain.model, "claude-opus-5-5", "Anthropic's own service keeps the official name");
+  const { seedConfigText } = await import("@sublang/playbook/seed-config");
+  const upstream = parseYaml(seedConfigText({ env: official, homeDir: home }).text);
+  assert.equal(first.top.captain.model, upstream.captain.model);
+  assert.equal(first.top.captain.subagentModel, upstream.captain.subagentModel);
   // The base URL changed: the untouched seed is written again, its
   // Claude agents on the provider default, Codex's model and the
   // template's comments kept.
   const second = await start(deepseek);
   assert.equal(second.reseeded, true);
   assert.equal(Object.hasOwn(second.top.captain, "model"), false, "the Captain on the provider default");
+  assert.equal(Object.hasOwn(second.top.captain, "subagentModel"), false);
   for (const [id, player] of Object.entries(second.top.players)) {
-    if (player.adapter === "claude") assert.equal(Object.hasOwn(player, "model"), false, `${id} on the provider default`);
-    else assert.equal(player.model, first.top.players[id]?.model, `${id} keeps its model`);
+    for (const field of ["model", "subagentModel"]) {
+      if (player.adapter === "claude") assert.equal(Object.hasOwn(player, field), false, `${id} on the provider default`);
+      else assert.equal(player[field], first.top.players[id]?.[field], `${id} keeps its ${field}`);
+    }
   }
   assert.ok(Object.values(second.top.players).some((player) => player.adapter === "codex"), "a Codex agent stands");
   assert.match(second.text, /# The Captain\/Judge agent\./, "comments kept");
@@ -4910,7 +4920,9 @@ test("core-service-138: a re-check reseeds an untouched seed as a start would", 
   await client.open();
   try {
     const agents = () => parseYaml(readFileSync(ownConfig(dataDir), "utf8")) as { captain: Record<string, unknown>; players: Record<string, Record<string, unknown>> };
-    assert.equal(agents().captain.model, "claude-opus-5-5", "seeded with nothing set up");
+    const { seedConfigText } = await import("@sublang/playbook/seed-config");
+    const upstream = parseYaml(seedConfigText({ env: {}, homeDir: home }).text);
+    assert.equal(agents().captain.model, upstream.captain.model, "seeded with nothing set up");
 
     // A third-party key written to Claude Code's settings after the
     // start: the re-check reseeds, the Claude agents on the provider default.
@@ -4986,7 +4998,8 @@ test("core-service-66: a former config whose locator points into its own directo
   assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays too");
   const published = readFileSync(canonical, "utf8");
   assert.notEqual(published, legacyText, "no older file is published past the nearer one");
-  assert.equal(published, starterText(readFileSync(templatePath(), "utf8")), "the starter is seeded instead");
+  const { seedConfigText } = await import("@sublang/playbook/seed-config");
+  assert.equal(published, starterText(seedConfigText({ env: {}, homeDir: home }).text), "the credential-free starter is seeded instead");
   assert.ok(
     reported.some((line) => line.includes(former) && line.includes("sessions")),
     `the refusal names the file and its locator: ${reported.join(" | ")}`,
@@ -5920,6 +5933,61 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
   assert.deepEqual(guards(),migratedGuards,"successful migration is not retried on the next startup");
 });
 
+test("core-service-101: Codex delegation reaches session projections and the adapter boundary", async (t) => {
+  const config = VALID_CONFIG.replaceAll("adapter: claude", "adapter: codex").replaceAll("model: claude-test", "model: codex-parent");
+  const harness = await startHarness(config, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  const run = async (sessionId: string, turn: number) => {
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId } });
+    await client.expectOk("turn.submit", { sessionId, text: `delegation turn ${turn}` });
+    await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && m.session.turns === turn && m.session.live === false);
+    return (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${sessionId}.json`))).lastAppliedExecutionProjection as {
+      captain: { subagentModel?: string; subagentEffort?: string };
+      players: { id: string; subagentModel?: string; subagentEffort?: string }[];
+      catalog: Record<string, { roles: Record<string, { subagentModel?: string; subagentEffort?: string }> }>;
+    };
+  };
+  const original = await run(session.id, 1);
+  assert.equal(original.captain.subagentModel, undefined);
+  assert.equal(original.players[0]?.subagentModel, undefined);
+  assert.equal(original.catalog.code?.roles.coder?.subagentModel, undefined);
+  assert.equal(harness.stats.runs.at(-1)?.agent, "codex");
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined);
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", subagentModel: "codex-child", subagentEffort: "high" });
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "dev.coder", subagentEffort: "medium" });
+  const pinned = await run(session.id, 2);
+  assert.equal(pinned.captain.subagentModel, "codex-child");
+  assert.equal(pinned.captain.subagentEffort, "high");
+  assert.equal(pinned.players[0]?.subagentModel, "inherit");
+  assert.equal(pinned.players[0]?.subagentEffort, "medium");
+  assert.equal(pinned.catalog.code?.roles.coder?.subagentModel, "inherit");
+  assert.equal(pinned.catalog.code?.roles.coder?.subagentEffort, "medium");
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined, "tool-free control calls omit the tuned child");
+  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, undefined);
+  for (const patch of [{ subagentModel: false as const }, { subagentEffort: "ultra" }]) {
+    const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
+    assert.ok(!refused.ok && refused.error.code === "invalid_config");
+    assert.match(refused.error.message, /subagentEffort for adapter "codex"/);
+  }
+  assert.deepEqual((await client.expectOk("session.list", {})).find((s) => s.id === session.id)?.agentSettings?.captain,
+    { subagentModel: "codex-child", subagentEffort: "high" }, "refusals preserve the session's valid settings");
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", subagentModel: false, subagentEffort: null });
+  const off = await run(session.id, 3);
+  assert.equal(off.captain.subagentModel, undefined);
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined);
+  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, undefined);
+  const other = await client.expectOk("session.create", { projectId: project.id });
+  const inherited = await run(other.id, 1);
+  assert.equal(inherited.captain.subagentModel, undefined);
+  assert.equal(inherited.captain.subagentEffort, undefined);
+  assert.equal(inherited.catalog.code?.roles.coder?.subagentEffort, undefined);
+  assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), config);
+});
+
 test("core-service-101: a session's own tuning reaches its runtime, its config file, and nothing else", async (t) => {
   const dir = scratchDir("spex-tuning-");
   const configPath = join(dir, "playbook.config.yaml");
@@ -6095,14 +6163,14 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   // continuing the session tuned with one is refused as the adapter's
   // drift, offering a new session (core-service-92).
   await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", subagentModel: "claude-sub-tuned" });
-  const onCodexConfig = config.replace(
+  const onGeminiConfig = config.replace(
     "  dev.coder:\n    adapter: claude\n    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\n",
-    "  dev.coder:\n    adapter: codex\n    model: claude-test\n",
+    "  dev.coder:\n    adapter: gemini\n    model: claude-test\n",
   );
-  assert.notEqual(onCodexConfig, config, "the player's adapter moved");
-  writeFileSync(configPath, onCodexConfig);
+  assert.notEqual(onGeminiConfig, config, "the player's adapter moved");
+  writeFileSync(configPath, onGeminiConfig);
   await service.reloadConfig();
-  const drift = await client.command("turn.submit", { sessionId: tuned.id, text: "on codex" });
+  const drift = await client.command("turn.submit", { sessionId: tuned.id, text: "on gemini" });
   assert.ok(!drift.ok && drift.error.code === "invalid_config", `refused as drift: ${JSON.stringify(drift)}`);
   assert.match(drift.error.message, /dev\.coder's adapter changed/, "names the adapter change");
   assert.match(drift.error.message, /new session/, "offers a new session");
@@ -6110,17 +6178,17 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
 
   // A subagent model on a player whose adapter cligent serves none for is
   // refused in cligent's words, with nothing written (DR-093).
-  const reviewerOnCodex = config.replace(
+  const reviewerOnGemini = config.replace(
     "  dev.reviewer:\n    adapter: claude\n    model: claude-test\n",
-    "  dev.reviewer:\n    adapter: codex\n",
+    "  dev.reviewer:\n    adapter: gemini\n",
   );
-  assert.notEqual(reviewerOnCodex, config, "the second player moved to codex");
-  writeFileSync(configPath, reviewerOnCodex);
+  assert.notEqual(reviewerOnGemini, config, "the second player moved to gemini");
+  writeFileSync(configPath, reviewerOnGemini);
   await service.reloadConfig();
   const mixed = await client.expectOk("session.create", { projectId: project.id });
-  const onCodex = await client.command("session.agent.set", { sessionId: mixed.id, agentId: "dev.reviewer", subagentModel: "gpt-6" });
-  assert.ok(!onCodex.ok && onCodex.error.code === "invalid_config", `refused: ${JSON.stringify(onCodex)}`);
-  assert.match(onCodex.error.message, /subagentModel is not supported for adapter "codex"/);
+  const onGemini = await client.command("session.agent.set", { sessionId: mixed.id, agentId: "dev.reviewer", subagentModel: "gemini-test" });
+  assert.ok(!onGemini.ok && onGemini.error.code === "invalid_config", `refused: ${JSON.stringify(onGemini)}`);
+  assert.match(onGemini.error.message, /subagentModel is not supported for adapter "gemini"/);
   const untouched = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === mixed.id);
   assert.equal(untouched?.agentSettings, undefined, "the refusal wrote nothing");
 
@@ -6828,4 +6896,80 @@ test("core-service-124: what one home captured runs on it alone, and a second ho
   await client.expectOk("intent.remove", { intentId: worked.id });
   await client.expectOk("session.delete", { sessionId: session.id });
   assert.equal((await client.expectOk("session.list", {})).some((entry) => entry.id === session.id), false);
+});
+
+
+test("Ultracode round-trips independently and unsupported activation preserves config bytes", async (t) => {
+  const harness = await startHarness(VALID_CONFIG);
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const path = join(harness.dir, "playbook.config.yaml");
+  const op = { kind: "playbook.role.bind" as const, playbookId: "code", role: "coder", playerId: "dev.coder" };
+  for (const ultracode of [true, false, null]) {
+    await client.expectOk("config.edit", { op: { ...op, ultracode } });
+    const state = await client.expectOk("config.get", {});
+    assert.ok(state.status === "valid");
+    assert.equal(state.summary.playbooks[0].roles.coder.ultracode, ultracode ?? undefined);
+  }
+  const before = readFileSync(path, "utf8");
+  const refused = await client.command("config.edit", { op: {
+    kind: "captain.set", patch: { adapter: "codex", ultracode: true },
+  } });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.equal(readFileSync(path, "utf8"), before);
+});
+
+
+test("Ultracode session tuning reaches first and resumed calls and clears before first submission", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  const before = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
+  for (const [index, ultracode] of [true, false, null].entries()) {
+    await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", effort: "high", ultracode });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: `Ultracode turn ${index}` });
+    await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === index + 1 && m.session.live === false);
+    const applied = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${session.id}.json`))).lastAppliedExecutionProjection as { captain: { ultracode?: boolean } };
+    assert.equal(applied.captain.ultracode, ultracode ?? undefined);
+    assert.equal(harness.stats.runs.at(-1)?.ultracode, ultracode ?? undefined);
+  }
+  const reset = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: reset.id } });
+  await client.expectOk("session.agent.set", { sessionId: reset.id, agentId: "captain", effort: "high", ultracode: true });
+  await client.expectOk("session.agent.set", { sessionId: reset.id, agentId: "captain", effort: null, ultracode: null });
+  await client.expectOk("turn.submit", { sessionId: reset.id, text: "reset before first message" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === reset.id && m.session.turns === 1 && m.session.live === false);
+  const resetProjection = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), `${reset.id}.json`))).lastAppliedExecutionProjection as { captain: { ultracode?: boolean; effort: { kind: string } } };
+  assert.equal(resetProjection.captain.ultracode, undefined);
+  assert.equal(resetProjection.captain.effort.kind, "provider-default");
+  assert.equal(harness.stats.runs.at(-1)?.ultracode, undefined);
+  assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), before);
+});
+
+
+test("first message refreshes a changed global config while retaining session identity", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  // Structural drift before the first turn has the same typed refusal as a reopen.
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { instruction: "different captain" } } });
+  const refused = await client.command("turn.submit", { sessionId: session.id, text: "refuse before first turn" });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.match(refused.error.message, /Settings changed/);
+  assert.equal(harness.stats.runs.length, 0);
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { instruction: null } } });
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "first-message-model" } } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "first message" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.live === false);
+  assert.equal(harness.stats.runs.at(-1)?.model, "first-message-model");
+  assert.equal((await client.expectOk("session.list", {})).filter(({id}) => id === session.id).length, 1);
 });

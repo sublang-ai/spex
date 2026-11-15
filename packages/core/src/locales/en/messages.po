@@ -775,6 +775,14 @@ msgstr "{path}.subagentModel is not supported for adapter \"{adapter}\""
 msgid "{path}.subagentModel must be a nonblank string"
 msgstr "{path}.subagentModel must be a nonblank string"
 
+#: src/config.ts
+msgid "{path}.ultracode is not supported for adapter \"{adapter}\""
+msgstr "{path}.ultracode is not supported for adapter \"{adapter}\""
+
+#: src/config.ts
+msgid "{path}.ultracode must be a boolean"
+msgstr "{path}.ultracode must be a boolean"
+
 #. The registry answered with an HTTP status Spex does not expect; {registry} is its display name, {status} the status, such as 429
 #: src/environments.ts
 msgid "{registry} answered {status} — Retry later"

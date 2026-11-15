@@ -123,6 +123,7 @@ msgstr "{annotation} · {count, plural, one {# entry} other {# entries}}"
 
 #. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
 #: src/components/TuningField.tsx
+#: src/components/UltracodeField.tsx
 msgid "{choice} ({value})"
 msgstr "{choice} ({value})"
 
@@ -2659,8 +2660,8 @@ msgid "copies made while writing"
 msgstr "copies made while writing"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
-msgstr "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, Ultracode, browser, and permissions"
+msgstr "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, Ultracode, browser, and permissions"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -3368,8 +3369,8 @@ msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
 
 #: src/components/AgentCards.tsx
-msgid "Every role now uses Provider default."
-msgstr "Every role now uses Provider default."
+msgid "No roles still name an official Claude model."
+msgstr "No roles still name an official Claude model."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -3594,7 +3595,6 @@ msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
 
 #. a run that ended with no outcome reported
-#. a run that ended with no outcome reported
 #: src/state/reducer.ts
 msgid "finished"
 msgstr "finished"
@@ -3761,6 +3761,7 @@ msgstr "From Git {source}"
 
 #. tuning choice: take the value the Settings surface configured
 #: src/components/AgentSettings.tsx
+#: src/components/UltracodeField.tsx
 msgid "from Settings"
 msgstr "from Settings"
 
@@ -3995,6 +3996,7 @@ msgstr "Incoming"
 
 #. tuning choice: take whatever the player lane resolves
 #: src/components/TuningField.tsx
+#: src/components/UltracodeField.tsx
 msgid "inherit the player"
 msgstr "inherit the player"
 
@@ -5107,6 +5109,7 @@ msgstr "off"
 #. subagent-model choice: send no subagent model, so the agent is not told to delegate
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 #: src/lib/agent-options.ts
 msgid "Off"
 msgstr "Off"
@@ -5118,6 +5121,7 @@ msgstr "Off (current)"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "Off (unsupported)"
 msgstr "Off (unsupported)"
 
@@ -5140,6 +5144,7 @@ msgstr "Older…"
 #. fast mode is pinned on
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "On"
 msgstr "On"
 
@@ -5150,6 +5155,7 @@ msgstr "On (current)"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/UltracodeField.tsx
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
 
@@ -6552,6 +6558,9 @@ msgstr "Runs slc over the draft's source — a few minutes, longer for many role
 msgid "Same as agent"
 msgstr "Same as agent"
 
+msgid "Same as agent (from subagent effort)"
+msgstr "Same as agent (from subagent effort)"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "Same as Captain"
@@ -6866,10 +6875,6 @@ msgstr "Sessions and project views"
 #: src/lib/agent-cards.ts
 msgid "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
 msgstr "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
-
-#: src/components/AgentCards.tsx
-msgid "Set all to Provider default"
-msgstr "Set all to Provider default"
 
 #. Manual step on Windows; `setx` is the command's name
 #: src/lib/agent-cards.ts
@@ -8190,6 +8195,14 @@ msgstr "Tweak the Captain agent in place"
 msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 msgstr "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 
+#: src/components/UltracodeField.tsx
+msgid "Ultracode"
+msgstr "Ultracode"
+
+#: src/components/UltracodeField.tsx
+msgid "Ultracode is unavailable for this selection."
+msgstr "Ultracode is unavailable for this selection."
+
 #. the runtime reported no default model
 #: src/components/AgentCards.tsx
 msgid "Unavailable"
@@ -8363,11 +8376,6 @@ msgstr "Use"
 #: src/components/SpaceRepairs.tsx
 msgid "Use {folder}"
 msgstr "Use {folder}"
-
-#. sets every role naming an official model to Provider default, named by the model it runs
-#: src/components/AgentCards.tsx
-msgid "Use {model} for all"
-msgstr "Use {model} for all"
 
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
@@ -8719,3 +8727,7 @@ msgstr "your project"
 #: src/lib/space.ts
 msgid "Your sessions"
 msgstr "Your sessions"
+
+#: src/components/AgentCards.tsx
+msgid "Clear Claude model pins"
+msgstr "Clear Claude model pins"

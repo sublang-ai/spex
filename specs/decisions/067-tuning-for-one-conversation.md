@@ -25,6 +25,10 @@ Amended by [DR-093](093-a-players-subagent-model.md) in §"Why this is affordabl
 Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in the same scope: a fifth, the subagent effort.
 Amended by [DR-091](091-models-named-by-the-runtime.md) in §"A chip is a setting, not a receipt" alone: while an agent still runs on the adapter and model setting its latest reporting call began under, its chip's model reads what the runtime reported for that call, and a choice still shows the moment it is taken.
 
+Amended by [DR-235](235-independent-ultracode.md) for independent Ultracode tuning.
+
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+
 ## Context
 
 Model, effort, and fast mode live in Settings, where they are defaults for every session of every project.

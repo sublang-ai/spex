@@ -14,6 +14,8 @@ Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-pla
 Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
 Amended by [DR-102](102-playbook-17-4-1-adoption.md) in its floors alone: Playbook `^17.4.1`, Cligent `^0.33.3`, slc `^0.15.1`.
 
+Amended by [DR-232](232-codex-subagent-selection.md) for Codex, where the subagent selection requests native spawn defaults.
+
 ## Context
 
 Measured against Cligent 0.29 and Claude Code 2.1.284: a Claude session's effort is one setting, the Agent tool's call carries a model but no effort, and the only effort a subagent can own is its definition's.

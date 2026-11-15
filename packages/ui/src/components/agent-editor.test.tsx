@@ -536,16 +536,16 @@ describe("DR-093: a subagent model where the adapter serves one", () => {
   });
 
   test("a stale choice on an adapter that serves none stays clearable", () => {
-    const editor = renderEditor({ adapter: "codex", subagentModel: "gpt-6" });
-    expect(subagent().value).toBe("gpt-6");
+    const editor = renderEditor({ adapter: "gemini", subagentModel: "gemini-test" });
+    expect(subagent().value).toBe("gemini-test");
     fireEvent.change(subagent(), { target: { value: "" } });
     expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
     fireEvent.click(editor.save());
     expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: null }));
   });
 
-  test("switching the adapter resets it [settings-36]", () => {
-    const editor = renderEditor({ adapter: "claude", subagentModel: "claude-sonnet-5-5" });
+  test.each(["claude-sonnet-5-5", "inherit", false] as const)("switching the adapter clears the stored child %s [settings-36]", (subagentModel) => {
+    const editor = renderEditor({ adapter: "claude", subagentModel });
     fireEvent.click(screen.getByTestId("agent-adapter-codex"));
     expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
     fireEvent.click(editor.save());

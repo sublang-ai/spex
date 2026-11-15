@@ -131,12 +131,13 @@ export interface OfficialRole {
    * your own group's. */
   projectId?: string;
   model: string;
+  field?: "subagentModel";
   source: OfficialSource;
 }
 
-/** Every role whose effective model is an official Claude name — the
- * Captain by its own `model`; each role by its binding's own model,
- * else its player's — over your own group's config and each project's
+/** Every role whose primary or child pin is an official Claude name — the
+ * Captain by its own fields; each role by its binding's own field,
+ * else its player's field — over your own group's config and each project's
  * composition. A role a project reads exactly as your own config does
  * is listed once. */
 export function officialRoles(state: ConfigState | undefined, projects: Record<string, ConfigState>): OfficialRole[] {
@@ -147,30 +148,27 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
   if (own.captain.adapter === "claude" && isOfficialModel(own.captain.model)) {
     rows.push({ key: "captain", role: "captain", model: own.captain.model!, source: { kind: "captain" } });
   }
+  if (own.captain.adapter === "claude" && isOfficialModel(own.captain.subagentModel)) {
+    rows.push({ key: "captain:subagentModel", role: "captain", model: own.captain.subagentModel as string, field: "subagentModel", source: { kind: "captain" } });
+  }
   const read = (summary: ConfigSummary, projectId?: string) => {
     for (const playbook of summary.playbooks) {
       for (const [role, binding] of Object.entries(playbook.roles)) {
         const player = summary.players.find((p) => p.id === binding.playerId) ?? own.players.find((p) => p.id === binding.playerId);
         if (player?.agent.adapter !== "claude") continue;
-        let model: string | false | undefined;
-        let source: OfficialSource;
-        if (binding.model !== undefined) {
-          model = binding.model;
-          // A project's file binds players by name alone (core-service-2),
-          // so a binding's own model is your own group's in every
-          // composition.
-          source = { kind: "own-binding", playbookId: playbook.id, role, playerId: binding.playerId };
-        } else {
-          model = player.agent.model;
-          source = { kind: "player", playerId: player.id };
+        for (const field of ["model", "subagentModel"] as const) {
+          const source: OfficialSource = binding[field] !== undefined
+            ? { kind: "own-binding", playbookId: playbook.id, role, playerId: binding.playerId }
+            : { kind: "player", playerId: player.id };
+          const model = binding[field] !== undefined ? binding[field] : player.agent[field];
+          if (!isOfficialModel(model)) continue;
+          const name = `${playbook.id}.${role}`;
+          const same = `${name}:${field}:${JSON.stringify(source)}`;
+          if (seen.has(same)) continue;
+          seen.add(same);
+          rows.push({ key: `${projectId ?? ""}:${name}:${field}`, role: name, ...(projectId !== undefined ? { projectId } : {}), model: model as string,
+            ...(field === "subagentModel" ? { field } : {}), source });
         }
-        if (!isOfficialModel(model)) continue;
-        const name = `${playbook.id}.${role}`;
-        // A project's role standing exactly as yours is one row.
-        const same = `${name}:${JSON.stringify(source)}`;
-        if (seen.has(same)) continue;
-        seen.add(same);
-        rows.push({ key: `${projectId ?? ""}:${name}`, role: name, ...(projectId !== undefined ? { projectId } : {}), model: model as string, source });
       }
     }
   };
@@ -182,18 +180,18 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
 }
 
 /** The batch setting each official name to Provider default where it
- * stands (settings-62): the Captain's and a player's `model` removed,
- * your own group's binding set to `false`. */
+ * stands (settings-62): remove Captain/player fields, set binding primary
+ * pins to `false` and child pins to `inherit` (Same as agent). */
 export function fixPlan(rows: readonly OfficialRole[]): ConfigBatchOpInput[] {
   const ops: ConfigBatchOpInput[] = [];
   const done = new Set<string>();
-  for (const { source } of rows) {
-    const key = JSON.stringify(source);
+  for (const { source, field = "model" } of rows) {
+    const key = `${field}:${JSON.stringify(source)}`;
     if (done.has(key)) continue;
     done.add(key);
-    if (source.kind === "captain") ops.push({ kind: "captain.set", patch: { model: null } });
-    else if (source.kind === "player") ops.push({ kind: "player.set", playerId: source.playerId, patch: { model: null } });
-    else ops.push({ kind: "playbook.role.bind", playbookId: source.playbookId, role: source.role, playerId: source.playerId, model: false });
+    if (source.kind === "captain") ops.push({ kind: "captain.set", patch: { [field]: null } });
+    else if (source.kind === "player") ops.push({ kind: "player.set", playerId: source.playerId, patch: { [field]: null } });
+    else ops.push({ kind: "playbook.role.bind", playbookId: source.playbookId, role: source.role, playerId: source.playerId, [field]: field === "model" ? false : "inherit" });
   }
   return ops;
 }

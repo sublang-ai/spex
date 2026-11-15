@@ -26,6 +26,7 @@ export type AgentPatch = {
   effort?: string | null;
   /** Adapter-scoped fast mode (DR-038); null returns to the default. */
   fastMode?: boolean | null;
+  ultracode?: boolean | null;
   browser?: boolean | null;
   permissions?: AgentBlockInput["permissions"] | null;
 };
@@ -67,6 +68,7 @@ export function bindRole(
     effort?: string | false | null;
     subagentEffort?: string | false | null;
     fastMode?: boolean | null;
+    ultracode?: boolean | null;
   },
   repository?: string,
   client: SpexClient = getClient(),
@@ -74,7 +76,7 @@ export function bindRole(
   // An untouched tuning is absent, not `undefined`: the op means
   // "preserve the existing value" when a key does not appear; null clears it.
   const tuning = Object.fromEntries(
-    Object.entries({ model: next.model, subagentModel: next.subagentModel, effort: next.effort, subagentEffort: next.subagentEffort, fastMode: next.fastMode }).filter(
+    Object.entries({ model: next.model, subagentModel: next.subagentModel, effort: next.effort, subagentEffort: next.subagentEffort, fastMode: next.fastMode, ultracode: next.ultracode }).filter(
       ([, value]) => value !== undefined,
     ),
   );
@@ -90,14 +92,10 @@ export function bindRole(
   });
 }
 
-/** Fixed neutral default for a new role assignment (DR-019), leaving
- * the subagent model and its effort unset — "Same as agent", "Agent
- * chooses" (DR-095); the "Same as Captain" action in the editor copies
- * the Captain's adapter, model, effort, subagent model, subagent
- * effort, fast mode, and permissions instead. */
+/** A new roster player's defaults. Existing blocks continue to own their
+ * selections, including an omitted model or child. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-opus-5-5",
   effort: "high",
   permissions: { mode: "auto" },
 };

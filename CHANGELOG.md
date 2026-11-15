@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Agent chips show the version behind a selected model alias, including Opus 5.5. A session still shows the model its latest matching call reported.
+
 - Projects created in the Chinese interface now have Chinese specs free of translation hash comments, including `meta.md`.
 
 - Native Windows moves a project's records where Spex moves them: at the first sign-in, which names your own group's folder after your login, when a project is added to a group, when a Space renames or moves it, and when one of its places is left or followed; Spex's own watching of the records held them in place before. While another program holds them open, the move changes nothing and stops naming the project, with Retry.
@@ -37,7 +39,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
-- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook 18.2.0 ([changelog](https://github.com/sublang-ai/playbook/blob/v18.2.0/CHANGELOG.md)), and the built-in playbooks stage as `sublang/playbooks` 18.2.0.
+- Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.
+
+- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook `^18.3.1`, Cligent `^0.39.0` and slc `^0.21.0`. The built-in playbooks stage as `sublang/playbooks` 18.3.1.
 
 - App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
 
@@ -52,6 +56,10 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - Desktop and server builds adopt registry-published Cligent 0.36.2 and Playbook 18.1.1 with checksum-locked shared runtimes; app tags no longer consume local vendor archives.
 
 ### Added
+
+- Fresh agent configs and new players use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents on their direct providers. Custom routes keep provider-selected models, including on private seats. The bundled compiler receives the selected subagent and independent Claude Ultracode setting.
+
+- Claude Ultracode can be set independently of reasoning effort. Existing Claude shorthand and Codex effort settings remain compatible.
 
 - Fork verification build rebased onto upstream `82961686`, preserving
   native Windows execution and tag-built macOS arm64 / Windows x64

@@ -7,6 +7,7 @@
 
 Accepted (2026-11-04) on the owner's direction, completing [DR-223](223-windows-storage-checks-what-macos-checks.md) for the storage Playbook keeps.
 Amends [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in the Playbook floor and the built-in release alone.
+Amended by [DR-237](237-published-agent-runtime-floors.md) in the Playbook floor and the built-in release.
 
 ## Context
 

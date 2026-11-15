@@ -201,19 +201,28 @@ test("app-shell-44: both native packaging commands run the resume check after th
   }
 });
 
-test("app-shell-44: the resume check passes only a resume of the same session on the changed default", async () => {
+test("app-shell-44: the native fixture separates settings defaults, service reply names and launch overrides", () => {
+  const source = readFileSync(new URL("packages/core/scripts/check-claude-resume.mjs", root), "utf8");
+  assert.match(source, /JSON\.stringify\(\{ model \}\)/);
+  assert.doesNotMatch(source, /env: \{ ANTHROPIC_MODEL: model \}/);
+  assert.match(source, /model: `service-reported-\$\{model\}`/);
+  assert.match(source, /ANTHROPIC_MODEL: ENV_OVERRIDE/);
+  assert.match(source, /expectedModel: ENV_OVERRIDE/);
+});
+
+test("app-shell-44: the model check requires the expected selection and the same resumed session", async () => {
   const { freshVerdict, resumeVerdict } = await import(new URL("packages/core/scripts/check-claude-resume-verdict.mjs", root).href);
-  const base = { explicit: "probe-explicit", changedDefault: "probe-default-b", freshToken: "session-1" };
-  assert.equal(freshVerdict({ explicit: "probe-explicit", requests: ["probe-explicit"] }), undefined);
-  assert.match(freshVerdict({ explicit: "probe-explicit", requests: [] }), /expected one request naming it/);
-  assert.equal(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-default-b"] }), undefined);
-  // A new session in place of the resume requests the default too, so the
-  // request alone cannot tell it from a resume.
-  assert.match(resumeVerdict({ ...base, resumeToken: "session-2", requests: ["probe-default-b"] }), /started a new session in place of the resume/);
-  assert.match(resumeVerdict({ ...base, resumeToken: undefined, requests: ["probe-default-b"] }), /started a new session/);
-  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-explicit"] }), /restored the session's earlier model probe-explicit/);
-  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: [] }), /expected one request naming the current default/);
-  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-default-b", "probe-default-b"] }), /expected one request/);
+  for (const expectedModel of ["probe-explicit", "probe-default-b", "probe-switched"]) {
+    assert.equal(freshVerdict({ expectedModel, requests: [expectedModel] }), undefined);
+    assert.match(freshVerdict({ expectedModel, requests: [] }), /expected one request/);
+    const base = { expectedModel, freshToken: "session-1", resumeToken: "session-1" };
+    assert.equal(resumeVerdict({ ...base, requests: [expectedModel] }), undefined);
+    assert.match(resumeVerdict({ ...base, resumeToken: "session-2", requests: [expectedModel] }), /started a new session/);
+    assert.match(resumeVerdict({ ...base, resumeToken: undefined, requests: [expectedModel] }), /started a new session/);
+    for (const requests of [[], ["wrong-model"], [expectedModel, expectedModel]]) {
+      assert.match(resumeVerdict({ ...base, requests }), /expected one request/);
+    }
+  }
 });
 
 test("release-40: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {

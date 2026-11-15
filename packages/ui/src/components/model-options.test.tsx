@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { AdapterName, AgentOptions } from "@sublang/spex-core/protocol";
 import { useAppStore } from "../state/store.js";
 import { AgentEditor, AgentEditorPopover } from "./AgentEditor.js";
+import { AgentSettingsPopover } from "./AgentSettings.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
 import { createRef } from "react";
 
@@ -35,6 +36,47 @@ function chooseModel(testId: string, value: string) {
 }
 
 const CUSTOM_ROW = "__spex_custom__";
+
+test("Codex discovery exposes subagent inheritance, model pins and native efforts through the shared editor", async () => {
+  useAppStore.setState({ loadAgentOptions: vi.fn(async (): Promise<AgentOptions> => ({
+    adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+    fastModeSupported: true, subagentModelSupported: true,
+    subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
+    discovery: { status: "available", defaultModel: "codex-parent", models: [{ id: "codex-child", name: "Child" }] },
+  })) });
+  const save = vi.fn();
+  render(<AgentEditor initial={{ adapter: "codex" }} onSave={save} />);
+  await ready();
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Agent chooses");
+  chooseModel("agent-subagent-model", "inherit");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: "inherit" }));
+  chooseModel("agent-subagent-model", "");
+  const efforts = screen.getByTestId("agent-subagent-effort") as HTMLSelectElement;
+  expect(Array.from(efforts.options).map((option) => option.value)).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  expect(efforts.options[0]!.text).toBe("Agent chooses");
+  fireEvent.change(efforts, { target: { value: "high" } });
+  const child = screen.getByTestId("agent-subagent-model-trigger");
+  expect(child.textContent).toBe("Same as agent (from subagent effort)");
+  fireEvent.click(child);
+  const choices = within(screen.getByTestId("agent-subagent-model-listbox")).getAllByRole("option");
+  expect(choices.find(row => row.dataset.value === "")?.textContent).toBe("Same as agent (from subagent effort)");
+  expect(choices.find(row => row.dataset.value === "inherit")?.textContent).toBe("Same as agent");
+  fireEvent.click(child);
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ adapter: "codex", subagentEffort: "high" }));
+  chooseModel("agent-subagent-model", "codex-child");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: "codex-child", subagentEffort: "high" }));
+  cleanup();
+
+  render(<AgentEditor initial={{ adapter: "codex", subagentModel: false }} onSave={save} />);
+  await ready();
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Off");
+  chooseModel("agent-subagent-model", "");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: null }));
+});
 
 test("runtime model selection narrows tuning and preserves a draft needing correction", async () => {
   const save = vi.fn();
@@ -551,11 +593,11 @@ test.each([
 });
 
 test.each([
-  { adapter: "claude" as const, reads: "inherit the player (Provider default · Sonnet · claude-sonnet-5)" },
+  { adapter: "claude" as const, reads: "inherit the player (Provider default)" },
   { adapter: "codex" as const, reads: "inherit the player (Provider default)" },
 ])("playbook-library-39: the inherit choices name a $adapter player's unset model and effort as the provider's default", async ({ adapter, reads }) => {
-  // Claude's catalog reports the model it runs by default; Codex's
-  // reports none, so its provider default is named by the words alone.
+  // Claude's fresh catalog default does not predict a resumed primary;
+  // Codex reports no default here. Both therefore read the words alone.
   useAppStore.setState({ loadAgentOptions: catalogs("sonnet") });
   render(<BindingEditorPopover role="analyst" position="dev.analyst" binding={{ playerId: "analyst", display: adapter }}
     players={[{ id: "analyst", agent: { adapter }, display: adapter, boundBy: [] }]}
@@ -566,6 +608,18 @@ test.each([
   // An unset effort takes the same words: no inherit choice reads bare.
   const effort = (screen.getByTestId("binding-effort-mode") as HTMLSelectElement).options[0];
   expect(effort.textContent).toBe("inherit the player (Provider default)");
+});
+
+test("playbook-library-39: a non-Claude role binding inherits the reported provider default suffix", async () => {
+  useAppStore.setState({ loadAgentOptions: async () => ({
+    ...codexCatalog(), discovery: { status: "available", defaultModel: "codex-default", models: [] },
+  }) });
+  render(<BindingEditorPopover role="analyst" position="dev.analyst" binding={{ playerId: "analyst", display: "Codex" }}
+    players={[{ id: "analyst", agent: { adapter: "codex" }, display: "Codex", boundBy: [] }]}
+    anchorRef={createRef<HTMLButtonElement>()} onSave={vi.fn(async () => {})} onClose={vi.fn()} />);
+  await ready();
+  const inherit = (screen.getByTestId("binding-model-mode") as HTMLSelectElement).options[0];
+  expect(inherit.textContent).toBe("inherit the player (Provider default · codex-default)");
 });
 
 test("settings-36: a switched adapter's field starts over on the provider default", async () => {
@@ -580,4 +634,141 @@ test("settings-36: a switched adapter's field starts over on the provider defaul
   expect(screen.queryByTestId("agent-model")).toBeNull();
   fireEvent.click(screen.getByTestId("agent-save"));
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ adapter: "codex", model: null }));
+});
+
+function enableUltracodeDiscovery(): void {
+  useAppStore.setState({ loadAgentOptions: async (adapter) => ({
+    ...options(adapter),
+    ultracodeSupported: adapter === "claude",
+    discovery: { status: "available", models: [
+      { id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5", effortValues: ["low", "medium", "high", "xhigh"] },
+      { id: "earlier", name: "Earlier", effortValues: ["low", "high"] },
+    ] },
+  }) });
+}
+
+test("Ultracode changes independently and clears when switching adapters", async () => {
+  enableUltracodeDiscovery();
+  const save = vi.fn();
+  render(<AgentEditor initial={{ adapter: "claude", model: "opus", effort: "medium", ultracode: true }} onSave={save} />);
+  await ready();
+  const flag = screen.getByRole("combobox", { name: "Ultracode" });
+  expect((flag as HTMLSelectElement).value).toBe("on");
+  const effort = screen.getByTestId("agent-effort") as HTMLSelectElement;
+  expect(Array.from(effort.options, (item) => item.value)).not.toContain("ultracode");
+  fireEvent.change(flag, { target: { value: "off" } });
+  expect(effort.value).toBe("medium");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ adapter: "claude", model: "opus", effort: "medium", ultracode: false }));
+  fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+  await ready();
+  expect(screen.queryByRole("combobox", { name: "Ultracode" })).toBeNull();
+  expect(Array.from(effort.options, (item) => item.value)).toContain("ultra");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", model: null, effort: null, ultracode: null }));
+});
+
+test("a standing legacy Ultracode effort stays readable and a model without xhigh cannot acquire the flag", async () => {
+  enableUltracodeDiscovery();
+  const save = vi.fn();
+  render(<AgentEditor initial={{ adapter: "claude", model: "opus", effort: "ultracode" }} allowUnchanged onSave={save} />);
+  await ready();
+  fireEvent.click(screen.getByTestId("agent-save"));
+  expect(save).toHaveBeenCalledWith({ adapter: "claude", model: "opus", effort: "ultracode" });
+  fireEvent.change(screen.getByTestId("agent-effort"), { target: { value: "low" } });
+  expect((screen.getByTestId("agent-ultracode") as HTMLSelectElement).value).toBe("on");
+  chooseModel("agent-model", "earlier");
+  expect(screen.getByText("Ultracode is unavailable for this selection.")).toBeTruthy();
+  expect((screen.getByTestId("agent-save") as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByTestId("agent-ultracode"), { target: { value: "inherit" } });
+  expect(screen.queryByTestId("agent-ultracode")).toBeNull();
+});
+
+test("a Claude conversation's unpinned model does not promise the fresh catalog default", async () => {
+  useAppStore.setState({ loadAgentOptions: async () => ({ ...options("claude"), discovery: { status: "available", defaultModel: "new-default", models: [] } }) });
+  render(<AgentSettingsPopover anchorRef={createRef<HTMLButtonElement>()} onSave={vi.fn(async () => {})} onClose={vi.fn()} readOnly={false} agent={{
+    id: "coder", name: "Coder", adapter: "claude", configured: {}, divergentRoles: [],
+  }} />);
+  const mode = await screen.findByTestId("agent-coder-model-mode") as HTMLSelectElement;
+  await waitFor(() => expect(screen.queryByText("Loading model options…")).toBeNull());
+  expect(mode.selectedOptions[0]!.textContent).toBe("from Settings (Provider default)");
+  expect(mode.textContent).not.toContain("new-default");
+});
+
+test.each([
+  { subagentEffort: undefined, expected: "Agent chooses" },
+  { subagentEffort: "high", expected: "Same as agent" },
+])("role and conversation inherit the Codex subagent selection as $expected", async ({ subagentEffort, expected }) => {
+  useAppStore.setState({ loadAgentOptions: async () => ({
+    ...options("codex"), subagentModelSupported: true, subagentEffortValues: ["high"],
+  }) });
+  const player = { adapter: "codex" as const, subagentEffort };
+  const anchorRef = createRef<HTMLButtonElement>();
+  const props = { anchorRef, onSave: vi.fn(async () => {}), onClose: vi.fn() };
+  const binding = render(<BindingEditorPopover {...props} role="coder" position="code.coder"
+    binding={{ playerId: "coder", display: "Codex" }}
+    players={[{ id: "coder", agent: player, display: "Codex", boundBy: [] }]} />);
+  await ready();
+  const field = (id: string) => (screen.getByTestId(id) as HTMLSelectElement).selectedOptions[0]!.textContent;
+  expect(field("binding-subagent-model-mode")).toContain(expected);
+  binding.unmount();
+  render(<AgentSettingsPopover {...props} readOnly={false} agent={{
+    id: "coder", name: "Coder", adapter: "codex", configured: player, divergentRoles: [],
+  }} />);
+  await screen.findByTestId("agent-coder-subagent-model-mode");
+  expect(field("agent-coder-subagent-model-mode")).toContain(expected);
+});
+
+test("role and conversation overrides preserve explicit off and can return to inheritance", async () => {
+  enableUltracodeDiscovery();
+  const save = vi.fn(async () => {});
+  const player = { adapter: "claude" as const, model: "opus", effort: "medium", ultracode: true };
+  const binding = render(<BindingEditorPopover role="coder" position="code.coder" binding={{ playerId: "coder", display: "Claude" }}
+    players={[{ id: "coder", agent: player, display: "Claude", boundBy: [] }]}
+    anchorRef={createRef<HTMLButtonElement>()} onSave={save} onClose={vi.fn()} />);
+  await ready();
+  const flag = screen.getByTestId("binding-ultracode") as HTMLSelectElement;
+  expect(flag.selectedOptions[0]?.textContent).toMatch(/on/i);
+  fireEvent.change(flag, { target: { value: "off" } });
+  fireEvent.click(screen.getByTestId("binding-save"));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ playerId: "coder", ultracode: false })));
+  binding.unmount();
+  render(<AgentSettingsPopover agent={{ id: "coder", name: "Coder", adapter: "claude", configured: player,
+    settings: { ultracode: false }, divergentRoles: [] }} anchorRef={createRef<HTMLButtonElement>()}
+    readOnly={false} onSave={save} onClose={vi.fn()} />);
+  const setting = await screen.findByTestId("agent-coder-ultracode");
+  expect((setting as HTMLSelectElement).value).toBe("off");
+  fireEvent.change(setting, { target: { value: "inherit" } });
+  fireEvent.click(screen.getByTestId("agent-save-coder"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ ultracode: null })));
+});
+
+test.each(["loading", "failed"])("a standing Ultracode choice stays unverified while discovery is %s", async (state) => {
+  const response = state === "loading" ? () => new Promise<AgentOptions>(() => {}) : async () => { throw new Error("fixture offline"); };
+  useAppStore.setState({ loadAgentOptions: response });
+  render(<AgentEditor initial={{ adapter: "claude", ultracode: true }} allowUnchanged onSave={vi.fn()} />);
+  if (state === "failed") await screen.findByText(/fixture offline/);
+  expect(screen.getByTestId("agent-ultracode").querySelector("option:checked")?.textContent).toBe("On");
+  expect(screen.queryByText("Ultracode is unavailable for this selection.")).toBeNull();
+});
+
+test.each(["binding", "conversation"])("an inherited On explains the %s save refusal until overridden", async (source) => {
+  enableUltracodeDiscovery();
+  const player = { adapter: "claude" as const, model: "earlier", ultracode: true };
+  const save = vi.fn(async () => {});
+  const anchorRef = createRef<HTMLButtonElement>();
+  if (source === "binding") {
+    render(<BindingEditorPopover role="coder" position="code.coder" binding={{ playerId: "coder", display: "Claude" }}
+      players={[{ id: "coder", agent: player, display: "Claude", boundBy: [] }]}
+      anchorRef={anchorRef} onSave={save} onClose={vi.fn()} />);
+  } else {
+    render(<AgentSettingsPopover agent={{ id: "coder", name: "Coder", adapter: "claude", configured: player, divergentRoles: [] }}
+      anchorRef={anchorRef} readOnly={false} onSave={save} onClose={vi.fn()} />);
+  }
+  await screen.findByText("Ultracode is unavailable for this selection.");
+  const button = screen.getByTestId(source === "binding" ? "binding-save" : "agent-save-coder") as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  fireEvent.change(screen.getByTestId(source === "binding" ? "binding-ultracode" : "agent-coder-ultracode"), { target: { value: "off" } });
+  expect(screen.queryByText("Ultracode is unavailable for this selection.")).toBeNull();
+  expect(button.disabled).toBe(false);
 });

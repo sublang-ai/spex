@@ -2,12 +2,11 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { useEffect, useState } from "react";
-import type { AdapterName, AgentModelOption, AgentOptions } from "@sublang/spex-core/protocol";
+import { adapterNameSchema, type AdapterName, type AgentModelOption, type AgentOptions } from "@sublang/spex-core/protocol";
 import { i18n } from "../i18n.js";
 import { usePlaceStore } from "../state/place-context.js";
 
-/** Discovery belongs to an open editor, never application startup.
- * A caller passing `epoch` reads the catalog again each time it changes,
+/** A caller passing `epoch` reads the catalog again each time it changes,
  * keeping the earlier reading as `refreshing` until the new one lands;
  * a failed reading replaces it (settings-5, DR-217). */
 export function useAgentOptions(adapter: AdapterName, epoch?: number) {
@@ -17,7 +16,7 @@ export function useAgentOptions(adapter: AdapterName, epoch?: number) {
   const [result, setResult] = useState<{ adapter: AdapterName; attempt: number; epoch?: number; options?: AgentOptions; error?: string }>();
   useEffect(() => {
     let active = true;
-    void Promise.resolve().then(() => load(adapter)).then(
+    void Promise.resolve().then(() => load(adapter, attempt > 0 || (epoch ?? 0) > 0)).then(
       (options) => { if (active) setResult({ adapter, attempt, epoch, options }); },
       (cause: unknown) => { if (active) setResult({ adapter, attempt, epoch, error: cause instanceof Error ? cause.message : String(cause) }); },
     );
@@ -80,6 +79,24 @@ export function modelDisplayText(display: ModelDisplay): string {
   return display.specific === undefined ? display.name : `${display.name} · ${display.specific}`;
 }
 
+/** A configured chip has room for one model. Prefer the specific ID
+ * behind an alias; keep the chosen variant when its ID extends that
+ * resolution, e.g. a larger context window (settings-74). */
+export function useChipModel(adapter: string | undefined, value: string | undefined): string | undefined {
+  const store = usePlaceStore();
+  const known = adapterNameSchema.options.find((name) => name === adapter);
+  const catalog = store((state) => known && state.modelCatalogs[known]);
+  const connected = store((state) => state.connection === "open");
+  const load = store((state) => state.loadAgentOptions);
+  useEffect(() => {
+    if (connected && value && known && !catalog) void load(known).catch(() => {});
+  }, [connected, value, known, catalog, load]);
+  if (!value || catalog?.status !== "available") return value;
+  const row = catalog.models.find((entry) => entry.id === value);
+  if (row?.resolvedModel) return value.startsWith(row.resolvedModel) ? value : row.resolvedModel;
+  return modelDisplayText(modelDisplay(catalog.models, value));
+}
+
 /** The words for the empty value — a model's, and an inherited
  * effort's — read on each render, never at module load, so they follow
  * the reader's language (localization-4). */
@@ -129,9 +146,15 @@ export function modelTuning(options: AgentOptions | undefined, model: string) {
   const available = options?.discovery?.status === "available" ? options.discovery : undefined;
   const selected = available ? findModel(available.models ?? [], model) : undefined;
   const efforts = selected?.effortValues ?? options?.effortValues ?? [];
-  const additionalEfforts = (available?.unreportedEffortValues ?? []).filter((effort) => !efforts.includes(effort));
+  const separateUltracode = options?.ultracodeSupported === true;
+  const reasoningEfforts = separateUltracode ? efforts.filter((value) => value !== "ultracode") : efforts;
+  const additionalEfforts = (available?.unreportedEffortValues ?? []).filter((value) =>
+    !reasoningEfforts.includes(value) && !(separateUltracode && value === "ultracode"));
+  const ultracodeModel = selected ?? (!model && available?.defaultModel ? findModel(available.models, available.defaultModel) : undefined);
   return {
-    efforts: [...new Set([...efforts, ...additionalEfforts])],
+    efforts: [...new Set([...reasoningEfforts, ...additionalEfforts])],
+    separateUltracode,
+    ultracodeSupported: separateUltracode && (ultracodeModel?.effortValues?.includes("xhigh") ?? true),
     additionalEfforts,
     effortKnown: selected?.effortValues !== undefined,
     fastModeSupported: selected?.fastModeSupported ?? options?.fastModeSupported,

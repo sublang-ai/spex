@@ -353,6 +353,7 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
     ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
   };
@@ -1260,7 +1261,7 @@ export class AuthorManager {
     return {
       playerId,
       agent,
-      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), String(agent.subagentModel ?? ""), agent.subagentEffort ?? ""].join("|"),
+      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), String(agent.ultracode ?? ""), String(agent.subagentModel ?? ""), agent.subagentEffort ?? ""].join("|"),
     };
   }
 
@@ -1416,9 +1417,8 @@ export class AuthorManager {
     }
     this.append(id, instance, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
     // The block's model, effort and fast mode, and its subagent model
-    // and effort (DR-093) — an unset subagent model resolved to
-    // `inherit` and an Off sent as none, as the launcher resolves them
-    // (DR-095); `{ mode: "auto" }` with the package as cwd and no extra
+    // and effort as the launcher resolves them, including native Codex
+    // defaults for an untuned block (DR-237); `{ mode: "auto" }` with the package as cwd and no extra
     // writable paths (DR-112); no tool lists, no maxTurns, no role — the
     // records name the player, not the events (playbook-library-64).
     const options: CligentOptions<string, boolean, string> = {
@@ -1426,6 +1426,7 @@ export class AuthorManager {
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+      ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
       ...subagentTuningOf(agent),
       permissions: { mode: "auto" },
       ...(agent.browser !== undefined ? {browser: agent.browser} : {}),

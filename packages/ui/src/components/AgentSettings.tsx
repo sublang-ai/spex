@@ -15,7 +15,7 @@
 import { useState, type RefObject } from "react";
 import type { MediaUploadOwner, SessionAgentSettings } from "@sublang/spex-core/protocol";
 
-import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { useAgentOptions, modelTuning, useChipModel } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { usePopover } from "../lib/usePopover.js";
 import { useFitInBox } from "../lib/popover-fit.js";
@@ -29,6 +29,7 @@ import {
 import { FAST_MODE_MARK, fastModeWord } from "./AgentChip.js";
 import { useBrowserTools } from "../lib/useBrowserTools.js";
 import { BrowserControl } from "./BrowserControl.js";
+import { UltracodeField } from "./UltracodeField.js";
 import { TuningField } from "./TuningField.js";
 
 /** What this conversation's own choice departs from, named where the
@@ -57,16 +58,20 @@ export interface AgentSettingsChange {
   effort?: string | false | null;
   subagentEffort?: string | false | null;
   fastMode?: boolean | null;
+  ultracode?: boolean | null;
   browser?: boolean | null;
 }
 
 /** What an agent runs, as a chip reads it: the model its runtime
  * reported for its latest call while the settings that call began under
  * still stand, else the model it is set to run (run-view-139, DR-091). */
-export function agentReading(agent: SessionAgent): string {
-  const effective = effectiveSettings(agent);
-  let text = reportedModel(agent) ?? effective.model ?? agent.adapter;
-  if (effective.effort) text += ` @ ${effective.effort}`;
+export function useAgentReading(agent?: SessionAgent): string {
+  const effective = agent && effectiveSettings(agent);
+  const reported = agent && reportedModel(agent);
+  const model = reported === undefined && agent?.settings?.model !== false ? effective?.model : undefined;
+  const configured = useChipModel(agent?.adapter, model);
+  let text = reported ?? configured ?? effective?.model ?? agent?.adapter ?? "";
+  if (effective?.effort) text += ` @ ${effective.effort}`;
   return text;
 }
 
@@ -104,7 +109,7 @@ export function AgentChipButton({
   anchorRef?: RefObject<HTMLButtonElement | null>;
   open?: boolean;
 }) {
-  const reading = agentReading(agent);
+  const reading = useAgentReading(agent);
   const reported = reportedPhrase(agent);
   const changed = changedFields(agent.settings).length > 0;
   const fastMode = effectiveSettings(agent).fastMode;
@@ -175,6 +180,7 @@ export function AgentSettingsPopover({
     effort: draft.effort === false ? undefined : draft.effort ?? agent.configured.effort,
     subagentEffort: draft.subagentEffort === false ? undefined : draft.subagentEffort ?? agent.configured.subagentEffort,
     fastMode: draft.fastMode ?? agent.configured.fastMode,
+    ultracode: draft.ultracode ?? agent.configured.ultracode,
   }, context);
   // Unknown or unsupported support blocks only a browser this edit newly
   // turns on, never the conversation's standing choice kept while other
@@ -187,7 +193,10 @@ export function AgentSettingsPopover({
   const catalog = discovery.options?.discovery?.status === "available" ? discovery.options.discovery : undefined;
   const models = catalog?.models ?? [];
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? agent.configured.effort;
-  const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !tuning.efforts.includes(effectiveEffort));
+  const legacyEffort = tuning.separateUltracode && effectiveEffort === "ultracode";
+  const inheritedUltracode = agent.configured.ultracode ?? (legacyEffort ? true : undefined);
+  const invalidUltracode = Boolean(discovery.options && (draft.ultracode ?? inheritedUltracode) === true && !tuning.ultracodeSupported);
+  const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !legacyEffort && !tuning.efforts.includes(effectiveEffort));
   const invalidModel = [draft.model, draft.subagentModel].some((value) => typeof value === "string" && !value.trim());
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
@@ -235,7 +244,7 @@ export function AgentSettingsPopover({
             value={draft.model}
             playerDefault={agent.configured.model}
             models={models}
-            defaultModel={catalog?.defaultModel}
+            defaultModel={agent.adapter === "claude" ? undefined : catalog?.defaultModel}
             onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
           />
           <TuningField
@@ -246,7 +255,11 @@ export function AgentSettingsPopover({
             playerDefault={agent.configured.effort}
             efforts={tuning.efforts}
             additionalEfforts={tuning.additionalEfforts}
-            onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { effort: undefined } : { effort: next }) }))}
+            onChange={(next) => setDraft((current) => ({
+              ...current, effort: next ?? undefined,
+              ...(legacyEffort && next !== "ultracode" && current.ultracode == null && agent.configured.ultracode === undefined && tuning.ultracodeSupported
+                ? { ultracode: true } : {}),
+            }))}
           />
           {offersSubagentModel && (
             <>
@@ -256,6 +269,8 @@ export function AgentSettingsPopover({
                 inheritLabel={fromSettings()}
                 value={draft.subagentModel}
                 playerDefault={agent.configured.subagentModel}
+                codexSubagent={agent.adapter === "codex"}
+                subagentEffort={draft.subagentEffort ?? agent.configured.subagentEffort}
                 models={models}
                 onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { subagentModel: undefined } : { subagentModel: next }) }))}
               />
@@ -272,6 +287,9 @@ export function AgentSettingsPopover({
           )}
         </div>
       </div>
+      <UltracodeField testId={`agent-${agent.id}-ultracode`} supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
+        value={draft.ultracode ?? undefined} inherited={inheritedUltracode} source="settings"
+        disabled={readOnly || busy} onChange={(value) => setDraft((current) => ({ ...current, ultracode: value }))} />
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && (
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-neutral-500 dark:text-neutral-400">{fastModeWord()}</span>
@@ -354,7 +372,7 @@ export function AgentSettingsPopover({
           <button
             type="button"
             data-testid={`agent-save-${agent.id}`}
-            disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
+            disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode || invalidUltracode}
             onClick={() => {
               setBusy(true);
               setError(undefined);
@@ -364,6 +382,7 @@ export function AgentSettingsPopover({
                 effort: draft.effort ?? null,
                 subagentEffort: draft.subagentEffort ?? null,
                 fastMode: draft.fastMode ?? null,
+                ...(draft.ultracode !== undefined || agent.settings?.ultracode !== undefined ? { ultracode: draft.ultracode ?? null } : {}),
                 browser: draft.browser ?? null,
               }))
                 .then(() => onClose())

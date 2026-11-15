@@ -45,6 +45,7 @@ import {
   type AgentExecutable,
   type RuntimeReadiness,
 } from "@sublang/cligent";
+import { isUltracodeSupported } from "@sublang/playbook/playbook-captain";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { seedConfigText } from "@sublang/playbook/seed-config";
@@ -132,7 +133,7 @@ const NO_MODULES: PlaybookModules = { find: () => undefined, repository: "" };
 
 /** Fields a project's file may not hold: what each player runs on is
  * yours alone (core-service-2, DR-103). */
-const MODEL_FIELDS = ["model", "effort", "fastMode", "subagentModel", "subagentEffort", "adapter"];
+const MODEL_FIELDS = ["model", "effort", "fastMode", "ultracode", "subagentModel", "subagentEffort", "adapter"];
 
 const notInProjectFile = (entry: string): Error =>
   new Error(i18n._({
@@ -217,7 +218,7 @@ const AGENT_FIELDS = new Set([
   // Adapter-scoped fast mode (cligent 0.24). Spex accepts and preserves it
   // so a config the launcher accepts is never rejected here
   // (shared-config-roundtrip-1); cligent owns which adapters allow it.
-  "fastMode",
+  "fastMode", "ultracode",
   "browser",
   // The model the agent's subagents run on (cligent 0.29, DR-093) — a
   // model, `inherit` for the agent's own, or `false` to send none
@@ -256,6 +257,7 @@ export interface ResolvedAgent {
   effort?: string;
   /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
   /** Adapter-scoped subagent model (DR-093) as the file says it: a
@@ -291,6 +293,7 @@ export interface SessionAgentBlock {
   /** Adapter-scoped fast mode, forwarded so the setting takes effect
    * (playbook 11: `false` is a literal disabled request). */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** Managed browser tools; omission remains off. */
   browser?: boolean;
   /** The model every subagent runs on, `inherit` for the agent's own,
@@ -314,6 +317,7 @@ export interface ResolvedBinding {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
+  ultracode?: boolean;
   subagentModel?: string | false;
   subagentEffort?: string | false;
 }
@@ -326,6 +330,7 @@ export interface HostRoleBinding {
   effort: TuningSelection;
   /** A role's own fast-mode override; absent inherits the player's. */
   fastMode?: boolean;
+  ultracode?: boolean;
   /** The role's subagent model with inheritance resolved, `false` — Off —
    * carried until the projection is built, as the player's is
    * (DR-093, DR-095). */
@@ -807,10 +812,9 @@ export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
  * signed in or not, so the seed is shown none. */
 const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
 
-/** The home whose agent sign-ins and Claude user settings a seed reads;
- * `null` on a seat, whose server account's are no member's
- * (core-service-3, core-service-126). */
-export type SeedHome = string | null;
+/** A local user home permits sign-in and settings lookup. A seat grants
+ * only its materialized native Codex home, or no filesystem lookup. */
+export type SeedHome = string | { codexHome: string } | null;
 
 /** Whether each agent is set up as a seed counts it (core-service-3,
  * DR-205): a credential variable — Claude's user settings included, as
@@ -825,7 +829,7 @@ export async function seedCredentials(
   const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
     if (variableCredential(adapter, env, home)) return true;
     if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
-    if (home === null) return false;
+    if (typeof home !== "string") return false;
     // The status command runs only where the folder stands, since it
     // would create it.
     if (!existsSync(agentFolder(adapter, env, home))) return false;
@@ -837,7 +841,7 @@ export async function seedCredentials(
 
 /** An agent's credential variable, as a run reads it (DR-204). */
 function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
-  const runEnv = adapter === "claude" && home !== null ? { ...env, ...claudeSettingsEnv(env, home) } : env;
+  const runEnv = adapter === "claude" && typeof home === "string" ? { ...env, ...claudeSettingsEnv(env, home) } : env;
   return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
 }
 
@@ -866,45 +870,16 @@ function agentFolder(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: 
 
 /** Playbook's own seed for these credentials, as Spex writes it
  * (core-service-3, DR-154): it reads the credentials confirmed above,
- * one variable standing for each, with no home folder (DR-205); behind
- * a third-party service its Claude agents take the provider's default
- * in place of an official name, which that service would map by its
- * own rule. */
+ * one variable standing for each, with no credential home (DR-205).
+ * Model selection uses the separate provider environment and home. */
 function seedText(env: NodeJS.ProcessEnv, home: SeedHome, credentials: SeedCredentials): string {
   const input: NodeJS.ProcessEnv = {
     ...(credentials.claude ? { ANTHROPIC_API_KEY: "confirmed" } : {}),
     ...(credentials.codex ? { OPENAI_API_KEY: "confirmed" } : {}),
   };
-  const text = starterText(seedConfigText({ env: input, homeDir: NO_HOME }).text);
-  const service = anthropicBaseUrl(home === null ? env : { ...env, ...claudeSettingsEnv(env, home) });
-  return service.state === "third-party" ? withoutOfficialModels(text) : text;
-}
-
-/** Anthropic's own naming (settings-61): a `claude-` model, or one of
- * its aliases, with or without the 1M-context suffix. */
-export function isOfficialModel(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  return /^claude-/i.test(value) || /^(opus|sonnet|haiku|fable)(\[1m\])?$/i.test(value);
-}
-
-/** The seed with each Claude agent's official `model` removed, so it
- * runs on the provider's default; comments kept. */
-export function withoutOfficialModels(text: string): string {
-  const document = parseDocument(text);
-  if (document.errors.length > 0) return text;
-  const agents: (string | number)[][] = [["captain"]];
-  const players = document.get("players", true);
-  if (isMap(players)) {
-    for (const item of players.items) agents.push(["players", isScalar(item.key) ? String(item.key.value) : String(item.key)]);
-  }
-  let removed = false;
-  for (const path of agents) {
-    if (document.getIn([...path, "adapter"]) !== "claude") continue;
-    if (!isOfficialModel(document.getIn([...path, "model"]))) continue;
-    document.deleteIn([...path, "model"]);
-    removed = true;
-  }
-  return removed ? document.toString() : text;
+  return starterText(seedConfigText({
+    env: input, homeDir: NO_HOME, modelEnv: env, modelHome: home ?? undefined,
+  }).text);
 }
 
 /**
@@ -1211,6 +1186,7 @@ function toResolvedAgent(
       }),
     );
   }
+  assertUltracode(rest.ultracode, adapter, path);
   // `false` is Off and valid on any adapter, as the launcher drops it
   // before cligent sees the block (DR-095).
   if (rest.subagentModel !== undefined && rest.subagentModel !== false) {
@@ -1220,34 +1196,33 @@ function toResolvedAgent(
     assertSubagentEffort(
       rest.subagentEffort,
       adapter,
-      delegatedModel(adapter, rest.subagentModel as string | false | undefined),
+      delegatedModel(adapter, rest.subagentModel as string | false | undefined, rest.subagentEffort),
       path,
     );
   }
   return rest as unknown as ResolvedAgent;
 }
 
-/** The subagent model an agent delegates on (DR-095), exactly as
- * Playbook's launcher resolves it: a string as it is, `false` as Off,
- * and an unset one as `inherit` — the agent's own model — wherever
- * cligent serves a subagent model for the adapter, with or without an
- * effort beside it; absent where it serves none. The configuration file
- * and its summary keep the omission. */
+/** Keep an untuned Codex call on its native defaults. A child effort on
+ * its own explicitly requests delegation using the parent's model. */
 function delegationOf(
   adapter: string,
   subagentModel: string | false | undefined,
+  subagentEffort?: unknown,
 ): string | false | undefined {
   if (subagentModel !== undefined) return subagentModel;
+  if (adapter === "codex" && subagentEffort === undefined) return undefined;
   return isSubagentModelSupported(adapter as never) ? "inherit" : undefined;
 }
 
 /** The subagent model an agent's call carries: its delegation with Off
  * sent as none, as the launcher strips it (DR-095). */
-function delegatedModel(
+export function delegatedModel(
   adapter: string,
   subagentModel: string | false | undefined,
+  subagentEffort?: unknown,
 ): string | undefined {
-  const delegation = delegationOf(adapter, subagentModel);
+  const delegation = delegationOf(adapter, subagentModel, subagentEffort);
   return delegation === false ? undefined : delegation;
 }
 
@@ -1414,7 +1389,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   }
-  const allowed = new Set(["player", "model", "effort", "fastMode", "subagentModel", "subagentEffort"]);
+  const allowed = new Set(["player", "model", "effort", "fastMode", "ultracode", "subagentModel", "subagentEffort"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
     throw new ConfigViolation("binding-keys", `${path}.${key}`,
@@ -1453,6 +1428,8 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   };
+  const ultracode = value.ultracode;
+  if (ultracode !== undefined && typeof ultracode !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
   const fastMode = value.fastMode;
   if (fastMode !== undefined && typeof fastMode !== "boolean") {
     // Unlike model and effort, fast mode carries no provider-default
@@ -1471,6 +1448,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     ...(tuning("model") !== undefined ? { model: tuning("model") } : {}),
     ...(tuning("effort") !== undefined ? { effort: tuning("effort") } : {}),
     ...(fastMode !== undefined ? { fastMode } : {}),
+    ...(ultracode !== undefined ? { ultracode } : {}),
     ...(tuning("subagentModel") !== undefined
       ? { subagentModel: tuning("subagentModel") }
       : {}),
@@ -1486,7 +1464,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
 export function subagentTuningOf(
   agent: Pick<ResolvedAgent, "adapter" | "subagentModel" | "subagentEffort">,
 ): { subagentModel?: string; subagentEffort?: string } {
-  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel);
+  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel, agent.subagentEffort);
   return {
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
@@ -1504,6 +1482,7 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined
@@ -2099,7 +2078,7 @@ function composeEntry(
       assertSubagentEffort(
         subagentEffort,
         player.adapter,
-        subagentModel === false ? undefined : subagentModel,
+        delegatedModel(player.adapter, subagentModel, subagentEffort),
         path,
       );
     }
@@ -2107,11 +2086,14 @@ function composeEntry(
     // binding takes its player's fast mode here, as the launcher's
     // `binding ?? player` does; `false` stays a literal request.
     const fastMode = binding.fastMode ?? player.fastMode;
+    const ultracode = binding.ultracode ?? player.ultracode;
+    assertUltracode(ultracode, player.adapter, path);
     hostBindings[role] = {
       playerId: binding.playerId,
       model: select(binding.model, player.model),
       effort: select(binding.effort, player.effort),
       ...(fastMode !== undefined ? { fastMode } : {}),
+      ...(ultracode !== undefined ? { ultracode } : {}),
       ...(subagentModel !== undefined ? { subagentModel } : {}),
       ...(subagentEffort !== undefined ? { subagentEffort } : {}),
     };
@@ -2288,6 +2270,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.ultracode !== undefined ? { ultracode: agent.ultracode } : {}),
     ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(agent.subagentModel !== undefined
       ? { subagentModel: agent.subagentModel }
@@ -2365,6 +2348,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               ...(binding.model !== undefined ? { model: binding.model } : {}),
               ...(binding.effort !== undefined ? { effort: binding.effort } : {}),
               ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
+              ...(binding.ultracode !== undefined ? { ultracode: binding.ultracode } : {}),
               ...(binding.subagentModel !== undefined
                 ? { subagentModel: binding.subagentModel }
                 : {}),
@@ -2730,4 +2714,12 @@ export async function checkAdapterReadiness(
     ...(credential ? { credential } : {}),
     ...(unconfirmed !== undefined ? { unconfirmed } : {}),
   };
+}
+
+export { isUltracodeSupported };
+
+export function assertUltracode(value: unknown, adapter: string, path: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
+  if (value && !isUltracodeSupported(adapter)) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
 }

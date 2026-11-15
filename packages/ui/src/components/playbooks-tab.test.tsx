@@ -322,13 +322,15 @@ describe("playbook-library-38: roles one player plays stand on one line", () => 
           roles: ["host", "critic", "scribe"],
           entry: ["own"],
           bindings: {
-            host: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "own" },
+            host: { playerId: "dev.coder", model: "opus", display: "opus @ high", from: "own" },
             critic: { playerId: "dev.reviewer", display: "gpt-5.6-sol", from: "own" },
-            scribe: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "own" },
+            scribe: { playerId: "dev.coder", model: "opus", display: "opus @ high", from: "own" },
           },
         }),
       ],
-    });
+    }, { modelCatalogs: { claude: {
+      status: "available", models: [{ id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5" }],
+    } } });
     const shared = lineOf("decide", "host");
     expect(shared).toBe(lineOf("decide", "scribe"));
     expect(shared.dataset.roles).toBe("host scribe");
@@ -337,8 +339,8 @@ describe("playbook-library-38: roles one player plays stand on one line", () => 
     // the tooltip, and what that binding runs (run-view-177).
     const player = within(shared).getByTestId("role-binding-decide-host");
     expect(player.textContent).toBe("Ccoder");
-    expect(player.title).toBe("dev.coder · claude-opus-5 @ high");
-    expect(within(shared).getByLabelText("dev.coder: claude · claude-opus-5 @ high (ready)")).toBeTruthy();
+    expect(player.title).toBe("dev.coder · opus @ high");
+    expect(within(shared).getByLabelText("dev.coder: claude · claude-opus-5-5 @ high (ready)")).toBeTruthy();
     expect(within(shared).getByTestId("role-bind-decide-host")).toBeTruthy();
     expect(within(shared).getByTestId("role-bind-decide-scribe")).toBeTruthy();
     expect(lineOf("decide", "critic")).not.toBe(shared);

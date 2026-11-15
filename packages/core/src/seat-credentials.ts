@@ -289,6 +289,12 @@ export class SeatEnvironment {
     }
   }
 
+  /** Only the materialized seat home is trusted for reading native routing. */
+  modelHome(): { codexHome: string } | null {
+    return this.codexHome && this.decided.get("CODEX_HOME") === this.codexHome
+      ? { codexHome: this.codexHome } : null;
+  }
+
   /** The values a run of `adapter` inherits now, by form name. */
   runValues(adapter: AdapterName): Record<string, string> {
     const values: Record<string, string> = {};

@@ -55,6 +55,7 @@ export function effectiveSettings(agent: SessionAgent): {
   effort?: string;
   subagentEffort?: string;
   fastMode?: boolean;
+  ultracode?: boolean;
   browser?: boolean;
 } {
   const pick = (chosen: string | false | undefined, configured: string | undefined): string | undefined =>
@@ -64,6 +65,7 @@ export function effectiveSettings(agent: SessionAgent): {
   const subagentModel = agent.settings?.subagentModel !== undefined ? agent.settings.subagentModel : agent.configured.subagentModel;
   const subagentEffort = agent.settings?.subagentEffort === false ? undefined : agent.settings?.subagentEffort ?? agent.configured.subagentEffort;
   return {
+    ultracode: agent.settings?.ultracode ?? agent.configured.ultracode,
     browser: agent.settings?.browser ?? agent.configured.browser ?? false,
     ...(pick(agent.settings?.model, agent.configured.model) !== undefined ? { model: pick(agent.settings?.model, agent.configured.model) } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
@@ -109,6 +111,7 @@ export function changedFields(settings: SessionAgentSettings | undefined): strin
   if (settings.subagentModel !== undefined) named.push("subagent model");
   if (settings.effort !== undefined) named.push("effort");
   if (settings.subagentEffort !== undefined) named.push("subagent effort");
+  if (settings.ultracode !== undefined) named.push("Ultracode");
   if (settings.fastMode !== undefined) named.push("fast mode");
   if (settings.browser !== undefined) named.push("browser");
   return named;
@@ -126,7 +129,7 @@ export function sessionAgents(
       Object.entries(playbook.roles)
         .filter(([, binding]) =>
           binding.playerId === playerId &&
-          (binding.model !== undefined || binding.subagentModel !== undefined || binding.effort !== undefined || binding.subagentEffort !== undefined || binding.fastMode !== undefined))
+          (binding.model !== undefined || binding.subagentModel !== undefined || binding.effort !== undefined || binding.subagentEffort !== undefined || binding.fastMode !== undefined || binding.ultracode !== undefined))
         .map(([role]) => `${playbook.id}.${role}`));
   const agentOf = (id: string, name: string, block: ConfigSummary["captain"] | undefined, adapter: AdapterName, divergentRoles: string[]): SessionAgent => ({
     id,
@@ -139,6 +142,7 @@ export function sessionAgents(
       ...(block?.subagentModel !== undefined ? { subagentModel: block.subagentModel } : {}),
       ...(block?.subagentEffort !== undefined ? { subagentEffort: block.subagentEffort } : {}),
       ...(block?.effort !== undefined ? { effort: block.effort } : {}),
+      ...(block?.ultracode !== undefined ? { ultracode: block.ultracode } : {}),
       ...(block?.fastMode !== undefined ? { fastMode: block.fastMode } : {}),
     },
     ...(session.agentSettings?.[id] ? { settings: session.agentSettings[id] } : {}),

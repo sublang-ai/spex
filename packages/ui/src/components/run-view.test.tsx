@@ -4295,7 +4295,14 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
   );
   const chip = (id: string) => screen.getByTestId(`agent-chip-${id}`);
 
-  test("reads what ran while its call's adapter and model setting stand, and what is set once either changes", () => {
+  test("reads what ran while its call's adapter and model setting stand, and what is set once either changes", async () => {
+    setClientForTests({ command: vi.fn(async (type) => type === "agent.options" ? {
+      discovery: { status: "available", models: [
+        { id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5" },
+        { id: "claude-captain", name: "Captain", resolvedModel: "a-different-catalog-model" },
+      ] },
+    } : {}) } as never);
+    useAppStore.setState({ connection: "open" });
     const reported = { ...SESSION, live: false, agentReportedModels: REPORTED };
     const { rerender } = render(runView(reported));
 
@@ -4309,9 +4316,11 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
     // An agent set to the provider's default names that, not its adapter.
     expect(chip("dev.reviewer").textContent).toBe("gpt-5.6-sol");
     expect(chip("dev.reviewer").getAttribute("title")).toBe("set to provider default, runtime reports gpt-5.6-sol");
-    // No report: the set value, as ever.
+    // No report: the alias shows immediately, then its catalog model.
     expect(chip("dev.coder").textContent).toBe("opus");
-    expect(chip("dev.coder").getAttribute("title")).toBe("opus");
+    await vi.waitFor(() => expect(chip("dev.coder").textContent).toBe("claude-opus-5-5"));
+    expect(chip("dev.coder").getAttribute("title")).toBe("claude-opus-5-5");
+    expect(chip("captain").textContent).toBe("claude-opus-5-5 @ high");
     expect(chip("dev.coder").getAttribute("data-reported")).toBeNull();
 
     // This conversation's own model for the Captain, after its call:

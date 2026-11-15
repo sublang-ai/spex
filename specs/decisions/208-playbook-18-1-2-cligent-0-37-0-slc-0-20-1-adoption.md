@@ -12,6 +12,8 @@ Amends [DR-167](167-the-compiler-shares-the-apps-engine.md) in the slc and shell
 Amends [DR-182](182-published-desktop-runtime-adoption.md) in the Playbook, Cligent and slc floors alone: Cligent 0.37.0 and Playbook 18.1.2 carry its published Windows fixes, and slc 0.20.0 no longer admits that Cligent.
 Amended by [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in the Playbook, Cligent and slc floors and the built-in release alone.
 
+Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the primary and child models of the shared starter.
+
 ## Context
 
 - Playbook 18.1.2 seeds the Captain and every player at effort `medium`, a `dev.reviewer` seeded on Codex beside Claude agents at `high`, and names `gpt-6.1-sol` for Codex [[1]].
