@@ -4998,7 +4998,8 @@ test("core-service-66: a former config whose locator points into its own directo
   assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays too");
   const published = readFileSync(canonical, "utf8");
   assert.notEqual(published, legacyText, "no older file is published past the nearer one");
-  assert.equal(published, starterText(readFileSync(templatePath(), "utf8")), "the starter is seeded instead");
+  const { seedConfigText } = await import("@sublang/playbook/seed-config");
+  assert.equal(published, starterText(seedConfigText({ env: {}, homeDir: home }).text), "the credential-free starter is seeded instead");
   assert.ok(
     reported.some((line) => line.includes(former) && line.includes("sessions")),
     `the refusal names the file and its locator: ${reported.join(" | ")}`,
