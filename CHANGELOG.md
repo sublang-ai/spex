@@ -37,7 +37,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
-- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook 18.2.0 ([changelog](https://github.com/sublang-ai/playbook/blob/v18.2.0/CHANGELOG.md)), and the built-in playbooks stage as `sublang/playbooks` 18.2.0.
+- Resuming a Claude conversation without choosing a model keeps the last model that answered it. An explicit switch becomes the model for later turns. Fresh conversations use the current default.
+
+- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook `^18.3.0`, Cligent `^0.39.0` and slc `^0.21.0`. The built-in playbooks stage as `sublang/playbooks` 18.3.0.
 
 - App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
 
@@ -53,9 +55,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Added
 
-- With the updated Playbook and Cligent, fresh agent configs use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents. New players use the models their own runtime and provider support, including on private seats. An older compiler keeps its primary model and reports a child selection it cannot apply.
+- Fresh agent configs and new players use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents on their direct providers. Custom routes keep provider-selected models, including on private seats. The bundled compiler receives the selected subagent and independent Claude Ultracode setting.
 
-- Claude Ultracode can be set independently of reasoning effort when the installed runtime supports it. Existing Claude shorthand and Codex effort settings remain compatible.
+- Claude Ultracode can be set independently of reasoning effort. Existing Claude shorthand and Codex effort settings remain compatible.
 
 - Fork verification build rebased onto upstream `82961686`, preserving
   native Windows execution and tag-built macOS arm64 / Windows x64

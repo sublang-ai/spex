@@ -156,9 +156,9 @@ export function ModelField({
 
   // A child without a named model has no catalog ID. Codex leaves the
   // choice to the agent unless an effort alone requests the parent.
-  const providerDefault = subagent === "codex" && !subagentEffort
-    ? { name: agentChoosesLabel() }
-    : subagent === "empty" || subagent === "codex"
+  const providerDefault = subagent === "codex"
+    ? { name: subagentEffort ? i18n._("Same as agent (from subagent effort)") : agentChoosesLabel() }
+    : subagent === "empty"
     ? { name: sameAsAgentLabel() }
     : providerDefaultDisplay(models, defaultModel);
   const choices: Choice[] = [];

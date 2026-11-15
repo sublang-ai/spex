@@ -195,12 +195,12 @@ function FaultLines({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
 }
 
 /** A confirmation listing what a batch changes before it is sent. */
-function Confirm({ children, busy, onConfirm, onCancel, testId }: { children: ReactNode; busy: boolean; onConfirm(): void; onCancel(): void; testId: string }) {
+function Confirm({ children, busy, confirmDisabled, onConfirm, onCancel, testId }: { children: ReactNode; busy: boolean; confirmDisabled?: boolean; onConfirm(): void; onCancel(): void; testId: string }) {
   return (
     <div data-testid={testId} className="flex flex-col gap-1 rounded-md border border-brand-200 bg-brand-50/40 p-2 text-xs dark:border-brand-900 dark:bg-brand-950/30">
       {children}
       <span className="flex gap-1">
-        <button type="button" className={buttonClass} disabled={busy} onClick={onConfirm} data-testid={`${testId}-confirm`}>
+        <button type="button" className={buttonClass} disabled={busy || confirmDisabled} onClick={onConfirm} data-testid={`${testId}-confirm`}>
           {i18n._({ id: "Confirm", comment: "default confirm button: go ahead with the act" })}
         </button>
         <button type="button" className={buttonClass} disabled={busy} onClick={onCancel}>
@@ -397,16 +397,21 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const done = outcome !== undefined && "done" in outcome;
   if (rows.length === 0 && !done) return null;
   const ops = fixPlan(rows);
+  const hasChildren = rows.some((row) => row.field === "subagentModel");
+  const needsDefault = rows.some((row) => row.field !== "subagentModel");
+  const unresolved = needsDefault && !defaultModel;
   const target = (() => {
     const display = providerDefaultDisplay(models, defaultModel);
     return display.specific ? `${display.name} · ${display.specific}` : display.name;
   })();
   const label = (row: OfficialRole) => {
     const project = row.projectId ? projects.find((p) => p.id === row.projectId)?.name ?? row.projectId : undefined;
-    return project ? `${roleLabel(row.role)} (${project})` : roleLabel(row.role);
+    const name = project ? `${roleLabel(row.role)} (${project})` : roleLabel(row.role);
+    return row.field === "subagentModel" ? `${name} · ${i18n._("Subagent model")}` : name;
   };
 
   function apply(): void {
+    if (busy || stale || unresolved || ops.length === 0 || !state.revision) return;
     setBusy(true);
     setOutcome(undefined);
     send(store, ops, state.revision)
@@ -424,7 +429,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
       {done ? (
         <span role="status" data-testid="agent-official-done">
           {rows.length === 0
-            ? i18n._("Every role now uses Provider default.")
+            ? i18n._("No roles still name an official Claude model.")
             : i18n._("Written, but these roles still name an official model:")}
         </span>
       ) : (
@@ -439,14 +444,14 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             type="button"
             data-testid="agent-official-fix"
             className={buttonClass}
-            disabled={busy || stale || !defaultModel || ops.length === 0 || !state.revision}
+            disabled={busy || stale || unresolved || ops.length === 0 || !state.revision}
             onClick={() => { setAsking(true); setOutcome(undefined); }}
           >
-            {defaultModel
+            {hasChildren ? i18n._("Clear Claude model pins") : defaultModel
               ? i18n._({ id: "Use {model} for all", comment: "sets every role naming an official model to Provider default, named by the model it runs", values: { model: modelDisplayText(modelDisplay(models, defaultModel)) } })
               : i18n._("Set all to Provider default")}
           </button>
-          {!defaultModel ? (
+          {unresolved ? (
             <span data-testid="agent-official-blind">
               {i18n._("The default model can't be read right now.")}{" "}
               <button type="button" className={buttonClass} onClick={catalog.refresh}>{i18n._({ id: "Retry", comment: "try creating the config file again" })}</button>
@@ -463,12 +468,12 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
         </span>
       ) : null}
       {asking ? (
-        <Confirm testId="agent-official-confirm" busy={busy || stale} onConfirm={apply} onCancel={() => setAsking(false)}>
+        <Confirm testId="agent-official-confirm" busy={busy || stale} confirmDisabled={Boolean(unresolved)} onConfirm={apply} onCancel={() => setAsking(false)}>
           <ul className="list-disc pl-5">
             {rows.map((row) => (
               <li key={row.key} data-testid="agent-official-confirm-row">
                 {label(row)}: {row.model} →{" "}
-                {target}
+                {row.field === "subagentModel" ? i18n._("Same as agent") : target}
               </li>
             ))}
           </ul>

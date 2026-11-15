@@ -356,6 +356,32 @@ function assertAuthoringPermissions(runs: FakeAdapterStats["runs"], packageDir: 
   }
 }
 
+for (const row of [
+  { adapter: "claude", child: undefined, effort: undefined, expected: "inherit" },
+  { adapter: "codex", child: undefined, effort: undefined, expected: undefined },
+  { adapter: "codex", child: undefined, effort: "high", expected: "inherit" },
+  { adapter: "codex", child: "inherit", effort: undefined, expected: "inherit" },
+  { adapter: "claude", child: false, effort: undefined, expected: undefined },
+  { adapter: "codex", child: "child-model", effort: "high", expected: "child-model" },
+] as const) {
+  test(`playbook-library-64: authoring delegation ${row.adapter}/${String(row.child)}/${String(row.effort)}`, async (t) => {
+    const dir = scratchDir("spex-authoring-delegation-");
+    const captain = `captain:\n  adapter: ${row.adapter}\n  model: parent-model\n${row.child === undefined ? "" : `  subagentModel: ${row.child}\n`}${row.effort === undefined ? "" : `  subagentEffort: ${row.effort}\n`}`;
+    writeFileSync(join(dir, "playbook.config.yaml"), CONFIG.replace(/captain:[\s\S]*?(?=players:)/, captain));
+    const harness = await startHarness({ dir, script: { fallback: { deltas: ["done"], result: "done" } }, slc: stubSlcSource() });
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const projectId = harness.projectId;
+    await client.expectOk("draft.create", { projectId, draftId: "delegation", ...NEW_PACKAGE });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "delegation" } });
+    await client.expectOk("draft.send", { projectId, draftId: "delegation", text: "hello" });
+    await until(() => harness.stats.runs.length > 0 && client.latest("delegation")?.activity === "idle", 10_000, "the authoring turn");
+    assert.equal(harness.stats.runs[0]!.subagentModel, row.expected);
+    assert.equal(harness.stats.runs[0]!.subagentEffort, row.effort);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // playbook-library-72: the happy path through registration
 // ---------------------------------------------------------------------------

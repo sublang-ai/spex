@@ -195,8 +195,7 @@ export function AgentSettingsPopover({
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? agent.configured.effort;
   const legacyEffort = tuning.separateUltracode && effectiveEffort === "ultracode";
   const inheritedUltracode = agent.configured.ultracode ?? (legacyEffort ? true : undefined);
-  const needsUltracodeReset = Boolean(discovery.options && agent.adapter === "claude" && !tuning.separateUltracode && draft.ultracode != null);
-  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (draft.ultracode ?? inheritedUltracode) === true && !tuning.ultracodeSupported);
+  const invalidUltracode = Boolean(discovery.options && (draft.ultracode ?? inheritedUltracode) === true && !tuning.ultracodeSupported);
   const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !legacyEffort && !tuning.efforts.includes(effectiveEffort));
   const invalidModel = [draft.model, draft.subagentModel].some((value) => typeof value === "string" && !value.trim());
   // Offered where the adapter serves one or a choice stands, so a stale
@@ -289,7 +288,7 @@ export function AgentSettingsPopover({
         </div>
       </div>
       <UltracodeField testId={`agent-${agent.id}-ultracode`} supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
-        value={draft.ultracode ?? undefined} inherited={inheritedUltracode} resetOnly={needsUltracodeReset} source="settings"
+        value={draft.ultracode ?? undefined} inherited={inheritedUltracode} source="settings"
         disabled={readOnly || busy} onChange={(value) => setDraft((current) => ({ ...current, ultracode: value }))} />
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && (
         <label className="flex flex-col gap-1 text-xs">

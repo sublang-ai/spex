@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The child of the packaging resume check (app-shell-44, DR-217). Its
+// The child of the packaging resume check (app-shell-44, DR-238). Its
 // parent starts it with an isolated home and a loopback model API
 // already in its environment, so the SDK reads only the temporary
 // settings. It runs one Claude call through the Cligent the core
 // resolves:
 //
-//   check-claude-resume-child.mjs fresh <model>
-//   check-claude-resume-child.mjs resume <token>
+//   check-claude-resume-child.mjs fresh [model]
+//   check-claude-resume-child.mjs resume <token> [model]
 //
 // and prints one `RESULT <json>` line. Any failure exits non-zero.
 
@@ -17,7 +17,6 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MINIMUM_CLIGENT = [0, 38, 0];
 const CALL_TIMEOUT_MS = 60_000;
 
 function fail(message) {
@@ -78,21 +77,23 @@ process.stderr.write(`check-claude-resume: Cligent ${cligent.manifest.version}, 
 const coreManifest = readJson(fileURLToPath(new URL("../package.json", import.meta.url)));
 const declared = coreManifest.dependencies?.["@sublang/cligent"];
 if (!cligentVersion) fail(`unreadable Cligent version ${cligent.manifest.version}`);
-if (compare(cligentVersion, MINIMUM_CLIGENT) < 0) {
-  fail(`Cligent ${cligent.manifest.version} is older than ${MINIMUM_CLIGENT.join(".")}, which admits a resumed Claude call on the provider default`);
-}
 if (!declared || !satisfiesCaret(cligentVersion, declared)) {
   fail(`Cligent ${cligent.manifest.version} at ${cligent.root} does not meet the core's declared range ${declared}`);
 }
-const [mode, value] = process.argv.slice(2);
-if ((mode !== "fresh" && mode !== "resume") || !value) fail(`usage: ${process.argv[1]} fresh <model> | resume <token>`);
+const [mode, value, resumeModel] = process.argv.slice(2);
+if ((mode !== "fresh" && mode !== "resume") || (mode === "resume" && !value)) fail(`usage: ${process.argv[1]} fresh [model] | resume <token> [model]`);
 
 const { ClaudeCodeAdapter } = await import(adapterUrl);
 const abort = new AbortController();
 const timer = setTimeout(() => abort.abort(), CALL_TIMEOUT_MS);
 const events = [];
 try {
-  const options = { cwd: process.cwd(), maxTurns: 1, abortSignal: abort.signal, ...(mode === "fresh" ? { model: value } : { resume: value }) };
+  const requestedModel = mode === "fresh" ? value : resumeModel;
+  const options = {
+    cwd: process.cwd(), maxTurns: 1, abortSignal: abort.signal,
+    ...(mode === "resume" ? { resume: value } : {}),
+    ...(requestedModel ? { model: requestedModel } : {}),
+  };
   for await (const event of new ClaudeCodeAdapter().run("Reply with ok.", options)) events.push(event);
 } catch (cause) {
   fail(`the ${mode} call threw: ${cause instanceof Error ? cause.message : String(cause)}`);

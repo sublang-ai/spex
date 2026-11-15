@@ -8,7 +8,7 @@
 Accepted (2026-11-14).
 Amends [DR-093](093-a-players-subagent-model.md) and [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in the meaning of the subagent selection on Codex.
 
-Amended by [DR-237](237-agent-tuning-across-runtime-versions.md) in native fork behavior and tool-free controls.
+Amended by [DR-237](237-published-agent-runtime-floors.md) in native fork behavior, the meaning of an omitted subagent model, and tool-free controls.
 
 ## Context
 
@@ -19,9 +19,9 @@ Codex accepts native per-run defaults for a spawned agent's model and reasoning 
 
 - Offer the existing subagent fields when the installed adapter advertises them.
 - On Codex the fields request spawn defaults. Fresh spawns can supply explicit values and a role may set its own model and effort [[1]].
-  A full-context fork inherits the parent.
+  Full-history and fresh spawns both honor native model and effort overrides.
 - The adapter instructs the player on each tuned turn to use the selected model for well-defined, fine-grained tasks, keep deep reasoning and design, brief delegates and verify their work.
-- Omission requests the agent's own model on supported adapters as in DR-095. A reader can select GPT-6.1 Sol for a Codex player independently of its own model.
+- On Codex, omission leaves the choice to the runtime unless a subagent effort alone requests the parent model. Explicit `inherit` selects the parent. A reader can select GPT-6.1 Sol independently of the player’s own model ([DR-237](237-published-agent-runtime-floors.md)).
 
 ## Consequences
 

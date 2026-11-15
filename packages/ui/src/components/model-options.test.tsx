@@ -56,6 +56,13 @@ test("Codex discovery exposes subagent inheritance, model pins and native effort
   expect(Array.from(efforts.options).map((option) => option.value)).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
   expect(efforts.options[0]!.text).toBe("Agent chooses");
   fireEvent.change(efforts, { target: { value: "high" } });
+  const child = screen.getByTestId("agent-subagent-model-trigger");
+  expect(child.textContent).toBe("Same as agent (from subagent effort)");
+  fireEvent.click(child);
+  const choices = within(screen.getByTestId("agent-subagent-model-listbox")).getAllByRole("option");
+  expect(choices.find(row => row.dataset.value === "")?.textContent).toBe("Same as agent (from subagent effort)");
+  expect(choices.find(row => row.dataset.value === "inherit")?.textContent).toBe("Same as agent");
+  fireEvent.click(child);
   fireEvent.click(screen.getByTestId("agent-save"));
   await waitFor(() => expect(save).toHaveBeenCalledWith({ adapter: "codex", subagentEffort: "high" }));
   chooseModel("agent-subagent-model", "codex-child");
@@ -663,6 +670,30 @@ test("a standing legacy Ultracode effort stays readable and a model without xhig
   expect((screen.getByTestId("agent-save") as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(screen.getByTestId("agent-ultracode"), { target: { value: "inherit" } });
   expect(screen.queryByTestId("agent-ultracode")).toBeNull();
+});
+
+test.each([
+  { subagentEffort: undefined, expected: "Agent chooses" },
+  { subagentEffort: "high", expected: "Same as agent" },
+])("role and conversation inherit the Codex subagent selection as $expected", async ({ subagentEffort, expected }) => {
+  useAppStore.setState({ loadAgentOptions: async () => ({
+    ...options("codex"), subagentModelSupported: true, subagentEffortValues: ["high"],
+  }) });
+  const player = { adapter: "codex" as const, subagentEffort };
+  const anchorRef = createRef<HTMLButtonElement>();
+  const props = { anchorRef, onSave: vi.fn(async () => {}), onClose: vi.fn() };
+  const binding = render(<BindingEditorPopover {...props} role="coder" position="code.coder"
+    binding={{ playerId: "coder", display: "Codex" }}
+    players={[{ id: "coder", agent: player, display: "Codex", boundBy: [] }]} />);
+  await ready();
+  const field = (id: string) => (screen.getByTestId(id) as HTMLSelectElement).selectedOptions[0]!.textContent;
+  expect(field("binding-subagent-model-mode")).toContain(expected);
+  binding.unmount();
+  render(<AgentSettingsPopover {...props} readOnly={false} agent={{
+    id: "coder", name: "Coder", adapter: "codex", configured: player, divergentRoles: [],
+  }} />);
+  await screen.findByTestId("agent-coder-subagent-model-mode");
+  expect(field("agent-coder-subagent-model-mode")).toContain(expected);
 });
 
 test("role and conversation overrides preserve explicit off and can return to inheritance", async () => {

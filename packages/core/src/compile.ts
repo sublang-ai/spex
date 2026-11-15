@@ -1141,28 +1141,6 @@ async function compileAdmitted(
       );
     }
     const compilerEnv = { ...env, ...toolchain.slc.env, ...agentEnv };
-    const requestedSettings = ["SLC_ULTRACODE", "SLC_REVIEWER_ULTRACODE", "SLC_SUBAGENT_MODEL", "SLC_REVIEWER_SUBAGENT_MODEL"].filter((key) => compilerEnv[key]?.trim());
-    if (requestedSettings.length) {
-      const help: string[] = [];
-      const result = await spawner(slcCommand, [...slcArgs, "--help"], dir, (line) => help.push(line), signal, compilerEnv);
-      signal?.throwIfAborted();
-      const output = help.join("\n");
-      for (const variable of requestedSettings) {
-        if (result !== 0 || !new RegExp(`\\b${variable}\\b`).test(output)) {
-          if (result === 0 && variable.endsWith("_SUBAGENT_MODEL")) {
-            if (compilerEnv[variable]?.trim() !== "false") {
-              progress(i18n._({ id: "This compiler uses its own subagent defaults. Update it to use {variable}.", values: { variable } }));
-            }
-            delete compilerEnv[variable];
-            continue;
-          }
-          throw new Error(i18n._({
-            id: "Update the compiler to use {variable}.",
-            values: { variable },
-          }));
-        }
-      }
-    }
     // The pipeline's own progress lines — `running:`, `packaging:`,
     // `introspected states:`, `derived roles:`, `compile complete` —
     // are wire texts the compile band matches to name its phases, read

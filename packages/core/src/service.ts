@@ -149,7 +149,7 @@ import { ArtifactFolderBusy, canonicalFolder, checkToolchain, compilePlaybook, c
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
-import { isUltracodeSupported, newPlayerModels } from "./config.js";
+import { isUltracodeSupported } from "./config.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
@@ -162,7 +162,7 @@ import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { configureSeatGit } from "./seat-git.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
-import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
+import { defaultAgentModels, isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 const CORE_VERSION = "0.1.0";
@@ -1577,7 +1577,7 @@ export class CoreService {
         ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
         ...(options.own ? { own: options.own } : {}),
         env: seat ? seat.environment.envFor(env) : env,
-        ...(seat ? { home: null } : options.home !== undefined ? { home: options.home } : {}),
+        ...(seat ? { home: seat.environment.modelHome() } : options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
         prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null, global: boolean) => {
@@ -2326,10 +2326,9 @@ export class CoreService {
     return this.seatEnvironment ? this.seatEnvironment.envFor(this.env) : this.env;
   }
 
-  /** The home whose sign-ins and Claude settings a seed reads: none on
-   * a seat, whose server account's are no member's (core-service-3). */
+  /** The local user's home, or the seat's scoped routing settings (core-service-3). */
   private seedHome(): SeedHome {
-    return this.seatEnvironment ? null : this.home;
+    return this.seatEnvironment ? this.seatEnvironment.modelHome() : this.home;
   }
 
   /** Reseed from the credentials read now, probing none where no seed
@@ -2467,7 +2466,7 @@ export class CoreService {
           ...(readiness.credential ? { credential: readiness.credential } : {}),
           ...(readiness.unconfirmed !== undefined ? { unconfirmed: readiness.unconfirmed } : {}),
           ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl(modelEnv) } : {}),
-          defaultModels: newPlayerModels(adapter, modelEnv),
+          defaultModels: defaultAgentModels(adapter, seat ? modelEnv : this.env, this.seedHome() ?? undefined),
           ...host,
           usedBy,
           // The embedded runtime declares which adapters take fast mode

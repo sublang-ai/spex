@@ -19,7 +19,6 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
 import { foldDiagnostics } from "./app-storage.js";
 import { WebSocket } from "ws";
-import { isSubagentModelSupported } from "@sublang/cligent";
 import { loadTmuxPlayConfig } from "@sublang/cligent/tmux-play";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
@@ -27,7 +26,7 @@ import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@subla
 import { CoreService } from "./service.js";
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { speak } from "./i18n.js";
-import { isUltracodeSupported, starterText, templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
+import { starterText, templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
@@ -1097,6 +1096,8 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
     readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
   assert.equal(byAdapter.get("claude")?.ready, true);
+  assert.deepEqual(byAdapter.get("claude")?.defaultModels, { model: "claude-fable-5-2", subagentModel: "claude-opus-5-5" });
+  assert.deepEqual(byAdapter.get("codex")?.defaultModels, { model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
   // A position is a player lane and the roles it serves — the written
   // entries' first, then each built-in no entry binds, on its default
   // `dev.<role>` (core-service-2).
@@ -1161,7 +1162,7 @@ test("settings-36: model discovery uses the captured environment without opening
   const filesBefore = sessionFiles();
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "claude" }), {
     adapter: "claude", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultracode"],
-    fastModeSupported: true, ultracodeSupported: isUltracodeSupported("claude"), subagentModelSupported: true,
+    fastModeSupported: true, ultracodeSupported: true, subagentModelSupported: true,
     // A subagent runs at the adapter's efforts less its orchestration
     // value (DR-095).
     subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
@@ -1169,10 +1170,8 @@ test("settings-36: model discovery uses the captured environment without opening
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "codex" }), {
     adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-    fastModeSupported: true, ultracodeSupported: false, subagentModelSupported: isSubagentModelSupported("codex"),
-    subagentEffortValues: isSubagentModelSupported("codex")
-      ? ["minimal", "low", "medium", "high", "xhigh", "max"]
-      : [],
+    fastModeSupported: true, ultracodeSupported: false, subagentModelSupported: true,
+    subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
     discovery: { status: "unavailable", reason: "Fixture discovery failed" },
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "gemini" }), {
@@ -5941,7 +5940,6 @@ test("core-service-101: Codex delegation reaches session projections and the ada
   await client.open();
   const project = await client.expectOk("project.register", { path: harness.projectDir });
   const session = await client.expectOk("session.create", { projectId: project.id });
-  const supported = isSubagentModelSupported("codex");
   const run = async (sessionId: string, turn: number) => {
     await client.expectOk("subscribe", { channel: { kind: "session", sessionId } });
     await client.expectOk("turn.submit", { sessionId, text: `delegation turn ${turn}` });
@@ -5958,15 +5956,6 @@ test("core-service-101: Codex delegation reaches session projections and the ada
   assert.equal(original.catalog.code?.roles.coder?.subagentModel, undefined);
   assert.equal(harness.stats.runs.at(-1)?.agent, "codex");
   assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined);
-  if (!supported) {
-    for (const patch of [{ subagentModel: "codex-child" }, { subagentEffort: "high" }]) {
-      const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
-      assert.ok(!refused.ok && refused.error.code === "invalid_config");
-      assert.match(refused.error.message, /is not supported for adapter "codex"/);
-    }
-    assert.equal((await client.expectOk("session.list", {})).find((s) => s.id === session.id)?.agentSettings, undefined);
-    return;
-  }
   await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "captain", subagentModel: "codex-child", subagentEffort: "high" });
   await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "dev.coder", subagentEffort: "medium" });
   const pinned = await run(session.id, 2);
@@ -6916,33 +6905,22 @@ test("Ultracode round-trips independently and unsupported activation preserves c
   await client.open();
   const path = join(harness.dir, "playbook.config.yaml");
   const op = { kind: "playbook.role.bind" as const, playbookId: "code", role: "coder", playerId: "dev.coder" };
-  for (const ultracode of [...(isUltracodeSupported("claude") ? [true, false] : []), null]) {
+  for (const ultracode of [true, false, null]) {
     await client.expectOk("config.edit", { op: { ...op, ultracode } });
     const state = await client.expectOk("config.get", {});
     assert.ok(state.status === "valid");
     assert.equal(state.summary.playbooks[0].roles.coder.ultracode, ultracode ?? undefined);
   }
-  if (!isUltracodeSupported("claude")) {
-    const before = readFileSync(path, "utf8");
-    const launcher = await import("@sublang/playbook/playbook-captain");
-    if (!("isUltracodeSupported" in launcher)) {
-      const off = await client.command("config.edit", { op: {
-        kind: "captain.set", patch: { adapter: "codex", ultracode: false },
-      } });
-      assert.ok(!off.ok && off.error.code === "invalid_config");
-      assert.equal(readFileSync(path, "utf8"), before);
-    }
-    for (const ultracode of [true, false]) {
-      const refused = await client.command("config.edit", { op: { ...op, ultracode } });
-      assert.equal(refused.ok, false);
-      assert.equal(readFileSync(path, "utf8"), before);
-    }
-  }
+  const before = readFileSync(path, "utf8");
+  const refused = await client.command("config.edit", { op: {
+    kind: "captain.set", patch: { adapter: "codex", ultracode: true },
+  } });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.equal(readFileSync(path, "utf8"), before);
 });
 
 
 test("Ultracode session tuning reaches first and resumed calls and clears before first submission", async (t) => {
-  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no Ultracode capability"); return; }
   const harness = await startHarness(VALID_CONFIG, { realShell: true, script: { fallback: { result: "not json on purpose" } } });
   const client = new Client(harness.service.port());
   t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });

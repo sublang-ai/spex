@@ -3369,8 +3369,8 @@ msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
 
 #: src/components/AgentCards.tsx
-msgid "Every role now uses Provider default."
-msgstr "所有角色都已改为服务商默认。"
+msgid "No roles still name an official Claude model."
+msgstr "所有角色均已不再指定 Claude 官方模型。"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -6558,6 +6558,9 @@ msgstr "对草稿源文运行 slc — 通常几分钟，角色多则更久"
 msgid "Same as agent"
 msgstr "与代理相同"
 
+msgid "Same as agent (from subagent effort)"
+msgstr "与代理相同（由子代理推理强度决定）"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
@@ -8733,3 +8736,7 @@ msgstr "你的项目"
 #: src/lib/space.ts
 msgid "Your sessions"
 msgstr "你的会话"
+
+#: src/components/AgentCards.tsx
+msgid "Clear Claude model pins"
+msgstr "清除 Claude 模型指定"

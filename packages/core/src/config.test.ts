@@ -10,13 +10,11 @@ import { parse as parseYaml } from "yaml";
 import {
   AGENT_RUNTIME_TARGETS,
   classifyRuntime,
-  isSubagentModelSupported,
   type AgentExecutable,
 } from "@sublang/cligent";
 
 import {
   ARTIFACT_SCHEMAS,
-  isUltracodeSupported,
   starterText,
   type ComposeOptions,
   type PlaybookModules,
@@ -31,7 +29,6 @@ import {
   seedConfig,
   summarizeConfig,
   templatePath,
-  withoutOfficialModels,
   validateProjectConfig,
   type LoadModule,
   ConfigViolation,
@@ -196,22 +193,6 @@ function reviewBlock(top: Record<string, unknown>): Record<string, unknown> {
 function reviewRoles(top: Record<string, unknown>): Record<string, unknown> {
   return reviewBlock(top).roles as Record<string, unknown>;
 }
-
-test("a third-party service removes each official Claude pin independently", () => {
-  const config = {
-    captain: { adapter: "claude", model: "custom-parent", subagentModel: "claude-opus-5-5" },
-    players: {
-      custom: { adapter: "claude", model: "fable", subagentModel: "custom-child" },
-      disabled: { adapter: "claude", subagentModel: false },
-      inherits: { adapter: "claude", subagentModel: "inherit" },
-      codex: { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" },
-    },
-  };
-  assert.deepEqual(parseYaml(withoutOfficialModels(JSON.stringify(config))), {
-    captain: { adapter: "claude", model: "custom-parent" },
-    players: { ...config.players, custom: { adapter: "claude", subagentModel: "custom-child" } },
-  });
-});
 
 test("bundled template composes with launcher-equivalent output", async () => {
   // The template is the installed playbook's own (core-service-3), so
@@ -695,19 +676,12 @@ test("Codex delegation follows Cligent support through config inheritance, pins 
   const coderId = String(codeRoles(top).coder);
   top.captain = { adapter: "codex", model: "codex-parent" };
   roster(top)[coderId] = { adapter: "codex", model: "codex-player" };
-  const supported = isSubagentModelSupported("codex");
   const initial = await compose(top, stubLoader);
   assert.equal(initial.captainOptions.sessionAgents.captain.subagentModel, undefined);
   assert.equal(initial.captainOptions.sessionAgents.players[coderId]?.subagentModel, undefined);
   assert.equal(initial.captainOptions.playbooks.code.roles.coder.subagentModel, undefined);
 
   Object.assign(top.captain as object, { subagentModel: "codex-child", subagentEffort: "high" });
-  if (!supported) {
-    await expectError(top, /^captain\.subagentModel is not supported for adapter "codex"$/);
-    top.captain = { adapter: "codex", subagentEffort: "high" };
-    await expectError(top, /^captain\.subagentEffort is not supported for adapter "codex"$/);
-    return;
-  }
   Object.assign(roster(top)[coderId] as object, { subagentEffort: "low" });
   reviewRoles(top).coder = { player: coderId, subagentModel: "codex-review", subagentEffort: "medium" };
   const pinned = await compose(top, stubLoader);
@@ -1338,19 +1312,7 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   assert.ok(review && !("fastMode" in review.roles.coder));
 });
 
-test("a launcher without the Ultracode field rejects a non-Claude Off during composition", async () => {
-  const top = baseConfig();
-  top.captain = { adapter: "codex", ultracode: false };
-  const launcher = await import("@sublang/playbook/playbook-captain");
-  if ("isUltracodeSupported" in launcher) {
-    assert.equal((await compose(top, stubLoader)).captainAgent.ultracode, false);
-  } else {
-    await expectError(top, /^captain\.ultracode is not supported for adapter "codex"$/);
-  }
-});
-
 test("Ultracode composes independently on agents and roles; a non-boolean is refused", async (t) => {
-  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no independent Ultracode"); return; }
   const top = baseConfig();
   (top.captain as Record<string, unknown>).ultracode = false;
   roster(top)["dev.reviewer"] = { adapter: "codex", ultracode: false };
@@ -1391,7 +1353,6 @@ test("Ultracode composes independently on agents and roles; a non-boolean is ref
 
 
 test("supported Ultracode remains independent through session projection and binding inheritance", async (t) => {
-  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no Ultracode capability"); return; }
   const top = baseConfig();
   Object.assign(top.captain as object, { effort: "high", ultracode: true });
   Object.assign(roster(top)["dev.coder"] as object, { ultracode: true });

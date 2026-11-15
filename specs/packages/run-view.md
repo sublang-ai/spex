@@ -1589,7 +1589,8 @@ Where the harness boots with the demo project registered, the Captain configured
 
 - each chip is opened from its own pane and edits its own agent, both panes wearing the chosen values before the message is sent [[run-view-138](#run-view-138)] [[run-view-139](#run-view-139)];
 - each editor's inherit choice names what the configuration sets, the coder's model by the display rule and the Captain's unset one as the provider's default followed by the model the runtime reports running by default, and each unset effort by the "Provider default" words [[run-view-138](#run-view-138)];
-- the Claude coder's editor names its unset subagent model "Same as agent" and its unset subagent effort "Agent chooses", and offers no orchestration value as a subagent effort [[run-view-138](#run-view-138)];
+- the coder’s editor names its unset subagent model "Same as agent" on Claude and its unset subagent effort "Agent chooses", and offers no orchestration value as a subagent effort [[run-view-138](#run-view-138)];
+- a separate Codex session-pane journey shows untuned "Agent chooses", then "Same as agent" after choosing a child effort alone; saving and reloading preserves that effort without a child pin [[run-view-138](#run-view-138)];
 - the turn runs on those values, the run's own record of what it applied naming them, the coder's subagent model and subagent effort set from its pane among them [[run-view-14](#run-view-14)];
 - the Settings surface still shows the configured values, and a second session of the same project opens with its panes wearing them [[run-view-139](#run-view-139)];
 - returning each agent to its configured values from its own chip leaves both panes reading them again [[run-view-138](#run-view-138)].

@@ -105,8 +105,8 @@ export interface StoreOptions {
   legacyDbPath?: string;
   /** The environment Git and the host URL are read from. */
   env?: NodeJS.ProcessEnv;
-  /** The home whose agent sign-ins the config seed reads; defaults to
-   * the environment's `HOME`, none on a seat (core-service-3). */
+  /** The local home for sign-in and routing, or a seat's scoped Codex
+   * home for routing its snapshot (core-service-3). */
   home?: SeedHome;
   /** The agents the seed counts as set up, confirmed before the store
    * opens; the credential variables alone where absent (core-service-3). */

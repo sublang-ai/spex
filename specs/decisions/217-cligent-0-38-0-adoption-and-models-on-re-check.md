@@ -10,6 +10,8 @@ Amends [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in th
 Amends [DR-206](206-the-workshop-points-to-its-guide.md) in what a Re-check reads afresh: the agent cards' model catalogs too.
 
 Amended by [DR-224](224-playbook-18-1-4-adoption.md) in the Playbook floor and the built-in release.
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in Claude model selection on resume and the packaging acceptance contract.
+Amended by [DR-237](237-published-agent-runtime-floors.md) in the Cligent and slc floors.
 
 ## Context
 

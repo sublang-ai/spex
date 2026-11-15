@@ -455,6 +455,31 @@ test.describe("a long active turn", () => {
 });
 
 test.describe("run-view-141: an agent's settings for one conversation", () => {
+  test("Codex session settings distinguish native delegation from effort-only inheritance", async ({ page, app }) => {
+    await app.core.command("config.edit", { op: { kind: "captain.set", patch: { adapter: "codex", model: "gpt-6-astra", subagentModel: null, subagentEffort: null } } });
+    await open(page, app);
+    await send(page, "Inspect Codex session delegation");
+    await settled(app);
+    await page.getByTestId("agent-chip-captain").click();
+    const editor = page.getByTestId("agent-settings-captain");
+    const child = editor.getByTestId("agent-captain-subagent-model-mode");
+    await expect(child.locator("option").first()).toHaveText("from Settings (Agent chooses)");
+    await expect(editor.getByTestId("agent-captain-subagent-effort-mode").locator("option").first()).toHaveText("from Settings (Agent chooses)");
+    await editor.getByTestId("agent-captain-subagent-effort-mode").selectOption("pin");
+    await editor.getByTestId("agent-captain-subagent-effort-value").selectOption("high");
+    await expect(child.locator("option").first()).toHaveText("from Settings (Same as agent)");
+    await editor.getByTestId("agent-save-captain").click();
+    await expect(editor).toHaveCount(0);
+    const session = (await app.core.command("session.list", {})).find(entry => entry.title === "Inspect Codex session delegation")!;
+    expect(session.agentSettings?.captain).toEqual({ subagentEffort: "high" });
+    await page.reload();
+    await page.getByTestId("agent-chip-captain").click();
+    await expect(child.locator("option").first()).toHaveText("from Settings (Same as agent)");
+    await expect(editor.getByTestId("agent-captain-subagent-effort-value")).toHaveValue("high");
+    await editor.getByRole("button", { name: "Cancel" }).click();
+
+  });
+
   test("each agent is changed from its own chip, and stays where it was changed", async ({ page, app }) => {
     // The Captain runs the provider's default: its block sets no model.
     await app.core.command("config.edit", { op: { kind: "captain.set", patch: { model: null } } });

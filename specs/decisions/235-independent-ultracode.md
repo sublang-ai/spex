@@ -19,8 +19,8 @@ Codex has a separate reasoning effort named `ultra`.
 
 - An explicit boolean `ultracode` selects the workflow setting independently of effort at the Captain, player, role and conversation scopes, under the existing tuning precedence.
 - Omission inherits the lower scope and ultimately the SDK default. The existing Claude shorthand still requests xhigh with workflows on, with an explicit boolean taking precedence for workflows.
-- Offer the independent control only where the installed runtime and launcher carry it, with a standing incompatible choice available for correction. A catalog identifying a model without xhigh precludes enabling it there. Missing model metadata leaves the SDK to decide availability.
-- Where the independent control is available, fresh effort choices contain only reasoning levels. Older installations retain their existing choices and reject an explicit Claude switch they cannot apply.
+- Offer the independent control on Claude, with a standing incompatible enabled choice available for correction. A catalog identifying a model without xhigh precludes enabling it there. Missing model metadata leaves the SDK to decide availability.
+- Where the independent control is available, fresh effort choices contain only reasoning levels. Adapters without the workflow capability retain their own effort choices.
 - The compiler receives the resolved setting when the app supplies its agent.
 
 ## Consequences

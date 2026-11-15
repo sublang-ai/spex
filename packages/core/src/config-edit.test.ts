@@ -18,7 +18,7 @@ import {
   type AgentPatch,
   type ConfigEditOp,
 } from "./config-edit.js";
-import { isUltracodeSupported, starterText, templatePath, type LoadModule, type PlaybookModules } from "./config.js";
+import { starterText, templatePath, type LoadModule, type PlaybookModules } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -587,7 +587,6 @@ test("native approval acceptance replaces seeded auto mode with explicit ask pol
 });
 
 test("an Ultracode patch writes the key, null removes it, comments kept", async (t) => {
-  if (!isUltracodeSupported("claude")) { t.skip("installed runtime has no independent Ultracode"); return; }
   const path = templateFile();
   const seeded = readFileSync(path, "utf8");
   // The starter ships no ultracode of its own — the adapter it seeds is

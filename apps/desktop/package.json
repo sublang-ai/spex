@@ -33,8 +33,8 @@
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/playbook": "^18.2.0",
-    "@sublang/slc": "^0.20.2",
+    "@sublang/playbook": "^18.3.0",
+    "@sublang/slc": "^0.21.0",
     "@sublang/spex": "*",
     "@sublang/spex-core": "*",
     "dugite": "3.3.2"

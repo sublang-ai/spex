@@ -683,6 +683,72 @@ describe("settings-39: one row per model behind a third-party service", () => {
 describe("settings-69: official names behind a third-party service", () => {
   const thirdParty = () => [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")];
 
+  test.each([false, "inherit"] as const)("repairs primary and child pins independently, preserving %s delegation", async (special) => {
+    const state: Valid = structuredClone(CROSSED);
+    state.summary.captain.subagentModel = "claude-opus-5-5";
+    state.summary.players.find(p => p.id === "dev.spare")!.agent.subagentModel = "opus";
+    state.summary.players.find(p => p.id === "dev.coder")!.agent.subagentModel = "claude-opus-5-5";
+    const roles = state.summary.playbooks[0]!.roles;
+    roles.coder!.subagentModel = "custom-child";
+    roles.reviewer!.subagentModel = "claude-opus-5-5";
+    state.summary.playbooks[1]!.roles.coder!.subagentModel = special;
+    show(state, thirdParty(), { [PROJECT]: projectComposition(state) });
+    expect(screen.getByTestId("agent-official-fix").textContent).toBe("Clear Claude model pins");
+    const list = screen.getByTestId("agent-official-list");
+    expect(list.textContent).toContain("Captain · Subagent model · claude-opus-5-5");
+    expect(list.textContent).toContain("fix.coder (shop) · Subagent model · opus");
+    expect(list.textContent).not.toContain("code.coder");
+    expect(list.textContent).not.toContain("review.coder · Subagent model");
+    fireEvent.click(screen.getByTestId("agent-official-fix"));
+    expect(screen.getAllByTestId("agent-official-confirm-row").map(r => r.textContent)).toContain("code.reviewer · Subagent model: claude-opus-5-5 → Same as agent");
+    commandMock.mockResolvedValue(state);
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
+    const ops = commandMock.mock.calls[0]![1].ops;
+    expect(ops).toHaveLength(7);
+    expect(ops).toEqual(expect.arrayContaining([
+      { kind: "captain.set", patch: { subagentModel: null } },
+      { kind: "player.set", playerId: "dev.spare", patch: { subagentModel: null } },
+      { kind: "playbook.role.bind", playbookId: "code", role: "reviewer", playerId: "dev.writer", subagentModel: "inherit" },
+    ]));
+    expect(ops.some((op: { playerId?: string }) => op.playerId === "dev.coder")).toBe(false);
+  });
+
+  test("child-only repair retains a custom primary with no discovered provider default", async () => {
+    catalogs.defaultModel = undefined;
+    const state: Valid = structuredClone(CROSSED);
+    state.summary.captain = { adapter: "claude", model: "custom-parent", subagentModel: "claude-opus-5-5" };
+    state.summary.players = [];
+    state.summary.playbooks = [];
+    const after: Valid = structuredClone(state);
+    delete after.summary.captain.subagentModel;
+    commandMock.mockResolvedValue(after);
+    show(state, thirdParty());
+    const fix = screen.getByTestId("agent-official-fix") as HTMLButtonElement;
+    expect(fix.disabled).toBe(false);
+    expect(fix.textContent).toBe("Clear Claude model pins");
+    expect(screen.queryByTestId("agent-official-blind")).toBeNull();
+    fireEvent.click(fix);
+    expect(screen.getByTestId("agent-official-confirm-row").textContent).toBe("Captain · Subagent model: claude-opus-5-5 → Same as agent");
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
+    expect(commandMock).toHaveBeenCalledWith("config.batch", { revision: state.revision, ops: [{ kind: "captain.set", patch: { subagentModel: null } }] });
+    expect(screen.getByTestId("agent-official-done").textContent).toBe("No roles still name an official Claude model.");
+    expect(useAppStore.getState().configState).toMatchObject({ summary: { captain: { model: "custom-parent" } } });
+  });
+
+  test("mixed repair cannot confirm after its primary target becomes unresolved", () => {
+    const state: Valid = structuredClone(CROSSED);
+    state.summary.captain.subagentModel = "claude-opus-5-5";
+    const view = show(state, thirdParty());
+    fireEvent.click(screen.getByTestId("agent-official-fix"));
+    catalogs.defaultModel = undefined;
+    view.rerender(<AgentCards />);
+    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(true);
+    const confirm = screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(commandMock).not.toHaveBeenCalled();
+  });
+
   test("listed by the model each role runs, confirmed with their targets, written where each stands, recomputed after", async () => {
     show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
     // settings-61: one line naming the service, the fix by the model it
@@ -746,7 +812,7 @@ describe("settings-69: official names behind a third-party service", () => {
     const remaining = screen.getByTestId("agent-official-list").textContent;
     expect(remaining).toBe("fix.reviewer (shop) · opus");
     expect(remaining).not.toContain("Captain");
-    expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("Every role now uses Provider default.");
+    expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("No roles still name an official Claude model.");
   });
 
   test("a conflict holds every batch from its first reading again, a failed read across leaving the page, until read again", async () => {

@@ -166,8 +166,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const supportsFastMode = tuning.fastModeSupported ?? readinessByAdapter.get(adapter)?.fastModeSupported ?? false;
   const legacyEffort = tuning.separateUltracode && effort === "ultracode";
   const invalidEffort = Boolean(discovery.options && effort && !legacyEffort && !tuning.efforts.includes(effort));
-  const needsUltracodeReset = Boolean(discovery.options && adapter === "claude" && !tuning.separateUltracode && ultracode !== undefined);
-  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (ultracode ?? legacyEffort) && !tuning.ultracodeSupported);
+  const invalidUltracode = Boolean(discovery.options && (ultracode ?? legacyEffort) && !tuning.ultracodeSupported);
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
@@ -188,10 +187,11 @@ export function AgentEditor(props: AgentEditorProps) {
     setFastMode(false);
   }
 
+  const savedChild = adapter === knownAdapter(initial?.adapter) ? subagentModelOf(initial) : (initial?.subagentModel ?? "");
   const dirty =
     adapter !== knownAdapter(initial?.adapter) ||
     model !== (initial?.model ?? "") ||
-    subagentModel !== subagentModelOf(initial) ||
+    subagentModel !== savedChild ||
     subagentEffort !== (initial?.subagentEffort ?? "") ||
     effort !== (initial?.effort ?? "") ||
     ultracode !== initial?.ultracode ||
@@ -222,7 +222,7 @@ export function AgentEditor(props: AgentEditorProps) {
     if (trimmedModel) patch.model = trimmedModel;
     else if (initial?.model) patch.model = null;
     // Preserve the saved representation when the child selection is unchanged.
-    if (subagentModel !== subagentModelOf(initial)) {
+    if (subagentModel !== savedChild) {
       if (subagentModel === false) patch.subagentModel = false;
       else if (subagentModel.trim()) patch.subagentModel = subagentModel.trim();
       else patch.subagentModel = null;
@@ -399,7 +399,7 @@ export function AgentEditor(props: AgentEditorProps) {
       <div className="grid grid-cols-2 gap-2 text-sm">
         <UltracodeField testId="agent-ultracode" supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
           value={ultracode} inherited={legacyEffort ? true : undefined} source="provider"
-          resetOnly={needsUltracodeReset} onChange={setUltracode} />
+          onChange={setUltracode} />
         {(supportsFastMode || fastMode) ? (
           <label className="col-span-2 flex items-center gap-2">
             <input

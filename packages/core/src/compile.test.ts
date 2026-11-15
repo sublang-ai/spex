@@ -53,7 +53,6 @@ function testSpawner(
       onLine(nodeVersion);
       return 0;
     }
-    if (args.includes("--help")) { onLine("SLC_ULTRACODE SLC_REVIEWER_ULTRACODE"); return 0; }
     slcCalls?.push({ argv: [command, ...args], ...(env ? { env } : {}) });
     return defaultSpawner(command, args, cwd, onLine);
   };
@@ -697,9 +696,6 @@ test("the compile's agent reaches slc unless the environment configures it (play
   const stub = `${process.execPath} ${stubPath}`;
   const lines: string[] = [];
   let argv: string[] = [];
-  let helpText = "SLC_ULTRACODE SLC_REVIEWER_ULTRACODE";
-  let helpCalls = 0;
-  let helpCode = 0;
   const compileWith = async (
     id: string,
     env: NodeJS.ProcessEnv,
@@ -716,10 +712,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       libraryDir: join(dir, "library"),
       env: { SPEX_SLC: stub, ...env },
       agent,
-      spawner: async (...args) => {
-        if (args[1].includes("--help")) { helpCalls++; if (helpText) args[3](helpText); return helpCode; }
-        return testSpawner("v24.1.0", slcCalls)(...args);
-      },
+      spawner: testSpawner("v24.1.0", slcCalls),
       onProgress: (line) => lines.push(line),
     });
     assert.equal(slcCalls.length, 1);
@@ -731,6 +724,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
     SLC_MODEL: env.SLC_MODEL,
     SLC_EFFORT: env.SLC_EFFORT,
     SLC_FAST_MODE: env.SLC_FAST_MODE,
+    SLC_ULTRACODE: env.SLC_ULTRACODE,
     SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT,
   });
   // The block reaches the compiler: codex at medium, nothing else, the
@@ -740,6 +734,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
     SLC_MODEL: undefined,
     SLC_EFFORT: "medium",
     SLC_FAST_MODE: undefined,
+    SLC_ULTRACODE: undefined,
     SLC_STALL_TIMEOUT: "2400",
   });
   assert.ok(
@@ -766,6 +761,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       SLC_MODEL: undefined,
       SLC_EFFORT: undefined,
       SLC_FAST_MODE: undefined,
+      SLC_ULTRACODE: undefined,
       SLC_STALL_TIMEOUT: "2400",
     },
   );
@@ -792,36 +788,15 @@ test("the compile's agent reaches slc unless the environment configures it (play
   );
   assert.equal(refusedCalls.length, 0, "no compiler ran");
   assert.ok(!refusedLines.some((line) => line.startsWith("running:")));
-  assert.equal(helpCalls, 0, "ordinary compiles never probe Ultracode support");
-  helpText = "old compiler help";
-  await compileWith("blank-review-ultra", { SLC_REVIEWER_ULTRACODE: " " }, { adapter: "claude" });
-  assert.equal(helpCalls, 0, "a blank workflow variable leaves the compiler default");
-  await assert.rejects(compileWith("old-ultra", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
-  await assert.rejects(compileWith("old-review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined), /Update the compiler to use SLC_REVIEWER_ULTRACODE/);
-  helpText = "";
-  await assert.rejects(compileWith("empty-help", {}, { adapter: "claude", ultracode: false }), /Update the compiler to use SLC_ULTRACODE/);
-  helpText = "SLC_ULTRACODE_EXTRA";
-  await assert.rejects(compileWith("partial-help", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
-  helpText = "SLC_ULTRACODE"; helpCode = 1;
-  await assert.rejects(compileWith("failed-help", {}, { adapter: "claude", ultracode: true }), /Update the compiler to use SLC_ULTRACODE/);
-  helpCode = 0;
-  const beforeOverride = helpCalls;
-  await compileWith("override-ultra", { SLC_AGENT: "codex" }, { adapter: "claude", ultracode: true });
-  assert.equal(helpCalls, beforeOverride, "environment override removes the block's Ultracode request");
-  helpText = "SLC_ULTRACODE SLC_REVIEWER_ULTRACODE";
+  const overridden = await compileWith("override-ultra", { SLC_AGENT: "codex" }, { adapter: "claude", ultracode: true });
+  assert.equal(overridden.SLC_ULTRACODE, undefined);
   const reviewerEnv = await compileWith("review-ultra", { SLC_REVIEWER_ULTRACODE: "false" }, undefined);
   assert.equal(reviewerEnv.SLC_REVIEWER_ULTRACODE, "false");
   const ultraEnv = await compileWith("ultracode", {}, { adapter: "claude", effort: "high", ultracode: true });
   assert.equal(ultraEnv.SLC_ULTRACODE, "true");
   assert.equal(ultraEnv.SLC_EFFORT, "high");
-  const legacy = await compileWith("old-child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
-  assert.equal(legacy.SLC_MODEL, "gpt-6-astra");
-  assert.equal(legacy.SLC_SUBAGENT_MODEL, undefined);
-  assert.ok(lines.some((line) => line.includes("own subagent defaults")));
-  const disabled = await compileWith("old-off", {}, { adapter: "claude", subagentModel: false });
-  assert.equal(disabled.SLC_SUBAGENT_MODEL, undefined);
-  assert.ok(!lines.some((line) => line.includes("own subagent defaults")));
-  helpText = "SLC_SUBAGENT_MODEL SLC_REVIEWER_SUBAGENT_MODEL";
+  const disabled = await compileWith("child-off", {}, { adapter: "claude", subagentModel: false });
+  assert.equal(disabled.SLC_SUBAGENT_MODEL, "false");
   const pairEnv = await compileWith("child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
   assert.equal(pairEnv.SLC_MODEL, "gpt-6-astra");
   assert.equal(pairEnv.SLC_SUBAGENT_MODEL, "gpt-6.1-sol");
@@ -834,6 +809,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       SLC_MODEL: "claude-opus-5",
       SLC_EFFORT: undefined,
       SLC_FAST_MODE: "true",
+      SLC_ULTRACODE: undefined,
       SLC_STALL_TIMEOUT: "2400",
     },
   );

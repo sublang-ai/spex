@@ -342,9 +342,9 @@ describe("SET: the session-player roster", () => {
     );
   });
 
-  test.each([true, false])("adding a Codex player respects child support %s", async (supported) => {
+  test("adding a Codex player submits the model pair received from its core", async () => {
     renderSettings(READINESS.map((entry) =>
-      entry.adapter === "codex" ? { ...entry, subagentModelSupported: supported, defaultModels: { model: "gpt-6-astra", ...(supported ? { subagentModel: "gpt-6.1-sol" } : {}) } } : entry));
+      entry.adapter === "codex" ? { ...entry, defaultModels: { model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" } } : entry));
     fireEvent.click(screen.getByTestId("player-add"));
     fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
     const form = within(screen.getByTestId("player-add-form"));
@@ -352,7 +352,7 @@ describe("SET: the session-player roster", () => {
     fireEvent.click(form.getByTestId("agent-save"));
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.edit", {
       op: { kind: "player.set", playerId: "dev.docs", patch: {
-        adapter: "codex", model: "gpt-6-astra", ...(supported ? { subagentModel: "gpt-6.1-sol" } : {}),
+        adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol",
         permissions: { mode: "auto" },
       } },
     }));

@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The packaging resume check (app-shell-44, DR-217). Cligent 0.38.0
-// admits a resumed Claude call on the provider default by omitting the
-// model, which holds only while Claude Code resumes on the default
-// current at that resume. The shells take the agent SDKs at any
-// version, so packaging checks the installed one under the attendee's
-// setup — a settings file whose `env.ANTHROPIC_MODEL` is the default —
-// against a loopback model API, and stops where it fails.
+// Packaging model-selection check (app-shell-44, DR-238): fresh omitted
+// selections use the default; resumed omitted selections retain the session's
+// model; an explicit selection switches it. All calls use an isolated home
+// and loopback model API because the shells accept any installed SDK version.
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -24,6 +21,7 @@ const CHILD_TIMEOUT_MS = 90_000;
 const EXPLICIT = "probe-explicit";
 const DEFAULT_A = "probe-default-a";
 const DEFAULT_B = "probe-default-b";
+const SWITCHED = "probe-switched";
 
 class CheckError extends Error {}
 
@@ -138,20 +136,31 @@ async function check() {
     const env = childEnvironment(home, `http://127.0.0.1:${port}`);
 
     const fresh = await runChild(["fresh", EXPLICIT], env, project);
-    const freshFailure = freshVerdict({ explicit: EXPLICIT, requests });
+    const freshFailure = freshVerdict({ expectedModel: EXPLICIT, requests });
     if (freshFailure) throw new CheckError(freshFailure);
 
     await writeDefault(home, DEFAULT_B);
     requests.length = 0;
     const resumed = await runChild(["resume", fresh.token], env, project);
     const resumeFailure = resumeVerdict({
-      explicit: EXPLICIT,
-      changedDefault: DEFAULT_B,
+      expectedModel: EXPLICIT,
       freshToken: fresh.token,
       resumeToken: resumed.token,
       requests,
     });
     if (resumeFailure) throw new CheckError(resumeFailure);
+
+    for (const model of [SWITCHED, undefined]) {
+      requests.length = 0;
+      const result = await runChild(["resume", fresh.token, ...(model ? [model] : [])], env, project);
+      const failure = resumeVerdict({ expectedModel: SWITCHED, freshToken: fresh.token, resumeToken: result.token, requests });
+      if (failure) throw new CheckError(failure);
+    }
+
+    requests.length = 0;
+    await runChild(["fresh"], env, project);
+    const defaultFailure = freshVerdict({ expectedModel: DEFAULT_B, requests });
+    if (defaultFailure) throw new CheckError(defaultFailure);
   } finally {
     if (server) await new Promise((resolve) => server.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
@@ -160,7 +169,7 @@ async function check() {
 
 try {
   await check();
-  console.log("check-claude-resume: a resumed Claude call with no model runs the current default");
+  console.log("check-claude-resume: Claude resumes retain the session model, explicit selections switch it, and fresh calls use the current default");
 } catch (cause) {
   console.error(`check-claude-resume: FAILED — ${cause instanceof Error ? cause.message : String(cause)}`);
   process.exit(1);

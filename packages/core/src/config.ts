@@ -45,8 +45,7 @@ import {
   type AgentExecutable,
   type RuntimeReadiness,
 } from "@sublang/cligent";
-import * as cligentCapabilities from "@sublang/cligent";
-import * as playbookCapabilities from "@sublang/playbook/playbook-captain";
+import { isUltracodeSupported } from "@sublang/playbook/playbook-captain";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { seedConfigText } from "@sublang/playbook/seed-config";
@@ -813,10 +812,9 @@ export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
  * signed in or not, so the seed is shown none. */
 const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
 
-/** The home whose agent sign-ins and Claude user settings a seed reads;
- * `null` on a seat, whose server account's are no member's
- * (core-service-3, core-service-126). */
-export type SeedHome = string | null;
+/** A local user home permits sign-in and settings lookup. A seat grants
+ * only its materialized native Codex home, or no filesystem lookup. */
+export type SeedHome = string | { codexHome: string } | null;
 
 /** Whether each agent is set up as a seed counts it (core-service-3,
  * DR-205): a credential variable — Claude's user settings included, as
@@ -831,7 +829,7 @@ export async function seedCredentials(
   const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
     if (variableCredential(adapter, env, home)) return true;
     if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
-    if (home === null) return false;
+    if (typeof home !== "string") return false;
     // The status command runs only where the folder stands, since it
     // would create it.
     if (!existsSync(agentFolder(adapter, env, home))) return false;
@@ -843,7 +841,7 @@ export async function seedCredentials(
 
 /** An agent's credential variable, as a run reads it (DR-204). */
 function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
-  const runEnv = adapter === "claude" && home !== null ? { ...env, ...claudeSettingsEnv(env, home) } : env;
+  const runEnv = adapter === "claude" && typeof home === "string" ? { ...env, ...claudeSettingsEnv(env, home) } : env;
   return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
 }
 
@@ -872,50 +870,16 @@ function agentFolder(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: 
 
 /** Playbook's own seed for these credentials, as Spex writes it
  * (core-service-3, DR-154): it reads the credentials confirmed above,
- * one variable standing for each, with no home folder (DR-205); behind
- * a third-party service its Claude agents take the provider's default
- * in place of an official name, which that service would map by its
- * own rule. */
+ * one variable standing for each, with no credential home (DR-205).
+ * Model selection uses the separate provider environment and home. */
 function seedText(env: NodeJS.ProcessEnv, home: SeedHome, credentials: SeedCredentials): string {
   const input: NodeJS.ProcessEnv = {
     ...(credentials.claude ? { ANTHROPIC_API_KEY: "confirmed" } : {}),
     ...(credentials.codex ? { OPENAI_API_KEY: "confirmed" } : {}),
   };
-  const modelEnv = home === null ? env : { ...env, ...claudeSettingsEnv(env, home) };
-  const options = { env: input, homeDir: NO_HOME, modelEnv };
-  const text = starterText(seedConfigText(options).text);
-  const service = anthropicBaseUrl(modelEnv);
-  return service.state === "third-party" ? withoutOfficialModels(text) : text;
-}
-
-/** Anthropic's own naming (settings-61): a `claude-` model, or one of
- * its aliases, with or without the 1M-context suffix. */
-export function isOfficialModel(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  return /^claude-/i.test(value) || /^(opus|sonnet|haiku|fable)(\[1m\])?$/i.test(value);
-}
-
-/** A third-party Claude service chooses both models unless the starter
- * names one of its own. Preserve unrelated settings and comments. */
-export function withoutOfficialModels(text: string): string {
-  const document = parseDocument(text);
-  if (document.errors.length > 0) return text;
-  const agents: (string | number)[][] = [["captain"]];
-  const players = document.get("players", true);
-  if (isMap(players)) {
-    for (const item of players.items) agents.push(["players", isScalar(item.key) ? String(item.key.value) : String(item.key)]);
-  }
-  let removed = false;
-  for (const path of agents) {
-    if (document.getIn([...path, "adapter"]) !== "claude") continue;
-    for (const field of ["model", "subagentModel"]) {
-      if (isOfficialModel(document.getIn([...path, field]))) {
-        document.deleteIn([...path, field]);
-        removed = true;
-      }
-    }
-  }
-  return removed ? document.toString() : text;
+  return starterText(seedConfigText({
+    env: input, homeDir: NO_HOME, modelEnv: env, modelHome: home ?? undefined,
+  }).text);
 }
 
 /**
@@ -2752,26 +2716,10 @@ export async function checkAdapterReadiness(
   };
 }
 
-/** Only model defaults are sent to clients. The service evaluates the seat's
- * effective provider privately; a runtime without this contract supplies none. */
-export function newPlayerModels(adapter: string, env: NodeJS.ProcessEnv): {model?: string; subagentModel?: string} {
-  const runtime = cligentCapabilities as { defaultAgentModels?: (
-    adapter: string, env: NodeJS.ProcessEnv
-  ) => {model?: string; subagentModel?: string} };
-  return runtime.defaultAgentModels?.(adapter, env) ?? {};
-}
-
-/** Older runtime releases expose no independent Ultracode capability. */
-export function isUltracodeSupported(adapter: string): boolean {
-  const capability = (cligentCapabilities as unknown as {isUltracodeSupported?: (adapter: string) => boolean}).isUltracodeSupported;
-  const projectionCapability = (playbookCapabilities as unknown as {isUltracodeSupported?: (adapter: string) => boolean}).isUltracodeSupported;
-  return typeof capability === "function" && capability(adapter) === true
-    && typeof projectionCapability === "function" && projectionCapability(adapter) === true;
-}
+export { isUltracodeSupported };
 
 export function assertUltracode(value: unknown, adapter: string, path: string): void {
   if (value === undefined) return;
   if (typeof value !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
-  const launcherAcceptsField = typeof (playbookCapabilities as { isUltracodeSupported?: unknown }).isUltracodeSupported === "function";
-  if (!launcherAcceptsField || ((value || adapter === "claude") && !isUltracodeSupported(adapter))) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
+  if (value && !isUltracodeSupported(adapter)) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
 }

@@ -284,12 +284,13 @@ When a native desktop package is built, its packaging gate shall run the package
 
 #### app-shell-44
 
-When a native desktop package is built, its packaging command shall run a resume check after the build and before the platform packager, aborting packaging where it fails, over the Claude adapter of the Cligent the core resolves and the agent SDK the shell declares at the unconstrained range [[app-shell-33](#app-shell-33)], asserting that a resumed Claude call with no model requests the default current at that resume ([DR-217](../decisions/217-cligent-0-38-0-adoption-and-models-on-re-check.md)):
+When a native desktop package is built, its packaging command shall run a resume check after the build and before the platform packager, aborting packaging where it fails, over the Claude adapter of the Cligent the core resolves and the agent SDK the shell declares at the unconstrained range [[app-shell-33](#app-shell-33)], asserting the fresh and resumed Claude model selection contract ([DR-238](../decisions/238-claude-resumes-keep-the-session-model.md)):
 
 - its child process starts under a temporary home — `HOME`, `USERPROFILE` and Claude's configuration directory — with every inherited `ANTHROPIC_*` and `CLAUDE_*` variable removed, a loopback model API fixture's address and a fake credential set, and a user settings file whose `env.ANTHROPIC_MODEL` is the only default;
-- it refuses a Cligent below 0.38.0 or outside the core's declared range, and prints the Cligent, SDK and Claude Code versions;
-- a call on an explicit model, then the settings default changed, then a resume of that session with no model each end in a successful terminal yielding a resume token;
-- the resume yields the first call's token, and its request names the changed default; another token fails as a new session in place of the resume, and naming the explicit model fails with a message that Claude Code restored the earlier model on resume;
+- it refuses a Cligent outside the core's declared range, and prints the Cligent, SDK and Claude Code versions;
+- a fresh call on an explicit model, then the settings default changed, then a resume with no model, then a resume on a different explicit model, then a resume with no model and a fresh call with no model each end in a successful terminal yielding a resume token;
+- every resume yields the first call's token; its request names the previous session model when the model is omitted and the requested model when explicit, including preservation of the explicit switch on the following resume; another token fails as a new session in place of the resume;
+- the fresh call with no model requests the changed settings default;
 - a missing executable, a failed or timed-out call or a fixture receiving no or other requests fails it with its reason, and the home and fixture are removed either way.
 
 #### app-shell-34

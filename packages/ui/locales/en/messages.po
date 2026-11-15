@@ -3369,8 +3369,8 @@ msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
 
 #: src/components/AgentCards.tsx
-msgid "Every role now uses Provider default."
-msgstr "Every role now uses Provider default."
+msgid "No roles still name an official Claude model."
+msgstr "No roles still name an official Claude model."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -6558,6 +6558,9 @@ msgstr "Runs slc over the draft's source — a few minutes, longer for many role
 msgid "Same as agent"
 msgstr "Same as agent"
 
+msgid "Same as agent (from subagent effort)"
+msgstr "Same as agent (from subagent effort)"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "Same as Captain"
@@ -8733,3 +8736,7 @@ msgstr "your project"
 #: src/lib/space.ts
 msgid "Your sessions"
 msgstr "Your sessions"
+
+#: src/components/AgentCards.tsx
+msgid "Clear Claude model pins"
+msgstr "Clear Claude model pins"
