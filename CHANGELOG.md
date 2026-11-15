@@ -37,7 +37,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
-- Resuming a Claude conversation without choosing a model keeps the last model that answered it. An explicit switch becomes the model for later turns. Fresh conversations use the current default.
+- Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.
 
 - The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook `^18.3.0`, Cligent `^0.39.0` and slc `^0.21.0`. The built-in playbooks stage as `sublang/playbooks` 18.3.0.
 

@@ -610,6 +610,18 @@ test.each([
   expect(effort.textContent).toBe("inherit the player (Provider default)");
 });
 
+test("playbook-library-39: a non-Claude role binding inherits the reported provider default suffix", async () => {
+  useAppStore.setState({ loadAgentOptions: async () => ({
+    ...codexCatalog(), discovery: { status: "available", defaultModel: "codex-default", models: [] },
+  }) });
+  render(<BindingEditorPopover role="analyst" position="dev.analyst" binding={{ playerId: "analyst", display: "Codex" }}
+    players={[{ id: "analyst", agent: { adapter: "codex" }, display: "Codex", boundBy: [] }]}
+    anchorRef={createRef<HTMLButtonElement>()} onSave={vi.fn(async () => {})} onClose={vi.fn()} />);
+  await ready();
+  const inherit = (screen.getByTestId("binding-model-mode") as HTMLSelectElement).options[0];
+  expect(inherit.textContent).toBe("inherit the player (Provider default · codex-default)");
+});
+
 test("settings-36: a switched adapter's field starts over on the provider default", async () => {
   useAppStore.setState({ loadAgentOptions: catalogs() });
   const save = vi.fn();

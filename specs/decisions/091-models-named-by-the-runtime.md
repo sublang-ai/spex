@@ -13,7 +13,7 @@ The model list's rows are amended by [DR-205](205-agent-cards-read-alike.md): ro
 
 Amended by [DR-233](233-model-versions-on-agent-chips.md) in the configured model on a chip: its adapter catalog supplies the specific model behind an alias.
 
-Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in how Claude's unpinned primary reads in conversation and binding editors: Provider default without the catalog's fresh-default model.
 
 ## Context
 
