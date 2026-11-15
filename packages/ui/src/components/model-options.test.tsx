@@ -593,11 +593,11 @@ test.each([
 });
 
 test.each([
-  { adapter: "claude" as const, reads: "inherit the player (Provider default · Sonnet · claude-sonnet-5)" },
+  { adapter: "claude" as const, reads: "inherit the player (Provider default)" },
   { adapter: "codex" as const, reads: "inherit the player (Provider default)" },
 ])("playbook-library-39: the inherit choices name a $adapter player's unset model and effort as the provider's default", async ({ adapter, reads }) => {
-  // Claude's catalog reports the model it runs by default; Codex's
-  // reports none, so its provider default is named by the words alone.
+  // Claude's fresh catalog default does not predict a resumed primary;
+  // Codex reports no default here. Both therefore read the words alone.
   useAppStore.setState({ loadAgentOptions: catalogs("sonnet") });
   render(<BindingEditorPopover role="analyst" position="dev.analyst" binding={{ playerId: "analyst", display: adapter }}
     players={[{ id: "analyst", agent: { adapter }, display: adapter, boundBy: [] }]}
@@ -670,6 +670,17 @@ test("a standing legacy Ultracode effort stays readable and a model without xhig
   expect((screen.getByTestId("agent-save") as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(screen.getByTestId("agent-ultracode"), { target: { value: "inherit" } });
   expect(screen.queryByTestId("agent-ultracode")).toBeNull();
+});
+
+test("a Claude conversation's unpinned model does not promise the fresh catalog default", async () => {
+  useAppStore.setState({ loadAgentOptions: async () => ({ ...options("claude"), discovery: { status: "available", defaultModel: "new-default", models: [] } }) });
+  render(<AgentSettingsPopover anchorRef={createRef<HTMLButtonElement>()} onSave={vi.fn(async () => {})} onClose={vi.fn()} readOnly={false} agent={{
+    id: "coder", name: "Coder", adapter: "claude", configured: {}, divergentRoles: [],
+  }} />);
+  const mode = await screen.findByTestId("agent-coder-model-mode") as HTMLSelectElement;
+  await waitFor(() => expect(screen.queryByText("Loading model options…")).toBeNull());
+  expect(mode.selectedOptions[0]!.textContent).toBe("from Settings (Provider default)");
+  expect(mode.textContent).not.toContain("new-default");
 });
 
 test.each([

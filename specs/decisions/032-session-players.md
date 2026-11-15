@@ -21,6 +21,8 @@ Amended by [DR-155](155-players-named-delegated-and-recovered.md): a player read
 Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md): a lane's call names the playbook and step it runs, leading back to its delegation line.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in how a player bound by more than one playbook reads: the row groups the roles one player plays and says nothing more; the binding editor names the other playbooks.
 
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+
 ## Context
 
 - Playbook 8 separates two things Spex has always conflated, and its own record says why: "player" named both a playbook-local work function and a host agent conversation, so session sharing depended on spelling, and a nested role's configured agent could be silently replaced by an ancestor's.

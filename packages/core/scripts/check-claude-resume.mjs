@@ -3,8 +3,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Packaging model-selection check (app-shell-44, DR-238): fresh omitted
-// selections use the default; resumed omitted selections retain the session's
-// model; an explicit selection switches it. All calls use an isolated home
+// selections use settings.model; omitted resumes leave model selection to
+// Claude Code, including its ANTHROPIC_MODEL launch override. All calls use an isolated home
 // and loopback model API because the shells accept any installed SDK version.
 
 import { spawn } from "node:child_process";
@@ -22,15 +22,16 @@ const EXPLICIT = "probe-explicit";
 const DEFAULT_A = "probe-default-a";
 const DEFAULT_B = "probe-default-b";
 const SWITCHED = "probe-switched";
+const ENV_OVERRIDE = "probe-env-override";
 
 class CheckError extends Error {}
 
-/** A minimal streamed Messages reply naming the requested model. */
+/** A service may report a different name than the requested selection. */
 function reply(response, model) {
   response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   const send = (type, data) => response.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
   send("message_start", {
-    message: { id: "msg_check", type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } },
+    message: { id: "msg_check", type: "message", role: "assistant", model: `service-reported-${model}`, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } },
   });
   send("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
   send("content_block_delta", { index: 0, delta: { type: "text_delta", text: "ok" } });
@@ -118,7 +119,7 @@ function runChild(args, env, cwd) {
 }
 
 function writeDefault(home, model) {
-  return writeFile(join(home, ".claude", "settings.json"), JSON.stringify({ env: { ANTHROPIC_MODEL: model } }));
+  return writeFile(join(home, ".claude", "settings.json"), JSON.stringify({ model }));
 }
 
 async function check() {
@@ -161,6 +162,12 @@ async function check() {
     await runChild(["fresh"], env, project);
     const defaultFailure = freshVerdict({ expectedModel: DEFAULT_B, requests });
     if (defaultFailure) throw new CheckError(defaultFailure);
+
+    // A launch override is intentionally stronger than native continuity.
+    requests.length = 0;
+    const overridden = await runChild(["resume", fresh.token], { ...env, ANTHROPIC_MODEL: ENV_OVERRIDE }, project);
+    const overrideFailure = resumeVerdict({ expectedModel: ENV_OVERRIDE, freshToken: fresh.token, resumeToken: overridden.token, requests });
+    if (overrideFailure) throw new CheckError(overrideFailure);
   } finally {
     if (server) await new Promise((resolve) => server.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
@@ -169,7 +176,7 @@ async function check() {
 
 try {
   await check();
-  console.log("check-claude-resume: Claude resumes retain the session model, explicit selections switch it, and fresh calls use the current default");
+  console.log("check-claude-resume: Claude native resumes survive differing service reply names and settings.model changes; explicit and ANTHROPIC_MODEL launch selections override; fresh calls use settings.model");
 } catch (cause) {
   console.error(`check-claude-resume: FAILED — ${cause instanceof Error ? cause.message : String(cause)}`);
   process.exit(1);

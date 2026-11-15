@@ -6876,10 +6876,6 @@ msgstr "Sessions and project views"
 msgid "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
 msgstr "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
 
-#: src/components/AgentCards.tsx
-msgid "Set all to Provider default"
-msgstr "Set all to Provider default"
-
 #. Manual step on Windows; `setx` is the command's name
 #: src/lib/agent-cards.ts
 msgid "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
@@ -8380,11 +8376,6 @@ msgstr "Use"
 #: src/components/SpaceRepairs.tsx
 msgid "Use {folder}"
 msgstr "Use {folder}"
-
-#. sets every role naming an official model to Provider default, named by the model it runs
-#: src/components/AgentCards.tsx
-msgid "Use {model} for all"
-msgstr "Use {model} for all"
 
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx

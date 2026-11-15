@@ -244,7 +244,7 @@ export function AgentSettingsPopover({
             value={draft.model}
             playerDefault={agent.configured.model}
             models={models}
-            defaultModel={catalog?.defaultModel}
+            defaultModel={agent.adapter === "claude" ? undefined : catalog?.defaultModel}
             onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
           />
           <TuningField

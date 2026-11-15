@@ -286,10 +286,11 @@ When a native desktop package is built, its packaging gate shall run the package
 
 When a native desktop package is built, its packaging command shall run a resume check after the build and before the platform packager, aborting packaging where it fails, over the Claude adapter of the Cligent the core resolves and the agent SDK the shell declares at the unconstrained range [[app-shell-33](#app-shell-33)], asserting the fresh and resumed Claude model selection contract ([DR-238](../decisions/238-claude-resumes-keep-the-session-model.md)):
 
-- its child process starts under a temporary home — `HOME`, `USERPROFILE` and Claude's configuration directory — with every inherited `ANTHROPIC_*` and `CLAUDE_*` variable removed, a loopback model API fixture's address and a fake credential set, and a user settings file whose `env.ANTHROPIC_MODEL` is the only default;
+- its child process starts under a temporary home — `HOME`, `USERPROFILE` and Claude's configuration directory — with every inherited `ANTHROPIC_*` and `CLAUDE_*` variable removed, a loopback model API fixture's address and a fake credential set, and a user settings file whose `model` is the only default;
 - it refuses a Cligent outside the core's declared range, and prints the Cligent, SDK and Claude Code versions;
 - a fresh call on an explicit model, then the settings default changed, then a resume with no model, then a resume on a different explicit model, then a resume with no model and a fresh call with no model each end in a successful terminal yielding a resume token;
-- every resume yields the first call's token; its request names the previous session model when the model is omitted and the requested model when explicit, including preservation of the explicit switch on the following resume; another token fails as a new session in place of the resume;
+- the fixture replies under a model name different from the requested selection; every ordinary resume yields the first call’s token and requests the saved selection when omitted or the explicit choice when supplied, including the following omitted resume after an explicit switch;
+- a final omitted resume with `ANTHROPIC_MODEL` set requests that launch override and preserves the token, rather than promising unconditional continuity; provider-specific restoration exceptions remain native policy ([DR-238](../decisions/238-claude-resumes-keep-the-session-model.md));
 - the fresh call with no model requests the changed settings default;
 - a missing executable, a failed or timed-out call or a fixture receiving no or other requests fails it with its reason, and the home and fixture are removed either way.
 

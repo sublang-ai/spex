@@ -519,11 +519,11 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     // The Captain's own chip opens the Captain's.
     await page.getByTestId("agent-chip-captain").click();
     const captain = page.getByTestId("agent-settings-captain");
-    // An unset model is inherited as the provider's default, named as
-    // the model field names it: the words, then the model the runtime
-    // reports running by default, itself by the display rule.
+    // An unset Claude primary inherits without a call-level pin. Its
+    // fresh catalog default cannot predict the model of a resumed
+    // conversation, so the choice reads Provider default alone.
     await expect(captain.getByTestId("agent-captain-model-mode").locator("option").first())
-      .toHaveText("from Settings (Provider default · Opus · claude-opus-5-5)");
+      .toHaveText("from Settings (Provider default)");
     await expect(captain.getByTestId("agent-captain-effort-mode").locator("option").first())
       .toHaveText("from Settings (Provider default)");
     await captain.getByTestId("agent-captain-model-mode").selectOption("pin");

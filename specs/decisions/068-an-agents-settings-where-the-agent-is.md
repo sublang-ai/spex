@@ -12,6 +12,8 @@ That record's scope, precedence, storage, application at the three projection si
 Amended by [DR-069](069-key-phrases-not-sentences.md) in §"One agent's control opens one agent's settings" alone: the editor's two sentences become the phrase "This conversation only".
 Amended by [DR-091](091-models-named-by-the-runtime.md) in the reading an agent's chip carries alone: the model the runtime reported for the agent's latest call, while the adapter and model setting that call began under still stand, with what is set kept in the chip's title and accessible name.
 
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+
 ## Context
 
 [DR-067](067-tuning-for-one-conversation.md) put one panel behind two kinds of door: an agent's own chip, and a control on the session header carrying a count of changed agents.

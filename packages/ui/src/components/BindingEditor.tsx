@@ -192,7 +192,7 @@ export function BindingEditorPopover({
             value={draft.model === null ? undefined : draft.model}
             playerDefault={lane?.agent.model}
             models={models}
-            defaultModel={catalog?.defaultModel}
+            defaultModel={lane?.agent.adapter === "claude" ? undefined : catalog?.defaultModel}
             onChange={(next) => setDraft((current) => ({ ...current, model: next }))}
           />
           <TuningField

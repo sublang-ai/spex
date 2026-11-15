@@ -201,6 +201,15 @@ test("app-shell-44: both native packaging commands run the resume check after th
   }
 });
 
+test("app-shell-44: the native fixture separates settings defaults, service reply names and launch overrides", () => {
+  const source = readFileSync(new URL("packages/core/scripts/check-claude-resume.mjs", root), "utf8");
+  assert.match(source, /JSON\.stringify\(\{ model \}\)/);
+  assert.doesNotMatch(source, /env: \{ ANTHROPIC_MODEL: model \}/);
+  assert.match(source, /model: `service-reported-\$\{model\}`/);
+  assert.match(source, /ANTHROPIC_MODEL: ENV_OVERRIDE/);
+  assert.match(source, /expectedModel: ENV_OVERRIDE/);
+});
+
 test("app-shell-44: the model check requires the expected selection and the same resumed session", async () => {
   const { freshVerdict, resumeVerdict } = await import(new URL("packages/core/scripts/check-claude-resume-verdict.mjs", root).href);
   for (const expectedModel of ["probe-explicit", "probe-default-b", "probe-switched"]) {

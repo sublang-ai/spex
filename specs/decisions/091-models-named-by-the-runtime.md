@@ -13,6 +13,8 @@ The model list's rows are amended by [DR-205](205-agent-cards-read-alike.md): ro
 
 Amended by [DR-233](233-model-versions-on-agent-chips.md) in the configured model on a chip: its adapter catalog supplies the specific model behind an alias.
 
+Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+
 ## Context
 
 - The model field is a native select whose options read `name · id`, so Claude's catalog reads "Default (recommended) · default" and "Opus · opus": the specific model each alias resolves to, `claude-opus-5-5`, matches a saved pin but is never shown.

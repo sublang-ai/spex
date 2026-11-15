@@ -25,7 +25,7 @@ import type {
 import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { useAgentOptions, modelDisplay, modelDisplayText, providerDefaultDisplay } from "../lib/agent-options.js";
+import { useAgentOptions, modelDisplay, modelDisplayText, providerDefaultDisplay, providerDefaultLabel } from "../lib/agent-options.js";
 import {
   adapterModels,
   distinctRunModels,
@@ -392,18 +392,13 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   // Recomputed from the newest state on every render (settings-61).
   const rows = officialRoles(state, projectConfigs);
   const discovery = catalog.options?.discovery;
-  const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
   const done = outcome !== undefined && "done" in outcome;
   if (rows.length === 0 && !done) return null;
   const ops = fixPlan(rows);
-  const hasChildren = rows.some((row) => row.field === "subagentModel");
   const needsDefault = rows.some((row) => row.field !== "subagentModel");
   const unresolved = needsDefault && !defaultModel;
-  const target = (() => {
-    const display = providerDefaultDisplay(models, defaultModel);
-    return display.specific ? `${display.name} · ${display.specific}` : display.name;
-  })();
+  const target = providerDefaultLabel();
   const label = (row: OfficialRole) => {
     const project = row.projectId ? projects.find((p) => p.id === row.projectId)?.name ?? row.projectId : undefined;
     const name = project ? `${roleLabel(row.role)} (${project})` : roleLabel(row.role);
@@ -447,9 +442,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             disabled={busy || stale || unresolved || ops.length === 0 || !state.revision}
             onClick={() => { setAsking(true); setOutcome(undefined); }}
           >
-            {hasChildren ? i18n._("Clear Claude model pins") : defaultModel
-              ? i18n._({ id: "Use {model} for all", comment: "sets every role naming an official model to Provider default, named by the model it runs", values: { model: modelDisplayText(modelDisplay(models, defaultModel)) } })
-              : i18n._("Set all to Provider default")}
+            {i18n._("Clear Claude model pins")}
           </button>
           {unresolved ? (
             <span data-testid="agent-official-blind">

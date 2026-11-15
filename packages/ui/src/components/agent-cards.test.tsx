@@ -755,7 +755,7 @@ describe("settings-69: official names behind a third-party service", () => {
     // sets, the roles folded beneath.
     const official = screen.getByTestId("agent-official");
     expect(official.textContent).toContain("Some roles still name a Claude model, which api.deepseek.com may bill as another model or refuse.");
-    expect(screen.getByTestId("agent-official-fix").textContent).toBe("Use deepseek-flash for all");
+    expect(screen.getByTestId("agent-official-fix").textContent).toBe("Clear Claude model pins");
     expect((screen.getByTestId("agent-official-roles") as HTMLDetailsElement).open).toBe(false);
     const list = screen.getByTestId("agent-official-list");
     // settings-61: by the effective model.
@@ -768,10 +768,10 @@ describe("settings-69: official names behind a third-party service", () => {
     fireEvent.click(screen.getByTestId("agent-official-fix"));
     const rows = screen.getAllByTestId("agent-official-confirm-row").map((row) => row.textContent);
     // settings-62: each role, its model, its target; the project's elsewhere.
-    expect(rows).toContain("Captain: claude-opus-5-5 → Provider default · deepseek-flash");
-    expect(rows).toContain("code.reviewer: claude-sonnet-5 → Provider default · deepseek-flash");
+    expect(rows).toContain("Captain: claude-opus-5-5 → Provider default");
+    expect(rows).toContain("code.reviewer: claude-sonnet-5 → Provider default");
     // A project's role runs your own player's model: written there.
-    expect(rows).toContain("fix.coder (shop): claude-haiku-4 → Provider default · deepseek-flash");
+    expect(rows).toContain("fix.coder (shop): claude-haiku-4 → Provider default");
     expect(rows.join("\n")).not.toContain("dev.late");
 
     // After the write a project binds a further official name.
