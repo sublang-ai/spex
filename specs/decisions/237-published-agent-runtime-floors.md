@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-14).
+Amended by [DR-239](239-playbook-18-3-1-reference-adoption.md) in the Playbook floor and bundled playbook version.
 Amends [DR-236](236-primary-and-subagent-model-defaults.md) in model-pair ownership and the shared runtime floor, and [DR-232](232-codex-subagent-selection.md) in the meaning of an omitted Codex subagent model, fork history and tool-free calls.
 Amends [DR-224](224-playbook-18-1-4-adoption.md) in the Playbook floor and built-in release and [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in the Cligent and slc floors.
 

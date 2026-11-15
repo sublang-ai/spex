@@ -255,8 +255,9 @@ meta.md       The spec of specs
 | [DR-234](decisions/234-translation-source-pins-stay-in-the-overlay.md) | 234-translation-source-pins-stay-in-the-overlay.md | Translation hashes move to each language's `source-pins.json` and updates recognize older templates with inline hashes |
 | [DR-235](decisions/235-independent-ultracode.md) | 235-independent-ultracode.md | Independent Claude workflow requests across agent, role and conversation tuning and compilation. |
 | [DR-236](decisions/236-primary-and-subagent-model-defaults.md) | 236-primary-and-subagent-model-defaults.md | Primary and subagent model pairs in the Playbook seed, new-player editor and compiler handoff; runtime model authority and shared dependency floor by DR-237 |
-| [DR-237](decisions/237-published-agent-runtime-floors.md) | 237-published-agent-runtime-floors.md | Cligent ^0.39.0, Playbook ^18.3.0 with built-ins 18.3.0 and slc ^0.21.0 for seeds, compilation and native delegation. |
+| [DR-237](decisions/237-published-agent-runtime-floors.md) | 237-published-agent-runtime-floors.md | Cligent ^0.39.0, Playbook ^18.3.0 with built-ins 18.3.0 and slc ^0.21.0 for seeds, compilation and native delegation; Playbook floor and built-ins amended by DR-239. |
 | [DR-238](decisions/238-claude-resumes-keep-the-session-model.md) | 238-claude-resumes-keep-the-session-model.md | Unpinned Claude calls use native fresh/resumed selection with launch/provider exceptions; native packaging tests settings changes, differing reply names and overrides. |
+| [DR-239](decisions/239-playbook-18-3-1-reference-adoption.md) | 239-playbook-18-3-1-reference-adoption.md | Playbook ^18.3.1 and bundled playbooks 18.3.1 adopt the corrected CODE reference for compilation; amends DR-237 |
 
 ## Packages
 
