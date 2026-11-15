@@ -25,6 +25,8 @@ Codex has a separate reasoning effort named `ultra`.
 
 ## Consequences
 
+App adoption uses the published compatible compiler, launcher and adapter under [DR-182](182-published-desktop-runtime-adoption.md).
+
 Existing configurations run without conversion.
 A reader can change the workflow setting without pinning reasoning effort, including when resuming a conversation.
 Claude Code applies model and workflow policy to the request [[1]].

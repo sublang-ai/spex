@@ -22,7 +22,7 @@ import { agentChoosesLabel, useAgentOptions, modelTuning } from "../lib/agent-op
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
-import { newPlayerModels, type AgentPatch } from "../lib/config-ops.js";
+import type { AgentPatch } from "../lib/config-ops.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import {
   FAST_MODE_MARK,
@@ -57,12 +57,11 @@ function knownAdapter(adapter: string | undefined): AdapterName {
     : "claude";
 }
 
-/** The subagent model as the field holds it: "" for "Same as agent" —
- * the omission and the literal `inherit` alike — `false` for "Off", or
- * a model (DR-095). */
+/** Codex distinguishes an omitted child from an explicit request for the
+ * parent model. On Claude both use the empty row (DR-237). */
 function subagentModelOf(agent: ChipAgent | undefined): string | false {
   const value = agent?.subagentModel;
-  return value === undefined || value === "inherit" ? "" : value;
+  return value === undefined || (agent?.adapter !== "codex" && value === "inherit") ? "" : value;
 }
 
 function initialMode(agent: ChipAgent | undefined): Mode {
@@ -168,7 +167,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const legacyEffort = tuning.separateUltracode && effort === "ultracode";
   const invalidEffort = Boolean(discovery.options && effort && !legacyEffort && !tuning.efforts.includes(effort));
   const needsUltracodeReset = Boolean(discovery.options && adapter === "claude" && !tuning.separateUltracode && ultracode !== undefined);
-  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && ultracode === true && !tuning.ultracodeSupported);
+  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (ultracode ?? legacyEffort) && !tuning.ultracodeSupported);
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
@@ -180,9 +179,9 @@ export function AgentEditor(props: AgentEditorProps) {
   function pickAdapter(next: AdapterName): void {
     if (next === adapter) return;
     setAdapter(next);
-    const defaults = props.newPlayerDefaults ? newPlayerModels(next, readinessByAdapter.get(next)) : {};
-    setModel(defaults.model ?? "");
-    setSubagentModel(defaults.subagentModel ?? "");
+    const defaults = props.newPlayerDefaults ? readinessByAdapter.get(next)?.defaultModels : undefined;
+    setModel(defaults?.model ?? "");
+    setSubagentModel(defaults?.subagentModel ?? "");
     setSubagentEffort("");
     setEffort("");
     setUltracode(undefined);
@@ -222,9 +221,7 @@ export function AgentEditor(props: AgentEditorProps) {
     const trimmedModel = model.trim();
     if (trimmedModel) patch.model = trimmedModel;
     else if (initial?.model) patch.model = null;
-    // "Same as agent" is the omission, and "Off" the configured `false`
-    // kept only while it stands (DR-095): either is written only when it
-    // changes what the block holds.
+    // Preserve the saved representation when the child selection is unchanged.
     if (subagentModel !== subagentModelOf(initial)) {
       if (subagentModel === false) patch.subagentModel = false;
       else if (subagentModel.trim()) patch.subagentModel = subagentModel.trim();
@@ -375,7 +372,8 @@ export function AgentEditor(props: AgentEditorProps) {
                   onChange={setSubagentModel}
                   labelId={subagentLabelId}
                   testId="agent-subagent-model"
-                  subagent="empty"
+                  subagent={adapter === "codex" ? "codex" : "empty"}
+                  subagentEffort={subagentEffort}
                   {...(initial?.subagentModel === false || subagentModel === false
                     ? { off: { selected: subagentModel === false, onSelect: () => setSubagentModel(false) } }
                     : {})}
@@ -399,7 +397,7 @@ export function AgentEditor(props: AgentEditorProps) {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <UltracodeField testId="agent-ultracode" supported={tuning.ultracodeSupported}
+        <UltracodeField testId="agent-ultracode" supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
           value={ultracode} inherited={legacyEffort ? true : undefined} source="provider"
           resetOnly={needsUltracodeReset} onChange={setUltracode} />
         {(supportsFastMode || fastMode) ? (

@@ -821,6 +821,8 @@ export interface ReadinessEntry {
   /** On `claude` alone: where its requests go, by
    * `ANTHROPIC_BASE_URL`'s host name and nothing more (core-service-9). */
   baseUrl?: BaseUrlState;
+  /** New roster player defaults for this core and service. Earlier cores omit them. */
+  defaultModels?: { model?: string; subagentModel?: string };
   /** The core's `process.platform` and the file name of its
    * environment's `SHELL`, so manual steps are written for the
    * computer that follows them. */

@@ -6,7 +6,7 @@
 // a merge patch — only the provided keys change, so hand-written
 // fields (instruction, granular permissions) survive.
 
-import type { AgentBlockInput, ReadinessEntry } from "@sublang/spex-core/protocol";
+import type { AgentBlockInput } from "@sublang/spex-core/protocol";
 
 import type { SpexClient } from "./client.js";
 import { getClient } from "../state/store.js";
@@ -96,24 +96,9 @@ export function bindRole(
  * selections, including an omitted model or child. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-fable-5-2",
-  subagentModel: "claude-opus-5-5",
   effort: "high",
   permissions: { mode: "auto" },
 };
-
-export function newPlayerModels(adapter: string, readiness?: ReadinessEntry): Pick<AgentBlockInput, "model" | "subagentModel"> {
-  if (adapter === "claude" && readiness?.baseUrl?.state !== "third-party") {
-    return {
-      model: NEUTRAL_BLOCK.model,
-      ...(readiness?.subagentModelSupported !== false ? { subagentModel: NEUTRAL_BLOCK.subagentModel } : {}),
-    };
-  }
-  if (adapter === "codex") {
-    return { model: "gpt-6-astra", ...(readiness?.subagentModelSupported ? { subagentModel: "gpt-6.1-sol" } : {}) };
-  }
-  return {};
-}
 
 /** Apply an editor patch to a local (not yet registered) block with
  * the same semantics the core uses: provided keys change, absent

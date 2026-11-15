@@ -9,6 +9,8 @@ Accepted (2026-11-14).
 Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player and [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the model lineup.
 Amends [DR-205](205-agent-cards-read-alike.md) in the models omitted from a third-party Claude seed, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the fields supplied to the compiler.
 
+Amended by [DR-237](237-agent-tuning-across-runtime-versions.md) in model ownership and compiler compatibility.
+
 ## Context
 
 The shared starter previously put Claude work on Opus and Codex work on Sol.

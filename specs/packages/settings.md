@@ -71,8 +71,8 @@ When the run view asks for Settings at an adapter's agent card [[run-view-45](ru
 
 Where the Settings surface is open, the Settings surface shall offer adding a session player by naming its id and giving it a whole agent block ([DR-032](../decisions/032-session-players.md)), and shall report a rejected id in the shared-config write path's own words without writing:
 
-- The new-player draft starts with Claude Fable 5.2 and Opus 5.5 subagents. Choosing Codex on that draft selects GPT-6 Astra and, where supported, GPT-6.1 Sol subagents ([DR-236](../decisions/236-primary-and-subagent-model-defaults.md)).
-- A third-party Claude service uses provider model defaults. Saving an untouched draft writes its displayed parent and child choices.
+- A new player starts on Claude, at high effort with automatic permissions. Its id must be unique in the roster and match `^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`; `captain` is reserved.
+- On the initial or newly selected adapter, the model and subagent model come from that place's readiness response [[core-service-9](core-service.md#core-service-9)]. A missing selection uses the provider default. Saving an untouched draft writes its displayed choices ([DR-237](../decisions/237-agent-tuning-across-runtime-versions.md)).
 
 ### Workshop Adapters
 
@@ -116,16 +116,16 @@ When an agent editor or conversation settings opens, the UI shall bind its brows
 When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md), [DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
 - Offer runtime model IDs, provider default, and explicit custom entry in the model field [[settings-39](#settings-39)], each model named by the display rule [[settings-38](#settings-38)]; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
-- Where Cligent reports the adapter serves a subagent model, or a value already stands, offer the subagent-model field [[settings-39](#settings-39)]: "Same as agent" first — the configured omission, requesting the agent's own model for its subagents — then the same runtime model IDs and custom entry, and "Off" — a `false`, which switches delegation off — only while one stands, in the block or in the editor's draft ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
-- A Codex model and effort selection requests the native spawn defaults ([DR-232](../decisions/232-codex-subagent-selection.md)).
+- Where Cligent reports the adapter serves a subagent model, or a value already stands, offer the subagent-model field [[settings-39](#settings-39)]: the configured omission first — "Agent chooses" on Codex without child effort, otherwise "Same as agent" — with a separate explicit "Same as agent" choice on Codex, then the same runtime model IDs and custom entry, and "Off" — a `false`, which switches delegation off — only while one stands, in the block or in the editor's draft ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Beside it, offer the subagent-effort field: "Agent chooses" first — the configured omission, leaving each subagent's effort to the agent — then the adapter's subagent efforts [[settings-35](#settings-35)], a standing value outside them shown as requiring correction ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
+- A Codex model and effort selection requests the native spawn defaults ([DR-232](../decisions/232-codex-subagent-selection.md)).
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
 - Where the launcher and adapter advertise independent Ultracode [[settings-35](#settings-35)], offer the workflow setting as default, on or off, apart from reasoning effort ([DR-235](../decisions/235-independent-ultracode.md)).
-- A known model lacking xhigh cannot acquire an enabled choice; a standing choice remains clearable. Keep a saved Claude `effort: ultracode` readable, preserve its enabled workflow setting when choosing a different effort on a capable model, and retain the previous effort choices when the independent capability is absent.
+- A known incompatible effective On, including an inherited On, explains why Save is disabled and permits correction. Pending or failed discovery alone never marks a standing choice unsupported. Keep a saved Claude `effort: ultracode` readable, preserve its enabled workflow setting when choosing a different effort on a capable model, and retain the previous effort choices when the independent capability is absent.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
 - Where an agent editor's or an agent card's [[settings-59](#settings-59)] `claude` model field serves a `third-party` base URL [[settings-14](#settings-14)] and the catalog reports a `defaultModel` [[settings-35](#settings-35)], mark Provider default as recommended [[settings-39](#settings-39)]; with no `defaultModel`, mark nothing ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)).
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
-- Except on the new-player draft [[settings-27](#settings-27)], explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, fast mode, and Ultracode to defaults because those settings belong to the previous adapter.
+- Switching an agent's adapter clears model, subagent model, both efforts, fast mode and Ultracode. A new-player draft then takes only the new adapter's primary and subagent model defaults [[settings-27](#settings-27)].
 
 #### settings-35
 
@@ -150,7 +150,8 @@ Where a model editor [[settings-34](#settings-34)] names a model value against t
 | only a row's `resolvedModel` | itself, a canonical pin recognized without rewriting it [[settings-34](#settings-34)] |
 | no row's id or `resolvedModel` | itself |
 | empty, taking the provider's default | "Provider default", then the runtime's `defaultModel` read by this rule where reported |
-| empty, or the literal `inherit`, in a subagent-model field | "Same as agent" alone: the selection requests the agent's own model, so the catalog's `defaultModel` never follows ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| empty on Codex with no child effort | "Agent chooses": the runtime selects without a delegation request |
+| any other empty subagent-model field, or the literal `inherit` | "Same as agent" alone: the selection requests the agent's own model, so the catalog's `defaultModel` never follows ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 | `false`, in a subagent-model field | "Off": no subagent model is sent, and the runtime chooses a subagent's model by its own order ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 
 - in one line of text the name and the specific model join with " · ", and so do "Provider default" and the default model, as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]", "GPT-6-Astra" and "Provider default · opus[1m]";
@@ -500,7 +501,11 @@ Where the agent editor and the role-binding editor render against fixture catalo
 - the keyboard opens the listbox on its selected row, walks it with the arrows, Home and End, chooses with Enter, and closes it with Escape leaving the editor open and focus on the trigger, while a click chooses a row and a press outside closes it [[settings-40](#settings-40)];
 - choosing "Custom model…" shows the hand-typed field, which keeps what is typed [[settings-39](#settings-39)];
 - the Captain's and a player's editor stands the model beside the effort and the subagent model beside the subagent effort [[settings-1](#settings-1)];
-- the subagent-model field reads "Same as agent" for an unset value with no default model beside it and offers "Off" only while a `false` stands, configured or copied into the draft, and the subagent-effort field reads "Agent chooses" for an unset value and lists the adapter's efforts without its orchestration value [[settings-34](#settings-34)] [[settings-38](#settings-38)] [[settings-39](#settings-39)].
+- the Codex subagent-model field distinguishes an untuned "Agent chooses" from an explicitly saved "Same as agent" and accepts a child effort alone; the Claude field reads "Same as agent" for an unset value with no default model beside it and offers "Off" only while a `false` stands, configured or copied into the draft, and the subagent-effort field reads "Agent chooses" for an unset value and lists the adapter's efforts without its orchestration value [[settings-34](#settings-34)] [[settings-38](#settings-38)] [[settings-39](#settings-39)].
+
+#### settings-75
+
+The rendered editor tests shall verify that an inherited Ultracode On in a binding or conversation explains a disabled Save on a model known to lack xhigh, that selecting Off permits saving, and that an agent editor with pending or failed discovery does not label a standing On unsupported [[settings-34](#settings-34)] [[settings-35](#settings-35)].
 
 ### Round-Trip Coverage
 
@@ -547,7 +552,7 @@ Where Settings is asked for the Captain's row and, separately, for `dev.reviewer
 
 #### settings-28
 
-Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its name and mark with its id in the tooltip, its agent with the adapter's readiness and the specific model behind a configured alias [[settings-74](#settings-74)], and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft [[settings-27](#settings-27)].
+Where the Settings surface renders a config whose roster holds a bound player and an unbound one, the test suite shall assert each player prints its name and mark with its id in the tooltip, its agent with the adapter's readiness and the specific model behind a configured alias [[settings-74](#settings-74)], and the bindings it answers [[settings-26](#settings-26)]; that editing one writes a merge patch over that player alone [[settings-26](#settings-26)]; that a refused removal shows the write path's own words beside it [[settings-26](#settings-26)]; and that adding a player writes the named id with the seeded block from an untouched draft, including a Codex pair and a private seat with provider defaults [[settings-27](#settings-27)].
 
 ### External Edit Coverage
 

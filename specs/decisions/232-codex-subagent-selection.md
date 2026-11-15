@@ -8,6 +8,8 @@
 Accepted (2026-11-14).
 Amends [DR-093](093-a-players-subagent-model.md) and [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in the meaning of the subagent selection on Codex.
 
+Amended by [DR-237](237-agent-tuning-across-runtime-versions.md) in native fork behavior and tool-free controls.
+
 ## Context
 
 Cligent 0.38.0 advertises subagent tuning only for Claude.

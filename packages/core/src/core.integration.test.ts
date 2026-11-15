@@ -5953,11 +5953,11 @@ test("core-service-101: Codex delegation reaches session projections and the ada
     };
   };
   const original = await run(session.id, 1);
-  assert.equal(original.captain.subagentModel, supported ? "inherit" : undefined);
-  assert.equal(original.players[0]?.subagentModel, supported ? "inherit" : undefined);
-  assert.equal(original.catalog.code?.roles.coder?.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(original.captain.subagentModel, undefined);
+  assert.equal(original.players[0]?.subagentModel, undefined);
+  assert.equal(original.catalog.code?.roles.coder?.subagentModel, undefined);
   assert.equal(harness.stats.runs.at(-1)?.agent, "codex");
-  assert.equal(harness.stats.runs.at(-1)?.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined);
   if (!supported) {
     for (const patch of [{ subagentModel: "codex-child" }, { subagentEffort: "high" }]) {
       const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
@@ -5976,8 +5976,8 @@ test("core-service-101: Codex delegation reaches session projections and the ada
   assert.equal(pinned.players[0]?.subagentEffort, "medium");
   assert.equal(pinned.catalog.code?.roles.coder?.subagentModel, "inherit");
   assert.equal(pinned.catalog.code?.roles.coder?.subagentEffort, "medium");
-  assert.equal(harness.stats.runs.at(-1)?.subagentModel, "codex-child");
-  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, "high");
+  assert.equal(harness.stats.runs.at(-1)?.subagentModel, undefined, "tool-free control calls omit the tuned child");
+  assert.equal(harness.stats.runs.at(-1)?.subagentEffort, undefined);
   for (const patch of [{ subagentModel: false as const }, { subagentEffort: "ultra" }]) {
     const refused = await client.command("session.agent.set", { sessionId: session.id, agentId: "captain", ...patch });
     assert.ok(!refused.ok && refused.error.code === "invalid_config");
@@ -5992,7 +5992,7 @@ test("core-service-101: Codex delegation reaches session projections and the ada
   assert.equal(harness.stats.runs.at(-1)?.subagentEffort, undefined);
   const other = await client.expectOk("session.create", { projectId: project.id });
   const inherited = await run(other.id, 1);
-  assert.equal(inherited.captain.subagentModel, "inherit");
+  assert.equal(inherited.captain.subagentModel, undefined);
   assert.equal(inherited.captain.subagentEffort, undefined);
   assert.equal(inherited.catalog.code?.roles.coder?.subagentEffort, undefined);
   assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), config);
@@ -6924,6 +6924,14 @@ test("Ultracode round-trips independently and unsupported activation preserves c
   }
   if (!isUltracodeSupported("claude")) {
     const before = readFileSync(path, "utf8");
+    const launcher = await import("@sublang/playbook/playbook-captain");
+    if (!("isUltracodeSupported" in launcher)) {
+      const off = await client.command("config.edit", { op: {
+        kind: "captain.set", patch: { adapter: "codex", ultracode: false },
+      } });
+      assert.ok(!off.ok && off.error.code === "invalid_config");
+      assert.equal(readFileSync(path, "utf8"), before);
+    }
     for (const ultracode of [true, false]) {
       const refused = await client.command("config.edit", { op: { ...op, ultracode } });
       assert.equal(refused.ok, false);
@@ -6973,6 +6981,13 @@ test("first message refreshes a changed global config while retaining session id
   const project = await client.expectOk("project.register", { path: harness.projectDir });
   const session = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  // Structural drift before the first turn has the same typed refusal as a reopen.
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { instruction: "different captain" } } });
+  const refused = await client.command("turn.submit", { sessionId: session.id, text: "refuse before first turn" });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  assert.match(refused.error.message, /Settings changed/);
+  assert.equal(harness.stats.runs.length, 0);
+  await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { instruction: null } } });
   await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "first-message-model" } } });
   await client.expectOk("turn.submit", { sessionId: session.id, text: "first message" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.live === false);

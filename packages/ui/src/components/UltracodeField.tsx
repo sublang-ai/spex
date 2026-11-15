@@ -5,8 +5,9 @@ import { i18n } from "../i18n.js";
 import { providerDefaultLabel } from "../lib/agent-options.js";
 
 /** Omission inherits the setting. Both booleans are deliberate choices. */
-export function UltracodeField({ supported, value, inherited, source, disabled, resetOnly, onChange, testId }: {
-  supported: boolean;
+export function UltracodeField({ supported, value, inherited, source, disabled, resetOnly, invalid, onChange, testId }: {
+  supported?: boolean;
+  invalid: boolean;
   value?: boolean;
   inherited?: boolean;
   source: "provider" | "player" | "settings";
@@ -31,10 +32,10 @@ export function UltracodeField({ supported, value, inherited, source, disabled, 
         onChange={(event) => onChange(event.target.value === "inherit" ? undefined : event.target.value === "on")}
         className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
         <option value="inherit">{defaultLabel}</option>
-        {(supported || value === true) && <option value="on">{supported ? on : i18n._("On (unsupported)")}</option>}
+        {(supported || value === true) && <option value="on">{supported === false ? i18n._("On (unsupported)") : on}</option>}
         {(!resetOnly || value === false) && <option value="off">{resetOnly ? i18n._("Off (unsupported)") : off}</option>}
       </select>
-      {(resetOnly || (!supported && value === true)) && <span role="alert" className="text-red-600">{i18n._("Ultracode is unavailable for this selection.")}</span>}
+      {invalid && <span role="alert" className="text-red-600">{i18n._("Ultracode is unavailable for this selection.")}</span>}
     </label>
   );
 }

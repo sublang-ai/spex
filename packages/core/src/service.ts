@@ -149,7 +149,7 @@ import { ArtifactFolderBusy, canonicalFolder, checkToolchain, compilePlaybook, c
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
-import { isUltracodeSupported } from "./config.js";
+import { isUltracodeSupported, newPlayerModels } from "./config.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
@@ -2438,6 +2438,7 @@ export class CoreService {
     // now, read as before a run (settings-49, core-service-126).
     const seat = this.seatEnvironment;
     const sources: SeatCredentialSources | undefined = seat?.prepare();
+    const modelEnv = seat ? seat.envFor(this.env) : { ...this.env, ...claudeSettingsEnv(this.env, this.home) };
     const credentialHalf = seat && sources
       ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
       : undefined;
@@ -2465,7 +2466,8 @@ export class CoreService {
           faults: readiness.faults,
           ...(readiness.credential ? { credential: readiness.credential } : {}),
           ...(readiness.unconfirmed !== undefined ? { unconfirmed: readiness.unconfirmed } : {}),
-          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl({ ...this.env, ...claudeSettingsEnv(this.env, this.home) }) } : {}),
+          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl(modelEnv) } : {}),
+          defaultModels: newPlayerModels(adapter, modelEnv),
           ...host,
           usedBy,
           // The embedded runtime declares which adapters take fast mode

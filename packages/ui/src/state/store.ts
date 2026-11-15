@@ -22,6 +22,7 @@ import type {
   AdapterName,
   AgentOptions,
   ClosedIntent,
+  Command,
   CommandResults,
   ConfigState,
   DraftInfo,
@@ -557,7 +558,7 @@ export interface AppState extends AttachmentState {
   loadAgentOptions(adapter: AdapterName, refresh?: boolean): Promise<AgentOptions>;
   /** One agent's settings for one conversation (DR-067, DR-068). It
    * writes no configuration: the defaults in Settings are untouched. */
-  setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; browser?: boolean | null}): Promise<void>;
+  setAgentSettings(sessionId: string, agentId: string, change: Omit<Extract<Command, { type: "session.agent.set" }>, "type" | "id" | "sessionId" | "agentId">): Promise<void>;
   connect(url?: string): void;
   refresh(): Promise<void>;
   /** Re-read the core's prose after the home's choice of language

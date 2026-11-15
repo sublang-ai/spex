@@ -128,11 +128,12 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
   );
   assert.equal(result.ok, true);
   const after = readFileSync(path, "utf8");
-  // The role's own inline comment survives on the patched pair.
-  assert.match(
-    after,
-    /dev\.reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: medium/,
-  );
+  const reviewer = parse(before).players["dev.reviewer"];
+  reviewer.adapter = "codex";
+  reviewer.model = "gpt-5.5";
+  delete reviewer.subagentModel;
+  assert.deepEqual(parse(after).players["dev.reviewer"], reviewer);
+  assertCommentsSurvive(before, after);
   // Unrelated lanes and their comments survive, byte for byte: the
   // coder's block as the installed template wrote it.
   const coderBlock = before.slice(

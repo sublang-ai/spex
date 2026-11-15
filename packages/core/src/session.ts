@@ -19,7 +19,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
-import { assertUltracode, assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
+import { delegatedModel, assertUltracode, assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, runsOnPhrase, runtimeRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type AssignedRuntime, type MediaAsset, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
@@ -163,9 +163,9 @@ const playerNamed = (playerId: string): string =>
 
 /** A drift the projection itself cannot express — a stored member the
  * current config no longer holds (core-service-92). */
-export class SettingsDriftError extends Error {
+export class SettingsDriftError extends CoreError {
   constructor(readonly changes: string[]) {
-    super(i18n._({
+    super("invalid_config", i18n._({
       id: "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back.",
       comment:
         "Refusal to continue a session; `changes` are the drift lines, themselves messages",
@@ -201,12 +201,12 @@ function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; u
   // default composition already resolved (DR-095).
   const {subagentModel: configuredModel, subagentEffort: configuredEffort, ...rest} = block;
   const subagentEffort = tuning?.subagentEffort === undefined ? configuredEffort : tuning.subagentEffort === false ? undefined : tuning.subagentEffort;
-  const subagentModel = tuning?.subagentModel === undefined ? configuredModel : tuning.subagentModel;
+  const subagentModel = delegatedModel(agent.adapter, tuning?.subagentModel ?? configuredModel, subagentEffort);
   // The effort is checked against the model it now runs beside, at every
   // site: a session may tune either one alone, and its Off reaches a
   // binding whose own effort stands.
   if (subagentEffort !== undefined && (tuning?.subagentEffort !== undefined || tuning?.subagentModel !== undefined)) {
-    assertSubagentEffort(subagentEffort, agent.adapter, subagentModel === false ? undefined : subagentModel, agent.path);
+    assertSubagentEffort(subagentEffort, agent.adapter, subagentModel, agent.path);
   }
   return {
     ...rest,
@@ -813,7 +813,6 @@ export class SessionManager {
         cleanupFailed(cleanupError);
         throw cleanupError;
       }
-      if (error instanceof SettingsDriftError) throw new CoreError("invalid_config", error.message);
       throw this.failure(error, mode === "new" ? "invalid_config" : "invalid_request");
     } finally { if (!cleanupUnconfirmed) this.opening.delete(project.id); }
   }

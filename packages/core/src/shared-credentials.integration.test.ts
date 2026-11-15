@@ -458,7 +458,7 @@ test("settings-50, settings-49: each credential class and phrase is delivered ov
     }
     return defaultRunCommand(command, args, cwd, env);
   };
-  const { home } = await startSeat("seat-classes", { shared, config: TWO_AGENTS, runCommand });
+  const { home } = await startSeat("seat-classes", { shared, config: TWO_AGENTS, runCommand, env: { ANTHROPIC_BASE_URL: "https://private-models.example/v1" } });
   t.after(() => home.stop());
   const read = async (): Promise<Record<string, ReadinessEntry>> =>
     Object.fromEntries((await home.client.expectOk("readiness.get", {})).map((entry) => [entry.adapter, entry]));
@@ -466,6 +466,9 @@ test("settings-50, settings-49: each credential class and phrase is delivered ov
 
   // Absent: no form is set, and the guidance names the Credentials section.
   let entries = await read();
+  assert.deepEqual(entries.claude?.defaultModels, {});
+  assert.deepEqual(entries.claude?.baseUrl, { state: "hidden" });
+  assert.ok(!JSON.stringify(entries).includes("private-models.example"));
   for (const adapter of ["claude", "codex"]) {
     assert.equal(entries[adapter]?.ready, false);
     assert.equal(entries[adapter]?.credential?.class, "none");

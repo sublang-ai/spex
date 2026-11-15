@@ -31,6 +31,8 @@ export function TuningField({
   label,
   value,
   playerDefault,
+  codexSubagent = false,
+  subagentEffort,
   inheritLabel = i18n._({
     id: "inherit the player",
     comment: "tuning choice: take whatever the player lane resolves",
@@ -53,6 +55,8 @@ export function TuningField({
   /** What inheriting runs: the tier below's value; a subagent model's
    * may be its configured `false`. */
   playerDefault: string | false | undefined;
+  codexSubagent?: boolean;
+  subagentEffort?: string | false;
   /** What inheriting means here, named so the reader can see what they
    * are departing from before they depart from it. */
   inheritLabel?: string;
@@ -82,15 +86,14 @@ export function TuningField({
   // (settings-38, DR-091); an effort is its adapter's own word, and one
   // left unset takes the same provider-default words, so no inherit
   // choice reads bare (run-view-138, DR-067).
-  // A subagent model left unset runs on the agent's own model and reads
-  // "Same as agent"; a subagent effort left unset is the agent's choice
-  // (settings-38, DR-095).
+  // Codex leaves an untuned child to the agent. Explicit inheritance
+  // and a child effort alone both select the parent (settings-38).
   const inherited = label === "model"
     ? modelDisplayText(playerDefault === undefined || playerDefault === false
       ? providerDefaultDisplay(models ?? [], defaultModel)
       : modelDisplay(models ?? [], playerDefault))
     : label === "subagent model"
-      ? subagentModelText(models ?? [], playerDefault)
+      ? (codexSubagent && playerDefault === undefined && !subagentEffort ? agentChoosesLabel() : subagentModelText(models ?? [], playerDefault))
       : label === "subagent effort"
         ? (typeof playerDefault === "string" ? playerDefault : agentChoosesLabel())
         : (typeof playerDefault === "string" ? playerDefault : providerDefaultLabel());
@@ -135,7 +138,7 @@ export function TuningField({
       {mode === "pin" && (picksModel ? (
         <ModelField value={typeof value === "string" ? value : ""} models={models ?? []}
           onChange={onChange} allowDefault={false} labelId={labelId} testId={`${testIdPrefix}-${key}-value`}
-          {...(label === "subagent model" ? { subagent: "inherit" as const } : {})} />
+          {...(label === "subagent model" ? { subagent: codexSubagent ? "codex" as const : "inherit" as const } : {})} />
       ) : (
         <select data-testid={`${testIdPrefix}-${key}-value`} aria-labelledby={labelId} value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.target.value)}

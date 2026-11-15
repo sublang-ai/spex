@@ -47,7 +47,11 @@ test("Codex discovery exposes subagent inheritance, model pins and native effort
   const save = vi.fn();
   render(<AgentEditor initial={{ adapter: "codex" }} onSave={save} />);
   await ready();
-  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Same as agent");
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Agent chooses");
+  chooseModel("agent-subagent-model", "inherit");
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ adapter: "codex", subagentModel: "inherit" }));
+  chooseModel("agent-subagent-model", "");
   const efforts = screen.getByTestId("agent-subagent-effort") as HTMLSelectElement;
   expect(Array.from(efforts.options).map((option) => option.value)).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
   expect(efforts.options[0]!.text).toBe("Agent chooses");
@@ -683,4 +687,34 @@ test("role and conversation overrides preserve explicit off and can return to in
   fireEvent.change(setting, { target: { value: "inherit" } });
   fireEvent.click(screen.getByTestId("agent-save-coder"));
   await waitFor(() => expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ ultracode: null })));
+});
+
+test.each(["loading", "failed"])("a standing Ultracode choice stays unverified while discovery is %s", async (state) => {
+  const response = state === "loading" ? () => new Promise<AgentOptions>(() => {}) : async () => { throw new Error("fixture offline"); };
+  useAppStore.setState({ loadAgentOptions: response });
+  render(<AgentEditor initial={{ adapter: "claude", ultracode: true }} allowUnchanged onSave={vi.fn()} />);
+  if (state === "failed") await screen.findByText(/fixture offline/);
+  expect(screen.getByTestId("agent-ultracode").querySelector("option:checked")?.textContent).toBe("On");
+  expect(screen.queryByText("Ultracode is unavailable for this selection.")).toBeNull();
+});
+
+test.each(["binding", "conversation"])("an inherited On explains the %s save refusal until overridden", async (source) => {
+  enableUltracodeDiscovery();
+  const player = { adapter: "claude" as const, model: "earlier", ultracode: true };
+  const save = vi.fn(async () => {});
+  const anchorRef = createRef<HTMLButtonElement>();
+  if (source === "binding") {
+    render(<BindingEditorPopover role="coder" position="code.coder" binding={{ playerId: "coder", display: "Claude" }}
+      players={[{ id: "coder", agent: player, display: "Claude", boundBy: [] }]}
+      anchorRef={anchorRef} onSave={save} onClose={vi.fn()} />);
+  } else {
+    render(<AgentSettingsPopover agent={{ id: "coder", name: "Coder", adapter: "claude", configured: player, divergentRoles: [] }}
+      anchorRef={anchorRef} readOnly={false} onSave={save} onClose={vi.fn()} />);
+  }
+  await screen.findByText("Ultracode is unavailable for this selection.");
+  const button = screen.getByTestId(source === "binding" ? "binding-save" : "agent-save-coder") as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  fireEvent.change(screen.getByTestId(source === "binding" ? "binding-ultracode" : "agent-coder-ultracode"), { target: { value: "off" } });
+  expect(screen.queryByText("Ultracode is unavailable for this selection.")).toBeNull();
+  expect(button.disabled).toBe(false);
 });

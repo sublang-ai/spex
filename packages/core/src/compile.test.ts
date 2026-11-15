@@ -814,7 +814,13 @@ test("the compile's agent reaches slc unless the environment configures it (play
   const ultraEnv = await compileWith("ultracode", {}, { adapter: "claude", effort: "high", ultracode: true });
   assert.equal(ultraEnv.SLC_ULTRACODE, "true");
   assert.equal(ultraEnv.SLC_EFFORT, "high");
-  await assert.rejects(compileWith("old-child", {}, { adapter: "codex", subagentModel: "gpt-6.1-sol" }), /Update the compiler to use SLC_SUBAGENT_MODEL/);
+  const legacy = await compileWith("old-child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
+  assert.equal(legacy.SLC_MODEL, "gpt-6-astra");
+  assert.equal(legacy.SLC_SUBAGENT_MODEL, undefined);
+  assert.ok(lines.some((line) => line.includes("own subagent defaults")));
+  const disabled = await compileWith("old-off", {}, { adapter: "claude", subagentModel: false });
+  assert.equal(disabled.SLC_SUBAGENT_MODEL, undefined);
+  assert.ok(!lines.some((line) => line.includes("own subagent defaults")));
   helpText = "SLC_SUBAGENT_MODEL SLC_REVIEWER_SUBAGENT_MODEL";
   const pairEnv = await compileWith("child", {}, { adapter: "codex", model: "gpt-6-astra", subagentModel: "gpt-6.1-sol" });
   assert.equal(pairEnv.SLC_MODEL, "gpt-6-astra");

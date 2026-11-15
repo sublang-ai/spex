@@ -2879,6 +2879,9 @@ msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; c
 msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
 
 #: src/compile.ts
+msgid "This compiler uses its own subagent defaults. Update it to use {variable}."
+msgstr "This compiler uses its own subagent defaults. Update it to use {variable}."
+
 msgid "Update the compiler to use {variable}."
 msgstr "Update the compiler to use {variable}."
 

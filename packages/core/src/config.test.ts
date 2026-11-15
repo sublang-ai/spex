@@ -224,7 +224,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   const composed = await compose(top, stubLoader);
   assert.deepEqual(composed.captainAgent, {
     adapter: captain.adapter,
-    model: captain.model,
+    ...(captain.model !== undefined ? { model: captain.model } : {}),
     effort: captain.effort,
     permissions: captain.permissions,
     ...(captain.subagentModel !== undefined ? { subagentModel: captain.subagentModel } : {}),
@@ -236,7 +236,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.equal(binding.playerId, codeRoles(top).coder);
   // Inheritance resolves in composition, so the shell is told the
   // outcome rather than left to infer it (DR-032).
-  assert.deepEqual(binding.model, { kind: "value", value: coder.model });
+  assert.deepEqual(binding.model, coder.model === undefined ? { kind: "provider-default" } : { kind: "value", value: coder.model });
   assert.deepEqual(binding.effort, { kind: "value", value: coder.effort });
   assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
   assert.ok(!Object.values(top.playbooks as Record<string, Record<string, unknown>>).some((entry) => "from" in entry), "the starter names no module");
@@ -652,7 +652,7 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   await expectError(blank, /^playbooks\.code\.roles\.coder\.subagentEffort must be a string or false/);
 });
 
-test("an unset subagent model delegates on the agent's own model wherever cligent serves one, as the launcher resolves it", async () => {
+test("an untuned Claude delegates on its own model and an adapter without delegation sends no child", async () => {
   // DR-095 (core-service-16): with or without an effort beside it, at
   // the Captain, each player and each binding; the summary keeps the
   // omission, and an adapter cligent serves none for composes none.
@@ -697,9 +697,9 @@ test("Codex delegation follows Cligent support through config inheritance, pins 
   roster(top)[coderId] = { adapter: "codex", model: "codex-player" };
   const supported = isSubagentModelSupported("codex");
   const initial = await compose(top, stubLoader);
-  assert.equal(initial.captainOptions.sessionAgents.captain.subagentModel, supported ? "inherit" : undefined);
-  assert.equal(initial.captainOptions.sessionAgents.players[coderId]?.subagentModel, supported ? "inherit" : undefined);
-  assert.equal(initial.captainOptions.playbooks.code.roles.coder.subagentModel, supported ? "inherit" : undefined);
+  assert.equal(initial.captainOptions.sessionAgents.captain.subagentModel, undefined);
+  assert.equal(initial.captainOptions.sessionAgents.players[coderId]?.subagentModel, undefined);
+  assert.equal(initial.captainOptions.playbooks.code.roles.coder.subagentModel, undefined);
 
   Object.assign(top.captain as object, { subagentModel: "codex-child", subagentEffort: "high" });
   if (!supported) {
@@ -713,7 +713,7 @@ test("Codex delegation follows Cligent support through config inheritance, pins 
   const pinned = await compose(top, stubLoader);
   assert.equal(pinned.captainOptions.sessionAgents.captain.subagentModel, "codex-child");
   assert.equal(pinned.captainOptions.sessionAgents.captain.subagentEffort, "high");
-  assert.equal(pinned.captainOptions.playbooks.code.roles.coder.subagentModel, "inherit");
+  assert.equal(executionConfig(pinned, "/work").catalog.code.roles.coder.subagentModel, "inherit");
   assert.equal(pinned.captainOptions.playbooks.code.roles.coder.subagentEffort, "low");
   assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentModel, "codex-review");
   assert.equal(pinned.captainOptions.playbooks.review.roles.coder.subagentEffort, "medium");
@@ -1336,6 +1336,17 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
   const review = summary.playbooks.find((p) => p.id === "review");
   assert.ok(review && !("fastMode" in review.roles.coder));
+});
+
+test("a launcher without the Ultracode field rejects a non-Claude Off during composition", async () => {
+  const top = baseConfig();
+  top.captain = { adapter: "codex", ultracode: false };
+  const launcher = await import("@sublang/playbook/playbook-captain");
+  if ("isUltracodeSupported" in launcher) {
+    assert.equal((await compose(top, stubLoader)).captainAgent.ultracode, false);
+  } else {
+    await expectError(top, /^captain\.ultracode is not supported for adapter "codex"$/);
+  }
 });
 
 test("Ultracode composes independently on agents and roles; a non-boolean is refused", async (t) => {

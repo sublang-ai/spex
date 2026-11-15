@@ -24,6 +24,7 @@ import {
   providerDefaultDisplay,
   providerDefaultLabel,
   sameAsAgentLabel,
+  agentChoosesLabel,
   subagentOffLabel,
 } from "../lib/agent-options.js";
 import { useFitInBox } from "../lib/popover-fit.js";
@@ -108,6 +109,7 @@ export function ModelField({
   labelId,
   allowDefault = true,
   subagent,
+  subagentEffort,
   off,
   recommended = false,
 }: {
@@ -126,7 +128,8 @@ export function ModelField({
    * empty row as "Same as agent" with no default model beside it;
    * "inherit" — a pin with no empty row — reads the literal `inherit`
    * as "Same as agent", its own row while it stands. */
-  subagent?: "empty" | "inherit";
+  subagent?: "empty" | "inherit" | "codex";
+  subagentEffort?: string;
   /** A subagent model's configured `false`, offered as "Off" only while
    * it stands (settings-34); `selected` while the field holds it. */
   off?: { selected: boolean; onSelect(): void };
@@ -141,7 +144,7 @@ export function ModelField({
   const baseId = useId();
   const offSelected = off?.selected === true;
   // A pinned `inherit` is the agent's own model, read as its words.
-  const inheritPin = subagent === "inherit" && value === "inherit";
+  const inheritPin = (subagent === "inherit" || subagent === "codex") && value === "inherit";
   const selected = findModel(models, value);
   const unlisted = Boolean(value) && !selected && !inheritPin;
   const manual = custom || unlisted || models.length === 0 || (!allowDefault && !value && !offSelected);
@@ -151,9 +154,11 @@ export function ModelField({
     if (models.length === 0) setOpen(false);
   }, [models.length]);
 
-  // A subagent model left empty runs on the agent's own model, which
-  // names no model of the catalog: its words stand alone (settings-38).
-  const providerDefault = subagent === "empty"
+  // A child without a named model has no catalog ID. Codex leaves the
+  // choice to the agent unless an effort alone requests the parent.
+  const providerDefault = subagent === "codex" && !subagentEffort
+    ? { name: agentChoosesLabel() }
+    : subagent === "empty" || subagent === "codex"
     ? { name: sameAsAgentLabel() }
     : providerDefaultDisplay(models, defaultModel);
   const choices: Choice[] = [];
@@ -167,7 +172,7 @@ export function ModelField({
     });
   }
   if (off) choices.push({ key: "off", value: OFF, line: { text: subagentOffLabel() } });
-  if (inheritPin) choices.push({ key: "inherit", value: "inherit", line: { text: sameAsAgentLabel() } });
+  if (inheritPin || subagent === "codex") choices.push({ key: "inherit", value: "inherit", line: { text: sameAsAgentLabel() } });
   // A canonical pin recognized through an alias's resolution is its own
   // row, reading as itself: never rewritten to the alias (DR-052).
   if (value && selected && selected.id !== value) {
@@ -281,7 +286,7 @@ export function ModelField({
         placeholder={offSelected
           ? subagentOffLabel()
           : allowDefault
-            ? (subagent === "empty" ? sameAsAgentLabel() : providerDefaultLabel())
+            ? providerDefault.name
             : i18n._({ id: "Model ID", comment: "placeholder of the hand-typed model id field" })}
         className={fieldClass}
       />}

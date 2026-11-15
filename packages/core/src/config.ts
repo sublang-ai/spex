@@ -881,8 +881,10 @@ function seedText(env: NodeJS.ProcessEnv, home: SeedHome, credentials: SeedCrede
     ...(credentials.claude ? { ANTHROPIC_API_KEY: "confirmed" } : {}),
     ...(credentials.codex ? { OPENAI_API_KEY: "confirmed" } : {}),
   };
-  const text = starterText(seedConfigText({ env: input, homeDir: NO_HOME }).text);
-  const service = anthropicBaseUrl(home === null ? env : { ...env, ...claudeSettingsEnv(env, home) });
+  const modelEnv = home === null ? env : { ...env, ...claudeSettingsEnv(env, home) };
+  const options = { env: input, homeDir: NO_HOME, modelEnv };
+  const text = starterText(seedConfigText(options).text);
+  const service = anthropicBaseUrl(modelEnv);
   return service.state === "third-party" ? withoutOfficialModels(text) : text;
 }
 
@@ -1230,34 +1232,33 @@ function toResolvedAgent(
     assertSubagentEffort(
       rest.subagentEffort,
       adapter,
-      delegatedModel(adapter, rest.subagentModel as string | false | undefined),
+      delegatedModel(adapter, rest.subagentModel as string | false | undefined, rest.subagentEffort),
       path,
     );
   }
   return rest as unknown as ResolvedAgent;
 }
 
-/** The subagent model an agent delegates on (DR-095), exactly as
- * Playbook's launcher resolves it: a string as it is, `false` as Off,
- * and an unset one as `inherit` — the agent's own model — wherever
- * cligent serves a subagent model for the adapter, with or without an
- * effort beside it; absent where it serves none. The configuration file
- * and its summary keep the omission. */
+/** Keep an untuned Codex call on its native defaults. A child effort on
+ * its own explicitly requests delegation using the parent's model. */
 function delegationOf(
   adapter: string,
   subagentModel: string | false | undefined,
+  subagentEffort?: unknown,
 ): string | false | undefined {
   if (subagentModel !== undefined) return subagentModel;
+  if (adapter === "codex" && subagentEffort === undefined) return undefined;
   return isSubagentModelSupported(adapter as never) ? "inherit" : undefined;
 }
 
 /** The subagent model an agent's call carries: its delegation with Off
  * sent as none, as the launcher strips it (DR-095). */
-function delegatedModel(
+export function delegatedModel(
   adapter: string,
   subagentModel: string | false | undefined,
+  subagentEffort?: unknown,
 ): string | undefined {
-  const delegation = delegationOf(adapter, subagentModel);
+  const delegation = delegationOf(adapter, subagentModel, subagentEffort);
   return delegation === false ? undefined : delegation;
 }
 
@@ -1499,7 +1500,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
 export function subagentTuningOf(
   agent: Pick<ResolvedAgent, "adapter" | "subagentModel" | "subagentEffort">,
 ): { subagentModel?: string; subagentEffort?: string } {
-  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel);
+  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel, agent.subagentEffort);
   return {
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
@@ -2113,7 +2114,7 @@ function composeEntry(
       assertSubagentEffort(
         subagentEffort,
         player.adapter,
-        subagentModel === false ? undefined : subagentModel,
+        delegatedModel(player.adapter, subagentModel, subagentEffort),
         path,
       );
     }
@@ -2751,6 +2752,15 @@ export async function checkAdapterReadiness(
   };
 }
 
+/** Only model defaults are sent to clients. The service evaluates the seat's
+ * effective provider privately; a runtime without this contract supplies none. */
+export function newPlayerModels(adapter: string, env: NodeJS.ProcessEnv): {model?: string; subagentModel?: string} {
+  const runtime = cligentCapabilities as { defaultAgentModels?: (
+    adapter: string, env: NodeJS.ProcessEnv
+  ) => {model?: string; subagentModel?: string} };
+  return runtime.defaultAgentModels?.(adapter, env) ?? {};
+}
+
 /** Older runtime releases expose no independent Ultracode capability. */
 export function isUltracodeSupported(adapter: string): boolean {
   const capability = (cligentCapabilities as unknown as {isUltracodeSupported?: (adapter: string) => boolean}).isUltracodeSupported;
@@ -2762,5 +2772,6 @@ export function isUltracodeSupported(adapter: string): boolean {
 export function assertUltracode(value: unknown, adapter: string, path: string): void {
   if (value === undefined) return;
   if (typeof value !== "boolean") throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode must be a boolean", values: { path } }));
-  if ((value || adapter === "claude") && !isUltracodeSupported(adapter)) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
+  const launcherAcceptsField = typeof (playbookCapabilities as { isUltracodeSupported?: unknown }).isUltracodeSupported === "function";
+  if (!launcherAcceptsField || ((value || adapter === "claude") && !isUltracodeSupported(adapter))) throw new ConfigViolation("tuning", `${path}.ultracode`, i18n._({ id: "{path}.ultracode is not supported for adapter \"{adapter}\"", values: { path, adapter } }));
 }

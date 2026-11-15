@@ -1149,6 +1149,13 @@ async function compileAdmitted(
       const output = help.join("\n");
       for (const variable of requestedSettings) {
         if (result !== 0 || !new RegExp(`\\b${variable}\\b`).test(output)) {
+          if (result === 0 && variable.endsWith("_SUBAGENT_MODEL")) {
+            if (compilerEnv[variable]?.trim() !== "false") {
+              progress(i18n._({ id: "This compiler uses its own subagent defaults. Update it to use {variable}.", values: { variable } }));
+            }
+            delete compilerEnv[variable];
+            continue;
+          }
           throw new Error(i18n._({
             id: "Update the compiler to use {variable}.",
             values: { variable },
@@ -1185,9 +1192,7 @@ async function compileAdmitted(
       progress,
       signal,
       {
-        ...env,
-        ...toolchain.slc.env,
-        ...agentEnv,
+        ...compilerEnv,
         SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT ?? "2400",
       },
     );

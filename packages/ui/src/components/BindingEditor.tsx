@@ -106,7 +106,7 @@ export function BindingEditorPopover({
   const legacyEffort = tuning.separateUltracode && effectiveEffort === "ultracode";
   const inheritedUltracode = lane?.agent.ultracode ?? (legacyEffort ? true : undefined);
   const needsUltracodeReset = Boolean(discovery.options && lane?.agent.adapter === "claude" && !tuning.separateUltracode && draft.ultracode != null);
-  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (draft.ultracode ?? lane?.agent.ultracode) === true && !tuning.ultracodeSupported);
+  const invalidUltracode = needsUltracodeReset || Boolean(discovery.options && (draft.ultracode ?? inheritedUltracode) === true && !tuning.ultracodeSupported);
   const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !legacyEffort && !tuning.efforts.includes(effectiveEffort));
   const effectiveFastMode = draft.fastMode ?? lane?.agent.fastMode ?? false;
   const adapterFastMode = discovery.options?.fastModeSupported;
@@ -213,6 +213,8 @@ export function BindingEditorPopover({
               label="subagent model"
               value={draft.subagentModel === null ? undefined : draft.subagentModel}
               playerDefault={lane?.agent.subagentModel}
+              codexSubagent={lane?.agent.adapter === "codex"}
+              subagentEffort={draft.subagentEffort ?? lane?.agent.subagentEffort}
               models={models}
               onChange={(next) => setDraft((current) => ({ ...current, subagentModel: next }))}
             />
@@ -227,7 +229,7 @@ export function BindingEditorPopover({
         </div>
       </div>
 
-      <UltracodeField testId="binding-ultracode" supported={tuning.ultracodeSupported}
+      <UltracodeField testId="binding-ultracode" supported={discovery.options ? tuning.ultracodeSupported : undefined} invalid={invalidUltracode}
         value={draft.ultracode ?? undefined} inherited={inheritedUltracode} resetOnly={needsUltracodeReset} source="player"
         onChange={(value) => setDraft((current) => ({ ...current, ultracode: value ?? null }))} />
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && <label className="flex flex-col gap-1 text-xs">

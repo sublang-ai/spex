@@ -40,7 +40,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n, type Language } from "../i18n.js";
 import { allRepositories } from "../lib/instances.js";
-import { applyLocalPatch, NEUTRAL_BLOCK, newPlayerModels, patchPlayer, setCaptain } from "../lib/config-ops.js";
+import { applyLocalPatch, NEUTRAL_BLOCK, patchPlayer, setCaptain } from "../lib/config-ops.js";
 import { agentBlockOf } from "../lib/drafts.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
 import {
@@ -983,7 +983,7 @@ function PlayerRoster({
             adapter: "claude",
             effort: NEUTRAL_BLOCK.effort,
             permissions: NEUTRAL_BLOCK.permissions,
-            ...newPlayerModels("claude", readinessByAdapter.get("claude")),
+            ...readinessByAdapter.get("claude")?.defaultModels,
           })}
           className="inline-flex items-center gap-1 self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >

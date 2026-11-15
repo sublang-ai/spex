@@ -87,6 +87,7 @@ const READINESS: ReadinessEntry[] = [
     ready: true,
     usedBy: ["captain", "dev.coder (code.coder)"],
     fastModeSupported: true, subagentModelSupported: true,
+    defaultModels: { model: "claude-fable-5-2", subagentModel: "claude-opus-5-5" },
   },
   {
     adapter: "codex",
@@ -343,7 +344,7 @@ describe("SET: the session-player roster", () => {
 
   test.each([true, false])("adding a Codex player respects child support %s", async (supported) => {
     renderSettings(READINESS.map((entry) =>
-      entry.adapter === "codex" ? { ...entry, subagentModelSupported: supported } : entry));
+      entry.adapter === "codex" ? { ...entry, subagentModelSupported: supported, defaultModels: { model: "gpt-6-astra", ...(supported ? { subagentModel: "gpt-6.1-sol" } : {}) } } : entry));
     fireEvent.click(screen.getByTestId("player-add"));
     fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
     const form = within(screen.getByTestId("player-add-form"));
@@ -376,9 +377,9 @@ describe("SET: the session-player roster", () => {
     );
   });
 
-  test("adding a Claude player on a third-party service leaves both model choices to the provider", async () => {
+  test.each(["hidden", "third-party"] as const)("adding a Claude player uses the core’s provider defaults with a %s base URL", async (state) => {
     renderSettings(READINESS.map((entry) => entry.adapter === "claude"
-      ? { ...entry, baseUrl: { state: "third-party", host: "provider.example" } } : entry));
+      ? { ...entry, defaultModels: {}, baseUrl: state === "hidden" ? { state } : { state, host: "provider.example" } } : entry));
     fireEvent.click(screen.getByTestId("player-add"));
     fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
     const form = within(screen.getByTestId("player-add-form"));
