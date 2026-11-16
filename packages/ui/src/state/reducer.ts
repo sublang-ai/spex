@@ -144,8 +144,10 @@ import {
   FAILURE_STATE_ID,
   failureTerminal,
   foldRestored,
+  foldScript,
   foldTrace,
   parkedFailure,
+  scriptRun,
   withFailureTerminal,
   type MachineFrame,
 } from "../lib/machine-frames.js";
@@ -972,6 +974,12 @@ export function applyRecord(
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = stateText(payload?.to);
+      } else if (topic === "playbook.script") {
+        // A script step's record lists on the card of the run standing
+        // in its state (run-view-198); its text goes nowhere else.
+        const run = scriptRun(r.payload, r.timestamp);
+        const frames = run ? foldScript(view.frames, run) : undefined;
+        if (frames) view.frames = frames;
       } else if (topic === RESTORING_TOPIC) {
         view.restoring = true;
       } else if (topic === RESTORED_TOPIC) {

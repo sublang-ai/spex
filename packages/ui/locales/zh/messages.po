@@ -2321,7 +2321,9 @@ msgstr "合并此项目的本地记录与已有记录"
 msgid "Combining…"
 msgstr "合并中…"
 
+#. label above the command a script step ran
 #. the slash command of a new playbook
+#: src/components/MachineCard.tsx
 #: src/components/PlaybookAuthoring.tsx
 msgid "Command"
 msgstr "命令"
@@ -3241,6 +3243,10 @@ msgstr "规程的每个角色由一个 Player 扮演；添加一个以调整其�
 msgid "Earlier conversations"
 msgstr "以往会话"
 
+#: src/components/MachineCard.tsx
+msgid "Earlier output was not kept."
+msgstr "更早的输出未保留。"
+
 #. saved work with no known project name or indexed conversations
 #: src/components/SpaceRepairs.tsx
 msgid "Earlier saved work"
@@ -3394,6 +3400,11 @@ msgstr "已有项目"
 #: src/components/CaptainHome.tsx
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
+
+#. a script step's row: the exit status its command ended with
+#: src/components/MachineCard.tsx
+msgid "exit {status}"
+msgstr "退出码 {status}"
 
 #: src/components/SpecGraph.tsx
 msgid "Expand {name}'s citation list"
@@ -3899,6 +3910,10 @@ msgstr "隐藏 {project} 中的会话"
 #: src/components/SpecView.tsx
 msgid "Hide the citation graph"
 msgstr "隐藏引用图谱"
+
+#: src/components/MachineCard.tsx
+msgid "Hide what {step} ran"
+msgstr "收起 {step} 执行的内容"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -5453,6 +5468,15 @@ msgstr "其他 Space…"
 #: src/components/RegistryAccount.tsx
 msgid "Other…"
 msgstr "其他…"
+
+#. label above what a script step's command printed
+#: src/components/MachineCard.tsx
+msgid "Output"
+msgstr "输出"
+
+#: src/components/MachineCard.tsx
+msgid "Output of {step}"
+msgstr "{step} 的输出"
 
 #. tab name: the project's own history, now and queue
 #. the project's Overview tab
@@ -7013,6 +7037,10 @@ msgstr "显示侧栏"
 msgid "Show the sidebar ({keys})"
 msgstr "显示侧栏（{keys}）"
 
+#: src/components/MachineCard.tsx
+msgid "Show what {step} ran"
+msgstr "展开 {step} 执行的内容"
+
 #: src/components/AgentCards.tsx
 msgid "Show which roles"
 msgstr "查看是哪些角色"
@@ -7693,6 +7721,10 @@ msgstr "Captain 的轮次失败 — {cause}"
 #: src/components/ProjectGroup.tsx
 msgid "The capturing session is gone"
 msgstr "捕获它的会话已不存在"
+
+#: src/components/MachineCard.tsx
+msgid "The command printed nothing."
+msgstr "命令没有输出。"
 
 #: src/components/CompileBand.tsx
 msgid "The compile toolchain is not ready."

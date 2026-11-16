@@ -642,6 +642,193 @@ export const MACHINE_ENDED_IN_FAILURE: FixtureEntry[] = [
   rec(534, { type: "turn_finished", turnId: 17, timestamp: 17_023 }),
 ];
 
+/** One script step's record, as the runtime's `playbook.script`
+ * telemetry carries it (run-view-198). */
+function script(seq: number, at: number, payload: Record<string, unknown>): FixtureEntry {
+  return rec(seq, {
+    type: "captain_telemetry",
+    turnId: 18,
+    timestamp: at,
+    topic: "playbook.script",
+    payload,
+  });
+}
+
+export const GATE_FORMAT_COMMAND = "npm run format:check";
+export const GATE_LINT_COMMAND = "spex=\"$(grep -o '@sublang/spex@[0-9][0-9.]*' kit/SKILL.md | head -n 1)\" && npx -y \"$spex\" lint";
+/** What a command printed is text: the Markdown link and the tag in
+ * it are characters (run-view-199). */
+export const GATE_LINT_OUTPUT = "specs:1: error structure/missing-file: no specs/ directory found\nsee [the guide](https://example.test/guide) <b>now</b>\n\nspex lint: 1 error, 0 warnings\n";
+export const GATE_ENDED_REASON = "gate ended in failure: spex lint reports problems after the last step.";
+
+/** A /gate run of script steps (run-view-198, run-view-199): its
+ * /verify child's check recorded by an engine that keeps the exit
+ * status alone, a format check that exits zero printing nothing, and
+ * a lint check that exits nonzero twice — the second run, its earlier
+ * output dropped, ending the run in a failure terminal. One record
+ * names a state no open run stands in. */
+export const MACHINE_SCRIPT_STEPS: FixtureEntry[] = [
+  rec(701, {
+    type: "turn_started",
+    turnId: 18,
+    timestamp: 18_000,
+    turn: { id: 18, prompt: "/gate the tree" },
+  }),
+  trace(702, 18_001, "t-gate", "gate", "session.started", {}),
+  trace(703, 18_002, "t-gate", "gate", "fsm.transition",
+    moved("ready", "verifyTree", "START_GATE")),
+  trace(704, 18_003, "t-gate", "gate", "playbook.call.started", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    text: "verify the tree",
+  }),
+  trace(705, 18_004, "t-gate-verify", "verify", "session.started", {}, "t-gate"),
+  trace(706, 18_005, "t-gate-verify", "verify", "fsm.transition",
+    moved("ready", "checkTree", "START_VERIFY"), "t-gate"),
+  script(707, 18_006, { stateId: "checkTree", sourceItem: "VERIFY-1", exitStatus: 3 }),
+  trace(708, 18_007, "t-gate-verify", "verify", "fsm.transition",
+    moved("checkTree", "treeChecked", "xstate.done.actor.0.checkTree", "done"), "t-gate"),
+  trace(709, 18_008, "t-gate", "gate", "playbook.call.finished", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    result: { status: "ok", playbookId: "verify", childSessionId: "t-gate-verify" },
+  }),
+  trace(710, 18_010, "t-gate", "gate", "fsm.transition",
+    moved("verifyTree", "checkFormat", "xstate.done.actor.0.verifyTree")),
+  script(711, 18_011, {
+    stateId: "checkFormat",
+    sourceItem: "GATE-2",
+    command: GATE_FORMAT_COMMAND,
+    exitStatus: 0,
+    durationMs: 300,
+    output: "",
+    outputTruncated: false,
+  }),
+  trace(712, 18_012, "t-gate", "gate", "fsm.transition",
+    moved("checkFormat", "checkLint", "xstate.done.actor.0.checkFormat")),
+  script(713, 18_013, {
+    stateId: "checkLint",
+    sourceItem: "GATE-3",
+    command: GATE_LINT_COMMAND,
+    exitStatus: 1,
+    durationMs: 1_200,
+    output: "Node.js v24.99.9 is not installed or cannot be found.\n",
+    outputTruncated: false,
+  }),
+  trace(714, 18_014, "t-gate", "gate", "fsm.transition",
+    moved("checkLint", "fixLint", "xstate.done.actor.0.checkLint")),
+  script(715, 18_015, {
+    stateId: "elsewhere",
+    sourceItem: "GATE-9",
+    command: "false",
+    exitStatus: 9,
+    durationMs: 5,
+    output: "from no run\n",
+    outputTruncated: false,
+  }),
+  trace(716, 18_016, "t-gate", "gate", "fsm.transition",
+    moved("fixLint", "checkLint", "LINT_FIXED")),
+  script(717, 18_040, {
+    stateId: "checkLint",
+    sourceItem: "GATE-3",
+    command: GATE_LINT_COMMAND,
+    exitStatus: 1,
+    durationMs: 22_000,
+    output: GATE_LINT_OUTPUT,
+    outputTruncated: true,
+  }),
+  trace(718, 18_041, "t-gate", "gate", "fsm.transition",
+    moved("checkLint", "lintFailed", "xstate.done.actor.1.checkLint", "done")),
+  trace(719, 18_042, "t-gate", "gate", "boss.input.settled", {
+    outcome: "terminal",
+    stateDescription: GATE_ENDED_REASON,
+    terminal: { stateId: "lintFailed", kind: "failure", description: GATE_ENDED_REASON },
+  }),
+  trace(720, 18_043, "t-gate", "gate", "session.disposed", {
+    state: { value: "lintFailed", status: "done" },
+    stateId: "lintFailed",
+  }),
+  rec(721, { type: "turn_finished", turnId: 18, timestamp: 18_044 }),
+];
+
+export const SWEEP_TREE_COMMAND = "git diff --check";
+export const SWEEP_TYPES_COMMAND = "npm run typecheck";
+
+/** A /sweep run still underway, whose script steps tell the fold's
+ * rules apart (run-view-198): its /verify child's check stands in a
+ * state named as the caller's calling state, so only the innermost
+ * run may list it; and the format check, first to run, runs again
+ * after the type check, so the order of latest runs differs from the
+ * order of first runs. */
+export const MACHINE_SCRIPT_ORDER: FixtureEntry[] = [
+  rec(801, {
+    type: "turn_started",
+    turnId: 19,
+    timestamp: 19_000,
+    turn: { id: 19, prompt: "/sweep the tree" },
+  }),
+  trace(802, 19_001, "t-sweep", "sweep", "session.started", {}),
+  trace(803, 19_002, "t-sweep", "sweep", "fsm.transition",
+    moved("ready", "verifyTree", "START_SWEEP")),
+  trace(804, 19_003, "t-sweep", "sweep", "playbook.call.started", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    text: "verify the tree",
+  }),
+  trace(805, 19_004, "t-sweep-verify", "verify", "session.started", {}, "t-sweep"),
+  trace(806, 19_005, "t-sweep-verify", "verify", "fsm.transition",
+    moved("ready", "verifyTree", "START_VERIFY"), "t-sweep"),
+  script(807, 19_006, {
+    stateId: "verifyTree",
+    sourceItem: "VERIFY-1",
+    command: SWEEP_TREE_COMMAND,
+    exitStatus: 2,
+    durationMs: 40,
+    output: "kit/SKILL.md:3: trailing whitespace.\n",
+    outputTruncated: false,
+  }),
+  trace(808, 19_007, "t-sweep-verify", "verify", "fsm.transition",
+    moved("verifyTree", "treeChecked", "xstate.done.actor.0.verifyTree", "done"), "t-sweep"),
+  trace(809, 19_008, "t-sweep", "sweep", "playbook.call.finished", {
+    stateId: "verifyTree",
+    playbookId: "verify",
+    result: { status: "ok", playbookId: "verify", childSessionId: "t-sweep-verify" },
+  }),
+  trace(810, 19_010, "t-sweep", "sweep", "fsm.transition",
+    moved("verifyTree", "checkFormat", "xstate.done.actor.0.verifyTree")),
+  script(811, 19_011, {
+    stateId: "checkFormat",
+    sourceItem: "SWEEP-2",
+    command: GATE_FORMAT_COMMAND,
+    exitStatus: 1,
+    durationMs: 900,
+    output: "kit/SKILL.md needs formatting\n",
+    outputTruncated: false,
+  }),
+  trace(812, 19_012, "t-sweep", "sweep", "fsm.transition",
+    moved("checkFormat", "checkTypes", "xstate.done.actor.0.checkFormat")),
+  script(813, 19_020, {
+    stateId: "checkTypes",
+    sourceItem: "SWEEP-3",
+    command: SWEEP_TYPES_COMMAND,
+    exitStatus: 1,
+    durationMs: 8_000,
+    output: "src/kit.ts(4,7): error TS2322\n",
+    outputTruncated: false,
+  }),
+  trace(814, 19_021, "t-sweep", "sweep", "fsm.transition",
+    moved("checkTypes", "checkFormat", "xstate.done.actor.0.checkTypes")),
+  script(815, 19_030, {
+    stateId: "checkFormat",
+    sourceItem: "SWEEP-2",
+    command: GATE_FORMAT_COMMAND,
+    exitStatus: 0,
+    durationMs: 700,
+    output: "",
+    outputTruncated: false,
+  }),
+];
+
 /** A child whose caller the pane never saw — it draws where it can be
  * seen rather than vanishing (run-view-78). */
 export const MACHINE_ORPHAN: FixtureEntry[] = [

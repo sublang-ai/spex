@@ -42,11 +42,19 @@ import {
   CHECK_ENDED_REASON,
   MACHINE_ASKED,
   MACHINE_ENDED_IN_FAILURE,
+  GATE_ENDED_REASON,
+  GATE_FORMAT_COMMAND,
+  GATE_LINT_COMMAND,
+  GATE_LINT_OUTPUT,
+  SWEEP_TREE_COMMAND,
+  SWEEP_TYPES_COMMAND,
   MACHINE_FAILED,
   MACHINE_INTERRUPTED,
   MACHINE_ORPHAN,
   MACHINE_RECOVERED,
   MACHINE_RUN,
+  MACHINE_SCRIPT_ORDER,
+  MACHINE_SCRIPT_STEPS,
   MACHINE_STOPPED,
   PARKED_FAILURE,
   VERIFY_ENDED_REASON,
@@ -1134,6 +1142,94 @@ describe("run-view-66: the machine call tree from the trace", () => {
       expect(shown.getAttribute("title")).toBe(reason);
       expect(shown.className).toContain("truncate");
     }
+  });
+
+  test("a run's script steps stand on its card, with what each ran and printed", () => {
+    renderRun(MACHINE_SCRIPT_STEPS);
+    const settled = screen.getAllByTestId(/^machine-card-/);
+    expect(settled.map((card) => card.getAttribute("data-playbook"))).toEqual(["gate", "verify"]);
+    expect(screen.getByTestId("machine-outcome-t-gate").textContent).toBe("failed");
+    expect(screen.getByTestId("machine-reason-t-gate").textContent).toBe(GATE_ENDED_REASON);
+    // On the strip: the step that last exited nonzero, once, read from
+    // its latest record (run-view-198). The step that exited zero and
+    // the record no open run stood in have no row.
+    expect(settled[0].getAttribute("data-expanded")).toBe("false");
+    const rows = () => screen.getAllByTestId(/^machine-script-t-gate/)
+      .filter((row) => /^machine-script-t-gate(-verify)?-[A-Za-z]+$/.test(row.getAttribute("data-testid")!))
+      .map((row) => row.getAttribute("data-testid"));
+    expect(rows()).toEqual(["machine-script-t-gate-checkLint", "machine-script-t-gate-verify-checkTree"]);
+    const lint = screen.getByTestId("machine-script-t-gate-checkLint");
+    expect(lint.getAttribute("data-exit")).toBe("1");
+    expect(within(lint).getByText("check lint").getAttribute("title")).toBe("checkLint");
+    expect(within(lint).getByText("exit 1")).toBeTruthy();
+    expect(within(lint).getByText("22s")).toBeTruthy();
+    // Unfolded on the command as run and the output as plain text
+    // (run-view-199): the link and the tag are characters.
+    const disclose = screen.getByTestId("machine-script-disclose-t-gate-checkLint");
+    expect(disclose.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("machine-script-command-t-gate-checkLint").textContent).toBe(GATE_LINT_COMMAND);
+    const output = screen.getByTestId("machine-script-output-t-gate-checkLint");
+    expect(output.textContent).toBe(GATE_LINT_OUTPUT);
+    expect(output.querySelector("a, b, img")).toBeNull();
+    expect(output.tagName).toBe("PRE");
+    expect(output.getAttribute("tabindex")).toBe("0");
+    expect(output.getAttribute("aria-label")).toBe("Output of check lint");
+    expect(output.className).toContain("overflow-y-auto");
+    expect(screen.getByTestId("machine-script-truncated-t-gate-checkLint").textContent).toBe("Earlier output was not kept.");
+    // The reader's fold is arrangement only.
+    fireEvent.click(disclose);
+    expect(disclose.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("machine-script-output-t-gate-checkLint")).toBeNull();
+    fireEvent.click(disclose);
+    expect(screen.getByTestId("machine-script-output-t-gate-checkLint").textContent).toBe(GATE_LINT_OUTPUT);
+    // A record carrying the exit status alone lists its step, on the
+    // nested run's own card, with nothing to unfold.
+    const tree = screen.getByTestId("machine-script-t-gate-verify-checkTree");
+    expect(screen.getByTestId("machine-card-t-gate-verify").contains(tree)).toBe(true);
+    expect(within(tree).getByText("exit 3")).toBeTruthy();
+    expect(screen.queryByTestId("machine-script-disclose-t-gate-verify-checkTree")).toBeNull();
+    // With the drawing, the step that exited zero stands folded, and
+    // unfolds to its command and the words that it printed nothing.
+    fireEvent.click(screen.getByTestId("machine-disclose-t-gate"));
+    expect(rows()).toEqual([
+      "machine-script-t-gate-checkFormat",
+      "machine-script-t-gate-checkLint",
+      "machine-script-t-gate-verify-checkTree",
+    ]);
+    const format = screen.getByTestId("machine-script-disclose-t-gate-checkFormat");
+    expect(format.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("machine-script-command-t-gate-checkFormat")).toBeNull();
+    fireEvent.click(format);
+    expect(screen.getByTestId("machine-script-command-t-gate-checkFormat").textContent).toBe(GATE_FORMAT_COMMAND);
+    expect(screen.getByTestId("machine-script-silent-t-gate-checkFormat").textContent).toBe("The command printed nothing.");
+    expect(within(screen.getByTestId("machine-script-t-gate-checkFormat")).getByText("<1s")).toBeTruthy();
+    expect(screen.queryByText(/from no run/)).toBeNull();
+  });
+
+  test("a script step's row follows the innermost run and each step's latest run, on a live card", () => {
+    renderRun(MACHINE_SCRIPT_ORDER);
+    const rowsOn = (card: string) => screen.getAllByTestId(new RegExp(`^machine-script-${card}-[A-Za-z]+$`))
+      .map((row) => row.getAttribute("data-testid")!.slice(`machine-script-${card}-`.length));
+    // The run is underway: its card is live and shows its drawing.
+    const root = within(screen.getByTestId("live-machines")).getByTestId("machine-card-t-sweep");
+    expect(root.getAttribute("data-settled")).toBeNull();
+    expect(root.getAttribute("data-expanded")).toBe("true");
+    // The child's check stood in a state named as its caller's calling
+    // state: it lists on the child, the innermost run standing there.
+    expect(rowsOn("t-sweep-verify")).toEqual(["verifyTree"]);
+    expect(screen.getByTestId("machine-script-command-t-sweep-verify-verifyTree").textContent).toBe(SWEEP_TREE_COMMAND);
+    // The caller's rows stand in the order of their steps' latest
+    // runs: the format check ran first and then again after the type
+    // check, so it stands last.
+    expect(rowsOn("t-sweep")).toEqual(["checkTypes", "checkFormat"]);
+    const types = screen.getByTestId("machine-script-t-sweep-checkTypes");
+    expect(types.getAttribute("data-exit")).toBe("1");
+    expect(screen.getByTestId("machine-script-command-t-sweep-checkTypes").textContent).toBe(SWEEP_TYPES_COMMAND);
+    // One row for the step run twice, read from its latest record.
+    const format = screen.getByTestId("machine-script-t-sweep-checkFormat");
+    expect(format.getAttribute("data-exit")).toBe("0");
+    expect(within(format).getByText("<1s")).toBeTruthy();
+    expect(screen.getByTestId("machine-script-disclose-t-sweep-checkFormat").getAttribute("aria-expanded")).toBe("false");
   });
 
   test("a run disposed where it stands settles unfinished", () => {

@@ -2321,7 +2321,9 @@ msgstr "Combines this project's local and existing records"
 msgid "Combining…"
 msgstr "Combining…"
 
+#. label above the command a script step ran
 #. the slash command of a new playbook
+#: src/components/MachineCard.tsx
 #: src/components/PlaybookAuthoring.tsx
 msgid "Command"
 msgstr "Command"
@@ -3241,6 +3243,10 @@ msgstr "Each role of a playbook is played by a player; add one to tune its agent
 msgid "Earlier conversations"
 msgstr "Earlier conversations"
 
+#: src/components/MachineCard.tsx
+msgid "Earlier output was not kept."
+msgstr "Earlier output was not kept."
+
 #. saved work with no known project name or indexed conversations
 #: src/components/SpaceRepairs.tsx
 msgid "Earlier saved work"
@@ -3394,6 +3400,11 @@ msgstr "Existing project"
 #: src/components/CaptainHome.tsx
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
+
+#. a script step's row: the exit status its command ended with
+#: src/components/MachineCard.tsx
+msgid "exit {status}"
+msgstr "exit {status}"
 
 #: src/components/SpecGraph.tsx
 msgid "Expand {name}'s citation list"
@@ -3899,6 +3910,10 @@ msgstr "Hide sessions in {project}"
 #: src/components/SpecView.tsx
 msgid "Hide the citation graph"
 msgstr "Hide the citation graph"
+
+#: src/components/MachineCard.tsx
+msgid "Hide what {step} ran"
+msgstr "Hide what {step} ran"
 
 #. tab note: a conversation this core cannot continue
 #. tab note: a conversation this core cannot continue
@@ -5453,6 +5468,15 @@ msgstr "Other Space…"
 #: src/components/RegistryAccount.tsx
 msgid "Other…"
 msgstr "Other…"
+
+#. label above what a script step's command printed
+#: src/components/MachineCard.tsx
+msgid "Output"
+msgstr "Output"
+
+#: src/components/MachineCard.tsx
+msgid "Output of {step}"
+msgstr "Output of {step}"
 
 #. tab name: the project's own history, now and queue
 #. the project's Overview tab
@@ -7013,6 +7037,10 @@ msgstr "Show the sidebar"
 msgid "Show the sidebar ({keys})"
 msgstr "Show the sidebar ({keys})"
 
+#: src/components/MachineCard.tsx
+msgid "Show what {step} ran"
+msgstr "Show what {step} ran"
+
 #: src/components/AgentCards.tsx
 msgid "Show which roles"
 msgstr "Show which roles"
@@ -7693,6 +7721,10 @@ msgstr "The Captain's turn failed — {cause}"
 #: src/components/ProjectGroup.tsx
 msgid "The capturing session is gone"
 msgstr "The capturing session is gone"
+
+#: src/components/MachineCard.tsx
+msgid "The command printed nothing."
+msgstr "The command printed nothing."
 
 #: src/components/CompileBand.tsx
 msgid "The compile toolchain is not ready."

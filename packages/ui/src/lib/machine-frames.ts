@@ -80,6 +80,10 @@ export interface MachineFrame {
    * recorded it: the reason its workflow authored, where it gave one
    * (run-view-197). */
   failureTerminal?: { description?: string };
+  /** The script steps the run has run, one entry per step read from
+   * its latest record, in the order of those latest runs
+   * (run-view-198). */
+  scripts?: ScriptRun[];
   openedAt: number;
   closedAt?: number;
 }
@@ -334,6 +338,66 @@ function settleFrame(
     return { open: next, settled: nextSettled };
   }
   return { open: stillOpen, settled: nextSettled, closed: complete };
+}
+
+/** One run of a script step, as its `playbook.script` telemetry
+ * record carries it (run-view-198): an engine that records only the
+ * exit status leaves the rest absent. */
+export interface ScriptRun {
+  stateId: string;
+  exitStatus: number;
+  /** The command as the runtime ran it. */
+  command?: string;
+  durationMs?: number;
+  /** What the command printed: untrusted text, shown as plain text
+   * and handed to nothing (run-view-199). */
+  output?: string;
+  /** Whether output before the kept tail was dropped. */
+  outputTruncated?: boolean;
+  at: number;
+}
+
+/** The script run a telemetry payload records, where it names a step
+ * and an exit status (run-view-198). */
+export function scriptRun(payload: unknown, at: number): ScriptRun | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const record = payload as Record<string, unknown>;
+  const stateId = asString(record.stateId);
+  const exitStatus = record.exitStatus;
+  if (!stateId || typeof exitStatus !== "number" || !Number.isFinite(exitStatus)) return undefined;
+  const durationMs = record.durationMs;
+  return {
+    stateId,
+    exitStatus,
+    ...(typeof record.command === "string" ? { command: record.command } : {}),
+    ...(typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0 ? { durationMs } : {}),
+    ...(typeof record.output === "string" ? { output: record.output } : {}),
+    ...(record.outputTruncated === true ? { outputTruncated: true } : {}),
+    at,
+  };
+}
+
+/** The open frames with a script run listed on the innermost run
+ * standing in its state, replacing that step's earlier run; undefined
+ * where no open run stands there (run-view-198). `open` holds parents
+ * before children, so the innermost is the last that matches. */
+export function foldScript(
+  open: readonly MachineFrame[],
+  run: ScriptRun,
+): MachineFrame[] | undefined {
+  for (let index = open.length - 1; index >= 0; index -= 1) {
+    const frame = open[index];
+    const stands = standsIn(frame, run.stateId) ||
+      (frame.active !== null && traceStateId(frame.active) === run.stateId);
+    if (!stands) continue;
+    const next = [...open];
+    next[index] = {
+      ...frame,
+      scripts: [...(frame.scripts ?? []).filter((entry) => entry.stateId !== run.stateId), run],
+    };
+    return next;
+  }
+  return undefined;
 }
 
 /** A run's failure terminal record (run-view-197). */
