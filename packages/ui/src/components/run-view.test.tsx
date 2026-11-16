@@ -46,11 +46,14 @@ import {
   GATE_FORMAT_COMMAND,
   GATE_LINT_COMMAND,
   GATE_LINT_OUTPUT,
+  SWEEP_TREE_COMMAND,
+  SWEEP_TYPES_COMMAND,
   MACHINE_FAILED,
   MACHINE_INTERRUPTED,
   MACHINE_ORPHAN,
   MACHINE_RECOVERED,
   MACHINE_RUN,
+  MACHINE_SCRIPT_ORDER,
   MACHINE_SCRIPT_STEPS,
   MACHINE_STOPPED,
   PARKED_FAILURE,
@@ -1201,6 +1204,32 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(screen.getByTestId("machine-script-silent-t-gate-checkFormat").textContent).toBe("The command printed nothing.");
     expect(within(screen.getByTestId("machine-script-t-gate-checkFormat")).getByText("<1s")).toBeTruthy();
     expect(screen.queryByText(/from no run/)).toBeNull();
+  });
+
+  test("a script step's row follows the innermost run, a parallel state's steps and each step's latest run, on a live card", () => {
+    renderRun(MACHINE_SCRIPT_ORDER);
+    const rowsOn = (card: string) => screen.getAllByTestId(new RegExp(`^machine-script-${card}-[A-Za-z]+$`))
+      .map((row) => row.getAttribute("data-testid")!.slice(`machine-script-${card}-`.length));
+    // The run is underway: its card is live and shows its drawing.
+    const root = within(screen.getByTestId("live-machines")).getByTestId("machine-card-t-sweep");
+    expect(root.getAttribute("data-settled")).toBeNull();
+    expect(root.getAttribute("data-expanded")).toBe("true");
+    // The child's check stood in a state named as its caller's calling
+    // state: it lists on the child, the innermost run standing there.
+    expect(rowsOn("t-sweep-verify")).toEqual(["verifyTree"]);
+    expect(screen.getByTestId("machine-script-command-t-sweep-verify-verifyTree").textContent).toBe(SWEEP_TREE_COMMAND);
+    // The caller's rows are the two steps its parallel state held
+    // active, in the order of their latest runs: the format check ran
+    // first and then again after the type check, so it stands last.
+    expect(rowsOn("t-sweep")).toEqual(["checkTypes", "checkFormat"]);
+    const types = screen.getByTestId("machine-script-t-sweep-checkTypes");
+    expect(types.getAttribute("data-exit")).toBe("1");
+    expect(screen.getByTestId("machine-script-command-t-sweep-checkTypes").textContent).toBe(SWEEP_TYPES_COMMAND);
+    // One row for the step run twice, read from its latest record.
+    const format = screen.getByTestId("machine-script-t-sweep-checkFormat");
+    expect(format.getAttribute("data-exit")).toBe("0");
+    expect(within(format).getByText("<1s")).toBeTruthy();
+    expect(screen.getByTestId("machine-script-disclose-t-sweep-checkFormat").getAttribute("aria-expanded")).toBe("false");
   });
 
   test("a run disposed where it stands settles unfinished", () => {
