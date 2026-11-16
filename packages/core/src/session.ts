@@ -819,17 +819,41 @@ export class SessionManager {
 
   /** The stored structural projection of a schema-7 checkpoint, when it has one. */
   async storedStructure(sessionId: string): Promise<SessionStructuralProjection | undefined> {
-    try {
-      const manifest = await this.store.sessionStoreFor(sessionId).readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
-      return manifest.schemaVersion === 7 ? manifest.structuralProjection : undefined;
-    } catch { return undefined; }
+    try { return await this.readStructure(sessionId); }
+    catch { return undefined; }
   }
 
-  /** The same execution check as opening, without a runtime, lease or hints. */
+  private async readStructure(sessionId: string): Promise<SessionStructuralProjection | undefined> {
+    const manifest = await this.store.sessionStoreFor(sessionId).readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
+    return manifest.schemaVersion === 7 ? manifest.structuralProjection : undefined;
+  }
+
+  /** The same execution check as opening, without a runtime, lease or
+   * hints. Playbook's answer follows from the session's files, the
+   * folder and the execution alone, so it is kept while all three stand
+   * as checked and the session is not read whole again
+   * (core-service-159). */
   async checkContinuation(project: ProjectInfo, composed: ComposedConfig, sessionId: string): Promise<void> {
-    const executionProjection = this.checkedExecution(project, composed, sessionId, await this.storedStructure(sessionId));
-    const checked = await this.store.sessionStoreFor(sessionId).validate(sessionId, {cwd: project.path, executionProjection});
-    if (!checked.resumable) throw new CoreError("invalid_request", checked.reasons.join("; "));
+    const files = this.store.sessionFiles(sessionId);
+    const kept = files === undefined ? undefined : this.store.continuationCheck(sessionId);
+    const standing = kept?.files === files ? kept : undefined;
+    let structure: SessionStructuralProjection | undefined;
+    let structureRead = true;
+    if (standing) structure = standing.structure;
+    else {
+      try { structure = await this.readStructure(sessionId); }
+      catch { structureRead = false; }
+    }
+    const executionProjection = this.checkedExecution(project, composed, sessionId, structure);
+    const execution = JSON.stringify(executionProjection);
+    let refusal = standing?.cwd === project.path && standing.execution === execution ? standing.refusal : undefined;
+    if (refusal === undefined) {
+      const checked = await this.store.sessionStoreFor(sessionId).validate(sessionId, {cwd: project.path, executionProjection});
+      refusal = checked.resumable ? null : checked.reasons.join("; ");
+      this.store.keepContinuationCheck(sessionId, files !== undefined && structureRead
+        ? {files, structure, cwd: project.path, execution, refusal} : undefined);
+    }
+    if (refusal !== null) throw new CoreError("invalid_request", refusal);
   }
 
   private checkedExecution(project: ProjectInfo, composed: ComposedConfig, sessionId: string, stored: SessionStructuralProjection | undefined): SessionExecutionProjection {

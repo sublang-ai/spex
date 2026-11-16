@@ -4269,6 +4269,11 @@ test("core-service-77: continuation observations guard project inputs and preser
   await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
   await settledSession(client, session.id, 1);
   const store = harness.service["store"];
+  // Every reading here validates afresh: the races lie in the awaited
+  // validation, which an answer kept for unchanged inputs never reaches
+  // (core-service-159).
+  store.keepContinuationCheck(session.id, undefined);
+  store.keepContinuationCheck = () => {};
   const repository = store.repository(project.id)!;
   const shared = repository.store;
   let afterValidation: (() => Promise<void>) | undefined;
@@ -6783,6 +6788,118 @@ test("core-service-60: a bounded external replay append is announced without rew
   assert.ok(diagnostics.some((entry) => entry.file.endsWith(`${id}.json`) && entry.blocking));
   await client.expectOk("session.delete", { sessionId: id });
   assert.equal(existsSync(root), false, "damaged recovery stays deletable through the shared lifecycle");
+});
+
+/** Count each session's `validate` through a clone's shared session store
+ * from now on; `hold` keeps a session's next one from reading until
+ * released. */
+function countValidations(service: CoreService, key: string): { of(id: string): number; hold(id: string): { reached: Promise<void>; release(): void } } {
+  const repository = service["store"].repository(key);
+  assert.ok(repository);
+  const shared = repository.store;
+  const counts = new Map<string, number>();
+  const holds = new Map<string, { reached: () => void; gate: Promise<void> }>();
+  repository.store = { ...shared, validate: async (id, context) => {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+    const held = holds.get(id);
+    if (held) {
+      holds.delete(id);
+      held.reached();
+      await held.gate;
+    }
+    return shared.validate(id, context);
+  } };
+  return {
+    of: (id) => counts.get(id) ?? 0,
+    hold: (id) => {
+      let reached!: () => void;
+      let release!: () => void;
+      const arrived = new Promise<void>((resolve) => { reached = resolve; });
+      holds.set(id, { reached, gate: new Promise<void>((resolve) => { release = resolve; }) });
+      return { reached: arrived, release };
+    },
+  };
+}
+
+/** Every change the clones' watches reported has been read. */
+async function sessionsRead(service: CoreService): Promise<void> {
+  await sleep(400);
+  await service["sessionScans"].settled();
+}
+
+test("core-service-160: a running session's own files read no saved session again, and a session standing as last read is not validated again", { timeout: 120_000 }, async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { watchConfig: true });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: saved.id, text: "A saved turn" });
+  assert.equal((await settledSession(client, saved.id, 1)).continuable, true);
+  await sessionsRead(harness.service);
+
+  const validations = countValidations(harness.service, project.id);
+  // What the clone's watch reports while a second session runs.
+  const reported = new Map<string, number>();
+  const watcher = watch(projectSessions(harness.dataDir, project.id), (_event, filename) => {
+    if (filename) reported.set(filename, (reported.get(filename) ?? 0) + 1);
+  });
+  t.after(() => watcher.close());
+  const running = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: running.id, text: "A running turn" });
+  await settledSession(client, running.id, 1);
+  await sessionsRead(harness.service);
+  watcher.close();
+  assert.ok((reported.get(`${running.id}.json`) ?? 0) >= 2, "the running session published its record more than once");
+  assert.equal(validations.of(saved.id), 0, "its own files read no other session again (core-service-158)");
+
+  // A read of every session validates none standing as last read, nor
+  // its continuation against the same execution.
+  const before = validations.of(saved.id) + validations.of(running.id);
+  await harness.service["syncForeignSessions"]();
+  await harness.service["syncForeignSessions"]();
+  assert.equal(validations.of(saved.id) + validations.of(running.id), before, "sessions standing as last read are not validated again (core-service-159)");
+  const listed = await client.expectOk("session.list", {});
+  assert.deepEqual(listed.filter((entry) => entry.continuable).map((entry) => entry.id).sort(), [saved.id, running.id].sort());
+});
+
+test("core-service-160: another host's writes read its session alone, and changes during a read share one more", { timeout: 120_000 }, async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { watchConfig: true });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: saved.id, text: "A saved turn" });
+  await settledSession(client, saved.id, 1);
+
+  const configPath = join(harness.dir, "playbook.config.yaml");
+  const plan = await loadLaunchPlan({ userConfigPath: configPath, modules: builtinLaunchModules(configPath) });
+  const external = await openSessionHost({ store: createSessionStore({ sessionsDir: projectSessions(harness.dataDir, project.id) }), mode: "new",
+    cwd: harness.projectDir, config: executionConfigFromPlan(plan), adapterImports: fakeAdapterImports({ fallback: { result: "unused" } }).imports });
+  t.after(() => external.dispose());
+  const id = external.sessionId;
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
+  await sessionsRead(harness.service);
+
+  const validations = countValidations(harness.service, project.id);
+  const held = validations.hold(id);
+  const started = (turnId: number) => ({ type: "turn_started", turnId, timestamp: turnId * 1000, turn: { id: turnId, prompt: `External turn ${turnId}` } });
+  await external.lease.append(started(1));
+  // The read of the first append is in flight; three more changes
+  // arrive, each past the wait a change is given.
+  await held.reached;
+  for (const turnId of [2, 3, 4]) {
+    await external.lease.append(started(turnId));
+    await sleep(300);
+  }
+  held.release();
+  await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_started" && m.record.turnId === 4);
+  await sessionsRead(harness.service);
+  assert.equal(validations.of(id), 2, "the read in flight, and one more for every change during it (core-service-158)");
+  assert.equal(validations.of(saved.id), 0, "another host's writes read its session alone (core-service-158)");
+  assert.deepEqual(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").map((entry) => entry.record.turnId), [1, 2, 3, 4]);
 });
 
 test("core-service-124: what one home captured runs on it alone, and a second home pairing the folder at the same path reads it as the other's", { timeout: 60_000 }, async (t) => {

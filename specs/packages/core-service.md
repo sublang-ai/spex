@@ -824,6 +824,29 @@ The core package shall own Spex application files through the versioned encoding
 - failed migration reports its cause and admits no writer to partially migrated data;
 - released migrations remain immutable; a format change adds a new migration.
 
+#### core-service-158
+
+While the core service runs, when a file changes in a clone's `sessions/`, the core package shall read again [[core-service-60](#core-service-60)] only the sessions that file can have changed:
+
+| Changed file | Read again |
+| --- | --- |
+| the record, replay descriptor, provider hints, former stream or lease of a session whose runtime this core is opening or holds [[core-service-91](#core-service-91)] | nothing |
+| the same files of any other session | that session alone, forgotten where its record left [[core-service-76](#core-service-76)] |
+| a Spex sidecar, or a file that is no record and no stream | nothing |
+| any other record or stream, or a change naming no file | every session of every clone |
+
+- a change waits 150 ms for others to join it, and no later change postpones its read;
+- one read runs at a time and one waits behind it: every change, and every read of all sessions asked for meanwhile, joins the one that waits.
+
+#### core-service-159
+
+When the core package reads a session whose runtime it does not hold [[core-service-60](#core-service-60)], it shall have Playbook validate the session [[1]] only where the session's files changed since Playbook last validated them for this core without failing:
+
+- the files stand unchanged while the session's record and replay descriptor are the same files holding the same bytes, its former stream keeps its size and modification time, and its chunk and asset folders keep their modification times;
+- an unchanged session's lease is still read, a changed writer reported as a change of the session [[core-service-32](#core-service-32)];
+- a validation of the same files in flight is awaited, never repeated beside it;
+- the continuation check [[core-service-73](#core-service-73)] keeps its last answer while the session's files, the project's folder and the execution it would continue with stand as then checked.
+
 ### Runtime Composition
 
 #### core-service-16
@@ -1099,6 +1122,15 @@ Where a fixture session — manifest naming a registered project's directory as 
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
 - a fixture record with a Boss journal and no stream lists with the first Boss entry as its title, its Boss turns counted, and a history of turn starts, Captain replies, and turn finishes [[core-service-60](#core-service-60)];
 - every fixture file is byte-identical once the service stops, and no sidecar joins them while only reads are requested [[core-service-65](#core-service-65)].
+
+#### core-service-160
+
+Where a session this core ran stands saved and continuable in a project's clone, with the clones watched, the test suite shall count Playbook's validations of each session and assert:
+
+- while a second session of the project runs a turn, publishing its record more than once, the saved session is not validated [[core-service-158](#core-service-158)];
+- two reads of every session afterwards validate neither session, and both still list as continuable [[core-service-159](#core-service-159)];
+- while another host appends to a session of its own, the saved session is not validated [[core-service-158](#core-service-158)];
+- with that session's first read held at its validation while three more appends arrive, each past a change's wait, the release is followed by one more validation of it and no further, its subscriber receiving each appended record once, in order [[core-service-158](#core-service-158)].
 
 #### core-service-71
 

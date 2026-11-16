@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import { readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -206,6 +206,11 @@ for (const scenario of ["old-path failure", "delayed success", "old directory sc
         }
       },
     };
+    // Another host rewrote the record since it was read, so the refresh
+    // validates it again rather than standing on that read
+    // (core-service-159).
+    const record = join(repository.sessionsDir, `${SESSION}.json`);
+    utimesSync(record, new Date(), new Date(Date.now() + 1000));
     const pending = scenario === "old directory scan"
       ? store.adoptForeignSessions(from) : store.refreshSession(SESSION, false);
     await waiting;
