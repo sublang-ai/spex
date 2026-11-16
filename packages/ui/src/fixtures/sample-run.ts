@@ -751,29 +751,15 @@ export const MACHINE_SCRIPT_STEPS: FixtureEntry[] = [
   rec(721, { type: "turn_finished", turnId: 18, timestamp: 18_044 }),
 ];
 
-/** A parallel state's transition: the regions' leaves under the one
- * state the run stands in. */
-const regions = (
-  from: string | Record<string, unknown>,
-  to: Record<string, unknown>,
-  event: string,
-): Record<string, unknown> => ({
-  from,
-  to,
-  event: { type: event },
-  state: { value: to, tags: [], status: "active" },
-});
-
 export const SWEEP_TREE_COMMAND = "git diff --check";
 export const SWEEP_TYPES_COMMAND = "npm run typecheck";
 
 /** A /sweep run still underway, whose script steps tell the fold's
  * rules apart (run-view-198): its /verify child's check stands in a
  * state named as the caller's calling state, so only the innermost
- * run may list it; a format check and a type check stand side by
- * side in a parallel state; and the format check, first to run, runs
- * again after the type check, so the order of latest runs differs
- * from the order of first runs. */
+ * run may list it; and the format check, first to run, runs again
+ * after the type check, so the order of latest runs differs from the
+ * order of first runs. */
 export const MACHINE_SCRIPT_ORDER: FixtureEntry[] = [
   rec(801, {
     type: "turn_started",
@@ -809,8 +795,7 @@ export const MACHINE_SCRIPT_ORDER: FixtureEntry[] = [
     result: { status: "ok", playbookId: "verify", childSessionId: "t-sweep-verify" },
   }),
   trace(810, 19_010, "t-sweep", "sweep", "fsm.transition",
-    regions("verifyTree", { checks: { format: "checkFormat", types: "checkTypes" } },
-      "xstate.done.actor.0.verifyTree")),
+    moved("verifyTree", "checkFormat", "xstate.done.actor.0.verifyTree")),
   script(811, 19_011, {
     stateId: "checkFormat",
     sourceItem: "SWEEP-2",
@@ -821,9 +806,7 @@ export const MACHINE_SCRIPT_ORDER: FixtureEntry[] = [
     outputTruncated: false,
   }),
   trace(812, 19_012, "t-sweep", "sweep", "fsm.transition",
-    regions({ checks: { format: "checkFormat", types: "checkTypes" } },
-      { checks: { format: "fixFormat", types: "checkTypes" } },
-      "xstate.done.actor.0.checkFormat")),
+    moved("checkFormat", "checkTypes", "xstate.done.actor.0.checkFormat")),
   script(813, 19_020, {
     stateId: "checkTypes",
     sourceItem: "SWEEP-3",
@@ -834,9 +817,7 @@ export const MACHINE_SCRIPT_ORDER: FixtureEntry[] = [
     outputTruncated: false,
   }),
   trace(814, 19_021, "t-sweep", "sweep", "fsm.transition",
-    regions({ checks: { format: "fixFormat", types: "checkTypes" } },
-      { checks: { format: "checkFormat", types: "fixTypes" } },
-      "FORMAT_FIXED")),
+    moved("checkTypes", "checkFormat", "xstate.done.actor.0.checkTypes")),
   script(815, 19_030, {
     stateId: "checkFormat",
     sourceItem: "SWEEP-2",

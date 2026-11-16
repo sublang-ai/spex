@@ -1206,7 +1206,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     expect(screen.queryByText(/from no run/)).toBeNull();
   });
 
-  test("a script step's row follows the innermost run, a parallel state's steps and each step's latest run, on a live card", () => {
+  test("a script step's row follows the innermost run and each step's latest run, on a live card", () => {
     renderRun(MACHINE_SCRIPT_ORDER);
     const rowsOn = (card: string) => screen.getAllByTestId(new RegExp(`^machine-script-${card}-[A-Za-z]+$`))
       .map((row) => row.getAttribute("data-testid")!.slice(`machine-script-${card}-`.length));
@@ -1218,9 +1218,9 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // state: it lists on the child, the innermost run standing there.
     expect(rowsOn("t-sweep-verify")).toEqual(["verifyTree"]);
     expect(screen.getByTestId("machine-script-command-t-sweep-verify-verifyTree").textContent).toBe(SWEEP_TREE_COMMAND);
-    // The caller's rows are the two steps its parallel state held
-    // active, in the order of their latest runs: the format check ran
-    // first and then again after the type check, so it stands last.
+    // The caller's rows stand in the order of their steps' latest
+    // runs: the format check ran first and then again after the type
+    // check, so it stands last.
     expect(rowsOn("t-sweep")).toEqual(["checkTypes", "checkFormat"]);
     const types = screen.getByTestId("machine-script-t-sweep-checkTypes");
     expect(types.getAttribute("data-exit")).toBe("1");
