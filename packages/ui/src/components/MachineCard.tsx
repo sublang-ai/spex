@@ -264,7 +264,9 @@ function ScriptRow({ cardId, run }: { cardId: string; run: ScriptRun }) {
                 : i18n._("Show what {step} ran", { step: name })
             }
             onClick={() => setOverride(!unfolded)}
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+            // A 24px hit target (run-view-50); the negative margin
+            // keeps the 16px box the row is laid out on.
+            className="-m-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
           >
             <Icon name={unfolded ? "caretDown" : "caretRight"} className="h-3 w-3" />
           </button>
@@ -508,7 +510,9 @@ export function MachineCard({
             : i18n._("Expand {run}", { run: label })
         }
         onClick={() => setOverride(!expanded)}
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+        // A 24px hit target (run-view-50); the negative margin keeps
+        // the 16px box the header is laid out on.
+        className="-m-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
       >
         <Icon
           name={expanded ? "caretDown" : "caretRight"}
