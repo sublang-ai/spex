@@ -12,7 +12,7 @@ Extends [DR-031](031-machine-call-tree.md): a run's card additionally lists the 
 
 - A workflow may hold script steps: commands the runtime runs itself, whose exit status alone picks the next state.
   A nonzero exit often ends the run in a failure terminal, whose reason ([DR-231](231-a-failure-terminal-reads-failed.md)) was authored before the run and names one assumed cause.
-- The runtime records each completed script step in the session's records: its state and exit status and, from the engine release that records them [[2]], the command as run, how long it took, and a bounded tail of what it printed.
+- The runtime records each completed script step in the session's records: its state and exit status and, from Playbook 19.0.0 on [[2]] [[3]], the command as run, how long it took, and a bounded tail of what it printed.
 - The run view read none of it.
   While a run is underway its progress lines fold into its card, the script's status line among them, so a reader saw neither the step nor its exit status.
 - The runtime gives the printed text to no agent, the Captain included: it is untrusted text for people.
@@ -50,3 +50,4 @@ Extends [DR-031](031-machine-call-tree.md): a run's card additionally lists the 
 
 [1]: https://github.com/sublang-ai/spex/issues/380 "Spex issue 380 — a failed playbook run reads done, and the app cannot show why it failed"
 [2]: https://github.com/sublang-ai/playbook/issues/104 "Playbook issue 104 — a script step records only its exit status"
+[3]: https://github.com/sublang-ai/playbook/releases/tag/v19.0.0 "Playbook 19.0.0 — a script step records its output and its command"
