@@ -845,7 +845,7 @@ When the core package reads a session whose runtime it does not hold [[core-serv
 - the files stand unchanged while the session's record and replay descriptor are the same files holding the same bytes, its former stream keeps its size and modification time, and its chunk and asset folders keep their modification times;
 - an unchanged session's lease is still read, a changed writer reported as a change of the session [[core-service-32](#core-service-32)];
 - a validation of the same files in flight is awaited, never repeated beside it;
-- the continuation check [[core-service-73](#core-service-73)] keeps its last answer while the session's files, the project's folder and the execution it would continue with stand as then checked.
+- the continuation check [[core-service-73](#core-service-73)] keeps its last answer while the session's files, the project's folder and the execution it would continue with stand as then checked, and a check of the same three in flight is awaited, never repeated beside it.
 
 ### Runtime Composition
 
@@ -1129,6 +1129,7 @@ Where a session this core ran stands saved and continuable in a project's clone,
 
 - while a second session of the project runs a turn, publishing its record more than once, the saved session is not validated [[core-service-158](#core-service-158)];
 - two reads of every session afterwards validate neither session, and both still list as continuable [[core-service-159](#core-service-159)];
+- with the saved session's continuation answer dropped and its validation held, two listings sent at once both reach its check, and its release is followed by no second validation, both listing it as continuable [[core-service-159](#core-service-159)];
 - while another host appends to a session of its own, the saved session is not validated [[core-service-158](#core-service-158)];
 - with that session's first read held at its validation, a second append queued to be read behind it and two more reported while that read waits, the release is followed by one more validation of it and no further, its subscriber receiving each appended record once, in order [[core-service-158](#core-service-158)].
 

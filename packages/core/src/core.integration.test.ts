@@ -6887,6 +6887,26 @@ test("core-service-160: a running session's own files read no saved session agai
   assert.equal(validations.of(saved.id) + validations.of(running.id), before, "sessions standing as last read are not validated again (core-service-159)");
   const listed = await client.expectOk("session.list", {});
   assert.deepEqual(listed.filter((entry) => entry.continuable).map((entry) => entry.id).sort(), [saved.id, running.id].sort());
+
+  // Two listings at once, the saved session's continuation unchecked,
+  // validate it once: the second awaits the check the first began.
+  const store = harness.service["store"];
+  store.keepContinuationCheck(saved.id, undefined);
+  const manager = harness.service["sessions"];
+  const checkedExecution = manager["checkedExecution"].bind(manager);
+  let reachedCheck = 0;
+  manager["checkedExecution"] = (...args) => {
+    if (args[2] === saved.id) reachedCheck += 1;
+    return checkedExecution(...args);
+  };
+  const beforeLists = validations.of(saved.id);
+  const held = validations.hold(saved.id);
+  const lists = [client.expectOk("session.list", {}), client.expectOk("session.list", {})];
+  await held.reached;
+  await until(() => reachedCheck >= 2, "both listings to reach the saved session's check");
+  held.release();
+  for (const entries of await Promise.all(lists)) assert.equal(entries.find((entry) => entry.id === saved.id)?.continuable, true);
+  assert.equal(validations.of(saved.id), beforeLists + 1, "a check in flight is awaited, never repeated beside it (core-service-159)");
 });
 
 test("core-service-160: another host's writes read its session alone, and changes during a read share one more", { timeout: 120_000 }, async (t) => {
