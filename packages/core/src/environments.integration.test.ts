@@ -247,14 +247,18 @@ async function startCore(dir: string, options: {
   return { service, client, dataDir, configPath, stop: async () => { client.close(); await service.stop(); } };
 }
 
-/** A copy of the shipped built-in release at a newer version. */
-function newerBuiltin(): BuiltinPackage {
+/** A newer release with an identifiable new GEARS item. */
+function newerBuiltin(nextMajor = true, minorSteps = 1): BuiltinPackage {
   const shipped = builtinPackage();
   const [major, minor] = shipped.version.split(".").map(Number);
-  const version = `${major}.${minor! + 1}.0`;
+  const version = nextMajor ? `${major! + 1}.0.0` : `${major}.${minor! + minorSteps}.0`;
   const dir = join(scratchDir("spex-newer-builtin-"), version);
   cpSync(shipped.dir, dir, { recursive: true });
   writeFileSync(join(dir, "meta.yaml"), readFileSync(join(dir, "meta.yaml"), "utf8").replace(`version: ${shipped.version}`, `version: ${version}`));
+  const gears = join(dir, "playbooks/en/code/code.playbook/code.gears.md");
+  const text = readFileSync(gears, "utf8");
+  assert.ok(text.includes("## External Behavior"));
+  writeFileSync(gears, text.replace("## External Behavior", `## External Behavior\n\n### code-10000\n\nThe ${version} release shall expose its current GEARS template.`));
   return { name: "sublang/playbooks", version, dir };
 }
 
@@ -262,7 +266,7 @@ function newerBuiltin(): BuiltinPackage {
 // environments-23: the built-in spec package through a real core
 // ---------------------------------------------------------------------------
 
-test("environments-23: a fresh home with no registry reachable seeds the built-in spec package, launches every built-in from it, and seeds a newer release beside the older", { timeout: 180_000 }, async (t) => {
+test("environments-23: an offline home launches its built-ins and automatically adopts a shipped major release, serving its GEARS while project pins stay", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-builtin-");
   const shipped = builtinPackage();
   // The starter enables every built-in playbook (core-service-3).
@@ -307,18 +311,33 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
   assert.equal(existsSync(join(dir, "project", ".claude", "skills", "code")), false);
 
-  // A newer built-in release seeds beside the older; the lock moves not.
-  const locks = [ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
+  // An explicit project pin remains independent of the global upgrade.
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: shipped.version }, wait: true });
+  const projectRequests = readFileSync(join(projectRoot, "spex.yaml"));
+  const projectLock = readFileSync(join(projectRoot, "spex.lock"));
   await core.stop();
   const newer = newerBuiltin();
   core = await startCore(dir, { hostUrl: UNREACHABLE, realShell: true, extra: { builtinPackage: newer } });
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`)), "the older stays seeded");
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${newer.version}.json`)), "the newer is seeded beside it");
-  assert.deepEqual([ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8")), locks, "an app update changes no lock");
-  // [environments-11] the state names the newer release beside the
-  // older its lock selects, the caret request admitting the newer.
-  const ownBefore = await core.client.expectOk("environment.get", { repository: own });
-  assert.deepEqual(ownBefore.builtinUpdate, { shipped: newer.version, locked: shipped.version });
+  const updated = await core.client.expectOk("environment.get", { repository: own });
+  assert.deepEqual(updated.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", newer.version, "builtin", true]]);
+  assert.equal(updated.stale, null);
+  assert.ok(!("builtinUpdate" in updated));
+  assert.deepEqual(parseRequests(readFileSync(join(ownClone, "spex.yaml"), "utf8")).packages["sublang/playbooks"], { version: `^${newer.version}` });
+  const artifacts = await core.client.expectOk("playbook.artifacts", { playbookId: "code", repository: own });
+  assert.match(artifacts.gears ?? "", new RegExp(`The ${newer.version.replaceAll(".", "\\.")} release shall expose its current GEARS template`));
+  assert.ok(artifacts.gearsItems?.items.some((item) => item.id === "code-10000"));
+  assert.deepEqual(readFileSync(join(projectRoot, "spex.yaml")), projectRequests);
+  assert.deepEqual(readFileSync(join(projectRoot, "spex.lock")), projectLock);
+  assert.doesNotMatch((await core.client.expectOk("playbook.artifacts", { playbookId: "code", repository: project.id })).gears ?? "", /code-10000/);
+
+  const ownRequests = readFileSync(join(ownClone, "spex.yaml"));
+  const ownLock = readFileSync(join(ownClone, "spex.lock"));
+  await core.stop();
+  core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { builtinPackage: newer } });
+  assert.deepEqual(readFileSync(join(ownClone, "spex.yaml")), ownRequests, "a second start does not rewrite the request");
+  assert.deepEqual(readFileSync(join(ownClone, "spex.lock")), ownLock, "a second start does not rewrite the lock");
   // A new project's environment still requests nothing, and its state
   // names no update.
   const later = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "later")) });
@@ -326,24 +345,155 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const laterState = await core.client.expectOk("environment.get", { repository: later.id });
   assert.ok(!("builtinUpdate" in laterState), "[environments-11] no update where the built-in is not requested");
 
-  // [environments-11] resolving again — what Update sends — moves the
-  // lock to the newer release, and the state names none.
-  let mark = core.client.mark();
-  await core.client.expectOk("environment.resolve", { repository: own });
-  const updated = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.version === newer.version);
-  assert.deepEqual(updated.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", newer.version, "builtin", true]]);
-  assert.ok(!("builtinUpdate" in updated), "[environments-11] the lock selects the shipped release");
-
   // [environments-11] a project requesting the built-in spec package
   // itself, at an exact version admitting only the older release, names
   // no update, its lock still selecting the older.
-  mark = core.client.mark();
-  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: shipped.version } });
-  const exact = await core.client.environment(project.id, mark, (state) => state.busy === null && state.stale === null
-    && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
+  const exact = await core.client.expectOk("environment.get", { repository: project.id });
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
 });
+
+test("environments-23: automatic adoption preserves selections, aliases, language, registry and unrelated locked versions, and an older app does not downgrade", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-builtin-adopt-registry-") });
+  t.after(() => registry.close());
+  const kit = skillRelease("acme", "kit");
+  const publish = async (version: string): Promise<void> => {
+    await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir("spex-builtin-adopt-kit-"), "kit"), { ...kit.manifest, version }, kit.files));
+  };
+  await publish("1.0.0");
+  const dir = scratchDir("spex-builtin-adopt-pins-");
+  let core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const root = clonePath(core.dataDir, own);
+  const request = { kind: "registry" as const, version: `^${builtinPackage().version}`, select: [{ artifact: "code", language: "en" }], alias: { code: "my-code" } };
+  await core.client.expectOk("environment.request", { repository: own, name: "sublang/playbooks", request, wait: true });
+  await core.client.expectOk("environment.request", { repository: own, name: "acme/kit", request: { kind: "registry", version: "^1.0.0" }, wait: true });
+  const doc = parseDocument(readFileSync(join(root, "spex.yaml"), "utf8"));
+  doc.set("language", "zh");
+  writeFileSync(join(root, "spex.yaml"), doc.toString({ lineWidth: 0 }));
+  await core.client.expectOk("environment.resolve", { repository: own, wait: true });
+  const beforeRequests = parseRequests(readFileSync(join(root, "spex.yaml"), "utf8"));
+  const before = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
+  await core.stop();
+  await publish("1.1.0"); // A full resolve would silently advance this unrelated package.
+  const newer = newerBuiltin();
+  core = await startCore(dir, { hostUrl: registry.url, extra: { builtinPackage: newer } });
+  const afterRequests = parseRequests(readFileSync(join(root, "spex.yaml"), "utf8"));
+  const after = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
+  assert.deepEqual(afterRequests, { ...beforeRequests, packages: { ...beforeRequests.packages, "sublang/playbooks": { version: `^${newer.version}`, select: request.select, alias: request.alias } } });
+  assert.deepEqual(after.packages["acme/kit"], before.packages["acme/kit"], "the newer available kit is not selected");
+  const beforeBuiltin = before.packages["sublang/playbooks"]!;
+  const afterBuiltin = after.packages["sublang/playbooks"]!;
+  assert.deepEqual(afterBuiltin.artifacts, beforeBuiltin.artifacts, "selection and language fallback stay");
+  assert.deepEqual(afterBuiltin.exports, { "my-code": "code", review: "review" });
+  assert.equal((afterBuiltin.source as RegistrySourceLock).registry, (beforeBuiltin.source as RegistrySourceLock).registry);
+  assert.equal((afterBuiltin.source as RegistrySourceLock).version, newer.version);
+  const requestsBytes = readFileSync(join(root, "spex.yaml"));
+  const lockBytes = readFileSync(join(root, "spex.lock"));
+  await core.stop();
+  core = await startCore(dir, { hostUrl: registry.url });
+  assert.deepEqual(readFileSync(join(root, "spex.yaml")), requestsBytes, "the request's newer lower bound stays");
+  assert.deepEqual(readFileSync(join(root, "spex.lock")), lockBytes, "an older app keeps the ahead lock");
+});
+
+test("environments-23: a stale global lock is not blessed, and a missing lock gets the shipped request before its first resolve", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-builtin-adopt-stale-");
+  let core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const root = clonePath(core.dataDir, own);
+  const oldLock = readFileSync(join(root, "spex.lock"));
+  await core.stop();
+  appendFileSync(join(root, "spex.yaml"), "\n# an unresolved reader edit\n");
+  const pending = readFileSync(join(root, "spex.yaml"));
+  const newer = newerBuiltin();
+  core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { builtinPackage: newer } });
+  assert.deepEqual(readFileSync(join(root, "spex.yaml")), pending);
+  assert.deepEqual(readFileSync(join(root, "spex.lock")), oldLock);
+  assert.ok((await core.client.expectOk("environment.get", { repository: own })).stale, "ordinary Update remains visible");
+  await core.stop();
+  rmSync(join(root, "spex.lock"));
+  core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { builtinPackage: newer } });
+  const state = await core.client.expectOk("environment.get", { repository: own });
+  assert.equal(state.stale, null);
+  assert.equal(state.packages[0]?.version, newer.version);
+  assert.ok(state.packages[0]?.installed);
+  assert.match(readFileSync(join(root, "spex.yaml"), "utf8"), /# an unresolved reader edit/);
+});
+
+test("environments-23: locked dependent requirements and selections survive compatible upgrades and block removed artifacts or an incompatible major", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-builtin-adopt-dependent-registry-") });
+  t.after(() => registry.close());
+  const needs = skillRelease("acme", "needs");
+  await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir("spex-builtin-adopt-dependent-"), "needs"), { ...needs.manifest, dependencies: { "sublang/playbooks": `^${builtinPackage().version}` } }, needs.files));
+  const dir = scratchDir("spex-builtin-adopt-requirements-");
+  let core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const root = clonePath(core.dataDir, own);
+  await core.client.expectOk("environment.request", { repository: own, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}`, select: [{ artifact: "code", language: "en" }, { artifact: "inspect", language: "en" }] }, wait: true });
+  await core.client.expectOk("environment.request", { repository: own, name: "acme/needs", request: { kind: "registry", version: "1.0.0" }, wait: true });
+  const doc = parseDocument(readFileSync(join(root, "spex.yaml"), "utf8"));
+  doc.set("language", "zh");
+  writeFileSync(join(root, "spex.yaml"), doc.toString({ lineWidth: 0 }));
+  await core.client.expectOk("environment.resolve", { repository: own, wait: true });
+  const before = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
+  assert.deepEqual(before.packages["sublang/playbooks"]?.requiredBy, ["acme/needs"]);
+  await core.stop();
+  const compatible = newerBuiltin(false);
+  core = await startCore(dir, { hostUrl: registry.url, extra: { builtinPackage: compatible } });
+  const after = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
+  assert.equal((after.packages["sublang/playbooks"]!.source as RegistrySourceLock).version, compatible.version);
+  assert.deepEqual(after.packages["sublang/playbooks"]!.artifacts, before.packages["sublang/playbooks"]!.artifacts, "all dependency artifacts and each explicit language stay");
+  assert.deepEqual(after.packages["sublang/playbooks"]!.artifacts.code, { language: "en", fallback: false });
+  assert.deepEqual(after.packages["sublang/playbooks"]!.artifacts.review, { language: "en", fallback: true });
+  assert.deepEqual(after.packages["sublang/playbooks"]!.requiredBy, ["acme/needs"]);
+  assert.deepEqual(after.packages["acme/needs"], before.packages["acme/needs"]);
+  const requests = readFileSync(join(root, "spex.yaml"));
+  const lock = readFileSync(join(root, "spex.lock"));
+  await core.stop();
+  const missingSelection = newerBuiltin(false, 2);
+  const manifestPath = join(missingSelection.dir, "meta.yaml");
+  const manifest = parseDocument(readFileSync(manifestPath, "utf8"));
+  manifest.deleteIn(["artifacts", "inspect"]);
+  writeFileSync(manifestPath, manifest.toString({ lineWidth: 0 }));
+  rmSync(join(missingSelection.dir, "playbooks/en/inspect"), { recursive: true });
+  core = await startCore(dir, { hostUrl: registry.url, extra: { builtinPackage: missingSelection } });
+  assert.deepEqual(readFileSync(join(root, "spex.yaml")), requests, "a removed explicit selection does not advance the request");
+  assert.deepEqual(readFileSync(join(root, "spex.lock")), lock, "a removed explicit selection does not stamp an impossible lock current");
+  assert.match((await core.client.expectOk("environment.get", { repository: own })).error ?? "", /inspect/);
+  await core.stop();
+  core = await startCore(dir, { hostUrl: registry.url, extra: { builtinPackage: newerBuiltin() } });
+  assert.deepEqual(readFileSync(join(root, "spex.yaml")), requests);
+  assert.deepEqual(readFileSync(join(root, "spex.lock")), lock);
+  assert.match((await core.client.expectOk("environment.get", { repository: own })).error ?? "", /acme\/needs requires sublang\/playbooks/);
+});
+
+for (const source of ["path", "git"] as const) {
+  test(`environments-23: a global built-in requested by ${source} stays customized across an app upgrade`, { timeout: 180_000 }, async (t) => {
+    const dir = scratchDir(`spex-builtin-adopt-${source}-`);
+    let core = await startCore(dir, { hostUrl: UNREACHABLE });
+    t.after(() => core.stop());
+    const own = `${OWN}/${OWN}-spex`;
+    const root = clonePath(core.dataDir, own);
+    const release = skillRelease("sublang", "playbooks");
+    const folder = source === "path" ? join(root, "mine", "playbooks") : join(dir, "custom-playbooks");
+    await makeRelease(folder, release.manifest, release.files);
+    if (source === "git") {
+      gitFolder(folder);
+      execFileSync("git", ["-C", folder, "add", "."]);
+      execFileSync("git", ["-C", folder, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "Custom built-ins"]);
+    }
+    await core.client.expectOk("environment.request", { repository: own, name: "sublang/playbooks", request: source === "path" ? { kind: "path", path: "mine/playbooks" } : { kind: "git", git: folder, rev: "HEAD" }, wait: true });
+    const requests = readFileSync(join(root, "spex.yaml"));
+    const lock = readFileSync(join(root, "spex.lock"));
+    await core.stop();
+    core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { builtinPackage: newerBuiltin() } });
+    assert.deepEqual(readFileSync(join(root, "spex.yaml")), requests);
+    assert.deepEqual(readFileSync(join(root, "spex.lock")), lock);
+  });
+}
 
 test("environments-11: the global environment requests the built-in spec package once, when the home is made; removed, it stays removed across a restart, the entries written for its playbooks standing aside", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-builtin-removed-");

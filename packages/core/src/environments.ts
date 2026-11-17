@@ -20,7 +20,8 @@
 // (environments-2, environments-32, DR-125). The built-in spec
 // package is seeded at start, requested in the global environment once
 // when the home is made, so the built-in playbooks work offline from the
-// first start, and in no project's at its pairing (DR-176). An
+// first start, and advanced there to newer app-shipped releases, and in
+// no project's at its pairing (DR-176). An
 // environment's explicit registry is independent of its Space. Legacy
 // manifests retain their former routing, while independent installations
 // use only the selected registry and its registry grant (DR-168).
@@ -70,6 +71,7 @@ import {
   ownPathIssue,
   parseLock,
   parseManifestText,
+  parseRequirement,
   parseRequests,
   placeOf,
   prepareBuiltinEnvironment,
@@ -91,6 +93,7 @@ import {
   resolve,
   satisfies,
   seedBuiltinPackage,
+  serializeLock,
   setRequest,
   unaskedRegistry,
   writeLock,
@@ -971,8 +974,104 @@ export class EnvironmentManager {
     return prepareBuiltinEnvironment(root, this.options.builtin, PUBLIC_REGISTRY_ORIGIN, this.spaceOf(placed));
   }
 
+  /** Advance only the global registry request to this app's release.
+   * Resolve its selections offline before touching either file, keeping
+   * every unrelated resolution and its immutable source unchanged. */
+  private async advanceGlobalBuiltin(root: string, key: string): Promise<void> {
+    const builtin = this.options.builtin;
+    if (!builtin || !this.isOwn(key) || this.stopped) return;
+    await this.run(key, async (step) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const requestsPath = join(root, "spex.yaml");
+        const lockPath = join(root, "spex.lock");
+        const read = readRequestsAt(requestsPath);
+        const request = read?.requests.packages[BUILTIN_PACKAGE_NAME];
+        if (!read || !request || !isRegistryRequest(request)) return;
+        if (compareVersions(parseRequirement(request.version).version, builtin.version) > 0) return;
+        const locked = readLockAt(lockPath);
+        const old = locked?.lock.packages[BUILTIN_PACKAGE_NAME];
+        if (locked) {
+          // Never bless pending edits or replace a customized/ahead source.
+          if (stalePhrases(locked.lock, read.text, root) || !old || !isRegistrySource(old.source)
+            || compareVersions(old.source.version, builtin.version) >= 0) return;
+        }
+        const doc = parseDocument(read.text);
+        doc.setIn(["packages", BUILTIN_PACKAGE_NAME, "version"], `^${builtin.version}`);
+        const next = doc.toString({ lineWidth: 0 });
+        const requests = parseRequests(next);
+        try {
+          if (!locked) {
+            if (fileVersion(lockPath) !== null) throw new VersionConflictError(lockPath);
+            if (next !== read.text) writeVersionedBytes(requestsPath, next, read.version);
+            return; // The ordinary first resolve handles an environment without a lock.
+          }
+          if (!old || !isRegistrySource(old.source)) return;
+          const source = old.source;
+          step("resolving");
+          const { manifest, issues } = parseManifestText(readFileSync(join(builtin.dir, "meta.yaml"), "utf8"));
+          if (!manifest) throw new Error(issues.map((issue) => issue.message).join("; "));
+          if (Object.keys(manifest.dependencies).length > 0) throw new Error("The shipped built-in package requires other packages; Update must resolve them together");
+          for (const name of old.requiredBy) {
+            const dependent = locked.lock.packages[name];
+            if (!dependent) throw new Error(`${name}: the locked package requiring ${BUILTIN_PACKAGE_NAME} is missing`);
+            let dependencies: Record<string, string>;
+            if (isPathSource(dependent.source)) dependencies = dependent.source.dependencies;
+            else {
+              const file = dependent.files.find((entry) => entry.path === "meta.yaml");
+              if (!file || !this.contentStore.has(file.sha256, file.executable)) throw new Error(`${name}: its locked meta.yaml is unavailable; Update must check its requirements`);
+              const bytes = readFileSync(this.contentStore.pathOf(file.sha256, file.executable));
+              const parsed = parseManifestText(bytes.toString("utf8"));
+              if (sha256(bytes) !== file.sha256 || !parsed.manifest) throw new Error(`${name}: its locked meta.yaml cannot be verified`);
+              dependencies = parsed.manifest.dependencies;
+            }
+            const requirement = dependencies[BUILTIN_PACKAGE_NAME];
+            if (!requirement || !satisfies(builtin.version, requirement)) throw new Error(`${name} requires ${BUILTIN_PACKAGE_NAME} ${requirement ?? "at an unknown version"}; Update must resolve the conflict with ${builtin.version}`);
+          }
+          // A dependency selects every artifact in the ordinary resolver,
+          // while a direct selection still chooses its explicit languages.
+          const select = old.requiredBy.length > 0
+            ? [...(request.select ?? []), ...Object.keys(manifest.artifacts).filter((artifact) => !request.select?.some((entry) => entry.artifact === artifact)).map((artifact) => ({ artifact }))]
+            : request.select;
+          const result = await resolve({
+            requests: { ...requests, packages: { [BUILTIN_PACKAGE_NAME]: { ...request, version: builtin.version, select } } },
+            requestsText: next,
+            registry: { ...this.builtinSource(), url: source.registry },
+            pathRoot: root, confined: true, git: this.git,
+          });
+          if (!result.ok) throw new Error(this.conflictPhrase(result.conflicts));
+          const replacement = result.lock.packages[BUILTIN_PACKAGE_NAME];
+          if (!replacement) throw new Error(`${BUILTIN_PACKAGE_NAME}: the shipped release did not resolve`);
+          replacement.requiredBy = [...old.requiredBy];
+          const packages = { ...locked.lock.packages, [BUILTIN_PACKAGE_NAME]: replacement };
+          for (const [name, resolution] of Object.entries(packages)) {
+            if (name === BUILTIN_PACKAGE_NAME) continue;
+            const collision = Object.keys(replacement.exports).find((exported) => exported in resolution.exports);
+            if (collision) throw new Error(`${BUILTIN_PACKAGE_NAME} and ${name} both export ${collision}; Update must resolve the alias conflict`);
+          }
+          const nextLock = serializeLock({ ...locked.lock, requests: requestsDigest(next), packages });
+          if (this.stopped) return;
+          // No await separates the two CAS writes. An interrupted pair is
+          // stale and needs ordinary Update; it never blesses other edits.
+          if (fileVersion(lockPath) !== locked.version) throw new VersionConflictError(lockPath);
+          if (fileVersion(requestsPath) !== read.version) throw new VersionConflictError(requestsPath);
+          if (next !== read.text) writeVersionedBytes(requestsPath, next, read.version);
+          if (fileVersion(requestsPath) !== requestsDigest(next)) throw new VersionConflictError(requestsPath);
+          writeVersionedBytes(lockPath, nextLock, locked.version);
+          return;
+        } catch (error) {
+          if (error instanceof VersionConflictError) continue;
+          // A failure for superseded files is no longer this attempt's
+          // outcome; a partly written pair remains visibly stale instead.
+          if (fileVersion(requestsPath) !== read.version || fileVersion(lockPath) !== (locked?.version ?? null)) continue;
+          throw error;
+        }
+      }
+    });
+  }
+
   /** At start: seed the built-in spec package into the store, so it
-   * installs offline and a newer shipped release reads as an update, move
+   * installs offline, advance the global registry request to this app's
+   * newer release without changing unrelated package selections, move
    * every project's environment its clone still holds into its working
    * folder (storage-24), make the global environment where the home holds
    * none, then resolve where no lock stands, install and export every
@@ -990,11 +1089,20 @@ export class EnvironmentManager {
     for (const repository of this.store.listRepositories()) {
       if (this.migrationBlocked.has(repository.key)) continue;
       const root = this.rootOf(repository.key);
+      let builtinError: unknown;
       if (this.isOwn(repository.key) && root !== null) {
-        try { this.prepareGlobal(root, repository.key); }
-        catch (error) { console.error(`spex: ${repository.key} does not request the built-in spec package: ${String(error)}`); }
+        try {
+          this.prepareGlobal(root, repository.key);
+          await this.advanceGlobalBuiltin(root, repository.key);
+        } catch (error) { builtinError = error; }
       }
       await this.settle(repository.key, "auto", false);
+      if (builtinError !== undefined) {
+        const state = this.cloneState(repository.key);
+        state.error = failurePhrase("resolve", builtinError);
+        state.refused = null;
+        this.announce(repository.key);
+      }
     }
     // Collecting the store is garbage collection: its failure is
     // reported and never fails the start (environments-52).

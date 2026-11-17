@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-15).
+Amended by [DR-241](241-reviewable-builtin-gears.md) in the Playbook floor and bundled playbook version.
 Amends [DR-237](237-published-agent-runtime-floors.md) in the Playbook floor and bundled playbook version.
 
 ## Context

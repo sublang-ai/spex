@@ -39,7 +39,7 @@
     "@lingui/core": "^6.7.0",
     "@openclaw/fs-safe": "0.26.13",
     "@sublang/cligent": "^0.39.0",
-    "@sublang/playbook": "^18.3.1",
+    "@sublang/playbook": "^19.0.0",
     "@sublang/spex": "*",
     "better-sqlite3": "^12.11.1",
     "esbuild": "^0.28.2",

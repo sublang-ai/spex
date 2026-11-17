@@ -21,6 +21,7 @@ Amended by [DR-170](170-space-is-written-at-every-pairing.md) in that sentence: 
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where packages are managed and in the two verbs.
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in how a package under development is made: `spex export` builds `spex-packages/<org>/<pkg>/` from the project's own files, repeatably, and `spex new` retires.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in where a package under development is made: the global page makes one in the global environment's own folder.
+Extended by [DR-241](241-reviewable-builtin-gears.md) in the app's automatic selection of its shipped built-in package in the global environment, without changing the CLI's update scope.
 
 ## Context
 
