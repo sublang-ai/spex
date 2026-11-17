@@ -6821,10 +6821,41 @@ function countValidations(service: CoreService, key: string): { of(id: string): 
   };
 }
 
-/** Every change the clones' watches reported has been read. */
-async function sessionsRead(service: CoreService): Promise<void> {
-  await sleep(400);
-  await service["sessionScans"].settled();
+/** Wait until `check` holds: a step bounded by the event it names
+ * (release-31), the bound only ending a hung wait. */
+async function until(check: () => boolean, what: string, timeoutMs = 60_000): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${what}`);
+    await sleep(10);
+  }
+}
+
+/** What the core's session scans are told by the clones' watches and
+ * how many reads they queue, observed in place from now on. `read`
+ * returns once every change made in `sessionsDir` before it has been
+ * reported and read: a fence file the watch reports after them, then
+ * the scans settled. */
+function observeScans(service: CoreService): { reported(name: string): number; queued(): number; read(sessionsDir: string): Promise<void> } {
+  const scans = service["sessionScans"];
+  const seen: string[] = [];
+  let queued = 0;
+  const changed = scans.changed.bind(scans);
+  scans.changed = (filename) => { seen.push(filename ?? ""); changed(filename); };
+  const enqueue = scans["enqueue"].bind(scans);
+  scans["enqueue"] = (scan, before) => { queued += 1; return enqueue(scan, before); };
+  return {
+    reported: (name) => seen.filter((entry) => entry === name).length,
+    queued: () => queued,
+    read: async (sessionsDir) => {
+      // No session's file: the scans read nothing for it.
+      const fence = `fence-${randomUUID()}`;
+      writeFileSync(join(sessionsDir, fence), "");
+      await until(() => seen.includes(fence), `the watch to report ${fence}`);
+      rmSync(join(sessionsDir, fence));
+      await scans.settled();
+    },
+  };
 }
 
 test("core-service-160: a running session's own files read no saved session again, and a session standing as last read is not validated again", { timeout: 120_000 }, async (t) => {
@@ -6836,21 +6867,16 @@ test("core-service-160: a running session's own files read no saved session agai
   const saved = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("turn.submit", { sessionId: saved.id, text: "A saved turn" });
   assert.equal((await settledSession(client, saved.id, 1)).continuable, true);
-  await sessionsRead(harness.service);
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const scans = observeScans(harness.service);
+  await scans.read(sessionsDir);
 
   const validations = countValidations(harness.service, project.id);
-  // What the clone's watch reports while a second session runs.
-  const reported = new Map<string, number>();
-  const watcher = watch(projectSessions(harness.dataDir, project.id), (_event, filename) => {
-    if (filename) reported.set(filename, (reported.get(filename) ?? 0) + 1);
-  });
-  t.after(() => watcher.close());
   const running = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("turn.submit", { sessionId: running.id, text: "A running turn" });
   await settledSession(client, running.id, 1);
-  await sessionsRead(harness.service);
-  watcher.close();
-  assert.ok((reported.get(`${running.id}.json`) ?? 0) >= 2, "the running session published its record more than once");
+  await scans.read(sessionsDir);
+  assert.ok(scans.reported(`${running.id}.json`) >= 2, "the watch reported the running session's record more than once");
   assert.equal(validations.of(saved.id), 0, "its own files read no other session again (core-service-158)");
 
   // A read of every session validates none standing as last read, nor
@@ -6881,22 +6907,31 @@ test("core-service-160: another host's writes read its session alone, and change
   const id = external.sessionId;
   await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
-  await sessionsRead(harness.service);
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const scans = observeScans(harness.service);
+  await scans.read(sessionsDir);
 
   const validations = countValidations(harness.service, project.id);
   const held = validations.hold(id);
   const started = (turnId: number) => ({ type: "turn_started", turnId, timestamp: turnId * 1000, turn: { id: turnId, prompt: `External turn ${turnId}` } });
-  await external.lease.append(started(1));
-  // The read of the first append is in flight; three more changes
-  // arrive, each past the wait a change is given.
-  await held.reached;
-  for (const turnId of [2, 3, 4]) {
+  // Each append publishes the session's replay descriptor anew.
+  const append = async (turnId: number): Promise<void> => {
+    const before = scans.reported(`${id}.replay.json`);
     await external.lease.append(started(turnId));
-    await sleep(300);
-  }
+    await until(() => scans.reported(`${id}.replay.json`) > before, `the watch to report turn ${turnId}'s append`);
+  };
+  await append(1);
+  // The read of the first append is in flight; the next append is
+  // queued to be read behind it, and two more arrive while it waits.
+  await held.reached;
+  const queued = scans.queued();
+  await append(2);
+  await until(() => scans.queued() > queued, "a read to wait behind the held one");
+  await append(3);
+  await append(4);
   held.release();
   await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_started" && m.record.turnId === 4);
-  await sessionsRead(harness.service);
+  await scans.read(sessionsDir);
   assert.equal(validations.of(id), 2, "the read in flight, and one more for every change during it (core-service-158)");
   assert.equal(validations.of(saved.id), 0, "another host's writes read its session alone (core-service-158)");
   assert.deepEqual(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").map((entry) => entry.record.turnId), [1, 2, 3, 4]);

@@ -1125,12 +1125,12 @@ Where a fixture session — manifest naming a registered project's directory as 
 
 #### core-service-160
 
-Where a session this core ran stands saved and continuable in a project's clone, with the clones watched, the test suite shall count Playbook's validations of each session and assert:
+Where a session this core ran stands saved and continuable in a project's clone, with the clones watched, the test suite shall count Playbook's validations of each session, each step waiting for the watch to report the changes it made, and assert:
 
 - while a second session of the project runs a turn, publishing its record more than once, the saved session is not validated [[core-service-158](#core-service-158)];
 - two reads of every session afterwards validate neither session, and both still list as continuable [[core-service-159](#core-service-159)];
 - while another host appends to a session of its own, the saved session is not validated [[core-service-158](#core-service-158)];
-- with that session's first read held at its validation while three more appends arrive, each past a change's wait, the release is followed by one more validation of it and no further, its subscriber receiving each appended record once, in order [[core-service-158](#core-service-158)].
+- with that session's first read held at its validation, a second append queued to be read behind it and two more reported while that read waits, the release is followed by one more validation of it and no further, its subscriber receiving each appended record once, in order [[core-service-158](#core-service-158)].
 
 #### core-service-71
 
