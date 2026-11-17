@@ -835,8 +835,8 @@ While the core service runs, when a file changes in a clone's `sessions/`, the c
 | a Spex sidecar, or a file that is no record and no stream | nothing |
 | any other record or stream, or a change naming no file | every session of every clone |
 
-- a change waits 150 ms for others to join it, and no later change postpones its read;
-- one read runs at a time and one waits behind it: every change, and every read of all sessions asked for meanwhile, joins the one that waits.
+- a change waits at most 150 ms for others to join it, and no later change postpones its read;
+- one read runs at a time and at most one waits behind it: a change, or a read of all sessions asked for, while one waits joins it at once, and changes still on their wait when it starts are read with it.
 
 #### core-service-159
 

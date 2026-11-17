@@ -7,8 +7,9 @@
 // every file of both. A file of a session this core holds is the core's
 // own write and reads nothing; a file naming another session reads that
 // session alone; anything else reads them all. One read runs at a time
-// and one waits behind it, every change meanwhile joining the one that
-// waits, so a read slower than the changes arriving leaves no backlog.
+// and at most one waits behind it: a change while one waits joins it at
+// once, and changes still on their short wait join it as it starts, so a
+// read slower than the changes arriving leaves no backlog.
 
 /** The sessions one read covers: each one named, or every session of
  * every clone. */
@@ -53,9 +54,11 @@ interface Waiting {
 }
 
 export class SessionScans {
-  /** The changes reported since the last read was asked for. */
+  /** The changes reported on their short wait, which no read holds yet. */
   private noted: { all: boolean; ids: Set<string> } = { all: false, ids: new Set() };
   private timer?: NodeJS.Timeout;
+  /** Who waits for the noted changes to be handed to a read. */
+  private handedOver: (() => void)[] = [];
   private waiting?: Waiting;
   private running?: Promise<void>;
   private stopped = false;
@@ -68,17 +71,18 @@ export class SessionScans {
     if (this.stopped) return;
     const what = filename === null ? "all" : named(filename);
     if (what === undefined) return;
-    if (what === "all") this.noted.all = true;
-    else if (this.options.holds(what.id)) return;
-    else this.noted.ids.add(what.id);
+    if (what !== "all" && this.options.holds(what.id)) return;
+    // A read already waits behind the one running: the change is read
+    // with it, which starts no sooner for any wait of its own.
+    const into = this.waiting ?? this.noted;
+    if (what === "all") into.all = true;
+    else into.ids.add(what.id);
+    if (this.waiting) return;
     // The wait is bounded even while a writer keeps writing: later
     // changes join this read instead of postponing it.
     if (this.timer) return;
     this.timer = setTimeout(() => {
-      this.timer = undefined;
-      const noted = this.noted;
-      this.noted = { all: false, ids: new Set() };
-      this.enqueue(noted).catch(() => {});
+      this.enqueue(this.handOver()).catch(() => {});
     }, this.options.delayMs ?? 150);
   }
 
@@ -89,16 +93,30 @@ export class SessionScans {
     return this.enqueue({ all: true, ids: new Set() }, before);
   }
 
-  /** Every read asked for so far has finished. */
+  /** Every change noted so far has been read, and every read asked for
+   * has finished. */
   async settled(): Promise<void> {
-    while (this.running) await this.running;
+    for (;;) {
+      if (this.timer) await new Promise<void>((resolve) => { this.handedOver.push(resolve); });
+      else if (this.running) await this.running;
+      else return;
+    }
   }
 
   /** No change is noted from now on; a read in flight finishes. */
   stop(): void {
     this.stopped = true;
+    this.handOver();
+  }
+
+  /** The changes on their short wait, taken off it. */
+  private handOver(): { all: boolean; ids: Set<string> } {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    const noted = this.noted;
+    this.noted = { all: false, ids: new Set() };
+    for (const resolve of this.handedOver.splice(0)) resolve();
+    return noted;
   }
 
   private enqueue(scan: SessionScan, before?: () => Promise<void>): Promise<void> {
@@ -117,6 +135,10 @@ export class SessionScans {
     try {
       for (let waiting = this.waiting; waiting; waiting = this.waiting) {
         this.waiting = undefined;
+        // Changes still on their short wait are read now, with this read.
+        const noted = this.handOver();
+        waiting.all ||= noted.all;
+        for (const id of noted.ids) waiting.ids.add(id);
         const failed = new Map<object, unknown>();
         for (const caller of waiting.callers) {
           try { await caller.before?.(); }
