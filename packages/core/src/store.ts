@@ -12,10 +12,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -470,31 +474,70 @@ function adoptFormerPlacementPrefs(prefs: Map<string, unknown>, key: string, nam
 /** The rebuildable forge cache, on this device alone (storage-1). */
 function forgeCacheFileOf(dir: string): string { return join(dir, "local", "forge-cache.json"); }
 
+/** A session file opens without following a link or waiting on a pipe
+ * or device; a flag the platform lacks is left out. */
+const OPEN_SESSION_FILE = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+/** The most a session's record or replay descriptor is read for its
+ * fingerprint: either is a few hundred bytes in a bounded root. */
+const FINGERPRINT_LIMIT = 16 * 1024 * 1024;
+
+/** A session file read only where it is a regular file — never through a
+ * link, from a pipe or from a device — with what identifies that file:
+ * "absent" where nothing stands there, none where anything else does or
+ * it holds more than `limit` bytes. A pipe read synchronously would hold
+ * the whole core (core-service-159). */
+function readSessionFile(path: string, limit = Infinity): { bytes: Buffer; stamp: string } | "absent" | undefined {
+  try {
+    if (!lstatSync(path).isFile()) return undefined;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "absent" : undefined;
+  }
+  let fd: number;
+  try { fd = openSync(path, OPEN_SESSION_FILE); }
+  catch { return undefined; }
+  try {
+    // What was opened, should the path have changed since it was looked at.
+    const stat = fstatSync(fd, { bigint: true });
+    if (!stat.isFile() || Number(stat.size) > limit) return undefined;
+    return { bytes: readFileSync(fd), stamp: `${stat.ino}:${stat.size}:${stat.mtimeNs}` };
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** What a session's files in `sessionsDir` stand at, as one digest; none
- * where its record cannot be read. The record and the replay descriptor
- * count by their bytes — each names the content it stands on by hash —
- * and by the file holding them, so a record put back as it once stood is
- * a change all the same; a former stream by its size and time; the
- * folders of its chunks and assets by their time, which a file leaving
- * either changes. */
+ * where its record is not a regular file, or its replay descriptor
+ * stands and is none, so such a session never stands unchanged
+ * (core-service-159). The record and the replay descriptor count by
+ * their bytes — each names the content it stands on by hash — and by
+ * the file holding them, so a record put back as it once stood is a
+ * change all the same; a former stream by its size and time; the folders
+ * of its chunks and assets by their time, which a file leaving either
+ * changes. */
 function sessionFilesDigest(sessionsDir: string, id: string): string | undefined {
   const hash = createHash("sha256");
-  const stood = (name: string, whole: boolean): boolean => {
-    const path = join(sessionsDir, name);
+  for (const name of [`${id}.json`, `${id}.replay.json`]) {
+    const read = readSessionFile(join(sessionsDir, name), FINGERPRINT_LIMIT);
+    if (read === undefined || (read === "absent" && name === `${id}.json`)) return undefined;
     hash.update(`\0${name}\0`);
+    if (read === "absent") hash.update("!ENOENT");
+    else hash.update(read.stamp).update("\0").update(read.bytes);
+  }
+  for (const name of [`${id}.records.jsonl`, `${id}.chunks`, `${id}.assets`]) {
+    let stood: string;
     try {
-      const stat = statSync(path, { bigint: true });
-      hash.update(stat.isDirectory() ? `${stat.mtimeNs}` : `${stat.ino}:${stat.size}:${stat.mtimeNs}`);
-      if (whole) hash.update("\0").update(readFileSync(path));
-      return true;
+      const stat = lstatSync(join(sessionsDir, name), { bigint: true });
+      if (stat.isDirectory()) stood = `${stat.mtimeNs}`;
+      else if (stat.isFile()) stood = `${stat.ino}:${stat.size}:${stat.mtimeNs}`;
+      else return undefined;
     } catch (error) {
-      hash.update(`!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`);
-      return false;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
+      stood = "!ENOENT";
     }
-  };
-  if (!stood(`${id}.json`, true)) return undefined;
-  stood(`${id}.replay.json`, true);
-  for (const name of [`${id}.records.jsonl`, `${id}.chunks`, `${id}.assets`]) stood(name, false);
+    hash.update(`\0${name}\0${stood}`);
+  }
   return hash.digest("hex");
 }
 
@@ -1283,8 +1326,10 @@ export class Store {
       // A bounded root keeps association fields readable even when a
       // referenced recovery chunk is damaged. These fields associate
       // history only; shared validation remains execution authority.
-      try { raw = readJson<Record<string, unknown>>(join(shared.sessionsDir, `${id}.json`)); }
-      catch { publishReadStatus(); return; }
+      try {
+        const read = readSessionFile(join(shared.sessionsDir, `${id}.json`));
+        raw = read !== undefined && read !== "absent" ? JSON.parse(read.bytes.toString("utf8")) as Record<string, unknown> : undefined;
+      } catch { publishReadStatus(); return; }
       if (!raw || raw.sessionId !== id || typeof raw.cwd !== "string") { publishReadStatus(); return; }
       manifest = raw as unknown as SessionManifest;
       try {

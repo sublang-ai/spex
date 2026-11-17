@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -6955,6 +6955,48 @@ test("core-service-160: another host's writes read its session alone, and change
   assert.equal(validations.of(id), 2, "the read in flight, and one more for every change during it (core-service-158)");
   assert.equal(validations.of(saved.id), 0, "another host's writes read its session alone (core-service-158)");
   assert.deepEqual(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").map((entry) => entry.record.turnId), [1, 2, 3, 4]);
+});
+
+test("core-service-161: a session file that is a pipe, or a link to one, holds up no read of the sessions", {
+  skip: process.platform === "win32" ? "a pipe is no file in a folder on Windows" : false,
+  timeout: 120_000,
+}, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved: string[] = [];
+  for (const text of ["A healthy turn", "A turn whose descriptor becomes a pipe", "A turn whose record becomes a link"]) {
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("turn.submit", { sessionId: session.id, text });
+    await settledSession(client, session.id, 1);
+    saved.push(session.id);
+  }
+  const [healthy, piped, linked] = saved;
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const pipe = join(sessionsDir, `${piped}.replay.json`);
+  rmSync(pipe);
+  execFileSync("mkfifo", [pipe]);
+  rmSync(join(sessionsDir, `${linked}.json`));
+  symlinkSync(pipe, join(sessionsDir, `${linked}.json`));
+  // A writer opens the pipe only once something reads it, then marks
+  // that and closes it, ending that read, and waits for the next: a
+  // read of the pipe fails this test rather than holding it forever.
+  const opened = join(harness.dir, "pipe-opened");
+  const writer = spawn("sh", ["-c", 'while :; do exec 3>"$1"; : > "$2"; exec 3>&-; done', "sh", pipe, opened], { stdio: "ignore" });
+  t.after(() => { writer.kill(); });
+
+  await harness.service["syncForeignSessions"]();
+  assert.equal(existsSync(opened), false, "no session file was read from the pipe (core-service-159)");
+  const listed = await client.expectOk("session.list", {});
+  assert.equal(listed.find((entry) => entry.id === healthy)?.continuable, true, "a healthy neighbor is served as before (core-service-60)");
+  for (const id of [piped, linked]) {
+    const entry = listed.find((candidate) => candidate.id === id);
+    assert.ok(entry, `${id} keeps its listing (core-service-60)`);
+    assert.equal(entry.continuable, undefined, `${id} does not continue from files it cannot read (core-service-159)`);
+  }
+  assert.equal(existsSync(opened), false, "a listing read nothing from the pipe either (core-service-159)");
 });
 
 test("core-service-124: what one home captured runs on it alone, and a second home pairing the folder at the same path reads it as the other's", { timeout: 60_000 }, async (t) => {
