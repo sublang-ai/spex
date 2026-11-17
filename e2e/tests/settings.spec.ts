@@ -27,13 +27,16 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   const modelList = captain.getByTestId("agent-model-listbox");
   const custom = captain.getByTestId("agent-model");
   const effort = captain.getByTestId("agent-effort");
+  const ultracode = captain.getByTestId("agent-ultracode");
 
   // An omitted current model stays editable; discovery never replaces it.
   await expect(modelTrigger).toHaveText("Custom model…");
   await expect(custom).toHaveValue("claude-opus-5");
   await expect(captain).toContainText("Not in this runtime's list");
   await expect(captain.getByTestId("agent-fast-mode")).toBeVisible();
-  await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max", "ultracode"]);
+  await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  await expect(ultracode).toHaveValue("inherit");
+  await expect(ultracode.locator("option")).toHaveText(["Provider default", "On", "Off"]);
 
   // Each row names the specific model the runtime reports, with its own
   // description; the provider default names the model it runs
@@ -67,7 +70,8 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   await expect(modelTrigger).toBeFocused();
   await expect(modelTrigger).toHaveText("Claude Fable 5.1 claude-fable-5-1");
   await expect(custom).toHaveCount(0);
-  await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "high", "max", "ultracode"]);
+  await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "high", "max"]);
+  await expect(ultracode).toHaveCount(0);
   await expect(captain.getByTestId("agent-fast-mode")).toHaveCount(0);
   expect(app.readConfig()).toBe(before);
   await effort.selectOption("high");
@@ -86,28 +90,32 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   await expect(custom).toHaveValue("manual-private-model");
   await expect(captain).toContainText("Adapter option; model support unverified");
   await captain.getByTestId("agent-fast-mode").check();
+  await ultracode.selectOption("on");
+  await expect(effort).toHaveValue("high");
   await captain.getByTestId("agent-save").click();
   await expect(captain.getByTestId("agent-chip")).toContainText("manual-private-model");
   const readCaptain = () => parse(app.readConfig()).captain;
-  await expect.poll(readCaptain).toMatchObject({ adapter: "claude", model: "manual-private-model", effort: "high", fastMode: true });
+  await expect.poll(readCaptain).toMatchObject({ adapter: "claude", model: "manual-private-model", effort: "high", fastMode: true, ultracode: true });
 
   // Deliberately switching adapters clears saved tuning; discovery alone
-  // above preserved it. All three resets reach the actual YAML writer.
+  // above preserved it. The independent workflow setting resets too.
   const beforeSwitch = app.readConfig();
   await captain.getByTestId("captain-edit").click();
   await expect(custom).toHaveValue("manual-private-model");
   await expect(effort).toHaveValue("high");
   await expect(captain.getByTestId("agent-fast-mode")).toBeChecked();
+  await expect(ultracode).toHaveValue("on");
   await captain.getByTestId("agent-adapter-codex").click();
   await expect(modelTrigger).toHaveText("Provider default");
   await expect(effort).toHaveValue("");
   await expect(captain.getByTestId("agent-fast-mode")).not.toBeChecked();
+  await expect(ultracode).toHaveCount(0);
   expect(app.readConfig()).toBe(beforeSwitch);
   await captain.getByTestId("agent-save").click();
   await expect(captain.getByTestId("agent-editor")).toBeHidden();
   await expect.poll(() => readCaptain().adapter).toBe("codex");
   const switched = readCaptain();
-  for (const key of ["model", "effort", "fastMode"]) expect(Object.hasOwn(switched, key)).toBe(false);
+  for (const key of ["model", "effort", "fastMode", "ultracode"]) expect(Object.hasOwn(switched, key)).toBe(false);
 });
 
 test("settings-29: the Captain row's editor round-trips the shared config", async ({

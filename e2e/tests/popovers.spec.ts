@@ -114,6 +114,10 @@ async function arrangeCompiled(app: App, id: string): Promise<void> {
 
 test.describe("the role editors", () => {
   let releaseDiscovery: (() => void) | undefined;
+  let discovery = Promise.resolve();
+  function holdDiscovery(): void {
+    discovery = new Promise<void>((resolve) => { releaseDiscovery = resolve; });
+  }
   // The agent editor at a role's control stands on an authoring
   // session's Add tab; the binding editor with each role's tuning on
   // the Playbooks surface (playbook-library-61, playbook-library-122).
@@ -121,18 +125,20 @@ test.describe("the role editors", () => {
     project: true,
     authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
     discoverAgentModels: async () => {
-      await new Promise<void>((resolve) => { releaseDiscovery = resolve; });
+      // Background cards and the open editor may discover different
+      // adapters together; one release must settle every pending read.
+      await discovery;
       return { status: "available", models: [{ id: "fixture-model", name: "Fixture model" }] };
     },
   } });
+  test.beforeEach(holdDiscovery);
   test.afterEach(() => releaseDiscovery?.());
 
   async function finishDiscovery(editor: Locator): Promise<void> {
     await expect(editor).toContainText("Loading model options…");
-    await expect.poll(() => Boolean(releaseDiscovery)).toBe(true);
     releaseDiscovery!();
-    releaseDiscovery = undefined;
     await expect(editor).toContainText("Models reported by the installed runtime.");
+    holdDiscovery();
   }
 
   test("settings-29, playbook-library-41: an editor opened at a role's control stands inside the pane", async ({

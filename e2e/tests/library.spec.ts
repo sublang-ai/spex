@@ -79,7 +79,7 @@ test.describe("runtime binding options", () => {
     discoverAgentModels: async () => ({
       status: "available", unreportedEffortValues: ["ultracode"], models: [
         { id: "claude-fable-5-1", name: "Claude Fable 5.1", effortValues: ["low", "high"], fastModeSupported: false },
-        { id: "opus", name: "Claude Opus 5.5", resolvedModel: "claude-opus-5-5", effortValues: ["low", "high", "max"], fastModeSupported: true },
+        { id: "opus", name: "Claude Opus 5.5", resolvedModel: "claude-opus-5-5", effortValues: ["low", "high", "xhigh", "max"], fastModeSupported: true },
       ],
     }),
   } });
@@ -131,7 +131,8 @@ test.describe("runtime binding options", () => {
     await expect(model).toHaveText("Claude Fable 5.1 claude-fable-5-1");
     await editor.getByTestId("binding-effort-mode").selectOption("pin");
     const effort = editor.getByTestId("binding-effort-value");
-    await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "low", "high", "ultracode"]);
+    await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "low", "high"]);
+    await expect(editor.getByTestId("binding-ultracode")).toHaveCount(0);
     await effort.selectOption("high");
     await expect(editor.getByTestId("binding-save")).toBeDisabled();
     await editor.getByTestId("binding-fast-mode").selectOption("off");
@@ -157,21 +158,27 @@ test.describe("runtime binding options", () => {
     await choose("opus");
     await expect(model).toHaveText("Claude Opus 5.5 claude-opus-5-5");
     await expect(editor.getByTestId("binding-save")).toBeEnabled();
-    await effort.selectOption("ultracode");
+    await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "low", "high", "xhigh", "max"]);
+    const ultracode = editor.getByTestId("binding-ultracode");
+    await expect(ultracode).toHaveValue("inherit");
+    await expect(ultracode.locator("option")).toHaveText(["inherit the player", "On", "Off"]);
+    await ultracode.selectOption("on");
+    await expect(effort).toHaveValue("high");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", subagentModel: "claude-haiku-5", subagentEffort: "low", effort: "ultracode", fastMode: false });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", subagentModel: "claude-haiku-5", subagentEffort: "low", effort: "high", fastMode: false, ultracode: true });
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
     await editor.getByTestId("binding-fast-mode").selectOption("inherit");
+    await expect(ultracode).toHaveValue("on");
     await expect(editor.getByTestId("binding-subagent-model-mode")).toHaveValue("pin");
     await editor.getByTestId("binding-subagent-model-mode").selectOption("inherit");
     await expect(editor.getByTestId("binding-subagent-effort-mode")).toHaveValue("pin");
     await editor.getByTestId("binding-subagent-effort-mode").selectOption("inherit");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", effort: "ultracode" });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", effort: "high", ultracode: true });
     expect(parse(app.readConfig()).players["dev.coder"].fastMode).toBe(true);
   });
 });
@@ -321,7 +328,7 @@ test("playbook-library-41: the tabs' and the surface's words, an override under 
   const firstRow = pipeline.getByRole("listitem").first();
   await expect(firstRow).toBeVisible();
   const firstToggle = pipeline.locator("[data-testid^='item-toggle-']").first();
-  await expect(firstToggle).toHaveAccessibleName(/^CODE-\d+: /);
+  await expect(firstToggle).toHaveAccessibleName(/^code-\d+: /);
   await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
   await firstToggle.click();
   await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
