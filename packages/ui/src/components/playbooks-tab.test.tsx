@@ -937,6 +937,59 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
     expect(screen.getByTestId("stages-code")).toBeTruthy();
   });
 
+  test("an inline Gears citation previews and lands on its row without fragment navigation", async () => {
+    withArtifacts(async () => ({
+      ...ARTIFACTS,
+      gearsItems: {
+        ...GEARS_ITEMS,
+        items: [
+          {
+            ...GEARS_ITEMS.items[0],
+            id: "code-1",
+            section: "Internal Behavior",
+          },
+          {
+            ...GEARS_ITEMS.items[1],
+            id: "code-2",
+            section: "Internal Behavior",
+            text: "The reviewer shall read it [[code-1](#code-1)].",
+            cites: ["code-1"],
+          },
+        ],
+      },
+    }));
+    await renderTab({ own: [CODE_GLOBAL] });
+    fireEvent.click(
+      within(screen.getByTestId("stages-code")).getByRole("button", {
+        name: "Gears",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("item-code-2")).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByTestId("item-toggle-code-2"));
+    const link = within(screen.getByTestId("item-code-2")).getByRole("link", {
+      name: "code-1",
+    });
+    expect(link.getAttribute("href")).toBe("#code-1");
+    const target = screen.getByTestId("item-code-1");
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+
+    fireEvent.focus(link);
+    expect(screen.getByTestId("citation-preview").textContent).toContain(
+      "The coder shall write the change.",
+    );
+    expect(fireEvent.click(link)).toBe(false);
+    expect(screen.queryByTestId("citation-preview")).toBeNull();
+    expect(
+      screen.getByTestId("item-toggle-code-1").getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+    expect(document.activeElement).toBe(target);
+    expect(target.className).toContain("ring-2");
+  });
+
   test("gears the parser could not read fall back to the markdown", async () => {
     withArtifacts(async () => ({ ...ARTIFACTS, gearsItems: undefined }));
     await renderTab({ own: [CODE_GLOBAL] });

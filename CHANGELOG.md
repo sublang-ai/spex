@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Inline citations in a playbook's GEARS open and focus their target item, with the same preview as other spec citations.
+
 - Agent chips show the version behind a selected model alias, including Opus 5.5. A session still shows the model its latest matching call reported.
 
 - Projects created in the Chinese interface now have Chinese specs free of translation hash comments, including `meta.md`.
@@ -41,7 +43,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.
 
-- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report. The app requires Playbook `^18.3.1`, Cligent `^0.39.0` and slc `^0.21.0`. The built-in playbooks stage as `sublang/playbooks` 18.3.1.
+- The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report.
+
+- Built-in GEARS now presents requirements, actions and verification items for human review. The app requires Playbook `^19.0.0`, Cligent `^0.39.0` and slc `^0.22.0`, and stages `sublang/playbooks` 19.0.0. New full compilations emit the same GEARS form. App upgrades select their newer bundled playbooks in the global environment automatically, including across major versions ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)).
 
 - App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
 

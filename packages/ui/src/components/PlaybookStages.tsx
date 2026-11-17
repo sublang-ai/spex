@@ -14,6 +14,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import type { SpecFileInfo } from "@sublang/spex-core/protocol";
@@ -22,7 +24,7 @@ import { i18n } from "../i18n.js";
 import { ResizableFrame } from "./ResizableFrame.js";
 import { CitationPreview, useCitationPreview } from "./CitationPreview.js";
 import { GROUP_CHIP, itemDomId, SpecItemRows } from "./SpecItemRows.js";
-import { buildItemIndex } from "../lib/spec-view-model.js";
+import { buildItemIndex, linkItemTargets } from "../lib/spec-view-model.js";
 
 /** The pipeline's stages. Each label and hint is read when the row
  * draws, never when this module loads, so the table never freezes the
@@ -222,6 +224,28 @@ export function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
     ? itemIndex.get(preview.open.target)
     : undefined;
 
+  function jumpTo(linkKey: string, targetId: string) {
+    preview.close();
+    if (!itemIndex.has(targetId)) {
+      setNotFoundKey(linkKey);
+      return;
+    }
+    setNotFoundKey(undefined);
+    setExpanded((current) => new Set(current).add(targetId));
+    setPendingJump(targetId);
+  }
+
+  function bodyLink(event: ReactMouseEvent | ReactFocusEvent) {
+    const anchor = (event.target as Element | null)?.closest?.("a");
+    if (!(anchor instanceof HTMLElement)) return undefined;
+    const href = anchor.getAttribute("href") ?? "";
+    if (/^https?:\/\//i.test(href)) return undefined;
+    const candidates = linkItemTargets(anchor.textContent ?? "", href);
+    const target =
+      candidates.find((candidate) => itemIndex.has(candidate)) ?? candidates[0];
+    return { anchor, target };
+  }
+
   // The landing waits for the expansion to commit, then scrolls the
   // row into the box, takes focus (DR-010 §6), and flashes it.
   useEffect(() => {
@@ -258,15 +282,18 @@ export function GearsItems({ id, file }: { id: string; file: SpecFileInfo }) {
             return next;
           })
         }
-        onJump={(linkKey, targetId) => {
-          preview.close();
-          if (!itemIndex.has(targetId)) {
-            setNotFoundKey(linkKey);
-            return;
-          }
-          setNotFoundKey(undefined);
-          setExpanded((current) => new Set(current).add(targetId));
-          setPendingJump(targetId);
+        onJump={jumpTo}
+        onBodyLinkClick={(itemId, event) => {
+          const link = bodyLink(event);
+          if (!link) return;
+          event.preventDefault();
+          if (link.target) jumpTo(`body:${itemId}:${link.target}`, link.target);
+        }}
+        onBodyLinkPreview={(itemId, event, immediate) => {
+          const link = bodyLink(event);
+          if (!link?.target) return;
+          const raise = immediate ? preview.focus : preview.hover;
+          raise(link.anchor, link.target, `body:${itemId}:${link.target}`);
         }}
       />
       {preview.open ? (

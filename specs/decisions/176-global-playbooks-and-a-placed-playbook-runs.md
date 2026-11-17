@@ -6,6 +6,7 @@
 ## Status
 
 Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
+Amended by [DR-241](241-reviewable-builtin-gears.md) in global registry-sourced built-in updates: startup selects the newer release the app ships, with removal and explicit path or Git sources standing.
 
 Accepted (2026-11-02) on the owner's direction, after a design review of the project's Playbooks tab that started from one row: a built-in under "Enabled" wearing "Personal" and offering "Enable for ⟨project⟩" — one fact said three ways, two of them global acts on a project page.
 Amends, under [DR-046](046-decision-record-evolution.md):
