@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -4269,6 +4269,11 @@ test("core-service-77: continuation observations guard project inputs and preser
   await client.expectOk("turn.submit", {sessionId: session.id, text: "first"});
   await settledSession(client, session.id, 1);
   const store = harness.service["store"];
+  // Every reading here validates afresh: the races lie in the awaited
+  // validation, which an answer kept for unchanged inputs never reaches
+  // (core-service-159).
+  store.keepContinuationCheck(session.id, undefined);
+  store.keepContinuationCheck = () => {};
   const repository = store.repository(project.id)!;
   const shared = repository.store;
   let afterValidation: (() => Promise<void>) | undefined;
@@ -6783,6 +6788,215 @@ test("core-service-60: a bounded external replay append is announced without rew
   assert.ok(diagnostics.some((entry) => entry.file.endsWith(`${id}.json`) && entry.blocking));
   await client.expectOk("session.delete", { sessionId: id });
   assert.equal(existsSync(root), false, "damaged recovery stays deletable through the shared lifecycle");
+});
+
+/** Count each session's `validate` through a clone's shared session store
+ * from now on; `hold` keeps a session's next one from reading until
+ * released. */
+function countValidations(service: CoreService, key: string): { of(id: string): number; hold(id: string): { reached: Promise<void>; release(): void } } {
+  const repository = service["store"].repository(key);
+  assert.ok(repository);
+  const shared = repository.store;
+  const counts = new Map<string, number>();
+  const holds = new Map<string, { reached: () => void; gate: Promise<void> }>();
+  repository.store = { ...shared, validate: async (id, context) => {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+    const held = holds.get(id);
+    if (held) {
+      holds.delete(id);
+      held.reached();
+      await held.gate;
+    }
+    return shared.validate(id, context);
+  } };
+  return {
+    of: (id) => counts.get(id) ?? 0,
+    hold: (id) => {
+      let reached!: () => void;
+      let release!: () => void;
+      const arrived = new Promise<void>((resolve) => { reached = resolve; });
+      holds.set(id, { reached, gate: new Promise<void>((resolve) => { release = resolve; }) });
+      return { reached: arrived, release };
+    },
+  };
+}
+
+/** Wait until `check` holds: a step bounded by the event it names
+ * (release-31), the bound only ending a hung wait. */
+async function until(check: () => boolean, what: string, timeoutMs = 60_000): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${what}`);
+    await sleep(10);
+  }
+}
+
+/** What the core's session scans are told by the clones' watches and
+ * how many reads they queue, observed in place from now on. `read`
+ * returns once every change made in `sessionsDir` before it has been
+ * reported and read: a fence file the watch reports after them, then
+ * the scans settled. */
+function observeScans(service: CoreService): { reported(name: string): number; queued(): number; read(sessionsDir: string): Promise<void> } {
+  const scans = service["sessionScans"];
+  const seen: string[] = [];
+  let queued = 0;
+  const changed = scans.changed.bind(scans);
+  scans.changed = (filename) => { seen.push(filename ?? ""); changed(filename); };
+  const enqueue = scans["enqueue"].bind(scans);
+  scans["enqueue"] = (scan, before) => { queued += 1; return enqueue(scan, before); };
+  return {
+    reported: (name) => seen.filter((entry) => entry === name).length,
+    queued: () => queued,
+    read: async (sessionsDir) => {
+      // No session's file: the scans read nothing for it.
+      const fence = `fence-${randomUUID()}`;
+      writeFileSync(join(sessionsDir, fence), "");
+      await until(() => seen.includes(fence), `the watch to report ${fence}`);
+      rmSync(join(sessionsDir, fence));
+      await scans.settled();
+    },
+  };
+}
+
+test("core-service-160: a running session's own files read no saved session again, and a session standing as last read is not validated again", { timeout: 120_000 }, async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { watchConfig: true });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: saved.id, text: "A saved turn" });
+  assert.equal((await settledSession(client, saved.id, 1)).continuable, true);
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const scans = observeScans(harness.service);
+  await scans.read(sessionsDir);
+
+  const validations = countValidations(harness.service, project.id);
+  const running = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: running.id, text: "A running turn" });
+  await settledSession(client, running.id, 1);
+  await scans.read(sessionsDir);
+  assert.ok(scans.reported(`${running.id}.json`) >= 2, "the watch reported the running session's record more than once");
+  assert.equal(validations.of(saved.id), 0, "its own files read no other session again (core-service-158)");
+
+  // A read of every session validates none standing as last read, nor
+  // its continuation against the same execution.
+  const before = validations.of(saved.id) + validations.of(running.id);
+  await harness.service["syncForeignSessions"]();
+  await harness.service["syncForeignSessions"]();
+  assert.equal(validations.of(saved.id) + validations.of(running.id), before, "sessions standing as last read are not validated again (core-service-159)");
+  const listed = await client.expectOk("session.list", {});
+  assert.deepEqual(listed.filter((entry) => entry.continuable).map((entry) => entry.id).sort(), [saved.id, running.id].sort());
+
+  // Two listings at once, the saved session's continuation unchecked,
+  // validate it once: the second awaits the check the first began.
+  const store = harness.service["store"];
+  store.keepContinuationCheck(saved.id, undefined);
+  const manager = harness.service["sessions"];
+  const checkedExecution = manager["checkedExecution"].bind(manager);
+  let reachedCheck = 0;
+  manager["checkedExecution"] = (...args) => {
+    if (args[2] === saved.id) reachedCheck += 1;
+    return checkedExecution(...args);
+  };
+  const beforeLists = validations.of(saved.id);
+  const held = validations.hold(saved.id);
+  const lists = [client.expectOk("session.list", {}), client.expectOk("session.list", {})];
+  await held.reached;
+  await until(() => reachedCheck >= 2, "both listings to reach the saved session's check");
+  held.release();
+  for (const entries of await Promise.all(lists)) assert.equal(entries.find((entry) => entry.id === saved.id)?.continuable, true);
+  assert.equal(validations.of(saved.id), beforeLists + 1, "a check in flight is awaited, never repeated beside it (core-service-159)");
+});
+
+test("core-service-160: another host's writes read its session alone, and changes during a read share one more", { timeout: 120_000 }, async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { watchConfig: true });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("turn.submit", { sessionId: saved.id, text: "A saved turn" });
+  await settledSession(client, saved.id, 1);
+
+  const configPath = join(harness.dir, "playbook.config.yaml");
+  const plan = await loadLaunchPlan({ userConfigPath: configPath, modules: builtinLaunchModules(configPath) });
+  const external = await openSessionHost({ store: createSessionStore({ sessionsDir: projectSessions(harness.dataDir, project.id) }), mode: "new",
+    cwd: harness.projectDir, config: executionConfigFromPlan(plan), adapterImports: fakeAdapterImports({ fallback: { result: "unused" } }).imports });
+  t.after(() => external.dispose());
+  const id = external.sessionId;
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === id);
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const scans = observeScans(harness.service);
+  await scans.read(sessionsDir);
+
+  const validations = countValidations(harness.service, project.id);
+  const held = validations.hold(id);
+  const started = (turnId: number) => ({ type: "turn_started", turnId, timestamp: turnId * 1000, turn: { id: turnId, prompt: `External turn ${turnId}` } });
+  // Each append publishes the session's replay descriptor anew.
+  const append = async (turnId: number): Promise<void> => {
+    const before = scans.reported(`${id}.replay.json`);
+    await external.lease.append(started(turnId));
+    await until(() => scans.reported(`${id}.replay.json`) > before, `the watch to report turn ${turnId}'s append`);
+  };
+  await append(1);
+  // The read of the first append is in flight; the next append is
+  // queued to be read behind it, and two more arrive while it waits.
+  await held.reached;
+  const queued = scans.queued();
+  await append(2);
+  await until(() => scans.queued() > queued, "a read to wait behind the held one");
+  await append(3);
+  await append(4);
+  held.release();
+  await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_started" && m.record.turnId === 4);
+  await scans.read(sessionsDir);
+  assert.equal(validations.of(id), 2, "the read in flight, and one more for every change during it (core-service-158)");
+  assert.equal(validations.of(saved.id), 0, "another host's writes read its session alone (core-service-158)");
+  assert.deepEqual(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").map((entry) => entry.record.turnId), [1, 2, 3, 4]);
+});
+
+test("core-service-161: a session file that is a pipe, or a link to one, holds up no read of the sessions", {
+  skip: process.platform === "win32" ? "a pipe is no file in a folder on Windows" : false,
+  timeout: 120_000,
+}, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const saved: string[] = [];
+  for (const text of ["A healthy turn", "A turn whose descriptor becomes a pipe", "A turn whose record becomes a link"]) {
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("turn.submit", { sessionId: session.id, text });
+    await settledSession(client, session.id, 1);
+    saved.push(session.id);
+  }
+  const [healthy, piped, linked] = saved;
+  const sessionsDir = projectSessions(harness.dataDir, project.id);
+  const pipe = join(sessionsDir, `${piped}.replay.json`);
+  rmSync(pipe);
+  execFileSync("mkfifo", [pipe]);
+  rmSync(join(sessionsDir, `${linked}.json`));
+  symlinkSync(pipe, join(sessionsDir, `${linked}.json`));
+  // A writer opens the pipe only once something reads it, then marks
+  // that and closes it, ending that read, and waits for the next: a
+  // read of the pipe fails this test rather than holding it forever.
+  const opened = join(harness.dir, "pipe-opened");
+  const writer = spawn("sh", ["-c", 'while :; do exec 3>"$1"; : > "$2"; exec 3>&-; done', "sh", pipe, opened], { stdio: "ignore" });
+  t.after(() => { writer.kill(); });
+
+  await harness.service["syncForeignSessions"]();
+  assert.equal(existsSync(opened), false, "no session file was read from the pipe (core-service-159)");
+  const listed = await client.expectOk("session.list", {});
+  assert.equal(listed.find((entry) => entry.id === healthy)?.continuable, true, "a healthy neighbor is served as before (core-service-60)");
+  for (const id of [piped, linked]) {
+    const entry = listed.find((candidate) => candidate.id === id);
+    assert.ok(entry, `${id} keeps its listing (core-service-60)`);
+    assert.equal(entry.continuable, undefined, `${id} does not continue from files it cannot read (core-service-159)`);
+  }
+  assert.equal(existsSync(opened), false, "a listing read nothing from the pipe either (core-service-159)");
 });
 
 test("core-service-124: what one home captured runs on it alone, and a second home pairing the folder at the same path reads it as the other's", { timeout: 60_000 }, async (t) => {

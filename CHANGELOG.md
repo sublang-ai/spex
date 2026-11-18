@@ -19,6 +19,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Inline citations in a playbook's GEARS open and focus their target item, with the same preview as other spec citations.
 
+- A run no longer slows as saved conversations accumulate. Each time the running conversation saved a step, the app read every saved conversation again, twice over, and queued one such read per save; on Windows one long saved conversation cost minutes per step. The app's own saves now read nothing, another program's change reads that conversation alone, changes arriving during a read share the next one, and a conversation unchanged since it was last read is not validated again ([#393](https://github.com/sublang-ai/spex/issues/393)).
+
 - Agent chips show the version behind a selected model alias, including Opus 5.5. A session still shows the model its latest matching call reported.
 
 - Projects created in the Chinese interface now have Chinese specs free of translation hash comments, including `meta.md`.

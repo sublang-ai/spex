@@ -90,6 +90,7 @@ import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control
 import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { CloneWatches } from "./clone-watches.js";
+import { SessionScans, type SessionScan } from "./session-scans.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { fileVersion, IN_USE_RETRIES, listed, readVersioned, retryWhileInUse, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
@@ -710,7 +711,9 @@ export class CoreService {
    * (core-service-60) and configs (core-service-2), your own group's
    * among them. */
   private readonly watches: CloneWatches;
-  private adoptTimer?: NodeJS.Timeout;
+  /** Which sessions are read again as the clones' `sessions/` change,
+   * and when (core-service-158). */
+  private readonly sessionScans: SessionScans;
   private reloadTimer?: NodeJS.Timeout;
 
   private configState: ConfigState;
@@ -806,12 +809,16 @@ export class CoreService {
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
+    this.sessionScans = new SessionScans({
+      holds: (sessionId) => this.store.holdsSession(sessionId),
+      scan: (scan) => this.scanSessions(scan),
+    });
     this.watches = new CloneWatches({
       active: () => this.options.watchConfig !== false && !this.stopping,
       repositories: () => this.store.listRepositories(),
       own: () => this.store.home.own(),
       configPath: () => this.configPath,
-      sessionsChanged: (filename) => this.sessionsChanged(filename),
+      sessionsChanged: (filename) => this.sessionScans.changed(filename),
       configChanged: () => this.scheduleReload(),
       // Sessions another host wrote (core-service-60) and a changed config
       // (core-service-2) while a watch was let go of.
@@ -1652,35 +1659,36 @@ export class CoreService {
   /**
    * Serve the sessions another host wrote into a clone's shared session
    * store (core-service-60), and forget the ones whose record left it
-   * (core-service-76). Called once before serving and again whenever
-   * a captain-session record or replay stream changes, so terminal
-   * sessions join the listing, keep their history current, and leave
-   * it when removed.
+   * (core-service-76): every session of every clone, read once before
+   * serving and again when a folder pairs, a sync applies or a watch
+   * resumes, `beforeScan` run first. Done once a read begun after this
+   * call has finished; reads asked for meanwhile share it
+   * (core-service-158).
    */
-  private adoptScan: Promise<void> = Promise.resolve();
-
   private syncForeignSessions(beforeScan?: () => Promise<void>): Promise<void> {
-    const scan = this.adoptScan.then(async () => {
-      await beforeScan?.();
-      await this.scanSessions();
-    });
-    this.adoptScan = scan.catch(() => {});
-    return scan;
+    return this.sessionScans.all(beforeScan);
   }
 
-  private async scanSessions(): Promise<void> {
+  /** One read of the sessions `scan` covers — those a changed file named
+   * (core-service-158), or all — publishing what changed: terminal
+   * sessions join the listing, keep their history current, and leave it
+   * when removed. */
+  private async scanSessions(scan: SessionScan): Promise<void> {
+    const ids = scan.all ? undefined : scan.ids;
     let changed: Awaited<ReturnType<Store["adoptForeignSessions"]>>;
     let vanished: { id: string; projectId: string }[];
     try {
-      changed = await this.store.adoptForeignSessions();
-      vanished = this.store.forgetVanishedForeignSessions();
+      changed = await this.store.adoptForeignSessions(undefined, ids);
+      vanished = this.store.forgetVanishedForeignSessions(ids);
     } catch {
       // Another host's directory is not ours to depend on: an
       // unreadable one costs its sessions, never this service.
       return;
     }
     const projectIds = new Set<string>();
-    await this.refreshReportedContinuations();
+    // A read of every session answers a pairing too, which changes what
+    // can continue with no session changed; a named one, what it changed.
+    await this.refreshReportedContinuations(ids ? changed.map(({ id }) => id) : undefined);
     for (const { id: sessionId, appended, replaced, unlistedProjectId } of changed) {
       if (unlistedProjectId) {
         this.broadcast({ type: "session.removed", sessionId, projectId: unlistedProjectId });
@@ -1726,31 +1734,6 @@ export class CoreService {
       file:join(result.sourceDir,`${entry.sessionId}.json`), reason:entry.reason, blocking:false,
       code: "session-import",
     });
-  }
-
-  /** Something changed in a clone's `sessions/` (core-service-60): a
-   * file of a session another host writes rescans soon. */
-  private sessionsChanged(filename: string | null): void {
-    // The CLI can append without replacing its manifest. Our own
-    // sidecars are irrelevant, and the store excludes owned sessions
-    // when a shared stream changes. A missing filename means scan.
-    if (filename && (
-      (!filename.endsWith(".json") && !filename.endsWith(".records.jsonl") && !/^\.[0-9a-f-]{36}\.lock$/.test(filename)) ||
-      filename.endsWith(".spex.json")
-    )) {
-      return;
-    }
-    if (filename?.endsWith(".records.jsonl") || filename?.endsWith(".replay.json")) {
-      const session = this.store.describeSession(filename.replace(/\.(?:records\.jsonl|replay\.json)$/, ""));
-      if (session?.live && !session.externalWriter) return;
-    }
-    // Bound the wait even while a CLI keeps writing: later events
-    // join this scan instead of postponing it until the writer stops.
-    if (this.adoptTimer) return;
-    this.adoptTimer = setTimeout(() => {
-      this.adoptTimer = undefined;
-      void this.syncForeignSessions();
-    }, 150);
   }
 
   /** Let go of what this core holds open within the clones at `keys` —
@@ -1892,13 +1875,13 @@ export class CoreService {
       await bound.within(Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done)));
       this.watches.close();
       if (this.reloadTimer) clearTimeout(this.reloadTimer);
-      if (this.adoptTimer) clearTimeout(this.adoptTimer);
+      this.sessionScans.stop();
       // A Space transport in flight is stopped; a local step finishes.
       await bound.within(this.space.stop());
       // An environment's resolve or install finishes; nothing new starts.
       await bound.within(this.environments.stop());
       await bound.within(this.registry.stop());
-      await bound.within(this.adoptScan);
+      await bound.within(this.sessionScans.settled());
       if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
       // A draft compile cut here stays "running" on disk and reads as
       // interrupted at the next start (playbook-library-59); its turns

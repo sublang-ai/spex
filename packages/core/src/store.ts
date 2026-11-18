@@ -9,13 +9,17 @@
 // descriptor is kept only as its paths and session store. The session
 // maps are rebuilt projections for UI and run folds.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -26,7 +30,7 @@ import {
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
-import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
+import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery, type SessionStructuralProjection } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
 import { PUBLIC_REGISTRY_ORIGIN } from "@sublang/spex/environment";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -144,6 +148,19 @@ export interface SpexRepository {
   projectFile: string;
   /** Playbook's shared session store over this clone's `sessions/`. */
   store: SharedSessionStore;
+}
+
+/** Playbook's answer on continuing a session, with all it follows from
+ * (core-service-159): the session's files, the stored structure read
+ * from them, the folder and the execution checked. */
+export interface ContinuationCheck {
+  files: string;
+  structure: SessionStructuralProjection | undefined;
+  cwd: string;
+  /** The execution projection, as JSON. */
+  execution: string;
+  /** Why it cannot continue; null where it can. */
+  refusal: string | null;
 }
 
 interface SessionMeta {
@@ -457,6 +474,73 @@ function adoptFormerPlacementPrefs(prefs: Map<string, unknown>, key: string, nam
 /** The rebuildable forge cache, on this device alone (storage-1). */
 function forgeCacheFileOf(dir: string): string { return join(dir, "local", "forge-cache.json"); }
 
+/** A session file opens without following a link or waiting on a pipe
+ * or device; a flag the platform lacks is left out. */
+const OPEN_SESSION_FILE = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+/** The most a session's record or replay descriptor is read for its
+ * fingerprint: either is a few hundred bytes in a bounded root. */
+const FINGERPRINT_LIMIT = 16 * 1024 * 1024;
+
+/** A session file read only where it is a regular file — never through a
+ * link, from a pipe or from a device — with what identifies that file:
+ * "absent" where nothing stands there, none where anything else does or
+ * it holds more than `limit` bytes. A pipe read synchronously would hold
+ * the whole core (core-service-159). */
+function readSessionFile(path: string, limit = Infinity): { bytes: Buffer; stamp: string } | "absent" | undefined {
+  try {
+    if (!lstatSync(path).isFile()) return undefined;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "absent" : undefined;
+  }
+  let fd: number;
+  try { fd = openSync(path, OPEN_SESSION_FILE); }
+  catch { return undefined; }
+  try {
+    // What was opened, should the path have changed since it was looked at.
+    const stat = fstatSync(fd, { bigint: true });
+    if (!stat.isFile() || Number(stat.size) > limit) return undefined;
+    return { bytes: readFileSync(fd), stamp: `${stat.ino}:${stat.size}:${stat.mtimeNs}` };
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** What a session's files in `sessionsDir` stand at, as one digest; none
+ * where its record is not a regular file, or its replay descriptor
+ * stands and is none, so such a session never stands unchanged
+ * (core-service-159). The record and the replay descriptor count by
+ * their bytes — each names the content it stands on by hash — and by
+ * the file holding them, so a record put back as it once stood is a
+ * change all the same; a former stream by its size and time; the folders
+ * of its chunks and assets by their time, which a file leaving either
+ * changes. */
+function sessionFilesDigest(sessionsDir: string, id: string): string | undefined {
+  const hash = createHash("sha256");
+  for (const name of [`${id}.json`, `${id}.replay.json`]) {
+    const read = readSessionFile(join(sessionsDir, name), FINGERPRINT_LIMIT);
+    if (read === undefined || (read === "absent" && name === `${id}.json`)) return undefined;
+    hash.update(`\0${name}\0`);
+    if (read === "absent") hash.update("!ENOENT");
+    else hash.update(read.stamp).update("\0").update(read.bytes);
+  }
+  for (const name of [`${id}.records.jsonl`, `${id}.chunks`, `${id}.assets`]) {
+    let stood: string;
+    try {
+      const stat = lstatSync(join(sessionsDir, name), { bigint: true });
+      if (stat.isDirectory()) stood = `${stat.mtimeNs}`;
+      else if (stat.isFile()) stood = `${stat.ino}:${stat.size}:${stat.mtimeNs}`;
+      else return undefined;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
+      stood = "!ENOENT";
+    }
+    hash.update(`\0${name}\0${stood}`);
+  }
+  return hash.digest("hex");
+}
+
 /** A clone's record, the files it holds named once (storage-1). */
 export function spexRepository(key: string, dir: string): SpexRepository {
   const sessionsDir = join(dir, "sessions");
@@ -515,6 +599,14 @@ export class Store {
   private readonly continuationRefusals = new Map<string, string>();
   private readonly untrackedSessions = new Set<string>();
   private readonly localSessions = new Set<string>();
+  /** Each session's last continuation check (core-service-159). */
+  private readonly continuationChecks = new Map<string, ContinuationCheck>();
+  /** What each session's files stood at when Playbook last read it whole
+   * for this core, in the clone it was read from (core-service-159). */
+  private readonly sessionReads = new Map<string, { repository: SpexRepository; files: string }>();
+  /** The whole read of each session now in flight, by what its files
+   * stood at when it began; `done` never rejects. */
+  private readonly sessionReading = new Map<string, { repository: SpexRepository; files: string; done: Promise<void> }>();
   /** Which spex repository holds each session (storage-6). */
   private readonly sessionLocations = new Map<string, string>();
   private prefsProblem?: StorageDiagnostic;
@@ -1080,21 +1172,25 @@ export class Store {
 
   /**
    * Adopt every session another host wrote into a clone's shared session
-   * store (core-service-60): a session is its clone's project's, whatever
-   * its working directory (storage-6). Foreign sessions refresh from the
-   * readable prefix; sessions this core owns are never replaced. Returns
-   * changes only, with new records to stream where the prior history is
-   * a prefix.
+   * store (core-service-60) — one clone's where `key` names it, and
+   * those `ids` name alone where given: a session is its clone's
+   * project's, whatever its working directory (storage-6). Foreign
+   * sessions refresh from the readable prefix; sessions this core holds
+   * are never replaced. Returns changes only, with new records to stream
+   * where the prior history is a prefix.
    */
-  async adoptForeignSessions(key?: string): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[]> {
+  async adoptForeignSessions(key?: string, ids?: ReadonlySet<string>): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[]> {
     const changed: { id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[] = [];
     for (const repository of key ? [this.requireRepository(key)] : this.repositories.values()) {
       if (!existsSync(repository.sessionsDir)) continue;
-      for (const filename of readdirSync(repository.sessionsDir)) {
+      const filenames = ids
+        ? [...ids].map((id) => `${id}.json`).filter((filename) => existsSync(join(repository.sessionsDir, filename)))
+        : readdirSync(repository.sessionsDir);
+      for (const filename of filenames) {
         if (this.repositories.get(repository.key) !== repository) break;
         if (!/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
         const id = filename.slice(0, -5);
-        if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
+        if (this.holdsSession(id)) continue;
         this.sessionLocations.set(id, repository.key);
         const update = await this.refreshSession(id, false);
         if (update) changed.push(update);
@@ -1103,11 +1199,75 @@ export class Store {
     return changed;
   }
 
+  /** Whether this core holds a session — reserved for its runtime, or
+   * running it: such a session is never read from its files beside the
+   * core's own picture of it, so a change to them is the core's own
+   * (core-service-158). */
+  holdsSession(id: string): boolean {
+    return this.localSessions.has(id) || !!this.sessions.get(id)?.live;
+  }
+
+  /** What a session's files stand at, as one digest (core-service-159);
+   * none where its record cannot be read. */
+  sessionFiles(id: string): string | undefined {
+    const repository = this.repositories.get(this.sessionLocations.get(id) ?? this.homeFile.own());
+    return repository && sessionFilesDigest(repository.sessionsDir, id);
+  }
+
+  /**
+   * Read a session from its files into the core's picture of it, and
+   * return what changed. A session another host may write (`live` false)
+   * standing as this core last read it is not read again
+   * (core-service-159): only its lease is, which names its writer; and a
+   * read of the same files already in flight is joined, not repeated.
+   */
   async refreshSession(id: string, live?: boolean): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string } | undefined> {
+    if (live !== false) return this.readSession(id, live);
+    if (this.localSessions.has(id)) return;
+    const key = this.sessionLocations.get(id) ?? this.homeFile.own();
+    const repository = this.repositories.get(key);
+    if (!repository) return;
+    const files = sessionFilesDigest(repository.sessionsDir, id);
+    if (files === undefined) {
+      this.sessionReads.delete(id);
+      return this.readSession(id, false);
+    }
+    const reading = this.sessionReading.get(id);
+    if (reading && reading.repository === repository && reading.files === files) {
+      await reading.done;
+      return this.refreshSession(id, false);
+    }
+    const read = this.sessionReads.get(id);
+    const prior = this.sessions.get(id);
+    if (read && read.repository === repository && read.files === files && prior && !prior.live) {
+      const current = (): boolean => this.repositories.get(key) === repository &&
+        (this.sessionLocations.get(id) ?? this.homeFile.own()) === key && !this.localSessions.has(id);
+      const writer = await repository.store.readLeaseState(id).catch((error: unknown) => {
+        if (!current()) return undefined;
+        throw error;
+      });
+      const standing = this.sessions.get(id);
+      if (writer === undefined || !current() || !standing || standing.live) return;
+      if ((standing.externalWriter ?? "idle") === writer) return;
+      const { externalWriter: _priorWriter, ...unchanged } = standing;
+      this.sessions.set(id, { ...unchanged, ...(writer === "idle" ? {} : { externalWriter: writer }) });
+      return { id, appended: [] };
+    }
+    const done = this.readSession(id, false, files);
+    const entry = { repository, files, done: done.then(() => {}, () => {}) };
+    this.sessionReading.set(id, entry);
+    try { return await done; }
+    finally { if (this.sessionReading.get(id) === entry) this.sessionReading.delete(id); }
+  }
+
+  /** One whole read of a session's files; `files` is what they stood at
+   * before it, kept once the read has been published. */
+  private async readSession(id: string, live?: boolean, files?: string): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string } | undefined> {
     if (live === false && this.localSessions.has(id)) return;
     const key = this.sessionLocations.get(id) ?? this.homeFile.own();
     const repository = this.repositories.get(key);
     if (!repository) return;
+    this.sessionReads.delete(id);
     const shared = repository.store;
     const currentLocation = (): boolean => this.repositories.get(key) === repository &&
       (this.sessionLocations.get(id) ?? this.homeFile.own()) === key;
@@ -1131,9 +1291,11 @@ export class Store {
       else this.sessionProblems.delete(id);
       return true;
     };
+    let validated = false;
     try {
       const checked = await shared.validate(id);
       if (!currentRead()) return;
+      validated = true;
       manifest = checked.manifest as SessionManifest;
       if (manifest.schemaVersion === 7 && !checked.integrityValid) problem = {file:join(shared.sessionsDir, `${id}.json`), reason:checked.reasons.join(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
@@ -1164,8 +1326,10 @@ export class Store {
       // A bounded root keeps association fields readable even when a
       // referenced recovery chunk is damaged. These fields associate
       // history only; shared validation remains execution authority.
-      try { raw = readJson<Record<string, unknown>>(join(shared.sessionsDir, `${id}.json`)); }
-      catch { publishReadStatus(); return; }
+      try {
+        const read = readSessionFile(join(shared.sessionsDir, `${id}.json`));
+        raw = read !== undefined && read !== "absent" ? JSON.parse(read.bytes.toString("utf8")) as Record<string, unknown> : undefined;
+      } catch { publishReadStatus(); return; }
       if (!raw || raw.sessionId !== id || typeof raw.cwd !== "string") { publishReadStatus(); return; }
       manifest = raw as unknown as SessionManifest;
       try {
@@ -1216,6 +1380,8 @@ export class Store {
       throw error;
     });
     if (!publishReadStatus()) return;
+    // Playbook read the session whole: the same files read the same.
+    if (files !== undefined && validated) this.sessionReads.set(id, { repository, files });
     // A session's last activity is the latest its own history records
     // (core-service-32): Playbook rewrites the manifest's updatedAt
     // whenever it releases the runtime, which need not be near the last
@@ -1334,12 +1500,14 @@ export class Store {
   /**
    * Forget every foreign session whose record left its clone's shared
    * session store while this core runs (core-service-76): the CLI's own
-   * removal, or a deletion from elsewhere. Returns what was dropped,
-   * with its project so the removal can be announced.
+   * removal, or a deletion from elsewhere — among those named, where any
+   * are. Returns what was dropped, with its project so the removal can be
+   * announced.
    */
-  forgetVanishedForeignSessions(): { id: string; projectId: string }[] {
+  forgetVanishedForeignSessions(ids?: ReadonlySet<string>): { id: string; projectId: string }[] {
     const gone: { id: string; projectId: string }[] = [];
     for (const meta of [...this.sessions.values()]) {
+      if (ids && !ids.has(meta.id)) continue;
       if (meta.live || !meta.originDir) continue;
       if (existsSync(join(meta.originDir, `${meta.id}.json`))) continue;
       this.dropSession(meta.id);
@@ -2006,6 +2174,8 @@ export class Store {
   /** Every in-memory trace of a session, gone. */
   private dropSession(id: string): void {
     this.sessions.delete(id);
+    this.sessionReads.delete(id);
+    this.continuationChecks.delete(id);
     this.continuationRefusals.delete(id);
     this.sessionProblems.delete(id);
     this.untrackedSessions.delete(id);
@@ -2042,6 +2212,17 @@ export class Store {
     const meta = this.sessions.get(id);
     return !!meta?.continuable && !meta.live && !meta.externalWriter &&
       (meta.runtime === undefined || runsElsewhere(meta.runtime, this.home.device) === undefined);
+  }
+
+  /** A known session's last continuation check, kept until the session
+   * is forgotten; whoever reads it compares what it was checked against. */
+  continuationCheck(id: string): ContinuationCheck | undefined {
+    return this.continuationChecks.get(id);
+  }
+
+  keepContinuationCheck(id: string, check: ContinuationCheck | undefined): void {
+    if (check && this.sessions.has(id)) this.continuationChecks.set(id, check);
+    else this.continuationChecks.delete(id);
   }
 
   setContinuationRefusal(id: string, reason: string | undefined): void {
