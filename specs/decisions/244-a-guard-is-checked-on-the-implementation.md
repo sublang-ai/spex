@@ -39,9 +39,9 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
   | Order | Technique | Establishes |
   | --- | --- | --- |
   | 1 | generated inputs and sequences run through the binding, a failing case reduced to a smallest one | sampled on the implementation |
-  | 2 | a small state model searched within stated bounds; each violating sequence and a sample of permitted ones run through the binding, their effects compared with what the model allows | checked within bounds, of the model; sampled or violated on the implementation, of the code, each reported apart |
+  | 2 | a small state model searched within stated bounds; each violating sequence and a sample of permitted ones run through the binding, their effects held to the assertion and compared with the model | checked within bounds, of the model; sampled or violated on the implementation, or a disagreement with the model, of the code, each reported apart |
   | 3 | a solver over the items themselves and over decision rules | conflict in the items; ambiguity where sampled readings of one item disagree |
-  | 4 | the same properties read over recorded logs | violated on the implementation, in a run no check drove |
+  | 4 | the same properties read over recorded logs | sampled or violated on the implementation, in a run no check drove |
   | 5 | an external prover's result for one component | proved under assumptions |
 
 - A technique joins Spex only after it has caught, on a real implementation, a past or held-out defect that the project's existing tests did not.
@@ -50,6 +50,8 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
   - Spex's own bounded search explores it.
   - Another engine may replace that search behind the same format and the same results, changing no surface.
 - A violation found in the model and not reproduced through the binding is reported as such and never as a defect of the code.
+- Observed effects are a violation on the implementation only where they are what the assertion forbids; effects that differ from the model and that the assertion permits are a disagreement with the model, to be settled in the derivation or the binding.
+- A recorded log supports a result only for the events it identifies, orders and holds completely: a violation that depends on an event's absence needs a log complete for that event, and a log short of that is inconclusive.
 - A change runs every guard one of whose inputs ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) it changes.
   Where Spex cannot tell what a change reaches, it runs every guard.
 - A run made for a change keeps to bounds that fit a review; a deeper search runs apart from it and reports the same results.

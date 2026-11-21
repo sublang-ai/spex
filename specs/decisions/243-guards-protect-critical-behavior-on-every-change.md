@@ -45,26 +45,32 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - an assumption a guard rests on is an item the behavior item cites.
 - A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item, chosen where plausible readings of the item disagree.
   One permitted example shows the behavior happening, so that refusing everything cannot pass.
-- A guard's assertion and its approved examples are test items that cite the behavior item; the spec of specs gains no item kind.
-- A guard's inputs are its behavior item, the items that one cites, its assertion, its approved examples, what Spex derived from them, its link to the code, the checker, and the code that link reaches.
+- A guard's assertion and its approved examples are test items that cite the behavior item, each example belonging to one guard; the spec of specs gains no item kind.
+- Every run of a guard for a change drives its permitted examples on the implementation and holds each to the effect it states, and confirms that what Spex derived rejects each forbidden example.
 - A guard stands only after it has failed on a fault planted in the guarded behavior or on a recorded past defect.
+  It keeps each fault it failed on and must fail on each again after any change to its inputs other than the project's code.
+- A guard's inputs are its behavior item, the items that one cites, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, and the code that link reaches.
 - Each check of a guard reports what it established, on which revision, within which bounds and under which assumptions, as exactly one of:
 
   | Result | Meaning |
   | --- | --- |
-  | Violated on the implementation | a sequence the assertion forbids was observed on the project's code, in a run the check drove or a recorded one |
+  | Violated on the implementation | effects the assertion forbids were observed on the project's code, in a run the check drove or a recorded one |
+  | Disagreement with the model | the code's observed effects differ from what Spex derived, and the assertion permits them |
   | Conflict in the items | the items the guard is derived from contradict each other or leave a case undecided |
   | Violated in the model | the sequence was found in what Spex derived and not yet reproduced |
-  | Sampled on the implementation | generated cases ran on the code and none violated the item |
+  | Sampled on the implementation | the cases stated, generated or recorded, ran on the code and none violated the assertion |
   | Checked within bounds | every sequence within the stated bounds was explored |
   | Proved under assumptions | a prover established the property for the stated assumptions |
   | Inconclusive | the check ended, a timeout included, without one of the above |
 
-- `spex verify` passes a guard only where a current result on the implementation shows no violation and no check of that guard reports a violation, a conflict or an inconclusive run.
-  A result on the model never stands in for one on the implementation.
+- A project's settings name the checks, and the bounds of each, that a change requires of a guard.
+- `spex verify` passes a guard only where every required check has finished with a current result at no less than the required bounds, one of them on the implementation, and none reports a violation, a conflict, a disagreement or an inconclusive run.
+  - A result on the model never stands in for one on the implementation.
+  - A later run of the same check on the same inputs replaces its inconclusive result; a violation stands until that check runs on changed inputs.
+  - A check that is not required reports its result and decides nothing while it runs or where it ends inconclusive.
 - A violation names the item's ID, the sequence of events, the effect observed and a command that replays it on the reader's own machine.
 - A result is stale from the moment any input of its guard changes, a replacement run still pending included, and a stale result is never shown as passing.
-- A change is shown as a weakening and waits for a person's approval, never an agent's, where it removes a guard or changes its assertion, an approved example, an assumption, its bounds or what its link to the code observes, unless Spex establishes that everything forbidden before is forbidden still.
+- A change is shown as a weakening and waits for a person's approval, never an agent's, where it removes a guard or a kept fault, lowers a required check or its bounds, or changes the guard's assertion, an approved example, an assumption or what its link to the code observes.
   The item and the code may change in one change where the intended behavior changed.
 - Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
 - `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
@@ -76,7 +82,7 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 - A reviewer who reads no formal notation can own a guarantee and see when a change weakens it.
 - Meaning cannot move into a hidden artifact: what Spex derives can be discarded and derived again from the items.
 - Assurance rests on examples and planted faults, which is weaker than an expert's reading of a formal specification, and on the precision of the item's own text.
-- A result reads longer than a badge; the seven results keep a sampled run from passing as a proof.
+- A result reads longer than a badge; the eight results keep a sampled run from passing as a proof.
 - An item must be exact enough to derive from, so a project that guards a behavior tends to sharpen that item first.
 - Most items of an application's interface stay outside guards and keep their tests.
 - Spec packages carrying guards for behaviors many projects share are left to a later decision.
