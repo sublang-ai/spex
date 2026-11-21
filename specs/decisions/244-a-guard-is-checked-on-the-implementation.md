@@ -52,6 +52,7 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
 - A violation found in the model and not reproduced through the binding is reported as such and never as a defect of the code.
 - Observed effects are a violation on the implementation only where they are what the assertion forbids; effects that differ from the model and that the assertion permits are a disagreement with the model, to be settled in the derivation or the binding.
 - A recorded log supports a result only for the events it identifies, orders and holds completely: a violation that depends on an event's absence needs a log complete for that event, and a log short of that is inconclusive.
+- A result drawn from a recorded log or an external prover names the exact events or artifact it read and the revision of the code that produced them, and is a result for that revision alone.
 - A change runs every guard one of whose inputs ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) it changes.
   Where Spex cannot tell what a change reaches, it runs every guard.
 - A run made for a change keeps to bounds that fit a review; a deeper search runs apart from it and reports the same results.
