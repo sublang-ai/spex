@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+// The scan: roots -> skills -> steps, links, tags -> annotations -> insights.
+// A skill that cannot be read or parsed is recorded with an issue; it never
+// aborts the scan.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { listRoots, skillDirs, isDir, realOr } from './roots.mjs';
+import { splitFrontmatter } from './frontmatter.mjs';
+import { fenceMask, clipText } from './markdown.mjs';
+import { detectSteps } from './steps.mjs';
+import { buildLinkMatcher, findLinks } from './links.mjs';
+import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
+import { bundledFiles } from './files.mjs';
+import { loadAnnotations, applyAnnotations } from './annotations.mjs';
+import { findInsights } from './insights.mjs';
+import { warn } from './log.mjs';
+
+export const ATLAS_VERSION = 1;
+const SKILL_FILE_MAX_BYTES = 4 * 1024 * 1024; // a SKILL.md this large is not a skill an agent could load; skip its content
+// Frontmatter keys whose lines are matched by tag rules: the description,
+// and Claude Code's `context`/`agent` (a `context: fork` skill runs as a subagent).
+// Link and tag detection read at most this many characters of a line: evidence
+// shows 160 and excerpts 400, and a minified line must not make a scan quadratic.
+export const LINE_SCAN_MAX = 4000;
+const scanText = (line) => (line.length > LINE_SCAN_MAX ? line.slice(0, LINE_SCAN_MAX) : line);
+const TAGGED_FRONTMATTER_KEYS = ['description', 'context', 'agent'];
+
+/**
+ * @param {{ cwd:string, home:string, user:boolean, plugins:boolean, extra:string[], agents:string[], rulesFile:string, stateDir:string }} opts
+ */
+export function scan(opts) {
+  const { rules, catalog } = loadRules(opts.rulesFile);
+  const roots = [];
+  let skills = [];
+  const seenRoots = new Set();
+  const byReal = new Map(); // real folder -> its record
+
+  for (const root of listRoots(opts)) {
+    if (!isDir(root.path)) {
+      if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
+      continue;
+    }
+    const realRoot = realOr(root.path);
+    if (seenRoots.has(realRoot)) continue; // the same folder reached twice (cwd is the home folder)
+    seenRoots.add(realRoot);
+    let present = 0;
+    for (const dir of skillDirs(root.path)) {
+      present++;
+      const real = realOr(dir);
+      // `npx skills` links one folder into several agents' roots: one record listing the others.
+      const seen = byReal.get(real);
+      if (seen) { seen.copies.push({ root: root.id, dir }); continue; }
+      const rec = readSkill(dir, root);
+      byReal.set(real, rec);
+      skills.push(rec);
+    }
+    if (root.requireSkills && !present) continue;
+    const { requireSkills, explicit, ...rec } = root;
+    roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
+  }
+  skills = mergeIdenticalCopies(skills);
+
+  assignIds(skills);
+  const matcher = buildLinkMatcher(skills);
+  let edges = [];
+  let unresolved = [];
+  for (const s of skills) {
+    analyze(s, rules, catalog);
+    const found = findLinks(matcher, s, linkLines(s));
+    edges.push(...found.edges);
+    unresolved.push(...found.unresolved);
+  }
+
+  const state = { skills, edges, unresolved, catalog };
+  const annotations = loadAnnotations(opts.stateDir);
+  if (annotations) applyAnnotations(annotations, state);
+  edges = state.edges;
+  unresolved = state.unresolved;
+
+  const order = new Map(skills.map((s, n) => [s.id, n]));
+  const byLine = (a, b) => (order.get(a.from) - order.get(b.from)) || ((a.evidence?.line ?? Infinity) - (b.evidence?.line ?? Infinity));
+  edges.sort(byLine);
+  unresolved.sort(byLine);
+  for (const s of skills) {
+    for (const st of s.steps) st.calls = [...new Set(edges.filter((e) => e.from === s.id && e.fromStep === st.id).map((e) => e.to))];
+    s.tags = mergeHits(s._baseTags, ...s.steps.map((st) => st.tags));
+  }
+  const insights = findInsights({ skills, edges, unresolved, roots });
+  for (const s of skills) {
+    s.issues = [...new Set(insights.filter((i) => i.skills.includes(s.id)).map((i) => i.kind))];
+  }
+
+  // The catalog is built from the hits themselves, so its labels are theirs (MCP tags included).
+  const used = new Map();
+  for (const s of skills) for (const t of s.tags) if (!used.has(t.id)) used.set(t.id, { id: t.id, category: t.category, label: t.label });
+  const tagCatalog = [...used.values()];
+  const ruleOrder = new Map([...catalog.keys()].map((id, n) => [id, n]));
+  tagCatalog.sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category)
+    || (ruleOrder.get(a.id) ?? Infinity) - (ruleOrder.get(b.id) ?? Infinity) || a.id.localeCompare(b.id));
+
+  return {
+    version: ATLAS_VERSION,
+    generatedAt: new Date().toISOString(),
+    cwd: opts.cwd,
+    roots,
+    tagCatalog: tagCatalog.map(({ id, category, label }) => ({ id, category, label })),
+    skills: skills.map(publicSkill),
+    edges,
+    unresolved,
+    insights,
+  };
+}
+
+function readSkill(dir, root) {
+  const file = path.join(dir, 'SKILL.md');
+  const s = {
+    id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
+    dir, file, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], stepKind: 'none', steps: [], tags: [], issues: [],
+    _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
+  };
+  let text;
+  try {
+    const size = fs.statSync(file).size;
+    if (size > SKILL_FILE_MAX_BYTES) throw new Error(`it is ${size} bytes, over the ${SKILL_FILE_MAX_BYTES}-byte limit`);
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    s._fmError = `cannot read SKILL.md: ${err.message}`;
+    return s;
+  }
+  s._raw = text; // compared byte for byte to find identical copies
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  const lines = text.split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  s._text = text;
+  s._readOk = true;
+  s._lines = lines;
+  s.lines = lines.length;
+  const fm = splitFrontmatter(text);
+  s._fmError = fm.error;
+  s._keyLines = fm.keyLines;
+  s._bodyStart = fm.bodyStart;
+  s.frontmatter = fm.data;
+  // Frontmatter that did not parse is not trusted: the folder names the
+  // skill and the description stays empty (data-model.md).
+  if (!fm.error) {
+    if (fm.data.name !== undefined && fm.data.name !== null && String(fm.data.name).trim()) s.name = String(fm.data.name).trim();
+    if (typeof fm.data.description === 'string') s.description = fm.data.description.trim();
+    else if (fm.data.description !== undefined && fm.data.description !== null) s.description = String(fm.data.description);
+  }
+  s._mask = fenceMask(lines);
+  for (let i = 0; i < s._bodyStart; i++) s._mask[i] = false;
+  try {
+    s.files = bundledFiles(dir, text);
+  } catch (err) {
+    warn(`cannot list the files of ${dir} (${err.message})`);
+  }
+  return s;
+}
+
+// A skill copied into several roots with a byte-identical SKILL.md under one
+// name is one record; the later folders join the first one's `copies`.
+function mergeIdenticalCopies(skills) {
+  const kept = [];
+  const byName = new Map();
+  for (const s of skills) {
+    const same = s._readOk ? (byName.get(s.name) ?? []).find((k) => k._readOk && k._raw === s._raw) : null;
+    if (same) {
+      same.copies.push({ root: s.root, dir: s.dir }, ...s.copies);
+      continue;
+    }
+    if (!byName.has(s.name)) byName.set(s.name, []);
+    byName.get(s.name).push(s);
+    kept.push(s);
+  }
+  return kept;
+}
+
+// id = name; the 2nd+ differing skill of a name gets `<name>@<rootId>`.
+function assignIds(skills) {
+  const taken = new Set();
+  for (const s of skills) {
+    let id = taken.has(s.name) ? `${s.name}@${s.root}` : s.name;
+    for (let n = 2; taken.has(id); n++) id = `${s.name}@${s.root}-${n}`;
+    taken.add(id);
+    s.id = id;
+  }
+}
+
+function analyze(s, rules, catalog) {
+  const { kind, steps } = detectSteps(s._lines, s._mask, s._bodyStart);
+  s.stepKind = kind;
+  const inStep = new Array(s._lines.length).fill(null);
+  s.steps = steps.map((st, n) => {
+    const id = `${s.id}#${n + 1}`;
+    for (let i = st.start; i <= st.end; i++) inStep[i] = id;
+    const lines = [];
+    for (let i = st.start; i <= st.end; i++) lines.push({ line: i + 1, text: scanText(s._lines[i]) });
+    return { id, index: n + 1, title: st.title, line: st.start + 1, endLine: st.end + 1, excerpt: st.excerpt, tags: [...matchLines(rules, lines).values()], calls: [] };
+  });
+  s._inStep = inStep;
+
+  // Tags outside every step: the frontmatter and the rest of the body.
+  const outside = [];
+  for (const key of TAGGED_FRONTMATTER_KEYS) {
+    const span = s._keyLines[key];
+    if (span) for (let i = span.start; i <= span.end; i++) outside.push({ line: i + 1, text: scanText(s._lines[i]) });
+  }
+  for (let i = s._bodyStart; i < s._lines.length; i++) if (!inStep[i]) outside.push({ line: i + 1, text: scanText(s._lines[i]) });
+  const base = matchLines(rules, outside);
+  const fmHits = new Map();
+  const tools = s._keyLines['allowed-tools'];
+  if (tools) {
+    const ev = { line: tools.start + 1, text: clipText(s._lines[tools.start].trim(), EVIDENCE_TEXT_MAX) };
+    for (const hit of allowedToolTags(s.frontmatter['allowed-tools'], ev, catalog).values()) fmHits.set(hit.id, hit);
+  }
+  const hint = s._keyLines['argument-hint'];
+  if (hint && catalog.has('input.arguments')) {
+    addEvidence(fmHits, catalog.get('input.arguments'), 'frontmatter', { line: hint.start + 1, text: clipText(s._lines[hint.start].trim(), EVIDENCE_TEXT_MAX) });
+  }
+  s._baseTags = mergeHits(fmHits, base);
+  for (const st of s.steps) st.tags = mergeHits(st.tags);
+}
+
+// Lines searched for links: the description, then the body outside fenced code.
+function linkLines(s) {
+  const out = [];
+  const span = s._keyLines.description;
+  if (span) for (let i = span.start; i <= span.end; i++) out.push({ line: i + 1, text: scanText(s._lines[i]), step: null });
+  for (let i = s._bodyStart; i < s._lines.length; i++) {
+    if (!s._mask[i]) out.push({ line: i + 1, text: scanText(s._lines[i]), step: s._inStep[i] });
+  }
+  return out;
+}
+
+function publicSkill(s) {
+  const out = {};
+  for (const [k, v] of Object.entries(s)) if (!k.startsWith('_')) out[k] = v;
+  return out;
+}

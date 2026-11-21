@@ -20,6 +20,12 @@
       "port": 4173
     },
     {
+      "name": "skill-atlas",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["skills/skill-atlas/scripts/atlas.mjs", "serve", "--no-open", "--port", "4317", "--state", ".skill-atlas-dev"],
+      "port": 4317
+    },
+    {
       "name": "spex-server",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "-w", "apps/server", "--", "--token=dev"],

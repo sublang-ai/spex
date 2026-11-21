@@ -18,3 +18,6 @@ playwright-report/
 # Isolated homes, repositories, and raw evidence for workshop simulations.
 .workshop-*/
 /.acceptance-local/
+
+# Skill Atlas state kept by a local run (skills/skill-atlas, --state).
+/.skill-atlas-dev/
