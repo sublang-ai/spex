@@ -12,6 +12,7 @@ Read this file before editing `annotations.json` or `workflows.json` by hand, or
 - [atlas.json — what the scan found](#atlasjson--what-the-scan-found)
 - [annotations.json — corrections layered on the scan](#annotationsjson--corrections-layered-on-the-scan)
 - [workflows.json — how the user organizes skills](#workflowsjson--how-the-user-organizes-skills)
+- [Languages](#languages)
 - [Detection rules](#detection-rules)
 
 ## Files and where they live
@@ -167,6 +168,98 @@ The scan is pattern matching; this file is where a reader who understood the ski
 
 - A skill may sit in several phases, and in none (the viewer lists it under Unassigned).
 - An entry is a skill id. One with no installed skill is kept and shown as missing, so a workflow survives an uninstall.
+
+## Languages
+
+A language is named by its tag: `en-US`, `zh-CN`.
+The page's own text is English in its source; every other language is data in the files below.
+
+### Translations of a skill's files
+
+A file's translation is the file beside it with the tag before the extension: `SKILL.zh-CN.md` for `SKILL.md`, `references/prompts.zh-CN.md` for `references/prompts.md`.
+
+- A name is read as a translation only where the tag is a two- or three-letter language with optional subtags (`zh`, `zh-CN`, `en-US`), the extension is `.md`, `.json`, `.txt`, `.yaml` or `.yml`, and the file it translates exists.
+- The scan looks in the skill's own folder first, then in `translations/<skill id>/` of the state directory, where the same relative path is used: `~/.skill-atlas/translations/pdf/SKILL.zh-CN.md`.
+  The state directory is where an agent writes translations of skills someone else ships; see [translate.md](translate.md).
+- A translation records the SHA-256 of the source file's bytes as it was translated, written by `atlas.mjs pin`:
+  - in Markdown, a line `<!-- skill-atlas:source sha256=<64 hex> -->` (after the frontmatter in a translated `SKILL.md`);
+  - in JSON, a top-level `"translationOf": { "sha256": "<64 hex>" }`.
+- A translation whose recorded digest differs from its source is *stale*; one recording none is never stale.
+
+In `atlas.json` every skill carries `translations`, an object keyed by tag (empty when there is none), and each entry of `files` lists the tags it is translated into:
+
+```jsonc
+"translations": {
+  "zh-CN": {
+    "origin": "skill",                 // skill | state | annotation (words from annotations.json alone)
+    "file": "/abs/…/code/SKILL.zh-CN.md",   // null when origin is "annotation"
+    "description": "…",                // the translation's frontmatter description, or null
+    "summary": null,                   // set only by annotations
+    "steps": [ { "title": "运行第一个阶段", "excerpt": "…" } ],   // by index; null when the count differs from the skill's steps
+    "stale": false
+  }
+},
+"files": [ { "path": "references/coder-phases.md", "kind": "reference", "linked": true, "translations": ["zh-CN"] } ]
+```
+
+Steps, links and tags always come from `SKILL.md`; a translation supplies words only.
+Two insight kinds report on translations: `stale-translation` and `translation-steps` (the translation's steps number otherwise than the skill's).
+
+Every insight carries `params`, the values its message is built from, so the page can phrase it in any language:
+
+| Kind | `params` |
+| --- | --- |
+| `duplicate-name` | `name` |
+| `unresolved-link` | `name`, `from` |
+| `cycle` | `path` (skill ids in order) |
+| `oversized` | `lines` |
+| `missing-description`, `invalid-frontmatter`, `no-steps` | — |
+| `name-mismatch` | `name`, `folder` |
+| `stale-translation` | `lang`, `files` (relative paths behind their source) |
+| `translation-steps` | `lang`, `steps`, `expected` |
+
+In `annotations.json` a skill's entry may repeat its words per language; they land in the skill's `translations` entry of that tag:
+
+```jsonc
+"code": {
+  "summary": "Implements a request as one commit per phase.",
+  "translations": {
+    "zh-CN": { "summary": "把请求实现为每阶段一次提交。", "steps": [ { "title": "…", "summary": "…" } ] }
+  }
+}
+```
+
+### The server's answers
+
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns the translation where there is one, with `"language": "<tag>"` and `"stale"`; else the file itself with `"language": null`.
+- `GET /api/config` adds:
+
+```jsonc
+{
+  "lang": "zh-CN",                     // the --lang the command was given, or null
+  "locales": {                         // one per file in assets/locales/
+    "zh-CN": { "name": "简体中文", "messages": { "Rescan": "重新扫描" } }
+  },
+  "labels": {                          // from references/<name>.<tag>.json
+    "zh-CN": {
+      "title": "技能图谱",
+      "categories": { "input": "数据输入" },
+      "tags": { "tool.shell": "命令行" },
+      "presets": { "sdlc": { "name": "软件交付", "description": "…", "phases": ["探索", "决策"] } }
+    }
+  }
+}
+```
+
+### Catalogs and label files
+
+- `assets/locales/<tag>.json` is a catalog: `{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "messages": { "<English text>": "<translation>" } }`.
+  - A placeholder is `{name}` and is kept in the translation.
+  - An English text with two forms is written `one|other` (`"{n} step|{n} steps"`); its translation gives one form, or one per plural category of its language in the order `Intl.PluralRules` lists them.
+  - A text with no entry is shown in English.
+- `references/tag-rules.<tag>.json`, `references/workflow-presets.<tag>.json` and `references/view-settings.<tag>.json` are label files: the same shape as the file they sit beside, from which only `title`, `label`, `name` and `description` are read — tags and presets by `id`, categories by key, a preset's phases by position.
+  Patterns, keywords, colors and every other setting come from the source file alone.
+- The page's language is the reader's choice on the page (kept in the browser), else `--lang`, else the browser's language where a catalog's tag shares its primary subtag, else `en-US`.
 
 ## Detection rules
 

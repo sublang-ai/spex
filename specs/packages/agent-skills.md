@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md).
+This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), and their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md).
 It owns their form and procedure, not the atlas that reads them.
 
 ## External Behavior
@@ -18,11 +18,18 @@ Each folder under `skills/` shall be one Agent Skill [[1]] a person installs on 
 
 - its `SKILL.md` opens with frontmatter whose `name` equals the folder's name and whose `description`, of at most 1024 characters, says what the skill does and when to use it;
 - the body of `SKILL.md` is at most 500 lines;
-- every relative link in `SKILL.md` names a file in the skill's folder, and every file under `references/` is linked from `SKILL.md`.
+- every relative link in `SKILL.md` names a file in the skill's folder, and every file under `references/` that is no translation is linked from `SKILL.md`.
 
 #### agent-skills-2
 
 Where a skill relays a prompt to a role or applies a rule a user may tune, the skill shall keep that text in a file under its `references/` that `SKILL.md` links.
+
+#### agent-skills-10
+
+Each Markdown file of a skill under `skills/`, and each file under its `references/` holding labels a reader sees, shall have beside it a `zh-CN` translation, named with the tag before the extension, recording its source's digest:
+
+- a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens by saying that agents load `SKILL.md`;
+- a translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
 
 ### Workflow skills
 
@@ -63,7 +70,7 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-7
 
-When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)].
+When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
 
 #### agent-skills-8
 
