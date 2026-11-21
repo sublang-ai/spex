@@ -237,18 +237,20 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 - a Linux or macOS row whose selection reaches the core runs on five runners, each building: four run a part of the core's suite, its test files sorted largest first and dealt to the parts in turn so each file runs in exactly one part, and the fifth runs the script tests, every other selected suite and the type and spec gates ([DR-229](../decisions/229-the-cores-suite-in-four-parts.md));
 - a full invocation validates the exact tree named by its caller or manual ref, never a separately selected mutable branch;
 - the classifier reads changed paths against the merge base with the comparison ref, `origin/main` locally, including staged, unstaged and untracked local files and both sides of renames;
-- documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace; documentation alone contains at least one changed path and no other kind;
+- documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace and `skills/`; documentation alone contains at least one changed path and no other kind;
 - a workspace path, including its Markdown, selects its workspace and transitively every workspace that declares it among its dependencies, development, peer or optional dependencies;
-- an exactly listed root tool selects its declared owners and their transitive dependents, or script tests alone where no owner is named, under the ownership table below; a missing named workspace, root dependency or localization configuration, or any unlisted non-documentation root path selects every workspace;
+- an exactly listed root tool, or a path under a listed root folder, the longest such folder deciding, selects its declared owners and their transitive dependents, or script tests alone where no owner is named, under the ownership table below; a missing named workspace, root dependency or localization configuration, or any unlisted non-documentation root path selects every workspace;
 - Linux suite execution that selects the core requires Git LFS for real transport and materialization coverage, with no skip for its absence;
 - the final result is evaluated by the shared `checks` gate [[release-44](#release-44)].
 
-| Exact root paths | Owner seeds |
+| Root paths | Owner seeds |
 | --- | --- |
 | `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/hub-lane.yml`, `.github/workflows/caches.yml`, `.github/actions/download-caches/action.yml` | Script tests alone |
 | `scripts/affected-tests.mjs`, `scripts/affected-tests.test.mjs`, `scripts/ci-verdict.mjs`, `scripts/ci-workflow.test.mjs`, `scripts/app-release-workflow.test.mjs`, `scripts/prepush.sh`, `scripts/merge-on-green.sh`, `scripts/test-linux.sh`, `scripts/linux-ci/Dockerfile` | Script tests alone |
 | `scripts/release-notes.mjs`, `scripts/release-notes.test.mjs`, `scripts/smoke.mjs`, `scripts/smoke.test.mjs`, `scripts/install-smoke.mjs`, `scripts/cli-smoke.mjs`, `scripts/desktop-smoke.mjs`, `scripts/migration-smoke.mjs` | Script tests alone |
-| `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/team-server-local.test.mjs` | Script tests alone |
+| `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/team-server-local.test.mjs`, `scripts/skill-atlas.test.mjs` | Script tests alone |
+| every path under `skills/skill-atlas/` | `e2e` |
+| every other path under `skills/` | Script tests alone |
 | `scripts/start-desktop.mjs`, `scripts/desktop-runner.mjs` | `apps/desktop` |
 | `scripts/start-server.mjs` | `apps/server` |
 | `scripts/storage-git.mjs`, `scripts/native-approval-stage.mjs` | `packages/core` |
@@ -355,7 +357,7 @@ When the repository-system audit reads the CI, release, hub and cache workflows,
 | --- | --- |
 | Pull-request lifecycle | A newer head cancels its prior run; full/manual validation is not cancelled by that rule [[release-30](#release-30)]. |
 | Documentation alone | CLI tests and spec lint run; the ordinary `checks` gate succeeds with unselected jobs skipped and no stand-in [[release-34](#release-34)] [[release-44](#release-44)]. |
-| Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool mapping selects its specified owners; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
+| Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool and root-folder mapping selects its specified owners, a skill's Markdown included; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
 | Local working-tree selection | Committed, staged, unstaged and untracked changes and both sides of renames contribute; documentation and code use the same selection and test commands as CI [[release-43](#release-43)]. |
 | Pull-request matrix | Linux Node 22 runs the selected suites and fast gates; a selection reaching the core runs the core's suite in four parts beside one runner for the rest and the gates, a fixture suite's files dealt largest first with each in exactly one part; Windows Node 22 runs only for selected CLI/UI/core work; journeys, native browser acceptance and the hub lane are skipped [[release-34](#release-34)]. |
 | Full app | The supported platform/Node suites, each Linux and macOS row in the core's four parts beside the rest, all journey shards, native browser acceptance and privileged hub lane are selected [[release-34](#release-34)] [[release-36](#release-36)]. |
