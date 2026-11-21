@@ -48,11 +48,14 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 - A guard's assertion and its approved examples are test items that cite the behavior item, each example belonging to one guard; the spec of specs gains no item kind.
 - Every run of a guard for a change confirms that what Spex derived admits each permitted example and rejects each forbidden one, and drives each permitted example on the implementation.
   A driven example is held to the effect it states where the guard's link to the code controls everything that effect depends on, and elsewhere to the effect the item requires of its events.
+  Either way the run must observe the guarded behavior happening in the example that shows it, and a run that does not reports a disagreement with the model where the link controls what the example depends on, and is inconclusive elsewhere.
 - A guard stands only after it has passed on the code without a fault and reported a violation of its assertion on the same code with that fault, planted in the guarded behavior or restored from a recorded past defect.
   - A faulty run that ends any other way, a timeout or a failed setup included, establishes nothing.
+  - A violation on code carrying a kept fault is evidence that the guard catches that fault, and never a result of the project's code.
   - The guard keeps each fault it caught and must catch each the same way again after any change to its inputs other than the project's code.
+  - A kept fault that changed code no longer admits is replaced before the guard passes again.
 - A guard's inputs are its behavior item, the items that one cites, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, any recorded log or imported result a check reads, and the code that link reaches.
-- Each check of a guard reports what it established, on which revision, within which bounds and under which assumptions, as exactly one of:
+- Each result of a guard's check says what was established, on which revision, within which bounds and under which assumptions, as exactly one of:
 
   | Result | Meaning |
   | --- | --- |
@@ -69,13 +72,16 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 - `spex verify` passes a guard only where every required check has finished with a current result at no less than the required bounds, one of them on the implementation, and none reports a violation, a conflict, a disagreement or an inconclusive run.
   - A result on the model never stands in for one on the implementation.
   - A later run of the same check on the same inputs replaces its inconclusive result.
-  - A violation keeps its recorded sequence and stands, through any change to bounds or settings, until that sequence is run again on a changed item, derivation, link or code and no longer violates.
-    Where the link does not control what the violation depends on, a run in which it fails to recur clears nothing, and a person closes it.
-  - A violation observed on the implementation fails the guard whichever check found it; a check that is not required otherwise decides nothing, while it runs or however it ends.
+  - A violation keeps its recorded sequence and stands until that sequence is run again after a change to the code or an approved change to another input, where the link controls what the violation depends on, and no longer violates.
+    - A run that merely fails to find it again clears nothing, whatever bounds or settings changed.
+    - In every other case only a person closes it, as where the link lacks that control, or where a corrected derivation, link or checker shows on the same recorded evidence that the assertion was not violated.
+    - A closed violation stays in the guard's record.
+  - A violation observed on the project's code at the revision checked fails the guard whichever check found it; a check that is not required otherwise decides nothing, while it runs or however it ends.
 - A violation names the item's ID, the sequence of events, the effect observed and a command that replays it on the reader's own machine.
 - A result is stale from the moment any input of its guard changes, a replacement run still pending included, and a stale result is never shown as passing.
-- A change is shown as a weakening and waits for a person's approval, never an agent's, where it removes a guard or a kept fault, lowers a required check or its bounds, removes or narrows the events its link to the code can cause or its checks generate, or changes the guard's assertion, an approved example, an assumption or what its link to the code observes.
-  The item and the code may change in one change where the intended behavior changed.
+- Removing a guard, and every change to a guard's inputs other than the project's code, is shown as a change to the guard and waits for a person's approval, never an agent's.
+  - That covers its items, assertion, examples and kept faults, what Spex derived, the checker, the required checks with their bounds and settings, the evidence a check reads, and its link to the code: what the link observes, the events it can cause and the orders they can occur in.
+  - The item and the code may change in one change, with that approval, where the intended behavior changed.
 - Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
 - `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
 - The first use Spex leads with is a service whose behavior depends on retries, ownership, approvals or background work, entered from a past incident or an existing item.

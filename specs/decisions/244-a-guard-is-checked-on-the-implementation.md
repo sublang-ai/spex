@@ -27,10 +27,10 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
 ## Decision
 
 - A project holds one **binding** for each interface its guards reach: how each event the items its guards cite name is caused, and how each effect they name is observed, through the application's own API, command line or test harness.
-  - An agent may draft a binding; a person approves what counts as the observation, and every change to it.
+  - An agent may draft a binding; a person approves it, what counts as the observation above all, and every change to it.
   - One binding serves every guard on its interface.
 - What Spex derives from an item is drafted from the item and the items it cites before the drafting agent reads the implementation, which it reads only to write the binding.
-- A derivation is stored with the project, recorded against the versions of the items and the binding it was derived from, and derived again only when one of them changes.
+- A derivation is stored with the project, recorded against the versions of the items and the binding it was derived from, and derived again only when one of them changes or a person approves its correction.
 - No agent takes part in a check's run, and what a run generates is fixed by its recorded seed.
   - A violation records the concrete actions, the initial conditions and the effect observed.
   - Its replay is promised to reproduce it only where the binding controls the schedule and the state the violation depends on; elsewhere the replay repeats the attempt and reports whether the violation recurred.
@@ -40,19 +40,20 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
   | --- | --- | --- |
   | 1 | generated inputs and sequences run through the binding, a failing case reduced to a smallest one | sampled on the implementation |
   | 2 | a small state model searched within stated bounds; each violating sequence and a sample of permitted ones run through the binding, their effects held to the assertion and compared with the model | checked within bounds, of the model; sampled or violated on the implementation, or a disagreement with the model, of the code, each reported apart |
-  | 3 | a solver over the items themselves and over decision rules | conflict in the items; ambiguity where sampled readings of one item disagree |
+  | 3 | a solver over the items themselves and over decision rules | conflict in the items; checked within bounds where it finds none |
   | 4 | the same properties read over recorded logs | sampled or violated on the implementation, in a run no check drove |
   | 5 | an external prover's result for one component | proved under assumptions |
 
-- A technique joins Spex only after it has caught, on a real implementation, a past or held-out defect that the project's existing tests did not.
+- A technique joins Spex only after it has caught, in a real project, a past or held-out defect of the code or conflict in the items that the project's existing tests did not.
 - The state model is in one format of Spex's own, of states, events and conditions, whatever language the project is written in.
   - It is derived, never authoritative, and no surface asks a person to read it.
   - Spex's own bounded search explores it.
   - Another engine may replace that search behind the same format and the same results, changing no surface.
 - A violation found in the model and not reproduced through the binding is reported as such and never as a defect of the code.
-- Observed effects are a violation on the implementation only where they are what the assertion forbids; effects that differ from the model and that the assertion permits are a disagreement with the model, to be settled in the derivation or the binding.
+- Observed effects are a violation on the implementation only where they are what the assertion forbids; effects that differ from the model and that the assertion permits are a disagreement with the model, to be settled in the code, the derivation or the binding.
 - A recorded log supports a result only for the events it identifies, orders and holds completely: a violation that depends on an event's absence needs a log complete for that event, and a log short of that is inconclusive.
-- A result drawn from a recorded log or an external prover names the exact events or artifact it read and the revision of the code that produced them, and is a result for that revision alone.
+- A result drawn from a recorded log or an external prover names the exact events or artifact it read and the revision of the code that produced them, and is a result for that revision alone, deciding nothing for another.
+- An external prover's result counts for a guard only where the property it states, its assumptions and its target match the guard's assertion, the assumptions the guard rests on and the code its binding reaches; a proof about a model is a result on the model, and one that matches less is inconclusive.
 - A change runs every guard one of whose inputs ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) it changes.
   Where Spex cannot tell what a change reaches, it runs every guard.
 - A run made for a change keeps to bounds that fit a review; a deeper search runs apart from it and reports the same results.
