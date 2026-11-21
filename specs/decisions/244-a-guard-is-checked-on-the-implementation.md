@@ -26,20 +26,22 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
 
 ## Decision
 
-- A project holds one **binding** for each interface its guards reach: how each event its guarded items name is caused, and how each effect they name is observed, through the application's own API, command line or test harness.
-  - An agent may draft a binding; a person approves what counts as the observation.
+- A project holds one **binding** for each interface its guards reach: how each event the items its guards cite name is caused, and how each effect they name is observed, through the application's own API, command line or test harness.
+  - An agent may draft a binding; a person approves what counts as the observation, and every change to it.
   - One binding serves every guard on its interface.
 - What Spex derives from an item is drafted from the item and the items it cites before the drafting agent reads the implementation, which it reads only to write the binding.
 - A derivation is stored with the project, recorded against the versions of the items and the binding it was derived from, and derived again only when one of them changes.
-- No agent takes part in a check's run: a run is deterministic for its recorded seed, and a violation reproduces from that seed.
+- No agent takes part in a check's run, and what a run generates is fixed by its recorded seed.
+  - A violation records the concrete actions, the initial conditions and the effect observed.
+  - Its replay is promised to reproduce it only where the binding controls the schedule and the state the violation depends on; elsewhere the replay repeats the attempt and reports whether the violation recurred.
 - Spex checks a guard by these techniques, adopted in this order:
 
   | Order | Technique | Establishes |
   | --- | --- | --- |
   | 1 | generated inputs and sequences run through the binding, a failing case reduced to a smallest one | sampled on the implementation |
-  | 2 | a small state model searched within stated bounds, each violating sequence replayed through the binding | checked within bounds; violated on the implementation once replayed |
-  | 3 | a solver over the items themselves and over decision rules | conflicts, gaps, and ambiguity where sampled readings of one item disagree |
-  | 4 | the same properties read over recorded logs | violations in runs no check drove |
+  | 2 | a small state model searched within stated bounds; each violating sequence and a sample of permitted ones run through the binding, their effects compared with what the model allows | checked within bounds, of the model; sampled or violated on the implementation, of the code, each reported apart |
+  | 3 | a solver over the items themselves and over decision rules | conflict in the items; ambiguity where sampled readings of one item disagree |
+  | 4 | the same properties read over recorded logs | violated on the implementation, in a run no check drove |
   | 5 | an external prover's result for one component | proved under assumptions |
 
 - A technique joins Spex only after it has caught, on a real implementation, a past or held-out defect that the project's existing tests did not.
@@ -48,7 +50,7 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
   - Spex's own bounded search explores it.
   - Another engine may replace that search behind the same format and the same results, changing no surface.
 - A violation found in the model and not reproduced through the binding is reported as such and never as a defect of the code.
-- A change runs the guards whose item, cited items, binding, derivation or checker changed, and those whose bound code the change reaches.
+- A change runs every guard one of whose inputs ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) it changes.
   Where Spex cannot tell what a change reaches, it runs every guard.
 - A run made for a change keeps to bounds that fit a review; a deeper search runs apart from it and reports the same results.
 
