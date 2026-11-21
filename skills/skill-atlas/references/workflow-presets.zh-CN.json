@@ -1,0 +1,52 @@
+{
+  "translationOf": { "sha256": "c280a3c3d566ca9a18abfa0ceeaf67d308416de2c900dd01d765c88cb1201978" },
+  "version": 1,
+  "about": "页面“新建工作流”菜单提供的起点。某个阶段的关键词出现在技能的名称或描述中时，该技能就被放入这个阶段；用户之后可以随意移动。可以添加自己的预设，或编辑这些预设。",
+  "presets": [
+    {
+      "id": "sdlc",
+      "name": "软件交付",
+      "description": "从一个想法到运行中的软件。",
+      "phases": [
+        { "name": "探索" },
+        { "name": "决策" },
+        { "name": "构建" },
+        { "name": "验证" },
+        { "name": "发布" },
+        { "name": "运维" }
+      ]
+    },
+    {
+      "id": "content",
+      "name": "内容流水线",
+      "description": "从调研到发表一篇作品。",
+      "phases": [
+        { "name": "调研" },
+        { "name": "起草" },
+        { "name": "编辑" },
+        { "name": "发表" }
+      ]
+    },
+    {
+      "id": "data",
+      "name": "数据分析",
+      "description": "从原始数据到一个决策。",
+      "phases": [
+        { "name": "收集" },
+        { "name": "清洗" },
+        { "name": "分析" },
+        { "name": "呈现" }
+      ]
+    },
+    {
+      "id": "blank",
+      "name": "空白",
+      "description": "三个待重命名的空阶段。",
+      "phases": [
+        { "name": "首先" },
+        { "name": "然后" },
+        { "name": "最后" }
+      ]
+    }
+  ]
+}

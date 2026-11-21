@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The scan: roots -> skills -> steps, links, tags -> annotations -> insights.
+// The scan: roots -> skills -> steps, links, tags -> translations -> annotations -> insights.
 // A skill that cannot be read or parsed is recorded with an issue; it never
 // aborts the scan.
 
@@ -14,6 +14,7 @@ import { detectSteps } from './steps.mjs';
 import { buildLinkMatcher, findLinks } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
+import { stateTranslations, readTextBounded, translationState } from './translations.mjs';
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { findInsights } from './insights.mjs';
 import { warn } from './log.mjs';
@@ -72,6 +73,7 @@ export function scan(opts) {
     const found = findLinks(matcher, s, linkLines(s));
     edges.push(...found.edges);
     unresolved.push(...found.unresolved);
+    readTranslations(s, opts.stateDir);
   }
 
   const state = { skills, edges, unresolved, catalog };
@@ -118,8 +120,9 @@ function readSkill(dir, root) {
   const file = path.join(dir, 'SKILL.md');
   const s = {
     id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
-    dir, file, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], stepKind: 'none', steps: [], tags: [], issues: [],
+    dir, file, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
     _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
+    _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(),
   };
   let text;
   try {
@@ -153,7 +156,9 @@ function readSkill(dir, root) {
   s._mask = fenceMask(lines);
   for (let i = 0; i < s._bodyStart; i++) s._mask[i] = false;
   try {
-    s.files = bundledFiles(dir, text);
+    const listed = bundledFiles(dir, text);
+    s.files = listed.files;
+    s._localTranslations = listed.translations;
   } catch (err) {
     warn(`cannot list the files of ${dir} (${err.message})`);
   }
@@ -222,6 +227,65 @@ function analyze(s, rules, catalog) {
   }
   s._baseTags = mergeHits(fmHits, base);
   for (const st of s.steps) st.tags = mergeHits(st.tags);
+}
+
+/**
+ * A skill's translations (data-model.md "Languages"): those in its folder,
+ * then those under translations/<skill id>/ of the state folder. Each
+ * translation of SKILL.md gives words per language; every translation is
+ * checked against its source's digest and its own. Steps, links and tags stay SKILL.md's.
+ */
+function readTranslations(s, stateDir) {
+  const chosen = new Map(); // "<source rel>\0<tag>" -> the first translation found
+  let fromState = [];
+  try {
+    fromState = stateTranslations(stateDir, s.id, s.dir);
+  } catch (err) {
+    warn(`cannot read the translations of ${s.id} in ${stateDir} (${err.message})`);
+  }
+  for (const t of [...s._localTranslations, ...fromState]) {
+    const key = `${t.sourceRel}\0${t.tag}`;
+    if (!chosen.has(key)) chosen.set(key, t);
+  }
+  const digests = new Map();
+  const tagsBySource = new Map();
+  for (const t of chosen.values()) {
+    if (!tagsBySource.has(t.sourceRel)) tagsBySource.set(t.sourceRel, new Set());
+    tagsBySource.get(t.sourceRel).add(t.tag);
+    Object.assign(t, translationState(t.abs, path.join(s.dir, ...t.sourceRel.split('/')), digests));
+    for (const [flag, byLang] of [[t.stale, s._staleByLang], [t.edited, s._editedByLang]]) {
+      if (!flag) continue;
+      if (!byLang.has(t.tag)) byLang.set(t.tag, []);
+      byLang.get(t.tag).push(t.rel);
+    }
+  }
+  for (const f of s.files) f.translations = [...(tagsBySource.get(f.path) ?? [])].sort();
+  const skillTranslations = [...chosen.values()].filter((t) => t.sourceRel === 'SKILL.md').sort((a, b) => a.tag.localeCompare(b.tag));
+  for (const t of skillTranslations) s.translations[t.tag] = readSkillTranslation(s, t);
+}
+
+function readSkillTranslation(s, t) {
+  const out = { origin: t.origin, file: t.abs, frontmatter: {}, description: null, summary: null, steps: null, stale: t.stale, edited: t.edited };
+  const raw = readTextBounded(t.abs);
+  if (raw === null) {
+    warn(`cannot read the ${t.tag} translation of ${s.id} at ${t.abs}; its words are not shown`);
+    return out;
+  }
+  const text = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  const lines = text.split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  const fm = splitFrontmatter(text);
+  // Frontmatter that did not parse gives no words: each key then reads as the skill's own.
+  if (!fm.error) out.frontmatter = fm.data;
+  if (!fm.error && fm.data.description !== undefined && fm.data.description !== null) out.description = String(fm.data.description).trim();
+  const mask = fenceMask(lines);
+  for (let i = 0; i < fm.bodyStart; i++) mask[i] = false;
+  // A translation's steps are read as a skill's and kept only where they
+  // number as the skill's own: a step of one is then the step of the other.
+  const { steps } = detectSteps(lines, mask, fm.bodyStart);
+  if (steps.length === s.steps.length) out.steps = steps.map((st) => ({ title: st.title, excerpt: st.excerpt }));
+  else s._translationSteps.set(t.tag, { steps: steps.length, expected: s.steps.length });
+  return out;
 }
 
 // Lines searched for links: the description, then the body outside fenced code.

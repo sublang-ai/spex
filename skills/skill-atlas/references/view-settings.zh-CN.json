@@ -1,0 +1,12 @@
+{
+  "translationOf": { "sha256": "3e4a8eeb8ba430839e1be2aaa41bf6c7802381f0c618644dcbd03dfd845dafd0" },
+  "version": 1,
+  "about": "视图如何呈现图谱。编辑后重新扫描（或重新加载）即可生效。",
+  "title": "技能图谱",
+  "categories": {
+    "input": { "label": "数据输入" },
+    "output": { "label": "数据输出" },
+    "tool": { "label": "工具" },
+    "human": { "label": "人工" }
+  }
+}

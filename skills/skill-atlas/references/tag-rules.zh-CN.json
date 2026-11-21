@@ -1,0 +1,34 @@
+{
+  "translationOf": { "sha256": "af828f53b1e468aa0a1a566841d36591d81e01a0754cc4af8fcc583ea4251fe0" },
+  "version": 1,
+  "about": "每个标签一项。当某条模式与某个步骤的某一行匹配时，就把标签附加到该步骤上（并汇总到其技能和阶段），但在其所在子句中先前被否定的匹配（同一句中它之前 60 个字符以内出现 never、not、no、nor、without、avoid、don't、doesn't、won't、cannot 或 can't）不算证据；如果某条规则的匹配即使被否定也应计入，就在该规则上设置 \"negatable\": false。模式是 JavaScript 正则表达式，不区分大小写匹配。可以随意编辑、添加或删除条目；id 必须形如 <category>.<slug>，category 为 input、output、tool、human 之一。",
+  "tags": [
+    { "id": "input.arguments", "label": "参数" },
+    { "id": "input.files", "label": "读取文件" },
+    { "id": "input.git", "label": "Git 历史" },
+    { "id": "input.web", "label": "网页与文档" },
+    { "id": "input.service", "label": "外部服务" },
+
+    { "id": "output.files", "label": "写入文件" },
+    { "id": "output.commit", "label": "Git 提交" },
+    { "id": "output.pull-request", "label": "PR 或 Issue" },
+    { "id": "output.report", "label": "报告" },
+    { "id": "output.external", "label": "外部变更" },
+
+    { "id": "tool.shell", "label": "命令行" },
+    { "id": "tool.git", "label": "Git" },
+    { "id": "tool.github", "label": "GitHub CLI" },
+    { "id": "tool.edit", "label": "文件编辑" },
+    { "id": "tool.search", "label": "代码搜索" },
+    { "id": "tool.web", "label": "网络访问" },
+    { "id": "tool.browser", "label": "浏览器" },
+    { "id": "tool.subagent", "label": "子代理" },
+    { "id": "tool.script", "label": "附带脚本" },
+    { "id": "tool.package-manager", "label": "包管理器" },
+
+    { "id": "human.question", "label": "询问用户" },
+    { "id": "human.approval", "label": "需要批准" },
+    { "id": "human.choice", "label": "用户决定" },
+    { "id": "human.handoff", "label": "用户操作" }
+  ]
+}

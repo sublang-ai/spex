@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The files bundled with a skill, classified for the viewer.
+// The files bundled with a skill, classified for the viewer, and the
+// translations among them, which are no files of the skill's own.
 
-import fs from 'node:fs';
 import path from 'node:path';
+import { listFiles, sourceRelOf } from './translations.mjs';
 
 export const FILES_MAX = 200; // data-model.md: at most 200 bundled files per skill
-const DIRS_MAX = 2000; // stop walking a pathological tree after this many folders
-const SKIP = new Set(['node_modules', '__pycache__']);
 
 const KIND_BY_DIR = {
   references: 'reference', reference: 'reference', docs: 'reference', doc: 'reference', examples: 'reference',
@@ -26,46 +25,26 @@ const KIND_BY_EXT = {
 /**
  * @param {string} dir the skill folder
  * @param {string} skillText SKILL.md text, to tell which files it mentions
- * @returns {{ path:string, kind:string, linked:boolean }[]}
+ * @returns {{ files: { path:string, kind:string, linked:boolean, translations:string[] }[],
+ *   translations: { rel:string, sourceRel:string, tag:string, abs:string, origin:'skill' }[] }}
+ *   a file beside its source named with a language tag is a translation, not a file;
+ *   `files[].translations` is filled in by the scan, which also reads the state folder.
  */
 export function bundledFiles(dir, skillText) {
-  const out = [];
-  const seen = new Set();
-  let dirs = 0;
-  let base;
-  try { base = fs.realpathSync(dir); } catch { return out; }
-  // A link leading out of the skill folder is not one of its files (the server refuses those too).
-  const inside = (real) => {
-    const rel = path.relative(base, real);
-    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-  };
-  const walk = (abs, rel) => {
-    if (out.length >= FILES_MAX || dirs >= DIRS_MAX) return;
-    dirs++;
-    let real;
-    try { real = fs.realpathSync(abs); } catch { return; }
-    if (seen.has(real)) return; // a symlink loop
-    seen.add(real);
-    let entries;
-    try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return; }
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const e of entries) {
-      if (out.length >= FILES_MAX) return;
-      if (e.name.startsWith('.') || SKIP.has(e.name)) continue;
-      const childAbs = path.join(abs, e.name);
-      const childRel = rel ? `${rel}/${e.name}` : e.name;
-      let stat;
-      try {
-        if (!inside(fs.realpathSync(childAbs))) continue;
-        stat = fs.statSync(childAbs);
-      } catch { continue; }
-      if (stat.isDirectory()) { walk(childAbs, childRel); continue; }
-      if (!stat.isFile() || childRel === 'SKILL.md') continue;
-      out.push({ path: childRel, kind: kindOf(childRel), linked: skillText.includes(childRel) });
+  const all = listFiles(dir);
+  const present = new Set(all);
+  const files = [];
+  const translations = [];
+  for (const rel of all) {
+    const src = sourceRelOf(rel);
+    if (src && present.has(src.sourceRel)) {
+      translations.push({ rel, sourceRel: src.sourceRel, tag: src.tag, abs: path.join(dir, ...rel.split('/')), origin: 'skill' });
+      continue;
     }
-  };
-  walk(dir, '');
-  return out;
+    if (rel === 'SKILL.md' || files.length >= FILES_MAX) continue;
+    files.push({ path: rel, kind: kindOf(rel), linked: skillText.includes(rel), translations: [] });
+  }
+  return { files, translations };
 }
 
 function kindOf(rel) {

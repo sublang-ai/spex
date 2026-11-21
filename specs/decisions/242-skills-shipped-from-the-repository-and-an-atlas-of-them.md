@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-21).
+Extended in the atlas's scan, page and state folder and in the form of a shipped skill by [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), which adds translations and the page's language.
 
 ## Context
 

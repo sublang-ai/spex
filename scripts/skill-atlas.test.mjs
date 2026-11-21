@@ -45,6 +45,17 @@ function fm(name, description, extra = '') {
 }
 
 const skillOf = (atlas, id) => atlas.skills.find((s) => s.id === id);
+const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const record = (hex) => `<!-- skill-atlas:source sha256=${hex} -->`;
+// A Markdown translation's own digest: its text without a byte order mark, with LF ends and its record line left out.
+const ownOf = (text) => crypto.createHash('sha256').update(text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n').filter((l) => !/^\s*<!--\s*skill-atlas:source\s/.test(l)).join('\n')).digest('hex');
+const mdRecord = (hex, own) => `<!-- skill-atlas:source sha256=${hex} own=${own} -->`;
+// A translation's name: a language tag before the extension of a text file.
+const TRANSLATION_NAME = /^(.+)\.([a-z]{2,3}(?:-[A-Za-z0-9]{1,8})*)\.(md|json|txt|yaml|yml)$/;
+const isTranslation = (file) => {
+  const m = TRANSLATION_NAME.exec(path.basename(file));
+  return !!m && fs.existsSync(path.join(path.dirname(file), `${m[1]}.${m[3]}`));
+};
 const edge = (atlas, from, to) => atlas.edges.filter((e) => e.from === from && e.to === to);
 
 // One fixture project for the scan tests.
@@ -235,6 +246,83 @@ Proceed without asking anyone.
   writeSkill(path.join(CLAUDE, '.trash', 'old'), `${fm('old', 'Trashed.')}\n`);
   writeSkill(path.join(CLAUDE, 'node_modules', 'pkg'), `${fm('pkg', 'A dependency.')}\n`);
 
+  // Steps from Chinese headings (skill-atlas-2).
+  writeSkill(path.join(CLAUDE, 'zhong'), `${fm('zhong', '\u5206\u90E8\u5206\u7684\u6280\u80FD\u3002')}
+## \u7B2C 1 \u90E8\u5206\uFF1A\u51C6\u5907
+
+\u51C6\u5907\u3002
+
+## \u7B2C 2 \u90E8\u5206\uFF1A\u6267\u884C
+
+\u6267\u884C\u3002
+`);
+  writeSkill(path.join(CLAUDE, 'zhstep'), `${fm('zhstep', '\u5206\u6B65\u9AA4\u7684\u6280\u80FD\u3002')}
+# \u6807\u9898
+
+### \u6B65\u9AA4 1\uFF1A\u626B\u63CF
+
+\u626B\u63CF\u3002
+
+### \u6B65\u9AA4 2 \u2014 \u6253\u5F00
+
+\u6253\u5F00\u3002
+`);
+  writeSkill(path.join(CLAUDE, 'zhlist'), `${fm('zhlist', '\u6709\u6D41\u7A0B\u5217\u8868\u7684\u6280\u80FD\u3002')}
+## \u5E38\u89C1\u95EE\u9898
+
+1. \u547D\u4EE4\u8FC7\u65F6
+2. \u7F3A\u5C11\u4F9D\u8D56
+
+## \u5DE5\u4F5C\u6D41\u7A0B
+
+1. **\u6536\u96C6\u8F93\u5165**\uFF1A\u6C47\u603B\u4E00\u5207\u3002
+2. \u5199\u62A5\u544A\u3002\u7136\u540E\u505C\u6B62\u3002
+`);
+
+  // Translations (skill-atlas-27): the skill's folder's, the state folder's,
+  // one of other steps and ones behind their source.
+  const trans = path.join(CLAUDE, 'trans');
+  writeSkill(trans, `${fm('trans', 'Translated skill.')}
+## Step 1: Gather
+
+Read the [guide](references/guide.md).
+
+## Step 2: Build
+
+Build it.
+`);
+  fs.mkdirSync(path.join(trans, 'references'), { recursive: true });
+  fs.writeFileSync(path.join(trans, 'references', 'guide.md'), '# Guide\n');
+  fs.writeFileSync(path.join(trans, 'references', 'guide.zh-CN.md'), `${record('0'.repeat(64))}\n# \u6307\u5357\n`);
+  fs.writeFileSync(path.join(trans, 'SKILL.zh-CN.md'), `${fm('trans', '\u5DF2\u7FFB\u8BD1\u7684\u6280\u80FD\u3002')}${record(sha(path.join(trans, 'SKILL.md')))}
+## \u6B65\u9AA4 1\uFF1A\u6536\u96C6
+
+\u9605\u8BFB[\u6307\u5357](references/guide.zh-CN.md)\u3002
+Invoke the \`code\` skill. Ask the user which branch to use.
+
+## \u7B2C 2 \u6B65\uFF1A\u6784\u5EFA
+
+\u6784\u5EFA\u3002
+`);
+  const stateTrans = (id, rel, text) => {
+    const file = path.join(P, 'state', 'translations', id, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+  };
+  stateTrans('trans', 'SKILL.zh-CN.md', `${fm('trans', 'STATE COPY')}## \u6B65\u9AA4 1\uFF1AX\n\n## \u6B65\u9AA4 2\uFF1AY\n`);
+  stateTrans('trans', 'SKILL.ja.md', `${fm('trans', 'Japanese words.')}## Step 1: A\n\n## Step 2: B\n`);
+  stateTrans('trans', 'references/guide.ja.md', '# Guide in ja\n');
+  stateTrans('alpha', 'SKILL.zh-CN.md', `${fm('alpha', '\u963F\u5C14\u6CD5\u3002')}## \u7B2C 1 \u9636\u6BB5 \u2014 \u6536\u96C6\n\n\u8BFB\u914D\u7F6E\u3002\n\n## \u7B2C 2 \u9636\u6BB5 \u2014 \u6784\u5EFA\n\n\u8FD0\u884C\u3002\n`);
+  fs.writeFileSync(path.join(CLAUDE, 'gamma', 'SKILL.zh-CN.md'), `${fm('gamma', '\u4F3D\u9A6C\u3002')}## \u5DE5\u4F5C\u6D41\u7A0B\n\n1. \u4E00\u3002\n2. \u4E8C\u3002\n3. \u4E09\u3002\n`);
+  // A translation edited apart from its source: the source's digest matches, its own does not.
+  fs.writeFileSync(path.join(CLAUDE, 'zhlist', 'SKILL.en-US.md'), `${fm('zhlist', 'A skill with a workflow list.')}${mdRecord(sha(path.join(CLAUDE, 'zhlist', 'SKILL.md')), '1'.repeat(64))}
+## Workflow
+
+1. **Gather input**: everything.
+2. Write the report. Then stop.
+`);
+  fs.writeFileSync(path.join(CLAUDE, 'delta', 'SKILL.zh-CN.md'), `${fm('delta', '\u5FB7\u5C14\u5854\u3002')}${record('f'.repeat(64))}\n## \u80CC\u666F\n\n\u80CC\u666F\u3002\n\n## \u89C4\u5219\n\n\u89C4\u5219\u3002\n`);
+
   // Annotations.
   fs.mkdirSync(path.join(P, 'state'), { recursive: true });
   fs.writeFileSync(path.join(P, 'state', 'annotations.json'), JSON.stringify({
@@ -244,11 +332,13 @@ Proceed without asking anyone.
         summary: 'Delta explains its rules.',
         addTags: [{ id: 'human.approval', step: 2, note: 'rules need sign-off' }, { id: 'output.custom-thing' }],
         addCalls: [{ to: 'review', step: 1, note: 'after the background' }],
+        translations: { 'zh-CN': { summary: '\u5FB7\u5C14\u5854\u89E3\u91CA\u5B83\u7684\u89C4\u5219\u3002' } },
       },
       annotated: {
         steps: [{ title: 'Decide the plan', summary: 'Pick one plan.', tags: ['human.choice'], calls: ['review'] }, { title: 'Write it down', summary: 'Record it.' }],
         addTags: [{ id: 'output.files', step: 2, note: 'writes the plan' }],
         addCalls: [{ to: 'lint-fix', step: 2, note: 'lints the plan' }],
+        translations: { 'zh-CN': { summary: '\u51B3\u5B9A\u5E76\u8BB0\u5F55\u8BA1\u5212\u3002', steps: [{ title: '\u51B3\u5B9A\u8BA1\u5212', summary: '\u9009\u4E00\u4E2A\u8BA1\u5212\u3002' }, { title: '\u5199\u4E0B\u6765' }] } },
       },
       orchestrator: { removeCalls: [{ to: 'lint-fix' }], removeTags: [{ id: 'output.files' }] },
       'not-installed': { summary: 'ignored' },
@@ -386,8 +476,8 @@ describe('scan (skill-atlas-24)', () => {
 
   test('lists bundled files inside the skill folder only', () => {
     assert.deepEqual(skillOf(atlas, 'bundled').files, [
-      { path: 'references/guide.md', kind: 'reference', linked: true },
-      { path: 'scripts/run.sh', kind: 'script', linked: false },
+      { path: 'references/guide.md', kind: 'reference', linked: true, translations: [] },
+      { path: 'scripts/run.sh', kind: 'script', linked: false, translations: [] },
     ], 'a link leading out of the folder lists nothing');
   });
 
@@ -413,11 +503,98 @@ describe('scan (skill-atlas-24)', () => {
 
   test('reports every insight kind', () => {
     const kinds = new Set(atlas.insights.map((i) => i.kind));
-    for (const k of ['duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'invalid-frontmatter', 'no-steps']) {
+    for (const k of ['duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'invalid-frontmatter', 'no-steps', 'stale-translation', 'edited-translation', 'translation-steps']) {
       assert.ok(kinds.has(k), `insight ${k}`);
     }
     assert.ok(skillOf(atlas, 'big').issues.includes('oversized'));
     assert.ok(skillOf(atlas, 'other-name').issues.includes('name-mismatch'));
+    // Every insight carries the values its message is built from.
+    for (const i of atlas.insights) assert.ok(i.params && typeof i.params === 'object', `${i.kind} has params`);
+    const one = (kind, id) => atlas.insights.find((i) => i.kind === kind && i.skills.includes(id));
+    assert.deepEqual(one('duplicate-name', 'dup').params, { name: 'dup' });
+    assert.deepEqual(one('unresolved-link', 'orchestrator').params, { name: 'missing-thing', from: 'orchestrator' });
+    assert.deepEqual([...one('cycle', 'ping').params.path].sort(), ['ping', 'pong']);
+    assert.equal(one('oversized', 'big').params.lines, skillOf(atlas, 'big').lines);
+    assert.deepEqual(one('name-mismatch', 'other-name').params, { name: 'other-name', folder: 'folder-x' });
+    assert.deepEqual(one('no-steps', 'plain').params, {});
+  });
+
+  test('reports a translation behind its source and one of other steps (skill-atlas-5)', () => {
+    const stale = atlas.insights.filter((i) => i.kind === 'stale-translation');
+    assert.deepEqual(stale.find((i) => i.skills[0] === 'trans').params, { lang: 'zh-CN', files: ['references/guide.zh-CN.md'] });
+    assert.deepEqual(stale.find((i) => i.skills[0] === 'delta').params, { lang: 'zh-CN', files: ['SKILL.zh-CN.md'] });
+    assert.ok(!stale.some((i) => i.skills[0] === 'alpha'), 'a translation recording no digest is not behind');
+    const edited = atlas.insights.filter((i) => i.kind === 'edited-translation');
+    assert.deepEqual(edited.map((i) => [i.skills, i.params]), [[['zhlist'], { lang: 'en-US', files: ['SKILL.en-US.md'] }]], 'one edited apart from its source, alone');
+    const steps = atlas.insights.filter((i) => i.kind === 'translation-steps');
+    assert.deepEqual(steps.map((i) => [i.skills, i.params]), [[['gamma'], { lang: 'zh-CN', steps: 3, expected: 2 }]]);
+    assert.ok(skillOf(atlas, 'trans').issues.includes('stale-translation'));
+    assert.ok(skillOf(atlas, 'gamma').issues.includes('translation-steps'));
+  });
+
+  test('detects steps from Chinese headings and a Chinese procedure heading (skill-atlas-2)', () => {
+    const zhong = skillOf(atlas, 'zhong');
+    assert.equal(zhong.stepKind, 'step');
+    assert.deepEqual(zhong.steps.map((st) => st.title), ['\u51C6\u5907', '\u6267\u884C']);
+    assert.deepEqual(skillOf(atlas, 'zhstep').steps.map((st) => st.title), ['\u626B\u63CF', '\u6253\u5F00']);
+    const list = skillOf(atlas, 'zhlist');
+    assert.equal(list.stepKind, 'step');
+    assert.deepEqual(list.steps.map((st) => st.title), ['\u6536\u96C6\u8F93\u5165', '\u5199\u62A5\u544A'], 'the list under the procedure heading, its titles cut at the Chinese full stop');
+  });
+
+  test('reports translations from the skill\'s folder, then the state folder, as words alone (skill-atlas-27)', () => {
+    const t = skillOf(atlas, 'trans');
+    const zh = t.translations['zh-CN'];
+    assert.equal(zh.origin, 'skill', 'the skill folder\'s translation comes first');
+    assert.equal(zh.file, path.join(CLAUDE, 'trans', 'SKILL.zh-CN.md'));
+    assert.equal(zh.description, '\u5DF2\u7FFB\u8BD1\u7684\u6280\u80FD\u3002');
+    assert.deepEqual(zh.frontmatter, { name: 'trans', description: '\u5DF2\u7FFB\u8BD1\u7684\u6280\u80FD\u3002' }, 'the translation\'s frontmatter, as the skill\'s own');
+    assert.equal(zh.summary, null);
+    assert.deepEqual(zh.steps.map((st) => st.title), ['\u6536\u96C6', '\u6784\u5EFA']);
+    assert.match(zh.steps[0].excerpt, /\u9605\u8BFB\u6307\u5357/);
+    assert.equal(zh.stale, false);
+    assert.equal(zh.edited, false);
+    const ja = t.translations.ja;
+    assert.equal(ja.origin, 'state');
+    assert.equal(ja.file, path.join(P, 'state', 'translations', 'trans', 'SKILL.ja.md'));
+    assert.equal(ja.description, 'Japanese words.');
+    assert.deepEqual(ja.steps.map((st) => st.title), ['A', 'B']);
+    assert.deepEqual(Object.keys(t.translations), ['ja', 'zh-CN']);
+
+    const a = skillOf(atlas, 'alpha').translations['zh-CN'];
+    assert.equal(a.origin, 'state');
+    assert.deepEqual(a.steps.map((st) => st.title), ['\u6536\u96C6', '\u6784\u5EFA']);
+    assert.equal(a.stale, false, 'one recording no digest is not behind');
+    const g = skillOf(atlas, 'gamma').translations['zh-CN'];
+    assert.equal(g.description, '\u4F3D\u9A6C\u3002');
+    assert.equal(g.steps, null, 'steps numbering otherwise than the skill\'s are not reported');
+    assert.equal(skillOf(atlas, 'delta').translations['zh-CN'].stale, true, 'a translation behind its source is marked');
+    assert.equal(skillOf(atlas, 'delta').translations['zh-CN'].edited, false, 'one recording no own digest is not edited');
+    const en = skillOf(atlas, 'zhlist').translations['en-US'];
+    assert.deepEqual([en.stale, en.edited], [false, true], 'a translation edited apart from its source is marked');
+    assert.equal(en.description, 'A skill with a workflow list.');
+    assert.deepEqual(skillOf(atlas, 'beta').translations, {}, 'a skill with none has an empty map');
+
+    // A translation is no file, no skill, and adds no link and no tag.
+    assert.deepEqual(t.files, [{ path: 'references/guide.md', kind: 'reference', linked: true, translations: ['ja', 'zh-CN'] }]);
+    assert.ok(atlas.skills.every((s) => path.basename(s.file) === 'SKILL.md'), 'no translation is a skill');
+    assert.ok(atlas.skills.every((s) => s.files.every((f) => !/\.(zh-CN|ja)\.md$/.test(f.path))), 'no translation is listed as a file');
+    assert.deepEqual(t.steps.map((st) => st.title), ['Gather', 'Build'], 'steps come from SKILL.md');
+    assert.ok(!atlas.edges.some((e) => e.from === 'trans'), 'a link in a translation is no link');
+    assert.ok(!t.tags.some((tg) => tg.id === 'human.question'), 'a tag rule matching a translation adds no tag');
+  });
+
+  test('applies an annotation\'s words under a language\'s tag (skill-atlas-6)', () => {
+    const a = skillOf(atlas, 'annotated').translations['zh-CN'];
+    assert.deepEqual(a, {
+      origin: 'annotation', file: null, frontmatter: null, description: null, summary: '\u51B3\u5B9A\u5E76\u8BB0\u5F55\u8BA1\u5212\u3002',
+      steps: [{ title: '\u51B3\u5B9A\u8BA1\u5212', excerpt: '\u9009\u4E00\u4E2A\u8BA1\u5212\u3002' }, { title: '\u5199\u4E0B\u6765', excerpt: 'Record it.' }],
+      stale: false, edited: false,
+    });
+    const d = skillOf(atlas, 'delta').translations['zh-CN'];
+    assert.equal(d.origin, 'skill', 'an annotation\'s summary joins the translation file\'s words');
+    assert.equal(d.summary, '\u5FB7\u5C14\u5854\u89E3\u91CA\u5B83\u7684\u89C4\u5219\u3002');
+    assert.deepEqual(d.steps.map((st) => st.title), ['\u80CC\u666F', '\u89C4\u5219']);
   });
 
   test('reports a calls cycle', () => {
@@ -587,6 +764,137 @@ test('plugin skills: installed for this project, enabled, and linkable as plugin
   assert.ok(atlas2.edges.some((e) => e.from === 'caller' && e.to === 'tools-skill' && e.kind === 'calls'));
 });
 
+// Every file under the folders with its content, to prove a command changes none.
+function contents(...dirs) {
+  const out = {};
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else out[full] = `${fs.statSync(full).mtimeMs}:${fs.readFileSync(full, 'utf8')}`;
+    }
+  };
+  for (const d of dirs) walk(d);
+  return out;
+}
+
+test('pin records each translation\'s source digest, and pin --check names those behind or unpinned (skill-atlas-28)', () => {
+  const project = path.join(tmp, 'pin-project');
+  const state = path.join(project, 'state');
+  const skill = path.join(project, '.claude', 'skills', 'pinned');
+  writeSkill(skill, `${fm('pinned', 'Pinned.')}\n## Step 1: A\nA.\n\n## Step 2: B\nB.\n`);
+  const SPDX = '<!-- SPDX-License-Identifier: Apache-2.0 -->';
+  fs.writeFileSync(path.join(skill, 'SKILL.zh-CN.md'), `${fm('pinned', '\u5DF2\u56FA\u5B9A\u3002')}\n${SPDX}\n\n## \u6B65\u9AA4 1\uFF1AA\nA\u3002\n\n## \u6B65\u9AA4 2\uFF1AB\nB\u3002\n`);
+  fs.mkdirSync(path.join(skill, 'references'), { recursive: true });
+  const ref = path.join(skill, 'references', 'a.md');
+  fs.writeFileSync(ref, '# A\n');
+  const refZh = path.join(skill, 'references', 'a.zh-CN.md');
+  fs.writeFileSync(refZh, `${SPDX}\n<!-- SPDX-FileCopyrightText: 2026 Test -->\n\n# A\u6587\n`);
+  const labels = path.join(skill, 'references', 'labels.json');
+  fs.writeFileSync(labels, '{\n  "version": 1,\n  "title": "Labels"\n}\n');
+  const labelsZh = path.join(skill, 'references', 'labels.zh-CN.json');
+  fs.writeFileSync(labelsZh, '{\n  "version": 1,\n  "title": "\u6807\u7B7E"\n}\n');
+  // Names whose infix is no language tag: files, not translations.
+  const plain = { 'app.dev.yaml': 'dev: true\n', 'data.min.json': '{"a":1}\n', 'notes.bak.md': '# old\n' };
+  for (const [f, text] of Object.entries(plain)) {
+    fs.writeFileSync(path.join(skill, 'references', f.replace(/\.[a-z]+(\.[a-z]+)$/, '$1')), text);
+    fs.writeFileSync(path.join(skill, 'references', f), text);
+  }
+  const stateJa = path.join(state, 'translations', 'pinned', 'references', 'a.ja.md');
+  fs.mkdirSync(path.dirname(stateJa), { recursive: true });
+  fs.writeFileSync(stateJa, '# A in ja\n');
+  const scope = ['--cwd', project, '--no-user', '--no-plugins', '--state', state];
+
+  const untouched = contents(skill, state);
+  let r = run(['pin', '--check', skill, path.join(state, 'translations'), ...scope], { cwd: project });
+  assert.equal(r.status, 1, 'unpinned translations fail the check');
+  const named = r.stdout.split('\n').filter((l) => l.startsWith('no digest'));
+  assert.equal(named.length, 4, r.stdout);
+  for (const f of ['SKILL.zh-CN.md', 'a.zh-CN.md', 'labels.zh-CN.json', 'a.ja.md']) assert.ok(named.some((l) => l.endsWith(f)), `${f} is named`);
+  assert.deepEqual(contents(skill, state), untouched, 'the check changes no file');
+
+  r = run(['pin', skill, path.join(state, 'translations', 'pinned'), ...scope], { cwd: project });
+  assert.equal(r.status, 0, r.stderr);
+  const skillLines = fs.readFileSync(path.join(skill, 'SKILL.zh-CN.md'), 'utf8').split('\n');
+  const skillZhText = fs.readFileSync(path.join(skill, 'SKILL.zh-CN.md'), 'utf8');
+  assert.deepEqual(skillLines.slice(3, 7), ['---', '', SPDX, mdRecord(sha(path.join(skill, 'SKILL.md')), ownOf(skillZhText))], 'after the frontmatter and the SPDX line following it, with its own digest');
+  const refLines = fs.readFileSync(refZh, 'utf8').split('\n');
+  assert.equal(refLines[2], mdRecord(sha(ref), ownOf(fs.readFileSync(refZh, 'utf8'))), 'at the top after the SPDX lines');
+  assert.equal(fs.readFileSync(labelsZh, 'utf8'), `{\n  "translationOf": { "sha256": "${sha(labels)}" },\n  "version": 1,\n  "title": "\u6807\u7B7E"\n}\n`, 'a top-level key, the formatting kept');
+  assert.equal(fs.readFileSync(stateJa, 'utf8').split('\n')[0], mdRecord(sha(ref), ownOf(fs.readFileSync(stateJa, 'utf8'))), 'a state translation records its skill\'s file');
+  for (const f of ['app.dev.yaml', 'data.min.json', 'notes.bak.md']) assert.equal(fs.readFileSync(path.join(skill, 'references', f), 'utf8'), plain[f], `${f} is no translation and is left unchanged`);
+
+  r = run(['pin', '--check', skill, path.join(state, 'translations'), ...scope], { cwd: project });
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /4 translations up to date/);
+
+  fs.writeFileSync(ref, '# A, changed\n');
+  const pinnedState = contents(skill, state);
+  r = run(['pin', '--check', skill], { cwd: project });
+  assert.equal(r.status, 1, 'a translation behind its source fails the check');
+  const behind = r.stdout.split('\n').filter((l) => l.startsWith('behind'));
+  assert.equal(behind.length, 1, r.stdout);
+  assert.match(behind[0], /a\.zh-CN\.md/);
+  assert.deepEqual(contents(skill, state), pinnedState, 'the check changes no file');
+  fs.writeFileSync(ref, '# A\n');
+
+  // A Markdown translation edited after it was pinned is named as edited.
+  fs.appendFileSync(refZh, '\u8865\u5145\u3002\n');
+  const editedState = contents(skill, state);
+  r = run(['pin', '--check', skill], { cwd: project });
+  assert.equal(r.status, 1, 'a translation edited apart from its source fails the check');
+  const editedLines = r.stdout.split('\n').filter((l) => l.startsWith('edited'));
+  assert.equal(editedLines.length, 1, r.stdout);
+  assert.match(editedLines[0], /a\.zh-CN\.md/);
+  assert.ok(!r.stdout.split('\n').some((l) => l.startsWith('behind')), r.stdout);
+  assert.deepEqual(contents(skill, state), editedState, 'the check changes no file');
+  const atlasEdited = scanJson(project, [], state).atlas;
+  assert.ok(atlasEdited.insights.some((i) => i.kind === 'edited-translation' && i.params.files.includes('references/a.zh-CN.md')));
+  fs.writeFileSync(ref, '# A, changed\n');
+  const atlasBehind = scanJson(project, [], state).atlas;
+  assert.ok(atlasBehind.insights.some((i) => i.kind === 'stale-translation' && i.params.files.includes('references/a.zh-CN.md')));
+
+  r = run(['pin', refZh], { cwd: project });
+  assert.equal(r.status, 0, r.stderr);
+  const again = fs.readFileSync(refZh, 'utf8').split('\n');
+  assert.equal(again.filter((l) => l.includes('skill-atlas:source')).length, 1, 'the record is rewritten in place');
+  assert.equal(again[2], mdRecord(sha(ref), ownOf(again.join('\n'))));
+  const pinnedJson = JSON.parse(fs.readFileSync(labelsZh, 'utf8'));
+  fs.writeFileSync(labels, '{ "version": 1, "title": "Changed" }\n');
+  assert.equal(run(['pin', labelsZh]).status, 0);
+  assert.notEqual(JSON.parse(fs.readFileSync(labelsZh, 'utf8')).translationOf.sha256, pinnedJson.translationOf.sha256, 'the JSON record is rewritten in place');
+  assert.equal(fs.readFileSync(labelsZh, 'utf8').split('translationOf').length, 2, 'one key');
+
+  const { atlas } = scanJson(project, [], state);
+  const s = skillOf(atlas, 'pinned');
+  assert.equal(s.translations['zh-CN'].stale, false);
+  assert.deepEqual(s.files.find((f) => f.path === 'references/a.md').translations, ['ja', 'zh-CN']);
+
+  const notOne = run(['pin', path.join(skill, 'SKILL.md')]);
+  assert.equal(notOne.status, 1);
+  assert.match(notOne.stderr, /is not a translation/);
+
+  // Pinning rewrites only the record line, every other line keeping its own end.
+  const mixedSrc = path.join(skill, 'references', 'mixed.md');
+  fs.writeFileSync(mixedSrc, '# M\n');
+  const mixed = path.join(skill, 'references', 'mixed.zh-CN.md');
+  fs.writeFileSync(mixed, '# T\nline1\r\nline2\nline3\n');
+  assert.equal(run(['pin', mixed]).status, 0);
+  const mixedText = fs.readFileSync(mixed, 'utf8');
+  assert.equal(mixedText, `${mdRecord(sha(mixedSrc), ownOf(mixedText))}\n# T\nline1\r\nline2\nline3\n`);
+
+  // A translation that cannot hold a record refuses the whole pin, changing no file.
+  fs.writeFileSync(path.join(skill, 'references', 'list.json'), '[1]\n');
+  fs.writeFileSync(path.join(skill, 'references', 'list.zh-CN.json'), '[1, 2]\n');
+  fs.writeFileSync(ref, '# A, changed again\n');
+  const beforeRefused = contents(skill, state);
+  const refused = run(['pin', skill], { cwd: project });
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /list\.zh-CN\.json/);
+  assert.match(refused.stderr, /no translation was changed/);
+  assert.deepEqual(contents(skill, state), beforeRefused, 'no translation is written');
+});
+
 test('a CLI failure is one line on stderr and a non-zero exit', () => {
   const r = run(['scan', '--cwd', path.join(tmp, 'no-such-folder')]);
   assert.notEqual(r.status, 0);
@@ -610,7 +918,7 @@ describe('serve (skill-atlas-25)', () => {
   before(async () => {
     fs.writeFileSync(viewer, `<!doctype html><title>t</title>${EMBED_MARKER}\n`);
     fs.cpSync(path.dirname(path.dirname(CLI)), copy, { recursive: true });
-    child = spawn(process.execPath, [path.join(copy, 'scripts', 'atlas.mjs'), 'serve', '--no-open', '--port', '0', '--cwd', P, '--no-user', '--no-plugins', '--state', state, '--viewer', viewer], { stdio: ['ignore', 'pipe', 'pipe'] });
+    child = spawn(process.execPath, [path.join(copy, 'scripts', 'atlas.mjs'), 'serve', '--no-open', '--port', '0', '--lang', 'zh-CN', '--cwd', P, '--no-user', '--no-plugins', '--state', state, '--viewer', viewer], { stdio: ['ignore', 'pipe', 'pipe'] });
     info = await new Promise((resolve, reject) => {
       let buf = '';
       const timer = setTimeout(() => reject(new Error('server did not start in time')), SERVER_START_TIMEOUT_MS);
@@ -748,6 +1056,78 @@ describe('serve (skill-atlas-25)', () => {
     assert.equal(cfg.view.title, 'Edited title');
   });
 
+  test('returns edited label files and catalogs on the next read, with --lang (skill-atlas-23)', async () => {
+    const refs = path.join(copy, 'references');
+    const write = (file, doc) => fs.writeFileSync(file, JSON.stringify(doc, null, 2));
+    write(path.join(refs, 'tag-rules.zh-CN.json'), { version: 1, tags: [{ id: 'tool.shell', category: 'tool', label: 'SHELL-ZH', patterns: ['ignored'] }] });
+    write(path.join(refs, 'workflow-presets.zh-CN.json'), { version: 1, presets: [{ id: 'sdlc', name: 'S-ZH', description: 'D-ZH', phases: [{ name: 'P1', keywords: ['x'] }, { name: 'P2' }] }] });
+    write(path.join(refs, 'view-settings.zh-CN.json'), { version: 1, title: 'T-ZH', categories: { input: { label: 'I-ZH', color: '#000' } } });
+    fs.mkdirSync(path.join(copy, 'assets', 'locales'), { recursive: true });
+    const catalog = path.join(copy, 'assets', 'locales', 'zh-CN.json');
+    write(catalog, { version: 1, language: 'zh-CN', name: '\u7B80\u4F53\u4E2D\u6587', messages: { Rescan: 'R-ZH' } });
+    let cfg = JSON.parse((await request({ pathname: '/api/config' })).text);
+    assert.equal(cfg.lang, 'zh-CN', 'the --lang the command was given');
+    assert.deepEqual(cfg.labels['zh-CN'], {
+      title: 'T-ZH',
+      categories: { input: 'I-ZH' },
+      tags: { 'tool.shell': 'SHELL-ZH' },
+      presets: { sdlc: { name: 'S-ZH', description: 'D-ZH', phases: ['P1', 'P2'] } },
+    }, 'labels alone, by id and by position');
+    assert.deepEqual(cfg.locales['zh-CN'], { name: '\u7B80\u4F53\u4E2D\u6587', messages: { Rescan: 'R-ZH' } });
+    write(catalog, { version: 1, language: 'zh-CN', name: '\u7B80\u4F53\u4E2D\u6587', messages: { Rescan: 'R2-ZH' } });
+    write(path.join(refs, 'tag-rules.zh-CN.json'), { version: 1, tags: [{ id: 'tool.shell', label: 'SHELL2-ZH' }] });
+    cfg = JSON.parse((await request({ pathname: '/api/config' })).text);
+    assert.equal(cfg.locales['zh-CN'].messages.Rescan, 'R2-ZH', 'an edited catalog');
+    assert.equal(cfg.labels['zh-CN'].tags['tool.shell'], 'SHELL2-ZH', 'an edited label file');
+  });
+
+  test('returns a file asked in a language as its translation, else the original (skill-atlas-10)', async () => {
+    const ask = async (skill, rel, lang) => {
+      const r = await request({ pathname: `/api/file?skill=${skill}&path=${encodeURIComponent(rel)}&lang=${lang}` });
+      assert.equal(r.status, 200, r.text);
+      assert.match(r.headers['content-type'], /^application\/json/);
+      return JSON.parse(r.text);
+    };
+    const own = await ask('trans', 'SKILL.md', 'zh-CN');
+    assert.equal(own.language, 'zh-CN');
+    assert.equal(own.path, 'SKILL.zh-CN.md', 'named as the file it is');
+    assert.equal(own.stale, false);
+    assert.equal(own.text, fs.readFileSync(path.join(CLAUDE, 'trans', 'SKILL.zh-CN.md'), 'utf8'), 'the skill folder\'s translation');
+    const behind = await ask('trans', 'references/guide.md', 'zh-CN');
+    assert.equal(behind.language, 'zh-CN');
+    assert.equal(behind.path, 'references/guide.zh-CN.md');
+    assert.equal(behind.stale, true, 'said to be behind its source');
+    const stateFile = path.join(state, 'translations', 'beta', 'SKILL.zh-CN.md');
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(stateFile, '# \u8D1D\u5854\n');
+    const fromState = await ask('beta', 'SKILL.md', 'zh-CN');
+    assert.deepEqual(fromState, { language: 'zh-CN', path: 'SKILL.zh-CN.md', stale: false, edited: false, text: '# \u8D1D\u5854\n' }, 'the state folder\'s translation');
+    const edited = await ask('zhlist', 'SKILL.md', 'en-US');
+    assert.deepEqual([edited.language, edited.stale, edited.edited], ['en-US', false, true], 'said to be edited apart from its source');
+    // A translation that is a link out of its folder, or a folder, is none: the original is returned.
+    const outside = path.join(tmp, 'outside.zh-CN.md');
+    fs.writeFileSync(outside, '# outside\n');
+    const link = path.join(CLAUDE, 'alpha', 'SKILL.zh-CN.md');
+    const folder = path.join(CLAUDE, 'trans', 'references', 'guide.ja.md');
+    fs.symlinkSync(outside, link);
+    fs.mkdirSync(folder);
+    try {
+      const viaLink = await ask('alpha', 'SKILL.md', 'zh-CN');
+      assert.deepEqual([viaLink.language, viaLink.text], [null, fs.readFileSync(path.join(CLAUDE, 'alpha', 'SKILL.md'), 'utf8')], 'a link leading out is no translation');
+      assert.equal((await ask('trans', 'references/guide.md', 'ja')).language, null, 'a folder is no translation');
+    } finally {
+      fs.rmSync(link);
+      fs.rmSync(folder, { recursive: true });
+    }
+    const original = await ask('alpha', 'SKILL.md', 'zh-CN');
+    assert.equal(original.language, null, 'the original where there is none');
+    assert.equal(original.path, 'SKILL.md', 'named as the original');
+    assert.equal(original.text, fs.readFileSync(path.join(CLAUDE, 'alpha', 'SKILL.md'), 'utf8'));
+    assert.equal((await ask('alpha', 'SKILL.md', 'en-US')).language, null);
+    assert.equal((await request({ pathname: '/api/file?skill=alpha&path=SKILL.md&lang=not!a!tag' })).status, 400);
+    assert.equal((await request({ pathname: `/api/file?skill=trans&path=${encodeURIComponent('../alpha/SKILL.md')}&lang=zh-CN` })).status, 403, 'a path outside the folder is refused in a language too');
+  });
+
   test('refuses a foreign Host and unmarked mutations', async () => {
     const foreign = await request({ pathname: '/api/atlas', headers: { Host: `evil.example:${port}` } });
     assert.equal(foreign.status, 403);
@@ -806,6 +1186,30 @@ describe('export', () => {
     assert.equal(data.atlas.skills[0].description, 'Breaks </script> tags');
   });
 
+  test('embeds the config with its catalogs and --lang\'s language (skill-atlas-22)', () => {
+    const copy = path.join(tmp, 'export-skill-copy');
+    fs.cpSync(path.dirname(path.dirname(CLI)), copy, { recursive: true });
+    fs.mkdirSync(path.join(copy, 'assets', 'locales'), { recursive: true });
+    fs.writeFileSync(path.join(copy, 'assets', 'locales', 'zh-CN.json'), JSON.stringify({ version: 1, language: 'zh-CN', name: 'ZH', messages: { Rescan: '</script><b>R</b>' } }));
+    fs.writeFileSync(path.join(copy, 'references', 'view-settings.zh-CN.json'), JSON.stringify({ title: 'T-ZH' }));
+    const viewer = path.join(tmp, 'export-viewer.html');
+    fs.writeFileSync(viewer, `<html><body>\n${EMBED_MARKER}\n</body></html>\n`);
+    const out = path.join(tmp, 'export-lang.html');
+    const r = spawnSync(process.execPath, [path.join(copy, 'scripts', 'atlas.mjs'), 'export', '--lang', 'zh-CN', '--out', out, '--cwd', P, '--no-user', '--no-plugins', '--state', path.join(P, 'state'), '--viewer', viewer], { encoding: 'utf8', timeout: CLI_TIMEOUT_MS });
+    assert.equal(r.status, 0, r.stderr);
+    const m = /<script id="atlas-embedded" type="application\/json">([\s\S]*?)<\/script>/.exec(fs.readFileSync(out, 'utf8'));
+    assert.ok(!m[1].includes('<'), 'no text can close the data element');
+    const data = JSON.parse(m[1]);
+    assert.equal(data.config.lang, 'zh-CN');
+    assert.deepEqual(data.config.locales['zh-CN'], { name: 'ZH', messages: { Rescan: '</script><b>R</b>' } });
+    assert.equal(data.config.labels['zh-CN'].title, 'T-ZH');
+    assert.equal(data.config.static, true);
+    assert.ok(skillOf(data.atlas, 'trans').translations['zh-CN'], 'the atlas holds the translations');
+    const bad = run(['export', '--lang', 'zh_CN!', '--out', out, '--cwd', P, '--no-user', '--no-plugins', '--state', path.join(P, 'state'), '--viewer', viewer]);
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /--lang zh_CN! is not a language tag/);
+  });
+
   test('works with the bundled viewer', (t) => {
     const bundled = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'viewer.html');
     if (!fs.existsSync(bundled)) return t.skip('assets/viewer.html is not present');
@@ -839,6 +1243,25 @@ describe('export', () => {
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /has no <script id="atlas-embedded"/);
   });
+});
+
+// skill-atlas-25: every text the page looks up is in the zh-CN catalog.
+test('the zh-CN catalog holds every text the page looks up (skill-atlas-25, skill-atlas-29)', () => {
+  const viewerFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'viewer.html');
+  const catalogFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'locales', 'zh-CN.json');
+  const html = fs.readFileSync(viewerFile, 'utf8');
+  const unescape = (body) => body.replace(/\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([\s\S]))/g, (all, cp, u4, x2, ch) => {
+    if (cp || u4 || x2) return String.fromCodePoint(parseInt(cp ?? u4 ?? x2, 16));
+    return { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', 0: '\0', '\n': '' }[ch] ?? ch;
+  });
+  const keys = new Set();
+  for (const m of html.matchAll(/(?<![\w$.])t\(\s*(['"])((?:\\[\s\S]|(?!\1)[^\\\n])*)\1/g)) keys.add(unescape(m[2]));
+  assert.ok(keys.size > 0, 'the page looks up its text through t()');
+  assert.ok(fs.existsSync(catalogFile), 'assets/locales/zh-CN.json exists');
+  const catalog = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
+  assert.equal(catalog.language, 'zh-CN');
+  const missing = [...keys].filter((k) => !Object.prototype.hasOwnProperty.call(catalog.messages ?? {}, k));
+  assert.deepEqual(missing, [], 'texts with no zh-CN entry');
 });
 
 // agent-skills-7 and agent-skills-8 (specs/packages/agent-skills.md).
@@ -887,10 +1310,74 @@ describe('the repository\'s skills', () => {
         const walk = (dir, rel) => {
           for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
             if (e.isDirectory()) walk(path.join(dir, e.name), `${rel}/${e.name}`);
-            else assert.ok(targets.has(`${rel}/${e.name}`), `${rel}/${e.name} is linked from SKILL.md itself`);
+            else if (!isTranslation(path.join(dir, e.name))) assert.ok(targets.has(`${rel}/${e.name}`), `${rel}/${e.name} is linked from SKILL.md itself`);
           }
         };
         walk(refs, 'references');
+      }
+    });
+  }
+
+  // Relative link targets of a Markdown file, as paths relative to the skill folder.
+  const linkTargets = (skillDir, file) => {
+    const out = [];
+    for (const m of fs.readFileSync(file, 'utf8').matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+      const target = m[1].split('#')[0];
+      if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
+      out.push(path.relative(skillDir, path.resolve(path.dirname(file), decodeURI(target))).split(path.sep).join('/'));
+    }
+    return out;
+  };
+  const LABEL_KEYS = new Set(['title', 'label', 'name', 'description']);
+  const holdsLabels = (value) => (Array.isArray(value) ? value.some(holdsLabels)
+    : value && typeof value === 'object' ? Object.entries(value).some(([k, v]) => (LABEL_KEYS.has(k) && typeof v === 'string') || holdsLabels(v)) : false);
+  const withTag = (rel, tag) => rel.replace(/(\.[a-z]+)$/, `.${tag}$1`);
+
+  for (const name of folders) {
+    test(`${name}: each translation present and pinned to its source, SKILL.zh-CN.md keeping name and steps and linking translations`, () => {
+      const skill = byDir(name);
+      const dir = skill.dir;
+      const all = [];
+      const walk = (d) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+          const full = path.join(d, e.name);
+          if (e.isDirectory()) walk(full);
+          else all.push(path.relative(dir, full).split(path.sep).join('/'));
+        }
+      };
+      walk(dir);
+      const sources = all.filter((rel) => !isTranslation(path.join(dir, rel)) && (rel.endsWith('.md')
+        || (rel.startsWith('references/') && rel.endsWith('.json') && holdsLabels(JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'))))));
+      assert.ok(sources.includes('SKILL.md'));
+      for (const rel of sources) assert.ok(all.includes(withTag(rel, 'zh-CN')), `${rel} has a zh-CN translation beside it`);
+
+      const checked = run(['pin', '--check', dir]);
+      assert.equal(checked.status, 0, `every translation records its source's digest:\n${checked.stdout}${checked.stderr}`);
+      for (const rel of all.filter((r) => r.endsWith('.zh-CN.md'))) {
+        const text = fs.readFileSync(path.join(dir, rel), 'utf8');
+        assert.match(text, /^<!-- skill-atlas:source sha256=[0-9a-f]{64} own=([0-9a-f]{64}) -->$/m, `${rel} records its source's digest and its own`);
+        assert.equal(/ own=([0-9a-f]{64}) -->$/m.exec(text)[1], ownOf(text), `${rel}'s own digest is its own`);
+      }
+
+      const zhFile = path.join(dir, 'SKILL.zh-CN.md');
+      const zhText = fs.readFileSync(zhFile, 'utf8');
+      const zhFront = /^---\n([\s\S]*?)\n---\n/.exec(zhText.replace(/\r\n/g, '\n'));
+      assert.ok(zhFront, 'SKILL.zh-CN.md has frontmatter');
+      assert.match(zhFront[1], new RegExp(`^name: ${name}$`, 'm'), 'the name is kept');
+      const zh = skill.translations['zh-CN'];
+      assert.ok(zh && zh.origin === 'skill', 'the scan reads the translation');
+      assert.ok(zh.description && zh.description !== skill.description, 'the description is translated');
+      assert.ok(Array.isArray(zh.steps), `the translation's steps number as the skill's ${skill.steps.length}`);
+      assert.equal(zh.steps.length, skill.steps.length);
+      const opening = zhText.replace(/\r\n/g, '\n').slice(zhFront[0].length).split('\n').filter((l) => l.trim() && !/^\s*<!--.*-->\s*$/.test(l)).slice(0, 3).join('\n');
+      assert.match(opening, /SKILL\.md/, 'it opens by saying agents load SKILL.md');
+
+      const zhTargets = linkTargets(dir, zhFile);
+      for (const target of zhTargets) assert.ok(fs.existsSync(path.join(dir, target)), `link ${target} in SKILL.zh-CN.md names a file`);
+      for (const target of linkTargets(dir, path.join(dir, 'SKILL.md'))) {
+        const translated = withTag(target, 'zh-CN');
+        if (all.includes(translated)) assert.ok(zhTargets.includes(translated), `SKILL.zh-CN.md links ${translated} where SKILL.md links ${target}`);
       }
     });
   }
