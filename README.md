@@ -160,6 +160,15 @@ Monolithic schema-7 sessions remain readable; continuing one requires explicit
 session store. The [storage guide](docs/storage.md#migration-and-definitions)
 describes the retained originals and migration boundaries.
 
+**Skills you can install without Spex.** The [`skills/`](skills) folder
+ships Agent Skills for any coding agent: `skill-atlas` maps the skills
+you have installed — which call which, what each step reads, writes,
+runs and asks — and lets you sort them into workflow phases on a local
+page; `code`, `review` and `decide` carry the built-in playbooks'
+procedure as plain skills. Install one with
+`npx skills add sublang-ai/spex --skill skill-atlas`
+([about the skills](docs/skills.md)).
+
 **Playbooks come in packages.** A project's `spex.yaml` lists the
 packages it adds — specs with the skills and playbooks made from them —
 from a registry, a Git repository or a folder in the project, and

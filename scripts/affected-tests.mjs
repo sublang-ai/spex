@@ -3,9 +3,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The suites a change reaches (release-34, release-43, DR-199): changed
-// workspaces and known root tools select their owners and transitive
+// workspaces, known root tools and skill folders select their owners and transitive
 // dependents. Unknown root paths reach everything; documentation --
-// docs/, specs/ and Markdown outside workspaces -- reaches nothing.
+// docs/, specs/ and Markdown outside workspaces and skills/ -- reaches nothing.
 //
 //   node scripts/affected-tests.mjs [--base <ref>] [--paths <file>] [--root <dir>]
 //       prints {"docsOnly":bool,"all":bool,"workspaces":[...]}
@@ -55,6 +55,7 @@ const ROOT_OWNERS = new Map([
     "scripts/inspection-browser-cache.test.mjs",
     "scripts/inspection-evidence.test.mjs",
     "scripts/team-server-local.test.mjs",
+    "scripts/skill-atlas.test.mjs",
   ].map((path) => [path, []]),
   ["scripts/start-desktop.mjs", ["apps/desktop"]],
   ["scripts/desktop-runner.mjs", ["apps/desktop"]],
@@ -63,6 +64,23 @@ const ROOT_OWNERS = new Map([
   ["scripts/native-approval-stage.mjs", ["packages/core"]],
   ["scripts/browser-preparation.ts", ["apps/desktop", "e2e"]],
 ]);
+// Folders of the agent skills shipped from the repository, owned whole: the
+// script tests check every skill, and the atlas's page has a browser journey.
+// The longest listed folder holding a path owns it.
+const ROOT_FOLDER_OWNERS = new Map([
+  ["skills/skill-atlas/", ["e2e"]],
+  ["skills/", []],
+]);
+
+/** The owners of a root path: its exact entry, else its longest listed folder's, else undefined. */
+function rootOwners(path) {
+  if (ROOT_OWNERS.has(path)) return ROOT_OWNERS.get(path);
+  let best;
+  for (const folder of ROOT_FOLDER_OWNERS.keys()) {
+    if (path.startsWith(folder) && (best === undefined || folder.length > best.length)) best = folder;
+  }
+  return best === undefined ? undefined : ROOT_FOLDER_OWNERS.get(best);
+}
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
@@ -127,6 +145,8 @@ export function readWorkspaces(root) {
 /** Documentation: under docs/ or specs/, or a Markdown file outside every workspace -- a workspace's own Markdown is a fixture or a package readme and reaches the workspace. */
 export function isDocumentation(path, workspaces = []) {
   if (path.startsWith("docs/") || path.startsWith("specs/")) return true;
+  // A shipped skill's Markdown is the skill itself, checked by the script tests.
+  if (path.startsWith("skills/")) return false;
   return path.endsWith(".md") && !workspaces.some((workspace) => path.startsWith(`${workspace.folder}/`));
 }
 
@@ -142,7 +162,7 @@ export function classify(root, paths) {
     const owner = workspaces.find((workspace) => path.startsWith(`${workspace.folder}/`));
     if (owner) changed.add(owner.folder);
     else {
-      const owners = ROOT_OWNERS.get(path);
+      const owners = rootOwners(path);
       if (owners === undefined || owners.some((folder) => !workspaces.some((workspace) => workspace.folder === folder))) all = true;
       else for (const folder of owners) changed.add(folder);
     }

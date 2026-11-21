@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "about": "Starting points offered by the viewer's New workflow menu. Each phase's keywords place a skill there when they appear in the skill's name or description; the user can move anything afterwards. Add your own presets or edit these.",
+  "presets": [
+    {
+      "id": "sdlc",
+      "name": "Software delivery",
+      "description": "From an idea to running software.",
+      "phases": [
+        { "name": "Discover", "keywords": ["research", "explore", "investigate", "inspect", "audit", "analy", "understand", "requirements"] },
+        { "name": "Decide", "keywords": ["decide", "design", "architecture", "plan", "spec", "proposal", "adr", "rfc"] },
+        { "name": "Build", "keywords": ["code", "implement", "build", "create", "develop", "scaffold", "migrate", "refactor", "branch"] },
+        { "name": "Verify", "keywords": ["review", "test", "verify", "lint", "security", "perf", "qa", "debug"] },
+        { "name": "Ship", "keywords": ["pr", "pull request", "release", "deploy", "publish", "merge", "changelog"] },
+        { "name": "Operate", "keywords": ["monitor", "incident", "observab", "on-call", "logs", "alert", "rollback"] }
+      ]
+    },
+    {
+      "id": "content",
+      "name": "Content pipeline",
+      "description": "From research to a published piece.",
+      "phases": [
+        { "name": "Research", "keywords": ["research", "search", "gather", "interview", "source"] },
+        { "name": "Draft", "keywords": ["write", "draft", "doc", "slides", "pptx", "docx", "outline"] },
+        { "name": "Edit", "keywords": ["edit", "review", "proofread", "style", "theme", "brand"] },
+        { "name": "Publish", "keywords": ["publish", "export", "pdf", "post", "send", "share"] }
+      ]
+    },
+    {
+      "id": "data",
+      "name": "Data analysis",
+      "description": "From raw data to a decision.",
+      "phases": [
+        { "name": "Collect", "keywords": ["import", "fetch", "extract", "scrape", "query", "sql"] },
+        { "name": "Clean", "keywords": ["clean", "transform", "csv", "xlsx", "spreadsheet", "normalize"] },
+        { "name": "Analyze", "keywords": ["analy", "model", "statistic", "forecast", "benchmark"] },
+        { "name": "Present", "keywords": ["chart", "viz", "dashboard", "report", "slides"] }
+      ]
+    },
+    {
+      "id": "blank",
+      "name": "Blank",
+      "description": "Three empty phases to rename.",
+      "phases": [
+        { "name": "First", "keywords": [] },
+        { "name": "Next", "keywords": [] },
+        { "name": "Last", "keywords": [] }
+      ]
+    }
+  ]
+}

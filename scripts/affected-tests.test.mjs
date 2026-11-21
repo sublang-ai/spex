@@ -86,6 +86,7 @@ test("known workflows and root tooling select script tests alone, without hiding
     "scripts/prepush.sh", "scripts/merge-on-green.sh", "scripts/test-linux.sh", "scripts/linux-ci/Dockerfile",
     "scripts/release-notes.mjs", "scripts/release-notes.test.mjs", "scripts/smoke.mjs", "scripts/smoke.test.mjs", "scripts/install-smoke.mjs", "scripts/cli-smoke.mjs", "scripts/desktop-smoke.mjs", "scripts/migration-smoke.mjs",
     "scripts/desktop-runner.test.mjs", "scripts/source-launch.integration.test.mjs", "scripts/live-output.test.mjs", "scripts/inspection-browser-cache.test.mjs", "scripts/inspection-evidence.test.mjs", "scripts/team-server-local.test.mjs",
+    "scripts/skill-atlas.test.mjs",
   ]) {
     assert.deepEqual(reach(root, [path, "specs/packages/release.md"]), { docsOnly: false, all: false, workspaces: [] }, path);
   }
@@ -102,6 +103,21 @@ test("root runtime helpers select their owners and every dependent; a missing ow
     for (const path of paths) assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: expected }, path);
   }
   assert.equal(reach(fixture(), ["scripts/start-server.mjs"]).all, true, "a stale ownership entry must never skip the suites");
+});
+
+test("a shipped skill's files select script tests alone, the atlas's also its journey; Markdown there is the skill, not documentation", () => {
+  for (const path of ["skills/code/references/x.json", "skills/new-skill/scripts/run.mjs"]) {
+    assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: [] }, path);
+  }
+  for (const path of ["skills/skill-atlas/scripts/atlas.mjs", "skills/skill-atlas/scripts/lib/scan.mjs", "skills/skill-atlas/assets/viewer.html", "skills/skill-atlas/references/tag-rules.json"]) {
+    assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: ["e2e"] }, path);
+  }
+  assert.deepEqual(reach(root, ["skills/skill-atlas/SKILL.md"]), { docsOnly: false, all: false, workspaces: ["e2e"] });
+  assert.deepEqual(reach(root, ["skills/code/SKILL.md"]), { docsOnly: false, all: false, workspaces: [] });
+  assert.deepEqual(reach(root, ["skills/code/x.json", "packages/ui/src/App.tsx"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
+  // A listed folder is matched whole, never as a name prefix.
+  for (const path of ["skills", "skillset/x.mjs", "skills-extra/x.mjs"]) assert.equal(reach(root, [path]).all, true, path);
+  assert.equal(reach(fixture(), ["skills/skill-atlas/scripts/atlas.mjs"]).all, true, "a stale ownership entry must never skip the suites");
 });
 
 test("documentation beside code is no documentation alone and adds nothing to the reach", () => {
