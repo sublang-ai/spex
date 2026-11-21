@@ -80,8 +80,9 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - A violation observed on the project's code at the revision checked fails the guard whichever check found it; a check that is not required otherwise decides nothing, while it runs or however it ends.
 - A violation names the item's ID, the sequence of events, the effect observed and a command that replays it on the reader's own machine.
 - A result is stale from the moment any input of its guard changes, a replacement run still pending included, and a stale result is never shown as passing.
-- Removing a guard, and every change to a guard's inputs other than the project's code, is shown as a change to the guard and waits for a person's approval, never an agent's.
-  - That covers its items, assertion, examples and kept faults, what Spex derived, the checker, the required checks with their bounds and settings, the source of the evidence a check reads, and its link to the code: what the link observes, the events it can cause and the orders they can occur in.
+- Removing a guard, and every change to a guard's inputs other than the project's code and the fresh evidence an approved source yields, is shown as a change to the guard and waits for a person's approval, never an agent's.
+  - That covers its items, assertion, examples and kept faults, what Spex derived, the checker, the required checks with their bounds and settings, the source of the evidence a check reads and how evidence is selected from it, and its link to the code: what the link observes, the events it can cause and the orders they can occur in.
+  - Fresh evidence from an approved source needs no approval of its own: it makes the earlier result stale, and the check runs on it for its revision.
   - The item and the code may change in one change, with that approval, where the intended behavior changed.
 - Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
 - `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
