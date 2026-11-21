@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Step detection, per data-model.md "Detection rules":
-//   1. numbered headings (Step/Phase/Stage/Part N, or "N. Title") when two or more share a level;
-//   2. the ordered list under a procedure heading, or the list opening the body;
+//   1. numbered headings (Step/Phase/Stage/Part N, their Chinese forms, or "N. Title")
+//      when two or more share a level;
+//   2. the ordered list under a procedure heading (English or Chinese), or the list opening the body;
 //   3. otherwise the `##` sections (stepKind "section").
 
 import { headings, sectionEnd, orderedItem, collectOrderedList, plainText, stripInline, clipText } from './markdown.mjs';
@@ -11,9 +12,19 @@ import { headings, sectionEnd, orderedItem, collectOrderedList, plainText, strip
 export const EXCERPT_MAX = 400; // data-model.md: excerpt is at most 400 characters
 export const TITLE_MAX = 80; // a list step's title is at most 80 characters
 
-const KEYWORD_HEADING = /^(step|phase|stage|part)\s+(\d+)[a-z]?\b\s*(?:[:.)\-\u2013\u2014]+\s*)?(.*)$/i;
+const KEYWORD_HEADING = /^(step|phase|stage|part)\s+(\d+)[a-z]?\b\s*(?:[:.)\-\u2013\u2014\uFF1A]+\s*)?(.*)$/i;
 const NUMBERED_HEADING = /^(\d+)[.)]\s+(.+)$/;
+// Chinese step headings: \u6B65\u9AA4 N (step N), \u9636\u6BB5 N (phase N), \u7B2C N \u6B65 (the Nth step),
+// \u7B2C N \u9636\u6BB5 (the Nth phase) and \u7B2C N \u90E8\u5206 (the Nth part); a title may follow after
+// a colon (ASCII or full-width), an enumeration comma, a dash or a period.
+const ZH_SEPARATOR = '(?:\\s*[:\\uFF1A.\\u3001\\u3002)\\uFF09\\-\\u2013\\u2014]+)?\\s*';
+const ZH_PREFIX_HEADING = new RegExp(`^(\u6B65\u9AA4|\u9636\u6BB5)\\s*(\\d+)${ZH_SEPARATOR}(.*)$`);
+const ZH_ORDINAL_HEADING = new RegExp(`^\u7B2C\\s*(\\d+)\\s*(\u6B65|\u9636\u6BB5|\u90E8\u5206)${ZH_SEPARATOR}(.*)$`);
+const ZH_FAMILY = { '\u6B65\u9AA4': 'step', '\u6B65': 'step', '\u9636\u6BB5': 'phase', '\u90E8\u5206': 'part' };
 const PROCEDURE_HEADING = /\b(workflow|steps|process|procedure|instructions|how[ -]to|usage|quick ?start)\b/i;
+// Their Chinese counterparts: workflow, flow, steps, process, procedure, instructions, how to, usage, quick start.
+const ZH_PROCEDURE_HEADING = /\u5DE5\u4F5C\u6D41|\u6D41\u7A0B|\u6B65\u9AA4|\u8FC7\u7A0B|\u89C4\u7A0B|\u8BF4\u660E|\u6307\u4EE4|\u5982\u4F55|\u7528\u6CD5|\u4F7F\u7528\u65B9\u6CD5|\u5FEB\u901F\u5F00\u59CB|\u5FEB\u901F\u5165\u95E8/;
+const isProcedureHeading = (text) => PROCEDURE_HEADING.test(text) || ZH_PROCEDURE_HEADING.test(text);
 const MIN_NUMBERED_HEADINGS = 2; // rule 1 needs two or more numbered headings on one level
 const MIN_LIST_ITEMS = 2; // a one-item list is not a procedure
 
@@ -55,6 +66,16 @@ function numberedHeadingSteps(body, mask, heads) {
       matches.push({ h, k, family: kw[1].toLowerCase(), title: rest || `${capitalize(kw[1])} ${kw[2]}` });
       return;
     }
+    const zh = ZH_PREFIX_HEADING.exec(text);
+    if (zh) {
+      matches.push({ h, k, family: ZH_FAMILY[zh[1]], title: zh[3].trim() || `${zh[1]} ${zh[2]}` });
+      return;
+    }
+    const ord = ZH_ORDINAL_HEADING.exec(text);
+    if (ord) {
+      matches.push({ h, k, family: ZH_FAMILY[ord[2]], title: ord[3].trim() || `\u7B2C ${ord[1]} ${ord[2]}` });
+      return;
+    }
     const num = NUMBERED_HEADING.exec(text);
     if (num) matches.push({ h, k, family: 'number', title: num[2].trim() });
   });
@@ -94,7 +115,7 @@ function headingStep(body, mask, h, end, title) {
 function listSteps(body, mask, heads) {
   // A procedure heading's own content (up to its next heading of any level).
   for (let k = 0; k < heads.length; k++) {
-    if (!PROCEDURE_HEADING.test(stripInline(heads[k].text))) continue;
+    if (!isProcedureHeading(stripInline(heads[k].text))) continue;
     const from = heads[k].index + 1;
     const to = k + 1 < heads.length ? heads[k + 1].index : body.length;
     for (let i = from; i < to; i++) {
@@ -142,19 +163,20 @@ function itemsToSteps(body, mask, items) {
 // so the sentence is the title then.
 function itemTitle(body, mask, it) {
   const bold = /^\s*(\*\*|__)(.+?)\1(.*)$/.exec(it.text);
-  if (bold && (/[.:!?]$/.test(bold[2].trim()) || /^\s*([:.(\-\u2013\u2014]|$)/.test(bold[3]))) return cleanTitle(stripInline(bold[2]));
+  if (bold && (/[.:!?\u3002\uFF1A\uFF01\uFF1F]$/.test(bold[2].trim()) || /^\s*([:.(\-\u2013\u2014\u3002\uFF1A\uFF08\uFF0C]|$)/.test(bold[3]))) return cleanTitle(stripInline(bold[2]));
   // The first paragraph of the item: its text line and lazy continuations.
   let text = it.text;
   for (let i = it.start + 1; i <= it.end && !mask[i] && body[i].trim() !== '' && !orderedItem(body[i]) && !/^\s*[-*+]\s/.test(body[i]); i++) {
     text += ' ' + body[i].trim();
   }
   const plain = stripInline(text);
-  const sentence = /^(.+?[.!?])(?=\s|$)/.exec(plain);
+  // A sentence ends at . ! ? before a space, or at a Chinese full stop, which takes none.
+  const sentence = /^(.+?(?:[.!?](?=\s|$)|[\u3002\uFF01\uFF1F]))/.exec(plain);
   return cleanTitle(sentence ? sentence[1] : plain);
 }
 
 function cleanTitle(text) {
-  return stripInline(text).replace(/[\s:\u2013\u2014-]+$/, '').replace(/\.$/, '').trim();
+  return stripInline(text).replace(/[\s:\uFF1A\u2013\u2014-]+$/, '').replace(/[.\u3002]$/, '').trim();
 }
 
 function excerpt(body, mask, from, to) {

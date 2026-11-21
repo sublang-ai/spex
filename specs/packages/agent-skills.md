@@ -26,7 +26,7 @@ Where a skill relays a prompt to a role or applies a rule a user may tune, the s
 
 #### agent-skills-10
 
-Each Markdown file of a skill under `skills/`, and each file under its `references/` holding labels a reader sees, shall have beside it a `zh-CN` translation, named with the tag before the extension, recording its source's digest:
+Each Markdown file of a skill under `skills/`, and each file under its `references/` holding labels a reader sees, shall have beside it a `zh-CN` translation, named with the tag before the extension, recording its source's digest and, where Markdown, its own:
 
 - a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens by saying that agents load `SKILL.md`;
 - a translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
@@ -70,7 +70,7 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-7
 
-When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
+When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
 
 #### agent-skills-8
 

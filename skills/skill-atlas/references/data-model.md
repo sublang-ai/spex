@@ -62,7 +62,7 @@ Every skill is keyed by its id — its `name`, or `<name>@<rootId>` for a differ
       "lines": 84,                     // SKILL.md line count
       "summary": null,                 // one sentence, set only by annotations
       "files": [                       // bundled files, SKILL.md excluded, at most 200
-        { "path": "references/coder-phase.md", "kind": "reference", "linked": true }
+        { "path": "references/coder-phases.md", "kind": "reference", "linked": true }
       ],                               // kind: reference | script | asset | other; linked: SKILL.md mentions the path
       "stepKind": "step",              // step | section | none — how `steps` was derived
       "steps": [
@@ -178,13 +178,16 @@ The page's own text is English in its source; every other language is data in th
 
 A file's translation is the file beside it with the tag before the extension: `SKILL.zh-CN.md` for `SKILL.md`, `references/prompts.zh-CN.md` for `references/prompts.md`.
 
-- A name is read as a translation only where the tag is a two- or three-letter language with optional subtags (`zh`, `zh-CN`, `en-US`), the extension is `.md`, `.json`, `.txt`, `.yaml` or `.yml`, and the file it translates exists.
+- A name is read as a translation only where the tag names a known language in its canonical form but for case — a two-letter language with optional subtags (`zh`, `zh-CN`, `en-US`), or a three-letter one with at least one (`yue-HK`), so `app.dev.yaml`, `data.min.json` and `notes.bak.md` stay files — the extension is `.md`, `.json`, `.txt`, `.yaml` or `.yml`, and the file it translates exists.
 - The scan looks in the skill's own folder first, then in `translations/<skill id>/` of the state directory, where the same relative path is used: `~/.skill-atlas/translations/pdf/SKILL.zh-CN.md`.
   The state directory is where an agent writes translations of skills someone else ships; see [translate.md](translate.md).
-- A translation records the SHA-256 of the source file's bytes as it was translated, written by `atlas.mjs pin`:
-  - in Markdown, a line `<!-- skill-atlas:source sha256=<64 hex> -->` (after the frontmatter in a translated `SKILL.md`);
+- A translation records the SHA-256 of the source file's bytes as they stood when the two last matched, and a Markdown translation its own SHA-256 too, written by `atlas.mjs pin`:
+  - in Markdown, a line `<!-- skill-atlas:source sha256=<64 hex> own=<64 hex> -->`, after the frontmatter and the SPDX comment lines that follow it; `own` is the SHA-256 of the file's UTF-8 text without a byte order mark, with LF line ends and with this line left out;
+  - in text, the same line without `own=`;
+  - in YAML, a line `# skill-atlas:source sha256=<64 hex>`;
   - in JSON, a top-level `"translationOf": { "sha256": "<64 hex>" }`.
-- A translation whose recorded digest differs from its source is *stale*; one recording none is never stale.
+- A translation whose recorded source digest differs from its source's is *stale* (behind its source); a Markdown one whose recorded own digest differs from its own is *edited* (apart from its source, which agents follow); one recording none is neither.
+- `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own).
 
 In `atlas.json` every skill carries `translations`, an object keyed by tag (empty when there is none), and each entry of `files` lists the tags it is translated into:
 
@@ -193,17 +196,19 @@ In `atlas.json` every skill carries `translations`, an object keyed by tag (empt
   "zh-CN": {
     "origin": "skill",                 // skill | state | annotation (words from annotations.json alone)
     "file": "/abs/…/code/SKILL.zh-CN.md",   // null when origin is "annotation"
+    "frontmatter": { "name": "code", "description": "…", "compatibility": "…" },   // the translation's, as the skill's own; null when origin is "annotation"
     "description": "…",                // the translation's frontmatter description, or null
     "summary": null,                   // set only by annotations
     "steps": [ { "title": "运行第一个阶段", "excerpt": "…" } ],   // by index; null when the count differs from the skill's steps
-    "stale": false
+    "stale": false,                    // behind its source
+    "edited": false                    // edited apart from its source
   }
 },
 "files": [ { "path": "references/coder-phases.md", "kind": "reference", "linked": true, "translations": ["zh-CN"] } ]
 ```
 
 Steps, links and tags always come from `SKILL.md`; a translation supplies words only.
-Two insight kinds report on translations: `stale-translation` and `translation-steps` (the translation's steps number otherwise than the skill's).
+Three insight kinds report on translations: `stale-translation`, `edited-translation` and `translation-steps` (the translation's steps number otherwise than the skill's).
 
 Every insight carries `params`, the values its message is built from, so the page can phrase it in any language:
 
@@ -216,6 +221,7 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `missing-description`, `invalid-frontmatter`, `no-steps` | — |
 | `name-mismatch` | `name`, `folder` |
 | `stale-translation` | `lang`, `files` (relative paths behind their source) |
+| `edited-translation` | `lang`, `files` (relative paths edited apart from their source) |
 | `translation-steps` | `lang`, `steps`, `expected` |
 
 In `annotations.json` a skill's entry may repeat its words per language; they land in the skill's `translations` entry of that tag:
@@ -231,7 +237,8 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 
 ### The server's answers
 
-- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns the translation where there is one, with `"language": "<tag>"` and `"stale"`; else the file itself with `"language": null`.
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns `{ "language", "path", "stale", "edited", "text" }`: the translation where there is one, a regular file inside its folder, with `"language": "<tag>"` and its own relative path (`SKILL.zh-CN.md`); else the file itself with `"language": null`, its relative path, `"stale": false` and `"edited": false`.
+  Without `lang` the answer is the file's plain text.
 - `GET /api/config` adds:
 
 ```jsonc
@@ -259,14 +266,14 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
   - A text with no entry is shown in English.
 - `references/tag-rules.<tag>.json`, `references/workflow-presets.<tag>.json` and `references/view-settings.<tag>.json` are label files: the same shape as the file they sit beside, from which only `title`, `label`, `name` and `description` are read — tags and presets by `id`, categories by key, a preset's phases by position.
   Patterns, keywords, colors and every other setting come from the source file alone.
-- The page's language is the reader's choice on the page (kept in the browser), else `--lang`, else the browser's language where a catalog's tag shares its primary subtag, else `en-US`.
+- The page's language is the reader's choice on the page (kept in the browser), else `--lang`, else the browser's language where a catalog's tag is it or shares its primary subtag and script (`zh` and `zh-SG` name `zh-CN`, `zh-TW` none), else `en-US`.
 
 ## Detection rules
 
 Steps, in order of preference, with fenced code ignored for structure:
 
-1. Headings titled `Step N`, `Phase N`, `Stage N`, `Part N` or `N. Title`, when two or more share a level.
-2. The ordered list under a heading that names a procedure (`Workflow`, `Steps`, `Process`, `Procedure`, `Instructions`, `How to`, `Usage`, `Quick start`), or the ordered list that opens the body.
+1. Headings titled `Step N`, `Phase N`, `Stage N`, `Part N`, `步骤 N`, `阶段 N`, `第 N 步`, `第 N 阶段`, `第 N 部分` or `N. Title`, when two or more share a level.
+2. The ordered list under a heading that names a procedure (`Workflow`, `Steps`, `Process`, `Procedure`, `Instructions`, `How to`, `Usage`, `Quick start`, `工作流`, `流程`, `步骤`, `过程`, `规程`, `说明`, `指令`, `如何`, `用法`, `使用方法`, `快速开始`, `快速入门`), or the ordered list that opens the body.
 3. Otherwise the `##` sections, reported with `stepKind: "section"`.
 
 Links from a skill to another installed skill named `N` (or `<plugin>:N`), read from the description and from the body outside fenced code:

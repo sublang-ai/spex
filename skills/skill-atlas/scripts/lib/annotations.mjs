@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { warn } from './log.mjs';
 import { tagInfo, mergeHits } from './tags.mjs';
+import { canonicalTag } from './translations.mjs';
 
 export const ANNOTATIONS_FILE = 'annotations.json';
 
@@ -88,8 +89,14 @@ export function applyAnnotations(doc, atlas) {
           return step;
         });
         skill.stepKind = 'step';
+        // A translation's steps were read against the detected steps, which
+        // are gone: only an annotation's words per language stand for these.
+        for (const tr of Object.values(skill.translations ?? {})) tr.steps = null;
+        skill._translationSteps?.clear();
       }
     }
+
+    applyTranslatedWords(skill, ann.translations, where);
 
     for (const add of list(ann.addTags, 'addTags', where)) {
       const step = stepAt(add?.step);
@@ -123,6 +130,41 @@ export function applyAnnotations(doc, atlas) {
       atlas.unresolved = atlas.unresolved.filter((u) => !(hits(u) && u.name === rm.to));
     }
   }
+}
+
+// An entry's words per language land in the skill's translation of that
+// language, created with origin "annotation" where no file gives one.
+function applyTranslatedWords(skill, value, where) {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { warn(`${where}: "translations" is not a map of language tags; ignored`); return; }
+  for (const [rawTag, words] of Object.entries(value)) {
+    const tag = canonicalTag(rawTag);
+    if (!tag) { warn(`${where}: translations key ${JSON.stringify(rawTag)} is not a language tag such as zh-CN; ignored`); continue; }
+    if (!words || typeof words !== 'object' || Array.isArray(words)) { warn(`${where}: translations.${rawTag} is not an object; ignored`); continue; }
+    const tr = skill.translations[tag] ?? { origin: 'annotation', file: null, frontmatter: null, description: null, summary: null, steps: null, stale: false, edited: false };
+    let changed = false;
+    if (typeof words.summary === 'string') { tr.summary = words.summary; changed = true; }
+    if (words.steps !== undefined) {
+      if (!Array.isArray(words.steps)) {
+        warn(`${where}: translations.${rawTag}.steps is not a list; ignored`);
+      } else if (words.steps.length !== skill.steps.length) {
+        warn(`${where}: translations.${rawTag}.steps has ${words.steps.length} entries but the skill has ${skill.steps.length} steps; ignored`);
+      } else {
+        // By index; a field left out keeps the translation file's words, else the skill's own.
+        tr.steps = words.steps.map((st, n) => {
+          const prior = tr.steps?.[n];
+          const own = skill.steps[n];
+          return {
+            title: typeof st?.title === 'string' ? st.title : prior?.title ?? own.title,
+            excerpt: typeof st?.summary === 'string' ? st.summary : prior?.excerpt ?? own.excerpt,
+          };
+        });
+        changed = true;
+      }
+    }
+    if (changed) skill.translations[tag] = tr;
+  }
+  skill.translations = Object.fromEntries(Object.entries(skill.translations).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function addCall(atlas, skill, step, target, ref, kind, note, where) {

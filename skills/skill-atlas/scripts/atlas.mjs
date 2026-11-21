@@ -3,7 +3,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Skill Atlas command line: scan installed agent skills, serve the viewer,
-// or export a standalone copy. See ../SKILL.md and ../references/data-model.md.
+// export a standalone copy, or pin translations to their sources.
+// See ../SKILL.md and ../references/data-model.md.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,8 +14,20 @@ import { scan } from './lib/scan.mjs';
 import { summarize } from './lib/summary.mjs';
 import { startServer } from './lib/server.mjs';
 import { writeExport } from './lib/export.mjs';
-import { BUNDLED, viewerConfig, readWorkflowsState } from './lib/state.mjs';
+import { BUNDLED, viewerConfig, readWorkflowsState, readLocales } from './lib/state.mjs';
+import { canonicalTag } from './lib/translations.mjs';
+import { pin } from './lib/pin.mjs';
 import { UsageError, warn } from './lib/log.mjs';
+
+// The offered tag the page shows for `tag`: the same tag, else one of the same
+// primary subtag and script (`zh` and `zh-SG` -> zh-CN, `zh-TW` -> none), as
+// the page's matchLang does.
+function offeredFor(tag, offered) {
+  const scriptOf = (t) => { try { return new Intl.Locale(t).maximize().script || ''; } catch { return ''; } };
+  const primary = (t) => t.toLowerCase().split('-')[0];
+  return offered.find((o) => o.toLowerCase() === tag.toLowerCase())
+    ?? offered.find((o) => primary(o) === primary(tag) && scriptOf(o) === scriptOf(tag)) ?? null;
+}
 
 const DEFAULT_PORT = 4173;
 const MAX_PORT = 65535;
@@ -25,6 +38,17 @@ Commands:
   scan                 Print atlas.json (or --out <file>); --summary prints a digest instead
   serve                Scan and serve the viewer on 127.0.0.1; prints one JSON line with the URL
   export --out <file>  Write a standalone viewer with the data inlined
+  pin <path>...        Record in each translation (a file such as SKILL.zh-CN.md beside its
+                       source, or under <state>/translations/<skill id>/) the SHA-256 of the
+                       file it translates and, in Markdown, its own; a folder stands for
+                       every translation in it. Markdown gets a line
+                       <!-- skill-atlas:source sha256=<hex> own=<hex> -->, text the same
+                       line without own=, YAML a line # skill-atlas:source sha256=<hex>,
+                       JSON a top-level "translationOf": { "sha256": "<hex>" }; an existing
+                       record is rewritten, and nothing is written where one cannot be
+  pin --check <path>...
+                       Change no file; name each translation behind its source, edited
+                       apart from it or recording no digest, and exit 1 where there is one
 
 Options:
   --cwd <dir>          Project to scan (default: the current folder)
@@ -32,23 +56,27 @@ Options:
   --agent <id>         Only folders of this agent (claude-code, codex, universal, ...); repeatable
   --no-user            Skip skill folders in the home folder
   --no-plugins         Skip Claude Code plugin skills
-  --state <dir>        Folder of workflows.json and annotations.json (default: ~/.skill-atlas)
+  --state <dir>        Folder of workflows.json, annotations.json and translations/
+                       (default: ~/.skill-atlas)
   --rules <file>       Tag rules (default: the bundled references/tag-rules.json)
   --out <file>         Output file (scan, export)
   --summary            scan: print the plain-text digest
   --port <n>           serve: port (default ${DEFAULT_PORT}; a free one if that is busy)
   --no-open            serve: do not open the browser
   --viewer <file>      serve, export: viewer HTML (default: the bundled assets/viewer.html)
+  --lang <tag>         serve, export: the language the page opens in until the reader picks
+                       one, such as en-US or zh-CN (default: the browser's)
+  --check              pin: check the recorded digests instead of writing them
   --help               Show this help
 `;
 
-const COMMANDS = new Set(['scan', 'serve', 'export']);
-const VALUE_OPTIONS = new Set(['--cwd', '--root', '--agent', '--state', '--rules', '--out', '--port', '--viewer']);
-const FLAG_OPTIONS = new Set(['--no-user', '--no-plugins', '--summary', '--no-open', '--help', '-h']);
+const COMMANDS = new Set(['scan', 'serve', 'export', 'pin']);
+const VALUE_OPTIONS = new Set(['--cwd', '--root', '--agent', '--state', '--rules', '--out', '--port', '--viewer', '--lang']);
+const FLAG_OPTIONS = new Set(['--no-user', '--no-plugins', '--summary', '--no-open', '--check', '--help', '-h']);
 const REPEATABLE = new Set(['--root', '--agent']);
 
 function parseArgs(argv) {
-  const opts = { command: null, root: [], agent: [] };
+  const opts = { command: null, root: [], agent: [], paths: [] };
   for (let i = 0; i < argv.length; i++) {
     let arg = argv[i];
     let value;
@@ -69,8 +97,10 @@ function parseArgs(argv) {
     } else if (arg.startsWith('-')) {
       throw new UsageError(`unknown option ${arg}; see --help`);
     } else if (!opts.command) {
-      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve or export (see --help)`);
+      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve, export or pin (see --help)`);
       opts.command = arg;
+    } else if (opts.command === 'pin') {
+      opts.paths.push(arg);
     } else {
       throw new UsageError(`unexpected argument "${arg}"; see --help`);
     }
@@ -125,8 +155,24 @@ async function main(argv) {
     if (!opts.help) process.exitCode = 2;
     return;
   }
+  if (opts.check && opts.command !== 'pin') throw new UsageError('--check is an option of pin; see --help');
   const sopts = scanOptions(opts);
   const viewerFile = opts.viewer ? path.resolve(opts.viewer) : BUNDLED.viewer;
+  let lang = null;
+  if (opts.lang !== undefined) {
+    lang = canonicalTag(opts.lang);
+    if (!lang) throw new UsageError(`--lang ${opts.lang} is not a language tag; pass one such as en-US or zh-CN`);
+    if (!offeredFor(lang, ['en-US', ...Object.keys(readLocales(BUNDLED.locales))])) {
+      warn(`--lang ${lang} has no catalog in assets/locales/; the page shows the browser's language where it is offered, else English`);
+    }
+  }
+
+  if (opts.command === 'pin') {
+    const result = pin({ targets: opts.paths, check: !!opts.check, stateDir: sopts.stateDir, skills: () => scan(sopts).skills });
+    process.stdout.write(result.lines.join('\n') + '\n');
+    if (result.failed) process.exitCode = 1;
+    return;
+  }
 
   if (opts.command === 'scan') {
     const atlas = scan(sopts);
@@ -143,7 +189,8 @@ async function main(argv) {
     const stored = readWorkflowsState(sopts.stateDir);
     if (!stored.valid) warn(`${stored.error}; exporting with no workflows`);
     const workflows = stored.valid ? stored.doc : { version: 1, active: null, workflows: [] };
-    const file = writeExport(viewerFile, opts.out, { atlas, workflows, config: viewerConfig(sopts.stateDir, true) });
+    const config = viewerConfig({ stateDir: sopts.stateDir, isStatic: true, lang, rulesFile: sopts.rulesFile });
+    const file = writeExport(viewerFile, opts.out, { atlas, workflows, config });
     process.stderr.write(`skill-atlas: wrote ${file}\n`);
     return;
   }
@@ -159,7 +206,7 @@ async function main(argv) {
   const atlas = scan(sopts);
   let started;
   try {
-    started = await startServer({ port, strictPort, stateDir: sopts.stateDir, viewerFile, atlas, rescan: () => scan(sopts) });
+    started = await startServer({ port, strictPort, stateDir: sopts.stateDir, viewerFile, atlas, lang, rulesFile: sopts.rulesFile, rescan: () => scan(sopts) });
   } catch (err) {
     if (err.code === 'EADDRINUSE') throw new UsageError(`port ${port} is in use; pass another --port, or omit it to take a free one`);
     throw new UsageError(`cannot listen on 127.0.0.1:${port}: ${err.message}`);

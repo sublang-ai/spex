@@ -6,3 +6,7 @@ packages/core/assets/playbook-sources/*.md text eol=lf
 spex.yaml text eol=lf
 spex.lock text eol=lf
 specs/packages/*.md text eol=lf
+# A skill's translation records the SHA-256 of its source's bytes
+# (DR-245): keep LF on every checkout so a Windows clone reads the
+# shipped translations as up to date.
+skills/** text eol=lf
