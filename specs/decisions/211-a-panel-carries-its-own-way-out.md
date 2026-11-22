@@ -9,6 +9,7 @@ Accepted (2026-11-03) on the owner's request to make Members and every comparabl
 Header dismissal presentation is amended by [DR-212](212-panel-dismissal-as-quiet-chrome.md).
 Extends [DR-010](010-interface-craft.md)'s keyboard and visual grammar to explicit panel dismissal.
 Amends [DR-198](198-consistent-inline-group-actions.md) in the Members header, [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in closing a diagnostic review, and [DR-158](158-a-legible-graph-and-outline.md) in clearing the pinned selection card.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
 
 ## Context
 

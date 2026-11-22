@@ -84,11 +84,6 @@ msgstr "“{title}” is in use"
 msgid "(unknown)"
 msgstr "(unknown)"
 
-#. Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are
-#: src/service.ts
-msgid "{adapter} takes only {forms}"
-msgstr "{adapter} takes only {forms}"
-
 #. Refusal of Install: spex.lock no longer matches what it was written from, so nothing installs until Update; {changes} is the stale report, such as "spex.yaml changed"
 #: src/environments.ts
 msgid "{changes} — Update first"
@@ -162,16 +157,6 @@ msgstr "{file}: {reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}: damaged transcript after record {seq}"
 
-#. Refusal of moving a project's records into a group that holds records of that name; {group} is that group's path at the Space, {name} the name
-#: src/space-groups.ts
-msgid "{group} already holds {name}"
-msgstr "{group} already holds {name}"
-
-#. Refusal of Open here or Add to a group…: the group's path is your login's, so its records can have no folder of their own on this computer; {group} is the group's path
-#: src/space-groups.ts
-msgid "{group} is a group named like your login"
-msgstr "{group} is a group named like your login"
-
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 #: src/space.ts
 msgid "{host} answered with an error"
@@ -184,12 +169,12 @@ msgid "{host} answered with an error (HTTP {status})"
 msgstr "{host} answered with an error (HTTP {status})"
 
 #. The Space's rate limit; {host} is its display name, {seconds} how long it asks to wait, read from its Retry-After
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}"
 msgstr "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}"
 
 #. The Space's rate limit, with no time of its own to wait; {host} is its display name
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "{host} asks to wait a moment"
 msgstr "{host} asks to wait a moment"
 
@@ -209,16 +194,6 @@ msgstr "{host} holds no default branch for it yet"
 #: src/space.ts
 msgid "{host} is not read yet, so these records cannot move there"
 msgstr "{host} is not read yet, so these records cannot move there"
-
-#. Refusal naming a group the Space's last read did not list; {group} is the group's id as sent, {host} the Space's display name
-#: src/space-groups.ts
-msgid "{host} listed no group {group}"
-msgstr "{host} listed no group {group}"
-
-#. Refusal of a pick naming a group the Space does not list; {host} is its display name; Refresh is the Space surface's control
-#: src/space.ts
-msgid "{host} lists no such group — Refresh, then pick again"
-msgstr "{host} lists no such group — Refresh, then pick again"
 
 #. A refusal relayed from the Space that carried no words; {host} is its display name
 #: src/space-git.ts
@@ -245,13 +220,8 @@ msgstr "{host} refused this computer's access"
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
 
-#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for, whose login the server does not know; {host} is the Space's display name, {login} the login of the account that signed in
-#: src/space-groups.ts
-msgid "{host} signed you in as @{login} — sign in with your own account"
-msgstr "{host} signed you in as @{login} — sign in with your own account"
-
 #. A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "{host} signed you in as another account — sign in as @{login}"
 msgstr "{host} signed you in as another account — sign in as @{login}"
 
@@ -290,10 +260,15 @@ msgstr "{name} {version} is too large for {registry} — leave out what it does 
 msgid "{name} added to spex.yaml"
 msgstr "{name} added to spex.yaml"
 
-#. Refusal of Add to a group…: the project's records belong to one Space, and the pick named a group at another; {name} is the project, {host} its Space's display name
+#. Refusal when the project already has a Space placement; {name} is the project
 #: src/space.ts
-msgid "{name} belongs to {host} — pick a group there"
-msgstr "{name} belongs to {host} — pick a group there"
+msgid "{name} already syncs with a Space"
+msgstr "{name} already syncs with a Space"
+
+#. Refusal when the reader chooses a different Space from the one that holds the project
+#: src/space.ts
+msgid "{name} belongs to {host} — choose that Space to sync"
+msgstr "{name} belongs to {host} — choose that Space to sync"
 
 #. Refusal of Open here: a file of the project {project}, on this computer, names the records {name} a Space lists as records of {project}, so they open with it and not on their own
 #: src/space.ts
@@ -331,15 +306,15 @@ msgstr "{name} has no project folder on this computer — Open here first"
 msgid "{name} has no records at {host} to attach — Refresh, then Retry"
 msgstr "{name} has no records at {host} to attach — Refresh, then Retry"
 
+#. Refusal of a project name already used in the account at this Space
+#: src/space-catalog.ts
+msgid "{name} is already used at {space}. Choose another name."
+msgstr "{name} is already used at {space}. Choose another name."
+
 #. Refusal of sharing a project's records at a Space they already sync with; {name} is the project, {host} the Space's display name
 #: src/space.ts
 msgid "{name} is at {host} already"
 msgstr "{name} is at {host} already"
-
-#. Refusal of Add to a group…: the project's records already sync with a Space; {name} is the project
-#: src/space.ts
-msgid "{name} is in a group already"
-msgstr "{name} is in a group already"
 
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
@@ -406,26 +381,10 @@ msgstr "{name} is private or not at {registry} — Sign in to {registry}"
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} is still working in {project} — wait for it to finish, or abort it"
 
-#. Refusal of a new top-level group's name; {name} is the name typed, {host} the Space's display name
-#: src/space-groups.ts
-msgid "{name} is taken at {host}; choose another name"
-msgstr "{name} is taken at {host}; choose another name"
-
-#. Refusal of a name in a group: the Space reports it taken there; {name} is the name, {group} the group's full path
-#: src/space-groups.ts
-msgid "{name} is taken in {group}; choose another name"
-msgstr "{name} is taken in {group}; choose another name"
-
 #. The registry's operator withdrew the version spex.lock records; {registry} is the registry's display name. Update is the Packages tab's control that picks the versions again
 #: src/environments.ts
 msgid "{name} is withdrawn at {registry} — Update picks another version"
 msgstr "{name} is withdrawn at {registry} — Update picks another version"
-
-#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
-#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
-#: src/space.ts
-msgid "{name} stays at its one Space"
-msgstr "{name} stays at its one Space"
 
 #. A package added from a folder that holds no meta.yaml; {path} is that folder in the project. Remove is the package row's control
 #: src/environments.ts
@@ -800,46 +759,6 @@ msgstr "{registry} could not be reached — check the connection, then Retry"
 msgid "{registry} is down ({status}) — Retry later"
 msgstr "{registry} is down ({status}) — Retry later"
 
-#. Refusal of a share at a role the Space does not list; {role} is the role named, {host} the Space's display name
-#: src/space-groups.ts
-msgid "{role} is not one of the roles {host} grants"
-msgstr "{role} is not one of the roles {host} grants"
-
-#. Connect failed: the team server answered with nothing that connects the person; {server} is the server's name
-#: src/places.ts
-msgid "{server} answered without connecting you"
-msgstr "{server} answered without connecting you"
-
-#. A seat's opening failed: the team server could not reach the instance to redeem the ticket; {server} is the server's name, {host} the instance's display name
-#: src/places.ts
-msgid "{server} could not reach {host}"
-msgstr "{server} could not reach {host}"
-
-#. Connect failed: the team server did not start the person's own Spex there and said no more; {server} is the server's name
-#: src/places.ts
-msgid "{server} could not start Spex for you"
-msgstr "{server} could not start Spex for you"
-
-#. Connect failed: the team server did not start the person's own Spex there; {server} is the server's name, {words} its own words, kept whole
-#: src/places.ts
-msgid "{server} could not start Spex for you: {words}"
-msgstr "{server} could not start Spex for you: {words}"
-
-#. Connect refused by the team server with no words of its own; {server} is the server's name
-#: src/places.ts
-msgid "{server} refused to connect you"
-msgstr "{server} refused to connect you"
-
-#. Connect refused by the team server, its refusal relayed from it or from the Space; {server} is the server's name, {words} its own words, kept whole
-#: src/places.ts
-msgid "{server} refused to connect you: {words}"
-msgstr "{server} refused to connect you: {words}"
-
-#. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
-#: src/places.ts
-msgid "{server}'s certificate could not be verified"
-msgstr "{server}'s certificate could not be verified"
-
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -945,35 +864,10 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
-#. Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are
-#: src/service.ts
-msgid "A {adapter} credential needs {keys}"
-msgstr "A {adapter} credential needs {keys}"
-
-#. Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username
-#: src/service.ts
-msgid "A code host's credential is a token and, where the host asks for one, a username"
-msgstr "A code host's credential is a token and, where the host asks for one, a username"
-
-#. Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character
-#: src/service.ts
-msgid "A code host's token and username are each one line of text"
-msgstr "A code host's token and username are each one line of text"
-
 #. Refusal: another compile of this core writes the playbook's artifact folder
 #: src/compile.ts
 msgid "a compile is writing {folder}; retry once it ends"
 msgstr "a compile is writing {folder}; retry once it ends"
-
-#. Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank
-#: src/service.ts
-msgid "A credential needs a name"
-msgstr "A credential needs a name"
-
-#. Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given
-#: src/service.ts
-msgid "A credential's value cannot be blank"
-msgstr "A credential's value cannot be blank"
 
 #. Refusal during attachment admission
 #: src/service.ts
@@ -989,21 +883,6 @@ msgstr "a dispatched intent's text is history"
 #: src/space.ts
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
-
-#. Refusal of opening a project's code on a team server because its records name no code remote; this prerequisite does not describe access to saved sessions or other records
-#: src/space.ts
-msgid "A Git remote is required to open this project's code on a server."
-msgstr "A Git remote is required to open this project's code on a server."
-
-#. Why a project's records are unreachable: their group's path is your login's, so they can have no folder of their own on this computer; read after 'Unreachable: '
-#: src/space-groups.ts
-msgid "a group named like your login"
-msgstr "a group named like your login"
-
-#. Storage diagnostic: the seat's credentials file holds a code host's entry under a key that is no host name, which is not repeated
-#: src/code-credentials.ts
-msgid "a host entry keyed by no host name is malformed; preserved unchanged"
-msgstr "a host entry keyed by no host name is malformed; preserved unchanged"
 
 #. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
 #: src/service.ts
@@ -1071,11 +950,6 @@ msgstr "a turn is being submitted in this session"
 msgid "act targets unknown intent {intentId}"
 msgstr "act targets unknown intent {intentId}"
 
-#. Refusal: the project's records are on this computer only; Add to a group… is the row's control
-#: src/space.ts
-msgid "Add it to a group first"
-msgstr "Add it to a group first"
-
 #. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection
 #: src/space-git.ts
 msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
@@ -1086,25 +960,10 @@ msgstr "Add this computer's SSH key to your account, accept a new host key in a 
 msgid "adding stopped after {done}: {error}"
 msgstr "adding stopped after {done}: {error}"
 
-#. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
-#: src/service.ts
-msgid "Already on a server — open it from your computer"
-msgstr "Already on a server — open it from your computer"
-
 #. Refusal of a sign-in: the address names the host and port of a Space this computer already signs in to, under another scheme; {listed} is that Space's address
 #: src/space.ts
 msgid "Already signed in to {listed} — sign in at that address"
 msgstr "Already signed in to {listed} — sign in at that address"
-
-#. Storage diagnostic: the seat's credentials file holds an agent's entry under a key that is no agent's name, which is not repeated
-#: src/code-credentials.ts
-msgid "an agent entry keyed by no agent's name is malformed; preserved unchanged"
-msgstr "an agent entry keyed by no agent's name is malformed; preserved unchanged"
-
-#. Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries
-#: src/service.ts
-msgid "An agent's credential cannot hold a NUL character"
-msgstr "An agent's credential cannot hold a NUL character"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -1176,6 +1035,11 @@ msgstr "cannot read file: {message}"
 msgid "captain must resolve an adapter"
 msgstr "captain must resolve an adapter"
 
+#. Guidance after a Space refused a records write
+#: src/space-git.ts
+msgid "Check access in your Space, then retry."
+msgstr "Check access in your Space, then retry."
+
 #. Refusal: the Space's side of a change was asked for before Check read it; Check is the Sync tab's control
 #: src/space.ts
 msgid "Check first, then view the diff"
@@ -1229,6 +1093,16 @@ msgstr "Check the URL, create the repository, or sign this computer in at {host}
 msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 msgstr "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 
+#. Refusal when the project's records have no sync destination
+#: src/space.ts
+msgid "Choose a Space to sync first"
+msgstr "Choose a Space to sync first"
+
+#. Refusal of a remote the reader named for a project's records that lies at a Space, which supplies its own records addresses
+#: src/space.ts
+msgid "Choose that Space as a sync destination"
+msgstr "Choose that Space as a sync destination"
+
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
 msgid "Choose the other side or fix the file, then Retry."
@@ -1238,16 +1112,6 @@ msgstr "Choose the other side or fix the file, then Retry."
 #: src/space.ts
 msgid "Close what holds them open, then Retry."
 msgstr "Close what holds them open, then Retry."
-
-#. Opening a project on a team server could not download its code: the member set no token for the code's host, which is no signed-in Space's; {host} is the code host's name as the Credentials section in Settings takes it
-#: src/space.ts
-msgid "Code not downloaded: {host} needs your credential — add it in Settings"
-msgstr "Code not downloaded: {host} needs your credential — add it in Settings"
-
-#. Opening a project on a team server could not download its code: the member's token for the code's host, which is no signed-in Space's, cannot be read from the server's credentials file; {host} is the code host's name as the Credentials section in Settings takes it
-#: src/space.ts
-msgid "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
-msgstr "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
@@ -1263,11 +1127,6 @@ msgstr "Code remote not configured"
 #: src/space.ts
 msgid "Code: {where}"
 msgstr "Code: {where}"
-
-#. Refusal of malformed access-only Codex subscription credentials; never repeats their contents
-#: src/service.ts
-msgid "Codex subscription credentials are invalid."
-msgstr "Codex subscription credentials are invalid."
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -1343,20 +1202,15 @@ msgstr "Confirm to remove it anyway."
 #. A stopped transfer's message; {host} is the Space's display name, or the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
+#: src/space-catalog.ts
 #: src/space-git.ts
-#: src/space-groups.ts
 msgid "Could not reach {host}"
 msgstr "Could not reach {host}"
 
 #. An unexpected local failure stopped Refresh; technical details stay in diagnostics
 #: src/space.ts
-msgid "Could not refresh groups; try again"
-msgstr "Could not refresh groups; try again"
-
-#. Refusal of a credentials command on a computer of one's own: Spex keeps a member's code-host and agent credentials only on a team server
-#: src/service.ts
-msgid "Credentials are set on a server only"
-msgstr "Credentials are set on a server only"
+msgid "Could not refresh Space projects; try again"
+msgstr "Could not refresh Space projects; try again"
 
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
@@ -1431,10 +1285,7 @@ msgstr "Enter just the Space's address, like https://spex.sublang.ai"
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
-#. Storage diagnostic: a record in the file is not an object
-#. Storage diagnostic: a record in the file is not an object
 #: src/app-storage.ts
-#: src/code-credentials.ts
 #: src/drafts.ts
 #: src/i18n.ts
 msgid "expected an object"
@@ -1552,30 +1403,10 @@ msgstr "GitHub CLI (gh) is not installed. Install it and run `gh auth login`."
 msgid "GitHub CLI is not authenticated. Run `gh auth login`."
 msgstr "GitHub CLI is not authenticated. Run `gh auth login`."
 
-#. Refusal of a group's rename naming neither a new name nor a new path
-#: src/space-groups.ts
-msgid "Give the group a new name or path"
-msgstr "Give the group a new name or path"
-
-#. Refusal of a new group whose path at the Space is blank; Path is the editor's field
-#: src/space-groups.ts
-msgid "Give the group a path"
-msgstr "Give the group a path"
-
 #. Guidance where a remote of an unread form refused access
 #: src/space-git.ts
 msgid "Give this computer access, then Retry"
 msgstr "Give this computer access, then Retry"
-
-#. The Space has no group deletion operation; the group is kept
-#: src/space-groups.ts
-msgid "Group deletion isn’t available at {host}. Contact the Space administrator."
-msgstr "Group deletion isn’t available at {host}. Contact the Space administrator."
-
-#. The Space has no group restoration operation; the group remains scheduled for deletion
-#: src/space-groups.ts
-msgid "Group restoration isn’t available at {host}. Contact the Space administrator."
-msgstr "Group restoration isn’t available at {host}. Contact the Space administrator."
 
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
@@ -1877,11 +1708,6 @@ msgstr "Media read begins beyond the file length."
 msgid "Media storage has stopped."
 msgstr "Media storage has stopped."
 
-#. Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role
-#: src/space-git.ts
-msgid "Membership decides who may send here: use Invite members, or ask someone who can manage members."
-msgstr "Membership decides who may send here: use Invite members, or ask someone who can manage members."
-
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
@@ -1910,21 +1736,6 @@ msgstr "Moving spex.yaml and spex.lock into the project folder did not finish �
 #: src/service.ts
 msgid "name either the session's instance or its file's version"
 msgstr "name either the session's instance or its file's version"
-
-#. Refusal of a members, share or removal command naming neither or both a group and a project's records
-#: src/space-groups.ts
-msgid "Name one group or one project"
-msgstr "Name one group or one project"
-
-#. Refusal of a share or a removal whose login is blank; {host} is the Space's display name
-#: src/space-groups.ts
-msgid "Name the account's login at {host}"
-msgstr "Name the account's login at {host}"
-
-#. Refusal of a new group whose name is blank
-#: src/space-groups.ts
-msgid "Name the group"
-msgstr "Name the group"
 
 #. Refusal: a package added from the registry or Git must be named, as org/name
 #: src/environments.ts
@@ -2002,11 +1813,6 @@ msgstr "no intent {intentId}"
 msgid "no live session {sessionId}"
 msgstr "no live session {sessionId}"
 
-#. A spex repository's state or a stopped transfer: the Space no longer lists it for this account
-#: src/space-git.ts
-msgid "No longer shared with you"
-msgstr "No longer shared with you"
-
 #. Stands where a role binds no player at all
 #. Stands where a role binds no player at all
 #: src/session.ts
@@ -2077,35 +1883,15 @@ msgstr "Normalize"
 msgid "not a folder, so no file in it is read"
 msgstr "not a folder, so no file in it is read"
 
-#. Refusal of Disconnect or of a server's sign-in: this computer is not connected to the server named
-#: src/places.ts
-msgid "Not connected to this server"
-msgstr "Not connected to this server"
-
-#. The Space found nothing a write named, and gave no words of its own; {host} is its display name
-#: src/space-groups.ts
-msgid "Not found at {host}"
-msgstr "Not found at {host}"
-
-#. The Space found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole
-#: src/space-groups.ts
-msgid "Not found at {host}: {words}"
-msgstr "Not found at {host}: {words}"
-
 #. Refusal: the project's records name no Git branch; spex is the branch's own name
 #: src/space.ts
 msgid "Not on a branch; check out spex in a terminal"
 msgstr "Not on a branch; check out spex in a terminal"
 
 #. The browser page's title once a sign-in failed
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Not signed in"
 msgstr "Not signed in"
-
-#. Storage diagnostic: a YAML file of the home does not parse; the file is left as it is
-#: src/code-credentials.ts
-msgid "not valid YAML; preserved unchanged"
-msgstr "not valid YAML; preserved unchanged"
 
 #. Guidance where the Space no longer lists a project's records for this account
 #. Guidance where the Space no longer lists a project's records for this account
@@ -2144,11 +1930,6 @@ msgstr "only a closed intent leaves history"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "only a finished intent confirms done"
-
-#. Refusal of a server open command without the flag recording the person's explicit Open request
-#: src/places.ts
-msgid "Opening a server requires an explicit request"
-msgstr "Opening a server requires an explicit request"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts
@@ -2201,10 +1982,15 @@ msgstr "path or alias already belongs to another project"
 msgid "path resolves outside the project"
 msgstr "path resolves outside the project"
 
-#. Refusal on a team server of adding your Personal records to a group or naming a remote for them: they stay on the server and reach no Space
+#. The description of the personal records repository created at sign-in
+#: src/space-catalog.ts
+msgid "Personal settings and conversation records"
+msgstr "Personal settings and conversation records"
+
+#. Refusal of manually adding a Space for personal settings, which sign-in handles automatically
 #: src/space.ts
-msgid "Personal records stay on this server"
-msgstr "Personal records stay on this server"
+msgid "Personal settings sync with each Space when you sign in"
+msgstr "Personal settings sync with each Space when you sign in"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -2370,11 +2156,6 @@ msgstr "project directory is missing"
 msgid "Project is unavailable."
 msgstr "Project is unavailable."
 
-#. Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself
-#: src/service.ts
-msgid "Projects on a server are opened from their group"
-msgstr "Projects on a server are opened from their group"
-
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
@@ -2450,17 +2231,7 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
 
-#. Refusal of group deletion without a reviewed public group path; no changes were sent
-#: src/space-groups.ts
-msgid "Review {group} before deleting it"
-msgstr "Review {group} before deleting it"
-
-#. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
-#: src/session.ts
-msgid "Runs nowhere yet"
-msgstr "Runs nowhere yet"
-
-#. Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name
+#. Why a session or an intent does not run here: it is assigned to another runtime, identified by its display label
 #: src/control-record.ts
 msgid "Runs on {label}"
 msgstr "Runs on {label}"
@@ -2530,11 +2301,6 @@ msgstr "Settings changed"
 msgid "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back."
 msgstr "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back."
 
-#. Refusal of sharing a project's records at another Space: the person may not manage their members at every Space they sync with, and sharing reaches more people; {name} is the project
-#: src/space.ts
-msgid "Sharing {name} at another Space needs the right to manage its members everywhere it syncs"
-msgstr "Sharing {name} at another Space needs the right to manage its members everywhere it syncs"
-
 #. A state or a stopped transfer: the Space asks this computer to sign in again
 #: src/space-git.ts
 msgid "Sign in again"
@@ -2555,11 +2321,6 @@ msgstr "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
 #: src/config.ts
 msgid "sign in by running codex in a terminal, or set OPENAI_API_KEY"
 msgstr "sign in by running codex in a terminal, or set OPENAI_API_KEY"
-
-#. Adapter requirement on a team server's seat, where no credential of the agent is set; `adapter` is the agent's name and the Credentials section is the one in Settings
-#: src/seat-credentials.ts
-msgid "sign in by setting your own credential for {adapter} in the Credentials section"
-msgstr "sign in by setting your own credential for {adapter} in the Credentials section"
 
 #. Refusal of a sync: the Space holding the project's records is signed out; {host} is that Space's display name, or its host name before any read
 #: src/space.ts
@@ -2612,14 +2373,9 @@ msgid "Sign-out at {registry} did not finish — check the connection, then Sign
 msgstr "Sign-out at {registry} did not finish — check the connection, then Sign out again"
 
 #. The browser page's title once a sign-in completed
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Signed in"
 msgstr "Signed in"
-
-#. Readiness on a team server's seat: the agent runs on the sign-in the server's administrator shared
-#: src/seat-credentials.ts
-msgid "Signed in by this server's administrator"
-msgstr "Signed in by this server's administrator"
 
 #. Spec notice: a link under specs/ pointed outside the project and was not read
 #: src/specs.ts
@@ -2657,7 +2413,7 @@ msgid "Spex desktop and server require macOS, Linux, or Windows with verified pr
 msgstr "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions."
 
 #. The browser page once a sign-in failed
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Spex did not sign in. You may close this browser window and return to Spex."
 msgstr "Spex did not sign in. You may close this browser window and return to Spex."
 
@@ -2667,7 +2423,7 @@ msgid "Spex is packaging {folder}; retry once it ends"
 msgstr "Spex is packaging {folder}; retry once it ends"
 
 #. The browser page once a sign-in completed
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex is signed in. You may close this browser window."
 
@@ -2676,20 +2432,10 @@ msgstr "Spex is signed in. You may close this browser window."
 msgid "Spex is stopping"
 msgstr "Spex is stopping"
 
-#. The description a project's new records carry at the Space, its code on no remote
-#: src/space-groups.ts
+#. The description of the project's records at the Space
+#: src/space-catalog.ts
 msgid "Spex records of {name}"
 msgstr "Spex records of {name}"
-
-#. The description a project's new records carry at the Space; {code} is the code's remote URL
-#: src/space-groups.ts
-msgid "Spex records of {name}; its code is at {code}"
-msgstr "Spex records of {name}; its code is at {code}"
-
-#. The description a group's new records carry at the Space
-#: src/space-groups.ts
-msgid "Spex records of the group {group}"
-msgstr "Spex records of the group {group}"
 
 #. Draft thread line for a turn Spex started; {kind} is the directive's code word (compile, register or spex), and keep the `Spex: ` opening
 #: src/authoring.ts
@@ -2798,21 +2544,6 @@ msgstr "taken, so {key} cannot move here under its Space's folder; move it aside
 msgid "Text or an attachment is required."
 msgstr "Text or an attachment is required."
 
-#. Refusal of a remote the reader named for a project's records that lies at a Space, which hands its own addresses over itself; Add to a group… is the row's control
-#: src/space.ts
-msgid "That address is a Space's own — Add it to a group instead"
-msgstr "That address is a Space's own — Add it to a group instead"
-
-#. Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port
-#: src/service.ts
-msgid "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces"
-msgstr "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces"
-
-#. Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are
-#: src/service.ts
-msgid "That is not an agent: name one of {agents}"
-msgstr "That is not an agent: name one of {agents}"
-
 #. Refusal: a summons is marked read only once its turn ended
 #: src/service.ts
 msgid "That turn has not ended, so it cannot be marked as read."
@@ -2842,11 +2573,6 @@ msgstr "the active lock is empty"
 #: src/authoring.ts
 msgid "the agent ended with status {status}"
 msgstr "the agent ended with status {status}"
-
-#. Storage diagnostic: an agent's entry in the seat's credentials file will not read; {name} is the agent's name
-#: src/code-credentials.ts
-msgid "the agent entry {name} is malformed; preserved unchanged"
-msgstr "the agent entry {name} is malformed; preserved unchanged"
 
 #. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
 #: src/compile.ts
@@ -2886,8 +2612,6 @@ msgstr "the config is not valid; fix it in Settings before the agent can answer"
 #. Refusal during attachment admission
 #. Refusal during core shutdown
 #. Refusal during core shutdown
-#. Refusal during core shutdown
-#: src/places.ts
 #: src/service.ts
 #: src/session.ts
 msgid "The core is stopping."
@@ -2907,11 +2631,6 @@ msgstr "The files of the applet {applet} are not on this computer — Install in
 #: src/environments.ts
 msgid "The folder of {name} is missing at {path} — choose its folder, then Retry"
 msgstr "The folder of {name} is missing at {path} — choose its folder, then Retry"
-
-#. Storage diagnostic: a code host's entry in the seat's credentials file will not read; {name} is its host name as the file keys it
-#: src/code-credentials.ts
-msgid "the host entry {name} is malformed; preserved unchanged"
-msgstr "the host entry {name} is malformed; preserved unchanged"
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts
@@ -2939,7 +2658,7 @@ msgid "the moved owner's token changed"
 msgstr "the moved owner's token changed"
 
 #. The Space reports the name of new records taken
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "The name is taken"
 msgstr "The name is taken"
 
@@ -2989,11 +2708,6 @@ msgstr "the path must be relative to these records"
 #: src/space.ts
 msgid "The records are here — Choose folder… for the code"
 msgstr "The records are here — Choose folder… for the code"
-
-#. Guidance after opening a project on a team server downloaded its records but not its code, the server choosing the code's folder: Open here again downloads the code there; Open here is the row's control
-#: src/space.ts
-msgid "The records are here — Open here again to download the code"
-msgstr "The records are here — Open here again to download the code"
 
 #. Refusal: package work asked of a project whose records Spex does not hold here; {name} is the project's name. 'Open here' is the project's control on the Space surface
 #: src/environments.ts
@@ -3064,17 +2778,17 @@ msgid "the session's structure no longer matches its stored one"
 msgstr "the session's structure no longer matches its stored one"
 
 #. A step refused because a sign-in, a token refresh or a sign-out replaced the stored credential while it ran
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "The sign-in changed meanwhile; try again"
 msgstr "The sign-in changed meanwhile; try again"
 
 #. A sign-in that ended because nobody approved it in time
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "The sign-in expired before it was approved"
 msgstr "The sign-in expired before it was approved"
 
 #. A sign-in that ended because the person denied it at the Space; {host} is its display name
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "The sign-in was denied at {host}"
 msgstr "The sign-in was denied at {host}"
 
@@ -3124,6 +2838,11 @@ msgstr "The upload chunk exceeds the declared file length."
 #: src/media-transfers.ts
 msgid "The upload service has stopped."
 msgstr "The upload service has stopped."
+
+#. A spex repository's state or a stopped transfer: the Space no longer lists it for this account
+#: src/space-git.ts
+msgid "These records are no longer available in your Space account"
+msgstr "These records are no longer available in your Space account"
 
 #. Refusal: the records the explorer shows are no folder
 #: src/space.ts
@@ -3205,16 +2924,6 @@ msgstr "This run no longer offers “{actionId}”."
 msgid "This run offers no recovery to rerun."
 msgstr "This run offers no recovery to rerun."
 
-#. Readiness on a team server's seat: the file holding the administrator's shared sign-ins cannot be read
-#: src/seat-credentials.ts
-msgid "This server's shared sign-in cannot be read: ask its administrator"
-msgstr "This server's shared sign-in cannot be read: ask its administrator"
-
-#. Readiness on a team server's seat: the agent's status command reports the administrator's shared sign-in expired or refused
-#: src/seat-credentials.ts
-msgid "This server's shared sign-in has expired: ask its administrator"
-msgstr "This server's shared sign-in has expired: ask its administrator"
-
 #. Refusal: nothing in the session's history can be continued
 #: src/service.ts
 msgid "this session has no compatible checkpoint"
@@ -3240,11 +2949,6 @@ msgstr "This session offers no way to end its run."
 #: src/service.ts
 msgid "this session ran in {cwd}; continue it on the computer whose folder it ran in"
 msgstr "this session ran in {cwd}; continue it on the computer whose folder it ran in"
-
-#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space
-#: src/service.ts
-msgid "This sign-in is for a server only — sign in on Space"
-msgstr "This sign-in is for a server only — sign in on Space"
 
 #. Live tool approval refusal
 #: src/approvals.ts
@@ -3305,8 +3009,6 @@ msgid "unsupported format {format}; preserved unchanged"
 msgstr "unsupported format {format}; preserved unchanged"
 
 #. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
-#. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
-#: src/code-credentials.ts
 #: src/i18n.ts
 msgid "unsupported format; preserved unchanged"
 msgstr "unsupported format; preserved unchanged"
@@ -3391,32 +3093,22 @@ msgid "Wait for the session to finish, then Retry."
 msgstr "Wait for the session to finish, then Retry."
 
 #. A step the Space left waiting, with no words of its own
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Waiting"
 msgstr "Waiting"
 
-#. A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path
-#: src/space-groups.ts
-msgid "Waiting for a member who can create it in {group}"
-msgstr "Waiting for a member who can create it in {group}"
+#. A Space has yet to prepare the records branch.
+#: src/space-catalog.ts
+msgid "Waiting for the records branch"
+msgstr "Waiting for the records branch"
 
-#. A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words
-#: src/space-groups.ts
-msgid "Waiting for a member who can create it in {group}: {words}"
-msgstr "Waiting for a member who can create it in {group}: {words}"
-
-#. A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path
-#: src/space-groups.ts
-msgid "Waiting for a member who can prepare its branch in {group}"
-msgstr "Waiting for a member who can prepare its branch in {group}"
-
-#. A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words
-#: src/space-groups.ts
-msgid "Waiting for a member who can prepare its branch in {group}: {words}"
-msgstr "Waiting for a member who can prepare its branch in {group}: {words}"
+#. A Space has yet to prepare the records branch. {words} is its answer.
+#: src/space-catalog.ts
+msgid "Waiting for the records branch: {words}"
+msgstr "Waiting for the records branch: {words}"
 
 #. A step the Space left waiting; {words} are its own words
-#: src/space-groups.ts
+#: src/space-catalog.ts
 msgid "Waiting: {words}"
 msgstr "Waiting: {words}"
 
@@ -3446,22 +3138,7 @@ msgstr "Your merge is saved on this computer — Retry to send it"
 msgid "Your orgs at {registry} could not be read — check the connection, then Retry"
 msgstr "Your orgs at {registry} could not be read — check the connection, then Retry"
 
-#. Readiness on a team server's seat: the agent runs on a credential the member placed in Settings
-#: src/seat-credentials.ts
-msgid "Your own credential"
-msgstr "Your own credential"
-
-#. Readiness on a team server's seat: the agent's status command reports the credential the member placed expired or refused
-#: src/seat-credentials.ts
-msgid "Your own credential has expired"
-msgstr "Your own credential has expired"
-
 #. A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied
 #: src/space-git.ts
 msgid "Your saved commits remain on this computer. Address the content limit, then Retry."
 msgstr "Your saved commits remain on this computer. Address the content limit, then Retry."
-
-#. Refusal of Connect or Disconnect: the record of this computer's server connections changed between the core's read and its write
-#: src/places.ts
-msgid "Your server connections changed meanwhile — try again"
-msgstr "Your server connections changed meanwhile — try again"

@@ -28,7 +28,7 @@ import type { CommandResults, EnvironmentPackage, EnvironmentState, RegistryStat
 
 import { EnvironmentSection } from "./EnvironmentSection.js";
 import { PackagesTab } from "./PackagesTab.js";
-import { instanceState } from "../fixtures/groups-state.js";
+import { instanceState } from "../fixtures/space-state.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   CONFIG_STATE,

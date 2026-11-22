@@ -23,8 +23,7 @@ import type {
   SessionInfo,
 } from "@sublang/spex-core/protocol";
 
-import { useEachPlace, useJoinedAttention } from "../state/place-context.js";
-import { isLocalPlace, useAppStore, type AppStore } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { causePhrase } from "../lib/failure-catalogue.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
 import { i18n } from "../i18n.js";
@@ -487,7 +486,7 @@ export function DashboardSurface({
 }: {
   /** Open at the entry's core and turn, or its failure's onset where
    * it names no turn. An omitted place means this computer. */
-  onOpenSession: (sessionId: string, turnId?: number, place?: string, focusAt?: number) => void;
+  onOpenSession: (sessionId: string, turnId?: number, focusAt?: number) => void;
   /** Open an intent record in its project's records reader. */
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   /** Stage an intent's dispatch (the App wires this to the store's
@@ -496,7 +495,7 @@ export function DashboardSurface({
   /** Optional Projects navigation for empty-state guidance
    * (dashboard-8), showing the place named; plain copy stands in when
    * the App leaves it unwired. */
-  onNavigate?: (surface: "Workspace", place: AppStore) => void;
+  onNavigate?: (surface: "Workspace") => void;
 }) {
   // The place the project groups stand at: this computer's, the
   // Dashboard joining the places' attention alone (DR-133). A link to a
@@ -509,17 +508,15 @@ export function DashboardSurface({
   const ledger = useAppStore((state) => state.ledger);
   const ledgerError = useAppStore((state) => state.ledgerError);
   const loadLedger = useAppStore((state) => state.loadLedger);
-  // The one queue across the places (dashboard-9): each entry kept
-  // with the store of the core it is answered at.
-  const joined = useJoinedAttention();
-  const placeProjects = useEachPlace((state) => state.projects);
+  const connection = useAppStore((state) => state.connection);
+  const queue = connection === "mismatch" ? [] : ledger?.attention ?? [];
   // Reading is an act on the ledger, so it is takeable from the row
   // itself — it depends on no runtime state of the session, and works
   // for a conversation this core could never continue (dashboard-53).
-  const markReviewed = (place: AppStore, entry: AttentionEntry): Promise<void> =>
+  const markReviewed = (entry: AttentionEntry): Promise<void> =>
     entry.turnId === undefined
       ? Promise.resolve()
-      : place.getState().reviewTurn(entry.sessionId, entry.turnId);
+      : home.getState().reviewTurn(entry.sessionId, entry.turnId);
 
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const now = useNow();
@@ -542,8 +539,8 @@ export function DashboardSurface({
       ? projects
       : projects.filter((project) => project.id === effectiveProjectFilter);
   const intents = ledger?.intents ?? [];
-  const attention = joined.entries.filter(
-    ({ entry }) =>
+  const attention = queue.filter(
+    (entry) =>
       effectiveProjectFilter === "all" ||
       entry.projectId === effectiveProjectFilter,
   );
@@ -570,14 +567,10 @@ export function DashboardSurface({
   // The filter hides entries and groups; it never changes the global
   // queue reading (dashboard-32).
   const nextHead = publishedNextHead(intents, projects);
-  const globalAttentionEmpty = joined.entries.length === 0;
+  const globalAttentionEmpty = queue.length === 0;
   const projectName = (projectId: string) =>
     projects.find((project) => project.id === projectId)?.name ?? projectId;
-  /** A project's name at the place an entry stands at. */
-  const projectNameAt = (place: AppStore, projectId: string) =>
-    placeProjects
-      .find((entry) => entry.store === place)
-      ?.value.find((project) => project.id === projectId)?.name ?? projectId;
+  const projectNameOf = (projectId: string) => projects.find((project) => project.id === projectId)?.name ?? projectId;
 
   // A verdict removes its row; focus moves on to the entry that took
   // its place, else the previous one, else the all-clear — never the
@@ -606,7 +599,7 @@ export function DashboardSurface({
   const workspaceLink = onNavigate ? (
     <button
       type="button"
-      onClick={() => onNavigate("Workspace", home)}
+      onClick={() => onNavigate("Workspace")}
       className="text-brand-600 hover:underline dark:text-brand-300"
     />
   ) : (
@@ -620,7 +613,7 @@ export function DashboardSurface({
     const state = home.getState();
     state.setCurrentProject(projectId);
     state.setWorkspaceTab(projectId, "overview");
-    onNavigate?.("Workspace", home);
+    onNavigate?.("Workspace");
   };
 
   return (
@@ -681,26 +674,24 @@ export function DashboardSurface({
           className="flex flex-col gap-2"
           data-testid="attention-queue"
         >
-          {attention.map(({ place, entry }, index) => (
+          {attention.map((entry, index) => (
             <AttentionRow
-              key={`${place.place.key}:${entry.intentId ?? entry.sessionId}-${entry.kind}`}
+              key={`${entry.intentId ?? entry.sessionId}-${entry.kind}`}
               entry={entry}
-              projectName={projectNameAt(place, entry.projectId)}
+              projectName={projectNameOf(entry.projectId)}
               now={now}
               // Opened and answered at its own core (dashboard-9).
               onOpen={() =>
                 entry.kind === "failure" && entry.turnId === undefined
-                  ? onOpenSession(entry.sessionId, undefined, place.place.key, entry.since)
-                  : isLocalPlace(place.place)
-                    ? onOpenSession(entry.sessionId, entry.turnId)
-                    : onOpenSession(entry.sessionId, entry.turnId, place.place.key)
+                  ? onOpenSession(entry.sessionId, undefined, entry.since)
+                  : onOpenSession(entry.sessionId, entry.turnId)
               }
               onClose={(as) =>
                 entry.intentId
-                  ? place.getState().closeIntent(entry.intentId, as)
+                  ? home.getState().closeIntent(entry.intentId, as)
                   : Promise.resolve()
               }
-              onReviewed={() => markReviewed(place, entry)}
+              onReviewed={() => markReviewed(entry)}
               onClosed={() => setHandOff({ index })}
             />
           ))}

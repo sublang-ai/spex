@@ -28,6 +28,7 @@ Amended by [DR-168](168-independent-package-registry.md) for independent registr
 Amended by [DR-188](188-registry-sign-in-opens-the-browser.md) in the desktop's permitted sign-in origins: each running registry sign-in also permits its origin.
 
 Extended by [DR-171](171-personal-names-are-space-logins.md) in personal attribution: the selected account's login supplies every new commit and intent author name; historical attribution is preserved.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

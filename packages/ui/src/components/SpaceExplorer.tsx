@@ -20,14 +20,14 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { GroupsState, RepositoryState, SpaceEntry, SpaceReadResult } from "@sublang/spex-core/protocol";
+import type { SpaceState, RepositoryState, SpaceEntry, SpaceReadResult } from "@sublang/spex-core/protocol";
 
 import {
   SPACE_SPLIT_DEFAULT,
   SPACE_SPLIT_MAX,
   SPACE_SPLIT_MIN,
 } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { instanceName } from "../lib/instances.js";
 import {
   SHARING_LABELS,
@@ -37,7 +37,6 @@ import {
   prettyJson,
   previewKindOf,
   sessionPartName,
-  seatName,
   staysHere,
   withheldPhrase,
 } from "../lib/space.js";
@@ -158,7 +157,7 @@ function SharingChip({ sync }: { sync: SpaceEntry["sync"] }) {
  * two environment files by their file names, and a file naming a Space
  * the records are kept at by that Space's display name, its folder as
  * where the records are kept. */
-function entryAnnotation(entry: SpaceEntry, groups?: GroupsState): string {
+function entryAnnotation(entry: SpaceEntry, groups?: SpaceState): string {
   if (entry.kind === "git") {
     return i18n._({ id: "Git data", comment: "entry mark: the repository's own files" });
   }
@@ -187,7 +186,7 @@ function entryAnnotation(entry: SpaceEntry, groups?: GroupsState): string {
 
 /** The annotation of an entry, read against the place's Spaces. */
 function useAnnotate(): (entry: SpaceEntry) => string {
-  const groups = usePlaceStore()((state) => state.space);
+  const groups = useAppStore((state) => state.space);
   return (entry) => entryAnnotation(entry, groups);
 }
 
@@ -201,14 +200,13 @@ function entrySize(entry: SpaceEntry): string | undefined {
 }
 
 /** The "Stays on this computer" panel (space-25): every ignored family
- * with its reason, the server named at a team server's place
+ * with its reason.
  * (space-112); folded state is chrome preference (DR-030). */
 function PrivacyPanel() {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const collapsed = store((state) => state.spacePrivacyCollapsed);
   const setCollapsed = store((state) => state.setSpacePrivacyCollapsed);
-  const seat = seatName(store.place);
-  const families = staysHere(seat);
+  const families = staysHere();
   return (
     <div
       data-testid="space-privacy"
@@ -223,13 +221,7 @@ function PrivacyPanel() {
         onClick={() => setCollapsed(!collapsed)}
       >
         <Icon name={collapsed ? "caretRight" : "caretDown"} className="h-3.5 w-3.5" />
-        {seat === undefined
-          ? i18n._({ id: "Stays on this computer", comment: "the Explore tab's panel of what never syncs" })
-          : i18n._({
-              id: "Stays on {place}",
-              values: { place: seat },
-              comment: "the Explore tab's panel of what never syncs, on a team server's Space; {place} is the server's name",
-            })}
+        {i18n._({ id: "Stays on this computer", comment: "the Explore tab's panel of what never syncs" })}
       </button>
       {collapsed ? null : (
         <dl id="space-privacy-list" className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs @md:grid-cols-[auto_1fr]">
@@ -479,7 +471,7 @@ export function ExploreTab({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const annotate = useAnnotate();
   const spaceTree = store((state) => state.spaceTree);
   const spaceRead = store((state) => state.spaceRead);
@@ -765,9 +757,6 @@ function PreviewPane({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  // At a team server's place the server is named where this computer
-  // would be (space-112).
-  const seat = seatName(usePlaceStore().place);
   const annotate = useAnnotate();
   const { node } = row;
   if (node.kind === "session") {
@@ -791,16 +780,10 @@ function PreviewPane({
           }
         />
         <p className="text-sm text-neutral-500">
-          {seat === undefined
-            ? i18n._({
+          {i18n._({
                 id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where this computer ran it, provider hints",
                 values: { count: node.children.length },
                 comment: "a session's node in the Explore tab: the files it holds",
-              })
-            : i18n._({
-                id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where {place} ran it, provider hints",
-                values: { count: node.children.length, place: seat },
-                comment: "a session's node in the Explore tab on a team server's Space; {place} is the server's name",
               })}
         </p>
       </>

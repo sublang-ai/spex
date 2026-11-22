@@ -11,7 +11,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { DraftInfo, PlaybookAvailability } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import {
   draftIdCaption,
   draftIdRuleText,
@@ -330,7 +330,7 @@ export function AuthoringSection({
   onAnnounce,
 }: {
   /** The environment whose sessions it lists and creates in: a
-   * project's key, or your own group's for the global one. */
+   * project's key, or your personal for the global one. */
   repository: string;
   taken: ReadonlyMap<string, PlaybookAvailability>;
   autoFocus?: boolean;
@@ -338,7 +338,7 @@ export function AuthoringSection({
   /** Says a deletion in the page's live region. */
   onAnnounce: (note: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const drafts = store((state) => state.drafts);
   const draftsLoaded = store((state) => state.draftsLoaded);
   const createDraft = store((state) => state.createDraft);

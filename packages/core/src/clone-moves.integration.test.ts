@@ -52,7 +52,7 @@ async function holdOpen(dir: string): Promise<() => Promise<void>> {
 const reloadedTo = (model: string) => (message: ServerMessage): boolean =>
   message.type === "config.state" && message.state.status === "valid" && message.state.summary.captain.model === model;
 
-/** A project placed at the stand-in's `acme` by a pick creating it, its
+/** A project placed at the stand-in account’s namespace by a pick creating it, its
  * clone moved there and its first sync done, holding a session another
  * host wrote, which the core read. */
 async function placedProject(home: StartedHome, host: StandinHost, name: string): Promise<{ key: string; id: string; clone: string; folder: string }> {
@@ -60,8 +60,8 @@ async function placedProject(home: StartedHome, host: StandinHost, name: string)
   const { key: local, clone: localClone } = await addFolder(home, folder);
   assert.ok(await announced(home, await writeForeignSession(localClone, folder, `written in ${name}`)), "the core reads the clone's sessions");
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: Home.load(home.dataDir).origin, groupId: "2002", name } });
-  const key = hostKey(host, `acme/${name}-spex`);
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: Home.load(home.dataDir).origin, name } });
+  const key = hostKey(host, `ada/${name}-spex`);
   const synced = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done", 30_000);
   return { key, id: synced.id ?? "", clone: clonePath(home.dataDir, key), folder };
 }
@@ -110,7 +110,7 @@ test("space-119: a sync follows the host's rename of a clone its core watches, a
   await signIn(home, host);
   const { key, id, clone, folder } = await placedProject(home, host, "renamed");
   host.script.rename(id, { name: "relocated-spex" });
-  const relocated = hostKey(host, "acme/relocated-spex");
+  const relocated = hostKey(host, "ada/relocated-spex");
   const from = home.client.mark();
   await home.client.expectOk("space.sync", { repository: key });
   const moved = await home.client.waitRepository(from, relocated, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
@@ -128,7 +128,7 @@ test("space-119: on Windows, a sync's move of a clone another program holds open
   await signIn(home, host);
   const { key, id, clone, folder } = await placedProject(home, host, "held");
   host.script.rename(id, { name: "released-spex" });
-  const released = hostKey(host, "acme/released-spex");
+  const released = hostKey(host, "ada/released-spex");
 
   // Held through every try: the move stops, nothing moved (space-60).
   const release = await holdOpen(join(clone, "sessions"));
@@ -159,7 +159,7 @@ test("storage-60: a pick moves a local-only clone its core watches under its ins
   await signIn(home, host);
   const local = `${LOGIN}/picked-spex`;
   const { key, clone, folder } = await placedProject(home, host, "picked");
-  assert.equal(key, `${hostFolder(host)}/acme/picked-spex`);
+  assert.equal(key, `${hostFolder(host)}/ada/picked-spex`);
   assert.ok(!existsSync(clonePath(home.dataDir, local)), "[storage-35] the clone left your own group's folder");
   assert.equal(git(bareOf(host, key), "rev-parse", "spex"), git(clone, "rev-parse", "spex"), "[storage-35] its first sync pushed from where it now lies");
   assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, "[storage-35] its pair follows it");
@@ -208,8 +208,8 @@ test("media-23: a pick moving a project's clone while the core reads an attachme
   const first = await home.client.expectOk("media.read", { owner: { kind: "project", id: local }, assetId: asset.assetId, offset: 0, length: MEDIA_CHUNK_BYTES });
   assert.equal(first.eof, false);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: Home.load(home.dataDir).origin, groupId: "2002", name: "attached" } });
-  const key = hostKey(host, "acme/attached-spex");
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: Home.load(home.dataDir).origin, name: "attached" } });
+  const key = hostKey(host, "ada/attached-spex");
   const synced = await home.client.waitRepository(from, key, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.equal(synced.sync.phase, "done", `[media-22] the clone moved: ${JSON.stringify(synced.sync)}`);
   assert.ok(!existsSync(clonePath(home.dataDir, local)), "[media-22] the clone left its former path");

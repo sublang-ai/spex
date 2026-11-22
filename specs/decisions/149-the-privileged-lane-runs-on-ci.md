@@ -10,10 +10,11 @@ Extends [DR-086](086-tests-in-tiers.md) in its tiers: the hub's privileged lane 
 Extends [DR-145](145-merge-on-green.md) in what a pull request's run holds: the lane is no required check.
 
 Amended by [DR-199](199-release-gated-full-validation.md) in its triggers and gate: the lane runs through full app validation or on explicit request, gates app publication, and has no schedule or automatic push or pull-request trigger.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-- The hub's privileged lane proves on a real Linux host with systemd and sudo what no hermetic suite can: the install script, the helper run through sudo, the units, the seats' isolation, the stop at a lease's end and, since [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md), the sweep [[hub-10](../packages/hub.md#hub-10)].
+- The hub's privileged lane proves on a real Linux host with systemd and sudo what no hermetic suite can: the install script, the helper run through sudo, the units, the seats' isolation, the stop at a lease's end and, since [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md), the sweep `hub-10`.
 - It has run by hand once, in a Multipass virtual machine on a developer's machine, recorded in `apps/hub/deploy/LANE.md`; the sweep's phase has run nowhere, and the developer's machine has no virtual machine tool today.
 - GitHub's Ubuntu runner is a disposable Linux host booted by systemd with passwordless sudo, which is exactly the host the lane asks for; its own Node lives under the runner account's toolcache, which the install script refuses for root's use.
 - [DR-145](145-merge-on-green.md) keeps a pull request's run lean and names its jobs as the required checks; the lane takes a quarter of an hour and changes the host's accounts, units and policy.

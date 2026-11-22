@@ -384,8 +384,8 @@ test("space-76: a join whose place is taken while its clone runs stops, leaving 
   // join's private folder is named apart from it. Git for Windows takes
   // no path so long without core.longpaths, so a short one stands there.
   const name = process.platform === "win32" ? "taken-spex" : `${"t".repeat(245)}-spex`;
-  const listing = host.script.addRepository({ group: "acme", name });
-  const key = hostKey(host, `acme/${name}`);
+  const listing = host.script.addRepository({ group: "ada", name });
+  const key = hostKey(host, `ada/${name}`);
   const home = await startHome("join-taken", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   await signIn(home, host);

@@ -23,6 +23,7 @@ Amended by [DR-168](168-independent-package-registry.md) for independent registr
 Amended by [DR-201](201-shared-codex-subscription-access.md) for shared ChatGPT subscription access through an access-only external-token snapshot instead of `CODEX_ACCESS_TOKEN`.
 
 Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in the separate first-open acknowledgement.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

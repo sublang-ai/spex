@@ -9,7 +9,7 @@ Implemented and independently reviewed (2026-10-26).
 
 ## Intent
 
-Preserve the admission and renewal lock checks [[hub-5](../packages/hub.md#hub-5)] [[hub-9](../packages/hub.md#hub-9)] while observing child output at its drained boundary [[release-31](../packages/release.md#release-31)].
+Preserve the admission and renewal lock checks `hub-5` `hub-9` while observing child output at its drained boundary [[release-31](../packages/release.md#release-31)].
 
 ## Deliverables
 

@@ -28,7 +28,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { intentMediaOwner, type ProjectMeta } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
 import {
   ATTENTION_MARK_CLASS,
@@ -192,7 +192,7 @@ const FORGE_STALE_CHECK_MS = 60_000;
  * first page — load on demand once connected; forge lists past the
  * cache window are asked for again while the groups stay on screen. */
 export function useGroupInputs(projects: readonly ProjectInfo[]): void {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const connection = store((state) => state.connection);
   const key = projects.map((project) => project.id).join("\n");
   useEffect(() => {
@@ -231,7 +231,7 @@ export function useGroupInputs(projects: readonly ProjectInfo[]): void {
 export function useForgeAge(
   projects: readonly ProjectInfo[],
 ): (projectId: string) => number | undefined {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const projectMeta = store((state) => state.projectMeta);
   const metaSeen = useRef(new Map<string, ProjectMeta>());
   const [fetchedAt, setFetchedAt] = useState<Record<string, number>>({});
@@ -257,7 +257,7 @@ export function useCaptureReveal(): {
   highlightId?: string;
   capture: (input: CaptureInput) => Promise<IntentInfo>;
 } {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const queueIntent = store((state) => state.queueIntent);
   const [highlightId, setHighlightId] = useState<string>();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -559,7 +559,7 @@ function HistoryBand({
   now: number;
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const history = store((state) => state.history[project.id]);
   const loadHistory = store((state) => state.loadHistory);
   const removeIntent = store((state) => state.removeIntent);
@@ -735,7 +735,7 @@ function NowBand({
   now: number;
   onOpenSession: (sessionId: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const view = store((state) =>
     session ? state.views[session.id] : undefined,
   );
@@ -989,7 +989,7 @@ function ProvenanceAction({
   onOpenSession: (sessionId: string) => void;
   onDone: () => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   // The record's title for its row (dashboard-40), from the tree the
   // path came from.
   const record = store((state) =>
@@ -1105,7 +1105,7 @@ function QueueRow({
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [editing, setEditing] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string>();
@@ -1381,7 +1381,7 @@ function UpNextBand({
   onOpenSession: (sessionId: string) => void;
   onCapture: (input: CaptureInput) => Promise<IntentInfo>;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const editIntent = store((state) => state.editIntent);
   const closeIntent = store((state) => state.closeIntent);
   const loadLedger = store((state) => state.loadLedger);
@@ -1666,7 +1666,7 @@ export function ProjectGroup({
   onCapture,
   onOpenOverview,
 }: ProjectGroupProps) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const projects = store((state) => state.projects);
   const sessions = store((state) => state.sessions);
   const ledger = store((state) => state.ledger);

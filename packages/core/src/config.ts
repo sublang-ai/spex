@@ -54,12 +54,10 @@ import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type 
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
 import { probeSignIn, type SignInProbe } from "./local-credentials.js";
-import { codexAuthContent } from "./seat-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import {
   defaultPlayerId,
-  type AdapterCredential,
   type AdapterName,
   type AgentSummary,
   type BaseUrlState,
@@ -812,15 +810,12 @@ export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
  * signed in or not, so the seed is shown none. */
 const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
 
-/** A local user home permits sign-in and settings lookup. A seat grants
- * only its materialized native Codex home, or no filesystem lookup. */
-export type SeedHome = string | { codexHome: string } | null;
+export type SeedHome = string | null;
 
 /** Whether each agent is set up as a seed counts it (core-service-3,
  * DR-205): a credential variable — Claude's user settings included, as
  * a run reads them — or a sign-in its own status command confirms where
- * its folder stands; never the folder alone. With no home, on a seat,
- * the variables of `env` alone. */
+ * its folder stands. Without a home, only credential variables count. */
 export async function seedCredentials(
   env: NodeJS.ProcessEnv,
   home: SeedHome,
@@ -828,7 +823,6 @@ export async function seedCredentials(
 ): Promise<SeedCredentials> {
   const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
     if (variableCredential(adapter, env, home)) return true;
-    if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
     if (typeof home !== "string") return false;
     // The status command runs only where the folder stands, since it
     // would create it.
@@ -843,22 +837,6 @@ export async function seedCredentials(
 function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
   const runEnv = adapter === "claude" && typeof home === "string" ? { ...env, ...claudeSettingsEnv(env, home) } : env;
   return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
-}
-
-/** Whether `env` selects a seat's access-only Codex snapshot that is
- * materialized as its own `auth.json` (core-service-150): a seed-only
- * presence, never written into a run. An invalid or unmaterialized
- * snapshot counts no credential. */
-function materializedCodexSnapshot(env: NodeJS.ProcessEnv): boolean {
-  if (!env.CODEX_AUTH_CONTENT || !env.CODEX_HOME) return false;
-  try {
-    const auth = join(env.CODEX_HOME, "auth.json");
-    const stat = lstatSync(auth);
-    return stat.isFile() && !stat.isSymbolicLink() &&
-      readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT);
-  } catch {
-    return false;
-  }
 }
 
 /** An agent's configuration folder, where its sign-in is kept. */
@@ -2379,19 +2357,9 @@ export interface AdapterReadiness {
   requirement?: string;
   /** Each unmet half by its kind (DR-204); `requirement` joins them. */
   faults: ReadinessFault[];
-  /** On a seat, the credential class and its phrase (settings-49). */
-  credential?: AdapterCredential;
   /** With null readiness alone: why the agent's sign-in could not be
    * confirmed just now (settings-14). */
   unconfirmed?: string;
-}
-
-/** The credential half where another rule than the launcher's decides
- * it: a seat's forms (settings-49). */
-export interface CredentialHalf {
-  ready: boolean;
-  requirement?: string;
-  credential: AdapterCredential;
 }
 
 /** The runtime half of readiness: usable, or a requirement naming why not. */
@@ -2642,9 +2610,6 @@ export async function checkAdapterReadiness(
   runtime: (
     adapter: AdapterName,
   ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck> = checkAdapterRuntime,
-  // On a seat the credential half is the seat's forms' (settings-14,
-  // settings-49), in place of the launcher's rules below.
-  credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
   // Injectable so tests spawn no status command.
   signIn: SignInProbe = probeSignIn,
 ): Promise<AdapterReadiness> {
@@ -2658,15 +2623,9 @@ export async function checkAdapterReadiness(
     faults.push({ kind: "runtime", requirement: runtimeCheck.requirement });
   }
   let credentialReady: boolean | null = null;
-  let credential: AdapterCredential | undefined;
   let unconfirmed: string | undefined;
   const forms = LOCAL_CREDENTIAL_FORMS[adapter];
-  if (credentialHalf) {
-    const half = await credentialHalf(adapter);
-    credentialReady = half.ready;
-    credential = half.credential;
-    if (!half.ready) faults.push({ kind: "credential", requirement: half.requirement ?? half.credential.phrase });
-  } else if (forms && (adapter === "claude" || adapter === "codex")) {
+  if (forms && (adapter === "claude" || adapter === "codex")) {
     // A home folder is no sign-in: the runtime creates it on its first
     // start (DR-204). With no variable set the agent's own status
     // command, run as a run would be, answers — only where the folder
@@ -2702,7 +2661,6 @@ export async function checkAdapterReadiness(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ),
       faults,
-      ...(credential ? { credential } : {}),
     };
   }
   // The null class survives only over a usable runtime (settings-14):
@@ -2711,7 +2669,6 @@ export async function checkAdapterReadiness(
     adapter,
     ready: credentialReady === null ? null : true,
     faults,
-    ...(credential ? { credential } : {}),
     ...(unconfirmed !== undefined ? { unconfirmed } : {}),
   };
 }

@@ -20,7 +20,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 
 export interface ResizableFrameProps extends HTMLAttributes<HTMLElement> {
   /** Frame identity: what the remembered height is remembered under. */
@@ -60,7 +60,7 @@ export function ResizableFrame({
   children,
   ...rest
 }: ResizableFrameProps) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   // The height is chrome preference, held where the rail's state and
   // the Captain split are held (DR-030); a frame with none, or one
   // remembered outside this frame's bounds, stands at its default.

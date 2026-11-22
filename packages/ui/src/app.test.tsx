@@ -38,7 +38,7 @@ function defaultReply(type: string): object {
       : type === "environment.playbooks"
         ? { project: [], own: [] }
         : type === "space.get"
-          ? groupsState()
+          ? spaceState()
           : type === "draft.list"
             ? []
             : type === "draft.defaults"
@@ -61,7 +61,7 @@ import { applyRecords, initialSessionView, type SessionView } from "./state/redu
 import { SHORTCUTS, keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { currentLocale } from "./i18n.js";
-import { groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
+import { spaceState, instanceState, repositoryRow } from "./fixtures/space-state.js";
 
 // A live clock: the rows print ages relative to now.
 const NOW = Date.now();
@@ -171,8 +171,8 @@ function seed(): void {
     connection: "open",
     everConnected: true,
     projects: [
-      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "p1", name: "alpha-spex", group: "me", own: true } },
-      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } },
+      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "p1", name: "alpha-spex" } },
+      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex" } },
     ] as never,
     projectMeta: {},
     space: undefined,
@@ -534,7 +534,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
 
 describe("dismissed folder choices remain reachable through Space (DR-214)", () => {
   test.each([false, true])("Space review preserves zero-count choices across visits and reload (collapsed: %s)", async (collapsed) => {
-    let space = groupsState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
+    let space = spaceState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
       file: `workspace/personal/${name}`, reason: "No project folder registered", blocking: false,
       repair: { kind: "repository" as const, repository: `personal/${name}`, projectName: name,
         key: `${name}|/old/${name}`, directories: [`/old/${name}`], sessions: 1,
@@ -618,7 +618,7 @@ describe("saved conversations without project files (DR-195)", () => {
       id: "saved-unpaired", projectId: "personal/notes-spex", projectPath: "/old/notes",
       title: "Plan the launch", players: [], initialVisible: [], continuable: undefined,
     });
-    const space = groupsState({ diagnostics: [{
+    const space = spaceState({ diagnostics: [{
       file: "workspace/personal/notes-spex", reason: "No project folder is registered", blocking: false,
       repair: {
         kind: "repository", repository: saved.projectId, key: "notes|/old/notes",
@@ -924,73 +924,6 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-172: first-project welcome route", () => {
-  test("space-58: pending palette submission survives shortcuts, and feedback survives close and repeated refusals", async () => {
-    const added = {
-      id: "me/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 0,
-      repository: { key: "me/gamma-spex", name: "gamma-spex", group: "me", own: true },
-    };
-    const space = groupsState({
-      own: { name: "me", named: true, repositories: [repositoryRow(added.id, { folder: added.path })] },
-      instances: [instanceState("https://example.test", { displayName: "Example" })],
-    });
-    const ledger = { intents: [], attention: [], badge: 0 };
-    let picks = 0;
-    let finishPick!: () => void;
-    commandMock.mockImplementation(async (type: string) => {
-      if (type === "project.register") return added;
-      if (type === "project.list") return [added];
-      if (type === "space.get") return space;
-      if (type === "ledger.get") return ledger;
-      if (type === "space.pick") {
-        if (++picks < 3) throw new Error("Destination unavailable");
-        await new Promise<void>((resolve) => { finishPick = resolve; });
-        return { accepted: true };
-      }
-      return defaultReply(type);
-    });
-    useAppStore.setState({
-      projects: [], sessions: [], views: {}, currentProjectId: undefined,
-      activeSessionId: undefined, workspaceTabs: {}, openTabs: {},
-      ledger: ledger as never, space,
-    });
-    render(<App />);
-    fireEvent.click(screen.getByTestId("home-add-project"));
-    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: added.path } });
-    fireEvent.click(screen.getByTestId("palette-add"));
-    const picker = await screen.findByTestId(`space-picker-${added.id}`);
-    fireEvent.click(within(picker).getByTestId("space-pick-group-@me"));
-    const submit = within(picker).getByTestId(`space-pick-submit-${added.id}`);
-    const live = screen.getByTestId("app-live");
-    await vi.waitFor(() => expect(submit).toHaveProperty("disabled", false));
-    fireEvent.click(submit);
-    await vi.waitFor(() => expect(live.textContent).toBe("Destination unavailable"));
-    const previousAnnouncement = live.firstElementChild;
-    fireEvent.click(submit);
-    await vi.waitFor(() => {
-      expect(picks).toBe(2);
-      expect(live.textContent).toBe("Destination unavailable");
-      expect(live.firstElementChild).not.toBe(previousAnnouncement);
-    });
-    fireEvent.click(submit);
-    await vi.waitFor(() => expect(picks).toBe(3));
-    expect(document.activeElement).toBe(picker);
-    // These bubble to App's real palette-toggle shortcut unless the
-    // pending dialog consumes them. Neither may hide a running write.
-    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
-      fireEvent.keyDown(document.activeElement!, { key: "p", ...modifier });
-      expect(screen.getByTestId(`space-picker-${added.id}`)).toBe(picker);
-      expect(document.activeElement).toBe(picker);
-      expect(picks).toBe(3);
-    }
-    await act(async () => { finishPick(); });
-    await vi.waitFor(() => {
-      expect(screen.queryByTestId("project-palette")).toBeNull();
-      expect(live.textContent).toBe("Adding gamma to Personal at Example");
-    });
-    expect(live.isConnected).toBe(true);
-    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole("main", { name: "Space" })));
-  });
-
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],
@@ -1033,7 +966,7 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
     useAppStore.setState({ configState: valid("code"), workspaceTabs: { p1: "start" } });
     render(<App />);
 
-    // Your own group's config enables /code alone; the project's on top
+    // Your personal config enables /code alone; the project's on top
     // adds /decide, which the Captain home's menu offers.
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: "p1" }),
@@ -1061,7 +994,7 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
     expect(menu.textContent).not.toContain("/decide");
   });
 
-  test("a project whose composition is refused offers your own group's catalog", async () => {
+  test("a project whose composition is refused offers your personal catalog", async () => {
     commandMock.mockImplementation(async (type: string, fields: { projectId?: string }) =>
       type === "config.get" && fields?.projectId === "p1"
         ? { status: "invalid", path: "/p1/config", errors: ["dev.auditor is not set up"] }
@@ -1079,12 +1012,12 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
 
 describe("space-59, space-60, space-63: the page follows a project a move re-keys or a join adds", () => {
   const repo = (key: string, folder: string | null) => repositoryRow(key, { folder });
-  const groups = (...repositories: ReturnType<typeof repo>[]) => groupsState({ own: { name: "me", named: true, repositories } });
-  const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex", group: "acme", own: false } };
-  const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } };
-  const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex", group: "acme", own: false } };
+  const groups = (...repositories: ReturnType<typeof repo>[]) => spaceState({ repositories });
+  const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex" } };
+  const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex" } };
+  const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex" } };
 
-  test("a Groups state naming the projects the page holds re-reads nothing", () => {
+  test("a Space state naming the projects the page holds re-reads nothing", () => {
     render(<App />);
     act(() => {
       deliverServerMessageForTests({ type: "space.state", state: groups(repo("p1", "/tmp/alpha"), repo("p2", "/tmp/beta"), repo("acme/team-spex", null)) });
@@ -1092,27 +1025,14 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
     expect(commandMock).not.toHaveBeenCalledWith("project.list", {});
   });
 
-  test("space-59, space-60, space-63: a Groups state whose project row stands under a second instance re-reads nothing", () => {
+  test("space-59, space-60, space-63: a Space state whose project row stands under a second instance re-reads nothing", () => {
     render(<App />);
     // alpha's row stands under the second instance's group, beta's under
     // your own group: both are the page's projects, wherever the state
     // heads them (space-1, DR-127).
-    const state = groupsState({
-      own: { name: "me", named: false, repositories: [repo("p2", "/tmp/beta")] },
-      instances: [
-        instanceState("https://host.test", { groups: [namespace("me")] }),
-        instanceState("https://second.test", {
-          groups: [
-            namespace("me"),
-            {
-              id: "30", login: null, mine: false, fullPath: "acme", name: "acme",
-              can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
-              placed: [],
-              repositories: [repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
-            },
-          ],
-        }),
-      ],
+    const state = spaceState({
+      repositories: [repo("p2", "/tmp/beta"), repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
+      instances: [instanceState("https://host.test"), instanceState("https://second.test")],
     });
     act(() => {
       deliverServerMessageForTests({ type: "space.state", state });
@@ -1221,74 +1141,17 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     ).toContain("No GitHub remote");
   });
 
-  test("projects-4, space-61: the header's records field reads 'Records · <group> · <standing>', the group left out while the records are in none, a waiting creation's phrase standing for their standing, never the records' key", async () => {
-    const row = (state: "local-only" | "reachable", extra: Parameters<typeof repositoryRow>[1] = {}) =>
-      repositoryRow("p1", { name: "alpha-spex", folder: "/tmp/alpha", state, ...extra });
-    const SPEX = "https://host.test";
-    // Your own group's rows stand in no group (space-1).
-    const local = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", named: true, repositories: [repository] } });
-    // A Space holding the records in Personal, or in a group.
-    const at = (repository: ReturnType<typeof row>, where: "personal" | "acme") =>
-      groupsState({
-        own: { name: "me", named: false, repositories: [] },
-        instances: [
-          instanceState(SPEX, {
-            displayName: "Host",
-            groups:
-              where === "personal"
-                ? [namespace("me", [repository])]
-                : [namespace("me"), { id: "30", login: null, mine: false, fullPath: "acme/research", name: "Research", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false }, placed: [], repositories: [repository] }],
-          }),
-        ],
-      });
-    commandMock.mockImplementation(async (type: string) =>
-      type === "space.get"
-        ? local(row("local-only"))
-        : type === "ledger.get"
-          ? LEDGER
-          : type === "ledger.history"
-            ? { intents: [], more: false }
-            : defaultReply(type),
-    );
+  test("projects-4: the records field names the Space", async () => {
+    const origin = "https://host.test";
+    const space = spaceState({
+      repositories: [repositoryRow("p1", { instance: origin, name: "alpha-spex", folder: "/tmp/alpha", state: "reachable" })],
+      instances: [instanceState(origin, { displayName: "My Space" })],
+    });
+    commandMock.mockImplementation(async (type: string) => type === "space.get" ? space : type === "ledger.get" ? LEDGER : type === "ledger.history" ? { intents: [], more: false } : defaultReply(type));
     useAppStore.setState({ workspaceTabs: { p1: "overview" } });
     render(<App />);
-    const records = await screen.findByTestId("overview-records");
-
-    // The Space state is asked for; records in no group read the field's
-    // name alone — no group, no phrase (projects-4, space-61, space-120).
-    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("space.get", {}));
-    await vi.waitFor(() => expect(records.textContent).toBe("Records"));
-    expect(records.textContent).not.toContain("alpha-spex");
-    expect(records.hasAttribute("title")).toBe(false);
-
-    // A waiting creation reads its phrase, which the Space surface
-    // carries on its line alone (space-64).
-    act(() => {
-      deliverServerMessageForTests({
-        type: "space.state",
-        state: local(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })),
-      });
-    });
-    expect(screen.getByTestId("overview-records-state").textContent).toBe(
-      "Waiting for a member who can create it in acme",
-    );
-    expect(screen.queryByTestId("overview-records-group")).toBeNull();
-
-    // In Personal at a Space, its group reads "Personal" and its standing
-    // follows (projects-4).
-    act(() => {
-      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "personal") });
-    });
-    expect(screen.getByTestId("overview-records-group").textContent).toBe("Personal");
-    expect(records.textContent).toMatch(/^Records · Personal · /);
-
-    // In a group, the group by its name, its path in the title.
-    act(() => {
-      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "acme") });
-    });
-    expect(screen.getByTestId("overview-records-group").textContent).toBe("Research");
-    expect(records.title).toBe("acme/research");
-    expect(records.textContent).not.toMatch(/spex|@host/);
+    const records = await screen.findByTestId("overview-records-space");
+    expect(records.textContent).toBe("My Space");
   });
 
   test("projects-9: records that never reached a Space ask a second confirmation counting them", async () => {

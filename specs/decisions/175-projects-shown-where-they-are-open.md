@@ -17,6 +17,7 @@ Amended by [DR-196](196-a-review-count-and-a-way-back.md) in sidebar availabilit
 Amended by [DR-209](209-a-project-row-with-one-menu.md) in the code phrase and project-row controls: absent code remote is neutral configuration information, server guidance concerns opening code alone, and alternate opening destinations share one overflow.
 
 Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in sidebar availability: saved-record folder tasks no longer add an entry or a place heading; headings stand only for places holding or opening projects.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
 
 ## Context
 

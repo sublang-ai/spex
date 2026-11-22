@@ -11,9 +11,9 @@
 // choice still runs its own sign-in, and no entry confers trust.
 
 import { useCallback, useEffect, useSyncExternalStore, type ReactNode, type RefObject } from "react";
-import type { GroupsState } from "@sublang/spex-core/protocol";
+import type { SpaceState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { hostNameOf, instanceOf } from "../lib/instances.js";
 
@@ -86,7 +86,7 @@ function clientOf(store: { getClient(): unknown }): DirectoryClient | undefined 
  * — again on a later mount where the last read failed, a failure
  * standing until a read succeeds, so nothing flickers. */
 export function useSpaceDirectory(): Directory {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const client = clientOf(store);
   const entry = readOf(client);
   const subscribe = useCallback(
@@ -118,7 +118,7 @@ export function useSpaceDirectory(): Directory {
 
 /** A Space by the name the reader knows it by (space-3): the display name
  * the home or the directory gives its origin, else its host name. */
-export function spaceNameOf(origin: string, groups?: GroupsState, directory?: Directory): string {
+export function spaceNameOf(origin: string, groups?: SpaceState, directory?: Directory): string {
   const listed = groups ? instanceOf(groups, origin) : undefined;
   if (listed?.displayName) return listed.displayName;
   const entry = directory?.status === "read" ? directory.spaces.find((space) => space.origin === origin) : undefined;

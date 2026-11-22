@@ -352,7 +352,7 @@ function readOwnJson(file: string): Record<string, unknown> | undefined {
 
 /** A moved clone's records outside it follow it, as a host's rename
  * moves them (space-60): every pair naming its key names the new one,
- * its sync preferences `sync:<key>:*` and its forge cache entry are
+ * its last-sync preferences and its forge cache entry are
  * re-keyed. Each is read as it stands and written only where it
  * changes, so a restart repeats nothing. */
 function rekeyClone(root: string, move: CloneMove): void {
@@ -368,7 +368,7 @@ function rekeyClone(root: string, move: CloneMove): void {
     const next: Record<string, unknown> = {};
     let changed = false;
     for (const [key, value] of Object.entries(prefs.prefs)) {
-      if (key.startsWith(prefix)) { next[`sync:${move.to}:${key.slice(prefix.length)}`] = value; changed = true; }
+      if (key.startsWith(prefix) && key.endsWith(":last")) { next[`sync:${move.to}:${key.slice(prefix.length)}`] = value; changed = true; }
       else next[key] = value;
     }
     if (changed) writeApplicationFile(prefsFile, { ...prefs, prefs: next });

@@ -1,21 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository placed at two instances across devices (DR-128):
-// real cores on three scratch homes against two stand-in instances on
-// separate Git backends. A project placed at both syncs through a device
-// holding both; a placement file whoever can push wrote is offered on
-// every other device as a line "Not on this device" with Attach, no
-// device carrying records there before its reader continues; Attach,
-// the explicit destination request, adds its remote and syncs it as an operation
-// of the clone's machine, and gives a local-only clone its first
-// placement, moving it as a pick does; a Leave deletes the file and every
-// other device drops its remote there at its next sync; two devices
-// placing at one instance at once meet as one choice of the file; and
-// Members, Share and Move act on the placement each names (space-93,
-// space-99, space-90, space-87, space-29, space-98, space-91, space-21,
-// storage-35) — hermetic, on loopback alone, in a file budget of its
-// own.
+// Personal project placement across devices, with explicit Attach and
+// Leave, file reconciliation and conflict handling.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -26,7 +13,7 @@ import { builtinPackage } from "./builtins.js";
 import { Home } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
-import type { GroupsState, RepositoryState } from "./protocol.js";
+import type { SpaceState, RepositoryState } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { bareOf, clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
@@ -37,7 +24,7 @@ test.after(() => fixture.dispose());
 
 type Device = Awaited<ReturnType<typeof startHome>>;
 
-/** The first stand-in's person, and your own group's repository once
+/** The first stand-in's person, and the personal settings repository once
  * signed in as them. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
@@ -47,7 +34,7 @@ const SECOND_NAME = "Second stand-in";
 const BOB = { id: "1002", login: "bob", displayName: "Bob" };
 
 /** A Refresh of every signed-in instance, landed. */
-async function refreshed(home: Device): Promise<GroupsState> {
+async function refreshed(home: Device): Promise<SpaceState> {
   const before = await home.client.expectOk("space.get", {});
   const mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -76,7 +63,7 @@ function holds(bare: string, path: string): boolean {
   try { return git(bare, "cat-file", "-t", `spex:${path}`) === "blob"; } catch { return false; }
 }
 
-test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, space-63, space-12, space-57, space-98, space-91, space-21, space-97, space-14, space-69, space-72, space-78, space-60, space-5, space-4, storage-34, storage-36, storage-38, storage-5: a project placed at two instances syncs through a device holding both, and a second device attaches from the placement's file — a file pushed by plain Git standing unattached on every home, nothing carried there, until its reader attaches; the second home's Join at the second writing nothing to the placement files and naming the first it does not list; a session crossing from the second home and an intent from the first; Attach refused signed out, with no file, at a placement held — your own group's own repository's at the second, placed there by the sign-in, among them — and for a repository another clone holds, and selecting Attach immediately syncing; a Leave asked while a sync runs following it and every other home dropping that remote at its next sync; two homes placing at once meeting as one choice, the side not chosen dropped and offered Attach; and Members, Share and Move acting on the placement each names", async (t) => {
+test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, space-63, space-12, space-57, space-98, space-91, space-21, space-97, space-14, space-60, space-5, space-4, storage-34, storage-36, storage-38, storage-5: a project placed at two instances syncs through a device holding both, and a second device attaches from the placement's file — a file pushed by plain Git standing unattached on every home, nothing carried there, until its reader attaches; the second home's Join at the second writing nothing to the placement files and naming the first it does not list; a session crossing from the second home and an intent from the first; Attach refused signed out, with no file, at a placement held — the personal settings placement at the second, placed there by the sign-in, among them — and for a repository another clone holds, and selecting Attach immediately syncing; a Leave asked while a sync runs following it and every other home dropping that remote at its next sync; two homes placing at once meeting as one choice, the side not chosen dropped and offered Attach", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: BOB });
   const firstOrigin = canonicalOrigin(first.url);
@@ -85,7 +72,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   const secondFolder = hostFolder(second);
   const file = `${PLACEMENTS_DIR}/${secondFolder}.yaml`;
 
-  // The first home: signed in to both, its project in the first's acme.
+  // The first home: signed in to both, its project in the first account's namespace.
   const one = await startHome("devices-one", { host: first, project: false });
   t.after(() => one.stop());
   let mark = one.client.mark();
@@ -94,18 +81,16 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   await signIn(one, second);
   const { key: local } = await addFolder(one, gitFolder("atlas"));
   mark = one.client.mark();
-  await one.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
-  const key = hostKey(first, "acme/atlas-spex");
+  await one.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, name: "atlas" } });
+  const key = hostKey(first, "ada/atlas-spex");
   const picked = await one.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   const firstId = picked.id as string;
   const oneClone = clonePath(one.dataDir, key);
   const firstBare = bareOf(first, key);
 
-  // A member of a repository in the second's acme who may not manage
-  // its members places the records there by plain Git, which no Spex act
-  // gates: the records pushed there, and the placement's file pushed to
-  // the first (space-90, storage-36).
-  const there = second.script.addRepository({ group: "acme", name: "atlas-spex", members: [{ id: "1003", login: "grace", displayName: "Grace Hopper", role: "Developer" }] });
+  // Place the account's copy by plain Git and send its placement file
+  // to the first Space (space-90, storage-36).
+  const there = second.script.addRepository({ group: BOB.login, name: "atlas-spex" });
   const peer = peerClone(firstBare);
   git(peer, "push", "-q", there.bare, "HEAD:spex");
   const peerHead = git(there.bare, "rev-parse", "spex");
@@ -122,9 +107,9 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.equal((await one.client.settle("space.sync", { repository: key }, 30_000)).sync.phase, "done");
   let row = await one.client.repository(key);
   assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
-  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path, placementOf(row, second.url).members], [there.id, "acme/atlas-spex", null]);
+  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path], [there.id, "bob/atlas-spex"]);
   assert.equal(git(there.bare, "rev-parse", "spex"), peerHead, "nothing carried to the second");
-  assert.equal(pushesTo(second, "acme/atlas-spex"), 0);
+  assert.equal(pushesTo(second, "bob/atlas-spex"), 0);
   assert.equal(configOf(oneClone, `remote.${secondFolder}.url`), null);
 
   // The third home, signed in to both as a member at each — the same
@@ -147,7 +132,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   row = repositoryOf(state, key);
   assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
   assert.equal(placementOf(row, second.url).id, there.id);
-  assert.ok(!rowsOf(state).some((repository) => repository.key === hostKey(second, "acme/atlas-spex")), "no row of its own");
+  assert.ok(!rowsOf(state).some((repository) => repository.key === hostKey(second, "bob/atlas-spex")), "no row of its own");
   await three.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas belongs to atlas on this computer — open atlas instead$/);
 
   // The first home's reader chooses Attach: its first step adds
@@ -168,7 +153,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.ok(steps.includes("attach:push:second"), steps.join(" "));
   assert.equal(attached.sync.phase, "done", JSON.stringify(attached.sync));
   assert.deepEqual(outcomes(attached), [[firstOrigin, true, "synced"], [secondOrigin, true, "synced"]]);
-  assert.match(configOf(oneClone, `remote.${secondFolder}.url`) ?? "", /\/acme\/atlas-spex\.git$/);
+  assert.match(configOf(oneClone, `remote.${secondFolder}.url`) ?? "", /\/bob\/atlas-spex\.git$/);
   assert.equal(configOf(oneClone, `remote.${secondFolder}.spexId`), there.id);
   assert.equal(configOf(oneClone, "spex.repositoryId"), null);
   assert.equal(git(there.bare, "rev-parse", "spex"), git(oneClone, "rev-parse", "HEAD"));
@@ -177,12 +162,12 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
 
   // On the third home it stays unattached, its sync carrying nothing to
   // the second, until its own reader continues (space-90).
-  const carried = pushesTo(second, "acme/atlas-spex");
+  const carried = pushesTo(second, "bob/atlas-spex");
   const unattached = await three.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(unattached.sync.phase, "done", JSON.stringify(unattached.sync));
   assert.deepEqual(lines(unattached), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
   assert.deepEqual(remoteNamesOf(threeClone), [firstFolder]);
-  assert.equal(pushesTo(second, "acme/atlas-spex"), carried);
+  assert.equal(pushesTo(second, "bob/atlas-spex"), carried);
 
   // The second home, signed in at the second alone, joins the second's
   // placement, pairing a folder: it writes nothing new to the placement
@@ -194,7 +179,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   mark = two.client.mark();
   await signIn(two, second);
   await two.client.waitRepository(mark, `${BOB.login}/${BOB.login}-spex`, (repository) => repository.sync.phase === "done", 30_000);
-  const twoKey = hostKey(second, "acme/atlas-spex");
+  const twoKey = hostKey(second, "bob/atlas-spex");
   mark = two.client.mark();
   await two.client.expectOk("space.join", { instance: second.url, hostId: there.id, folder: join(mkdtempSync(join(scratch, "two-")), "atlas") });
   await two.client.waitRepository(mark, twoKey, (repository) => repository.state === "reachable" && repository.sync.phase === "idle" && repository.folder !== null, 30_000);
@@ -235,7 +220,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   // instance the home does not list, or for no clone, not found; and
   // signed out there (space-29, space-90).
   await three.client.expectError("space.attach", { repository: key, instance: first.url }, "invalid_request", new RegExp(`^atlas is at ${HOST_NAME} already$`));
-  // Your own group's own repository, which the third home's sign-in at
+  // The personal settings repository, which the third home's sign-in at
   // the second placed there, is placed there already (space-4).
   await three.client.expectError("space.attach", { repository: HOST_OWN, instance: second.url }, "invalid_request", new RegExp(`^${LOGIN} is at ${SECOND_NAME} already$`));
   const { key: other, clone: otherClone } = await addFolder(two, gitFolder("other"));
@@ -244,7 +229,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   writeFileSync(join(otherClone, file), bytes);
   await two.client.expectError("space.attach", { repository: other, instance: second.url }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
   await two.client.expectError("space.attach", { repository: twoKey, instance: first.url }, "not_found");
-  await three.client.expectError("space.attach", { repository: hostKey(first, "acme/nowhere-spex"), instance: second.url }, "not_found");
+  await three.client.expectError("space.attach", { repository: hostKey(first, "ada/nowhere-spex"), instance: second.url }, "not_found");
   await signOut(three, second);
   await three.client.expectError("space.attach", { repository: key, instance: second.url }, "invalid_request", /^Sign in to a Space first$/);
   await signIn(three, second);
@@ -253,7 +238,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   // Without a second acknowledgement, the third home's Attach adds the remote and syncs
   // that placement, its line synced; a second Attach there is refused
   // (space-99, space-61, space-29).
-  const threeAttached = await three.client.settle("space.attach", { repository: key, instance: second.url, noticed: false }, 30_000);
+  const threeAttached = await three.client.settle("space.attach", { repository: key, instance: second.url }, 30_000);
   assert.equal(threeAttached.sync.phase, "done", JSON.stringify(threeAttached.sync));
   assert.deepEqual(threeAttached.placements.map((line) => [line.instance, line.attached, line.state, line.outcome?.kind]), [[firstOrigin, true, "reachable", "synced"], [secondOrigin, true, "reachable", "synced"]]);
   assert.equal(configOf(threeClone, `remote.${secondFolder}.spexId`), there.id);
@@ -311,9 +296,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   const rejoined = await one.client.settle("space.place", { repository: key, choice: { kind: "join", instance: second.url, hostId: there.id } }, 30_000);
   assert.equal(rejoined.sync.phase, "done", JSON.stringify(rejoined.sync));
   assert.deepEqual(outcomes(rejoined), [[firstOrigin, true, "synced"], [secondOrigin, true, "synced"]]);
-  const acme = second.script.groups.find((group) => group.fullPath === "acme");
-  assert.ok(acme);
-  const meeting = await three.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "atlas-two" } }, 30_000);
+  const meeting = await three.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, name: "atlas-two" } }, 30_000);
   const created = second.script.repositories.find((repository) => repository.path === "atlas-two-spex");
   assert.ok(created, "the third created atlas-two-spex at the second");
   assert.ok(meeting.sync.phase === "choices" && meeting.sync.placement === firstOrigin, JSON.stringify(meeting.sync));
@@ -333,41 +316,12 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.deepEqual(lines(offered), [[firstOrigin, true, "reachable"]]);
   row = repositoryOf(await refreshed(one), key);
   assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
-  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path], [created.id, "acme/atlas-two-spex"]);
+  assert.deepEqual([placementOf(row, second.url).id, placementOf(row, second.url).path], [created.id, "bob/atlas-two-spex"]);
   assert.equal(configOf(oneClone, `remote.${secondFolder}.url`), null);
   assert.ok(existsSync(join(oneClone, "sessions", `${sessionId}.json`)), "the clone's records kept");
   assert.ok(second.script.repositories.some((repository) => repository.id === there.id), "the unchosen repository stands at the stand-in");
 
-  // Members, Share, removing a member and Move naming the second
-  // placement act at the second alone, the move leaving the clone's key;
-  // a move of the first stands the row under its new group and moves
-  // the clone at its next sync (space-62, space-69, space-72, space-78,
-  // space-60, space-29).
-  const logins = (reply: { members: { login: string }[] }): string[] => reply.members.map((member) => member.login).sort();
-  const acts = (host: StandinHost, from: number): string[] => host.script.requests.slice(from)
-    .filter((request) => /^\/api\/v1\/host\/repositories\//.test(request.path))
-    .map((request) => `${request.method} ${request.path}`);
-  const fromFirst = first.script.requests.length;
-  assert.deepEqual(logins(await three.client.expectOk("space.members", { repository: key, instance: second.url })), [BOB.login]);
-  assert.deepEqual(logins(await three.client.expectOk("space.share", { repository: key, instance: second.url, login: "grace", role: "developer" })), [BOB.login, "grace"]);
-  assert.deepEqual(logins(await three.client.expectOk("space.unshare", { repository: key, instance: second.url, login: "grace" })), [BOB.login]);
-  assert.deepEqual(await three.client.expectOk("space.repository.move", { repository: key, instance: second.url, groupId: null }), { repository: { id: created.id, fullPath: `${BOB.login}/atlas-two-spex` } });
-  assert.deepEqual(acts(first, fromFirst), []);
-  assert.ok(existsSync(threeClone), "a move of the second moves no clone");
-  assert.equal(placementOf(await three.client.repository(key), second.url).path, `${BOB.login}/atlas-two-spex`);
-  const fromSecond = second.script.requests.length;
-  assert.deepEqual(await three.client.expectOk("space.repository.move", { repository: key, groupId: "2003" }), { repository: { id: firstId, fullPath: "acme/research/atlas-spex" } });
-  assert.deepEqual(acts(second, fromSecond), []);
-  const research = (await three.client.expectOk("space.get", {})).instances.find((instance) => instance.origin === firstOrigin)?.groups.find((group) => group.fullPath === "acme/research");
-  assert.deepEqual(research?.repositories.map((repository) => repository.key), [key]);
-  assert.ok(existsSync(threeClone), "the move moves no clone of its own");
-  const movedKey = hostKey(first, "acme/research/atlas-spex");
-  mark = three.client.mark();
-  await three.client.expectOk("space.sync", { repository: key });
-  const moved = await three.client.waitRepository(mark, movedKey, (repository) => repository.sync.phase !== "running", 30_000);
-  assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
-  assert.deepEqual(moved.placements.map((line) => [line.instance, line.path, line.outcome?.kind]), [[firstOrigin, "acme/research/atlas-spex", "synced"], [secondOrigin, `${BOB.login}/atlas-two-spex`, "synced"]]);
-  assert.ok(existsSync(clonePath(three.dataDir, movedKey)) && !existsSync(threeClone), "the clone moved under the first's new group");
+
 });
 
 /** An environment's `spex.lock` at its root (environments-26), as
@@ -392,7 +346,7 @@ async function builtinRegistry(home: Device, key: string, expected: string): Pro
   return found;
 }
 
-test("storage-35, space-99, space-90, space-87, space-29, space-117, environments-11, storage-34, storage-5: a local-only project under your own group's folder shows its named remote placement as not on this device; Attach moves its clone and pair to that placement and syncs it, changing its Space while keeping the explicit public registry and package pins", async (t) => {
+test("storage-35, space-99, space-90, space-87, space-29, space-117, environments-11, storage-34, storage-5: a local-only project under the local-only folder shows its named remote placement as not on this device; Attach moves its clone and pair to that placement and syncs it, changing its Space while keeping the explicit public registry and package pins", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: BOB });
   const secondOrigin = canonicalOrigin(second.url);
@@ -419,7 +373,7 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   // A device that held its records at the second left them there: the
   // repository holding its spex, and its file in this clone, which
   // names that placement (storage-36).
-  const there = second.script.addRepository({ group: "acme", name: "delta-spex" });
+  const there = second.script.addRepository({ group: "bob", name: "delta-spex" });
   git(clone, "push", "-q", there.bare, "spex:spex");
   mkdirSync(join(clone, PLACEMENTS_DIR), { recursive: true, mode: 0o700 });
   writeFileSync(join(clone, PLACEMENTS_DIR, `${secondFolder}.yaml`), encodePlacementFile(secondOrigin, there.id));
@@ -433,7 +387,7 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   // (storage-35, space-99, storage-34).
   mark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.attach", { repository: local, instance: second.url }), { accepted: true });
-  const key = hostKey(second, "acme/delta-spex");
+  const key = hostKey(second, "bob/delta-spex");
   const movedClone = clonePath(home.dataDir, key);
   assert.ok(existsSync(join(movedClone, ".git")) && !existsSync(clone), "moved under the second's folder as the reply came");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair follows it");
@@ -456,107 +410,4 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   assert.equal(requests.registry, PUBLIC_REGISTRY_ORIGIN);
   assert.equal(requests.space, secondOrigin);
   assert.deepEqual(parseLock(readFileSync(join(placedRoot, "spex.lock"), "utf8")).packages, packages);
-});
-
-test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refuses a placement a file names in a group named like your login and any placement of a group's own spex repository, no request reaching either stand-in, no remote added and no clone moved; a group's own repository's file naming a host repository it does not hold names no line, that repository standing as a row of its own; a pick or a Place joining a repository another clone here holds is refused naming that clone", async (t) => {
-  const first = await startHost();
-  const second = await startHost({ displayName: SECOND_NAME, person: BOB });
-  const firstOrigin = canonicalOrigin(first.url);
-  const secondOrigin = canonicalOrigin(second.url);
-  const firstFolder = hostFolder(first);
-  const secondFolder = hostFolder(second);
-  // A group at the second's root under the login's path there, holding a
-  // spex repository: held as colliding (git-host-5).
-  const named = { id: "2950", fullPath: BOB.login, name: "Bob's team", kind: "group" as const, members: [{ ...BOB, role: "Owner" }] };
-  second.script.groups.push(named);
-  const clash = second.script.addRepository({ group: named.id, name: "delta-spex" });
-  const home = await startHome("attach-refused", { host: first, project: false });
-  t.after(() => home.stop());
-  let mark = home.client.mark();
-  await signIn(home, first);
-  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
-  mark = home.client.mark();
-  await signIn(home, second);
-  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "synced", 30_000);
-  const asked = (): number[] => [first.script.requests.length, second.script.requests.length];
-  const placeIn = (clone: string, id: string): void => {
-    mkdirSync(join(clone, PLACEMENTS_DIR), { recursive: true, mode: 0o700 });
-    writeFileSync(join(clone, PLACEMENTS_DIR, `${secondFolder}.yaml`), encodePlacementFile(secondOrigin, id));
-  };
-
-  // A local-only project under your own group's folder whose file names
-  // the repository in that group: its line reads unreachable, and its
-  // Attach is refused with that cause, nothing asked of either stand-in,
-  // no remote added and the clone left under your own group's folder
-  // (space-87, space-61, space-29).
-  const { key: local, clone: localClone } = await addFolder(home, gitFolder("delta"));
-  placeIn(localClone, clash.id);
-  let state = await refreshed(home);
-  let row = rowsOf(state).find((candidate) => candidate.key === local);
-  assert.ok(row && state.own.repositories.includes(row), "the local-only row stands under your own group");
-  assert.equal(row.state, "local-only");
-  assert.deepEqual(lines(row), [[secondOrigin, false, "unreachable"]]);
-  assert.equal(placementOf(row, second.url).reason, "a group named like your login");
-  let before = asked();
-  await home.client.expectError("space.attach", { repository: local, instance: second.url }, "invalid_request", new RegExp(`^${BOB.login} is a group named like your login$`));
-  assert.deepEqual(asked(), before, "no request reached either stand-in");
-  assert.ok(existsSync(join(localClone, ".git")), "the clone stays where it was");
-  assert.equal(git(localClone, "remote"), "", "no remote added");
-  assert.ok(rowsOf(await home.client.expectOk("space.get", {})).some((candidate) => candidate.key === local && candidate.state === "local-only"));
-
-  // A group's own spex repository, created at the first by its first
-  // session, its clone holding a file that names a repository the second
-  // lists: its row carries no line for it, its placements read only the
-  // first, and that repository stands as a row of its own under the
-  // second's acme, the second naming no placement of the group's row
-  // (space-87, space-62, space-1).
-  const groupKey = hostKey(first, "acme/acme-spex");
-  const groupClone = clonePath(home.dataDir, groupKey);
-  mkdirSync(groupClone, { recursive: true });
-  git(groupClone, "init", "-q", "-b", "spex");
-  git(groupClone, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "Start");
-  const work = gitFolder("acme-work");
-  await home.client.expectOk("project.rebind", { projectId: groupKey, path: work });
-  mark = home.client.mark();
-  assert.equal((await home.client.expectOk("project.register", { path: work })).id, groupKey);
-  await home.client.waitRepository(mark, groupKey, (repository) => repository.sync.phase === "done", 30_000);
-  const other = second.script.addRepository({ group: "acme", name: "other-spex" });
-  placeIn(groupClone, other.id);
-  state = await refreshed(home);
-  row = rowsOf(state).find((candidate) => candidate.key === groupKey);
-  assert.ok(row, "the group's own row stands");
-  assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"]]);
-  assert.deepEqual(row.placedAt, [firstOrigin]);
-  const secondAcme = instanceOf(state, second.url)?.groups.find((group) => group.fullPath === "acme");
-  assert.ok(secondAcme, "the second lists acme");
-  const standing = secondAcme.repositories.find((candidate) => candidate.id === other.id);
-  assert.deepEqual([standing?.key, standing?.state], [hostKey(second, "acme/other-spex"), "absent"]);
-  assert.ok(!secondAcme.placed.some((line) => line.key === groupKey), "no line names the group's row");
-  before = asked();
-  await home.client.expectError("space.attach", { repository: groupKey, instance: second.url }, "invalid_request", /^acme stays at its one Space$/);
-  assert.deepEqual(asked(), before, "no request reached either stand-in");
-  assert.deepEqual(remoteNamesOf(groupClone), [firstFolder]);
-
-  // One clone per host repository: a project placed at both, then a pick
-  // of the local-only project and a Place of another joining its
-  // repository at the second are each refused naming the project that
-  // holds it, nothing asked of either stand-in (space-29, git-host-5).
-  const { key: atlasLocal } = await addFolder(home, gitFolder("atlas"));
-  mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: atlasLocal, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
-  const atlas = hostKey(first, "acme/atlas-spex");
-  await home.client.waitRepository(mark, atlas, (repository) => repository.sync.phase === "done", 30_000);
-  const { key: borealisLocal } = await addFolder(home, gitFolder("borealis"));
-  mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: borealisLocal, choice: { kind: "create", instance: first.url, groupId: "2002", name: "borealis" } });
-  const borealis = hostKey(first, "acme/borealis-spex");
-  await home.client.waitRepository(mark, borealis, (repository) => repository.sync.phase === "done", 30_000);
-  const atSecond = fixture.attachByHand(home, atlas, second);
-  await refreshed(home);
-  before = asked();
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "join", instance: second.url, hostId: atSecond.id } }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
-  await home.client.expectError("space.place", { repository: borealis, choice: { kind: "join", instance: second.url, hostId: atSecond.id } }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
-  assert.deepEqual(asked(), before, "no request reached either stand-in");
-  assert.equal(git(localClone, "remote"), "");
-  assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, borealis)), [firstFolder]);
 });

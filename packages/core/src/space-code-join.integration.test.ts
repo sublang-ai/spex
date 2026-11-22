@@ -20,7 +20,7 @@ import { startGitHttpHost } from "./testing/git-http-host.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, stringsOf } from "./testing/space-harness.js";
 import { type StandinHost } from "./testing/standin-host.js";
-import type { GroupsState, ServerMessage } from "./protocol.js";
+import type { SpaceState, ServerMessage } from "./protocol.js";
 import type { Store } from "./store.js";
 
 const fixture = createSpaceHarness();
@@ -34,8 +34,9 @@ const PAIR_GUIDANCE = "The records are here — Choose folder… for the code";
 const codeAt = (where: string): [string, string][] => [["en", `Code: ${where}`], ["zh", `代码：${where}`]];
 
 function privateCode(host: StandinHost, name: string): { remote: string; bare: string } {
-  const code = host.script.addRepository({ group: "acme", name });
-  return { remote: `${host.gitOrigin}/${host.storage}/acme/${name}.git`, bare: code.bare };
+  const namespace = host.script.person.login;
+  const code = host.script.addRepository({ group: namespace, name });
+  return { remote: `${host.gitOrigin}/${namespace}/${name}.git`, bare: code.bare };
 }
 
 function credentialRequests(host: StandinHost): number {
@@ -51,9 +52,9 @@ function inspectCredential(options: GitRunOptions): { file: string; mode: number
 
 test("space-37, projects-20, git-host-14: joining private code uses the brokered helper, disposes it and keeps the remote unchanged", async (t) => {
   const host = await startHost();
-  const privateKey = hostKey(host, "acme/private-spex");
+  const privateKey = hostKey(host, "ada/private-spex");
   const code = privateCode(host, "private-code");
-  const records = host.script.addRepository({ group: "acme", name: "private-spex", project: { format: 1, name: "private", remote: code.remote } });
+  const records = host.script.addRepository({ group: "ada", name: "private-spex", project: { format: 1, name: "private", remote: code.remote } });
   const home = await startHome("join-private-code", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const fromSignIn = home.client.mark();
@@ -139,8 +140,8 @@ test("space-37: joining code at another origin keeps that device's credentials a
   const other = await startGitHttpHost({ root, username: "device", password: "device-secret" });
   t.after(() => other.close());
   const remote = `${other.url}/code.git`;
-  const records = host.script.addRepository({ group: "acme", name: "other-spex", project: { format: 1, name: "other", remote } });
-  const otherKey = hostKey(host, "acme/other-spex");
+  const records = host.script.addRepository({ group: "ada", name: "other-spex", project: { format: 1, name: "other", remote } });
+  const otherKey = hostKey(host, "ada/other-spex");
   const home = await startHome("join-other-code", {
     host, project: false, extra: { signIn: "browser" },
     env: {
@@ -175,8 +176,8 @@ for (const failure of ["unauthorized", "server", "credential", "occupied"] as co
   test(`space-37: a private code join stopped by ${failure} keeps its records and existing files, with no Git origin in the failure`, async (t) => {
     const host = await startHost();
     const code = privateCode(host, `code-${failure}`);
-    const key = hostKey(host, `acme/${failure}-spex`);
-    const records = host.script.addRepository({ group: "acme", name: `${failure}-spex`, project: { format: 1, name: failure, remote: code.remote } });
+    const key = hostKey(host, `ada/${failure}-spex`);
+    const records = host.script.addRepository({ group: "ada", name: `${failure}-spex`, project: { format: 1, name: failure, remote: code.remote } });
     const home = await startHome(`join-code-${failure}`, { host, project: false, extra: { signIn: "browser" } });
     t.after(() => home.stop());
     const fromSignIn = home.client.mark();
@@ -189,7 +190,7 @@ for (const failure of ["unauthorized", "server", "credential", "occupied"] as co
     const credentials: string[] = [];
     let codeChildren = 0;
     t.mock.method(SpaceGit.prototype, "run", async function (this: SpaceGit, args: string[], options: GitRunOptions = {}) {
-      const cloning = args[0] === "clone";
+      const cloning = args.includes("clone");
       if (cloning && args.includes(code.remote)) {
         codeChildren += 1;
         credentials.push(inspectCredential(options).file);
@@ -249,7 +250,7 @@ async function twoInstances(name: string): Promise<{ first: StandinHost; second:
 
 /** A Refresh, then the state once a read of every listed instance begun
  * since is held (git-host-5). */
-async function readEach(home: Home): Promise<GroupsState> {
+async function readEach(home: Home): Promise<SpaceState> {
   const asked = Date.now();
   const from = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -265,7 +266,7 @@ function leaks(hosts: StandinHost[], values: unknown[]): string[] {
 
 /** Every Groups state broadcast to a client, the sign-in's own pages
  * aside (space-3). */
-function broadcasts(messages: ServerMessage[]): GroupsState[] {
+function broadcasts(messages: ServerMessage[]): SpaceState[] {
   return messages.flatMap((message) => message.type === "space.state" ? [{ ...message.state, signIn: { phase: "idle" as const } }] : []);
 }
 
@@ -276,17 +277,17 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   // projects' spex repositories lie in the first's `acme`.
   const firstCode = privateCode(first, "alpha-code");
   const secondCode = privateCode(second, "c-code");
-  const alpha = first.script.addRepository({ group: "acme", name: "alpha-spex", project: { format: 1, name: "alpha", remote: firstCode.remote } });
-  const c = first.script.addRepository({ group: "acme", name: "c-spex", project: { format: 1, name: "c", remote: secondCode.remote } });
-  const alphaKey = hostKey(first, "acme/alpha-spex");
-  const cKey = hostKey(first, "acme/c-spex");
+  const alpha = first.script.addRepository({ group: "ada", name: "alpha-spex", project: { format: 1, name: "alpha", remote: firstCode.remote } });
+  const c = first.script.addRepository({ group: "ada", name: "c-spex", project: { format: 1, name: "c", remote: secondCode.remote } });
+  const alphaKey = hostKey(first, "ada/alpha-spex");
+  const cKey = hostKey(first, "ada/c-spex");
   const codePath = (remote: string): string => new URL(remote).pathname;
 
   // Both instances reported, each code reads the display name of the
   // instance under whose Git origin it lies, never as its URL (space-1,
   // space-83).
   const listed = await readEach(home);
-  const rowOf = (state: GroupsState, key: string): [string, string | null, string | null, string] => {
+  const rowOf = (state: SpaceState, key: string): [string, string | null, string | null, string] => {
     const row = repositoryOf(state, key);
     return [row.state, row.instance, row.code, row.codeKind];
   };
@@ -358,13 +359,13 @@ test("projects-41, projects-37, space-63, storage-36: signed in to two instances
   // lies in the first's `acme` and is placed at the second's too, its
   // file there committed by another device (storage-36).
   const code = privateCode(second, "d-code");
-  const records = first.script.addRepository({ group: "acme", name: "d-spex", project: { format: 1, name: "d", remote: code.remote } });
-  const there = second.script.addRepository({ group: "acme", name: "d-spex" });
+  const records = first.script.addRepository({ group: "ada", name: "d-spex", project: { format: 1, name: "d", remote: code.remote } });
+  const there = second.script.addRepository({ group: BOB.login, name: "d-spex" });
   await peerPush(peerClone(records.bare), (dir) => {
     mkdirSync(join(dir, PLACEMENTS_DIR), { recursive: true });
     writeFileSync(join(dir, PLACEMENTS_DIR, `${hostFolder(second)}.yaml`), encodePlacementFile(canonicalOrigin(second.url), there.id));
   });
-  const key = hostKey(first, "acme/d-spex");
+  const key = hostKey(first, "ada/d-spex");
   const codePath = new URL(code.remote).pathname;
   await readEach(home);
 
@@ -402,17 +403,17 @@ test("projects-38, projects-7, projects-36: signed in to two instances on Git ba
   // is its code, joined to a spex repository in the first's `acme`, and
   // one local only.
   const origins: Record<string, string> = {
-    first: `${first.gitOrigin}/${first.storage}/acme/one-code.git`,
-    second: `${second.gitOrigin}/${second.storage}/acme/two-code.git`,
+    first: `${first.gitOrigin}/ada/one-code.git`,
+    second: `${second.gitOrigin}/bob/two-code.git`,
     other: "https://dev@code.example.test/team/three.git",
   };
-  const records = Object.fromEntries(Object.keys(origins).map((name) => [name, first.script.addRepository({ group: "acme", name: `${name}-spex` })]));
+  const records = Object.fromEntries(Object.keys(origins).map((name) => [name, first.script.addRepository({ group: "ada", name: `${name}-spex` })]));
   await readEach(home);
   const keys: Record<string, string> = {};
   for (const [name, remote] of Object.entries(origins)) {
     const folder = gitFolder(`${name}-code`);
     git(folder, "remote", "add", "origin", remote);
-    const key = hostKey(first, `acme/${name}-spex`);
+    const key = hostKey(first, `ada/${name}-spex`);
     const mark = home.client.mark();
     await home.client.expectOk("space.join", { instance: first.url, hostId: records[name].id, folder });
     const joined = await home.client.waitRepository(mark, key, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
@@ -420,7 +421,7 @@ test("projects-38, projects-7, projects-36: signed in to two instances on Git ba
     keys[name] = key;
   }
   const local = gitFolder("local-code");
-  git(local, "remote", "add", "origin", `${first.gitOrigin}/${first.storage}/acme/local-code.git`);
+  git(local, "remote", "add", "origin", `${first.gitOrigin}/ada/local-code.git`);
   keys.local = (await addFolder(home, local)).key;
   assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), keys.local).instance, null, "the local-only project has no instance");
 

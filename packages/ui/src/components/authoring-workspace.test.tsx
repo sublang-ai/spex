@@ -28,11 +28,11 @@ import type {
   CommandResults,
   ConfigState,
   DraftInfo,
-  GroupsState,
+  SpaceState,
   ReadinessEntry,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
-import { groupsState, instanceState, namespace, repositoryRow } from "../fixtures/groups-state.js";
+import { spaceState, instanceState, repositoryRow } from "../fixtures/space-state.js";
 import { OWN_KEY, available, home } from "../fixtures/playbooks.js";
 
 afterEach(cleanup);
@@ -579,7 +579,7 @@ describe("playbook-library-51: New playbook asks for the id", () => {
   });
 
   test("a draft is made in the spex repository of the project whose tab it is", async () => {
-    const other = { ...PROJECT, id: "acme/tools-spex", name: "tools", repository: { key: "acme/tools-spex", name: "tools-spex", group: "acme", own: false } };
+    const other = { ...PROJECT, id: "acme/tools-spex", name: "tools", repository: { key: "acme/tools-spex", name: "tools-spex" } };
     seed({ projects: [PROJECT, other], currentProjectId: "acme/tools-spex" });
     render(<PlaybooksTab project={other} />);
     const input = screen.getByTestId("new-playbook-id");
@@ -1888,21 +1888,20 @@ describe("playbook-library-111: what stands beneath the Add form by the project'
   const ONE = "https://one.test";
   const TWO = "https://two.test";
 
-  /** The Groups state the core would send: the home's instances in its
+  /** The Space state the core would send: the home's instances in its
    * list's order, the first its default, else the origin it was created
    * with; the session's project in your namespace at Two, or local-only
    * under your own group. */
-  function groups(project: "two" | "local", instances: { origin: string; name: string; signedIn: boolean }[], created = ONE): GroupsState {
+  function groups(project: "two" | "local", instances: { origin: string; name: string; signedIn: boolean }[], created = ONE): SpaceState {
     const row = repositoryRow(PROJECT_ID, project === "two" ? { instance: TWO, state: "reachable" } : {});
     const own = repositoryRow(OWN_KEY, { own: true, instance: instances[0]?.origin ?? null });
-    return groupsState({
+    return spaceState({
       defaultInstance: instances[0]?.origin ?? created,
-      own: { name: "me", named: instances.length === 0, repositories: project === "local" ? [own, row] : [own] },
+      repositories: [own, row],
       instances: instances.map(({ origin, name, signedIn }) =>
         instanceState(origin, {
           displayName: name,
           signedIn,
-          groups: [namespace("me", project === "two" && origin === TWO ? [row] : [])],
         }),
       ),
     });
@@ -2118,7 +2117,7 @@ describe("playbook-library-121: publication setup owns publishing names and lice
       if (type === "draft.defaults") return Promise.resolve({ org: "space-group", license: "MIT" });
       return original(type, ...args);
     });
-    await openSetup({ space: groupsState({ defaultInstance: space, instances: [instanceState(space, { account: { id: "space-person", login: "space-person", displayName: null, canCreateGroup: false } })] }), registryAccounts: {} });
+    await openSetup({ space: spaceState({ defaultInstance: space, instances: [instanceState(space, { account: { id: "space-person", login: "space-person", displayName: null } })] }), registryAccounts: {} });
     await publicationDefaults("registry-owned", "MIT");
     expect(suggestions()).toEqual(["registry-owned", "zeta"]);
     expect(commandMock).toHaveBeenCalledWith("registry.get", { origin: registry });
@@ -2138,7 +2137,7 @@ describe("playbook-library-121: publication setup owns publishing names and lice
       if (type === "draft.defaults") return Promise.resolve({ org: "space-group", license: "MIT" });
       return original(type, ...args);
     });
-    seed({ space: groupsState({ defaultInstance: space, instances: [instanceState(space)] }), registryAccounts: { [registry]: { origin: registry, displayName: "Package Registry", account: null, signIn: { phase: "idle" }, error: null } } });
+    seed({ space: spaceState({ defaultInstance: space, instances: [instanceState(space)] }), registryAccounts: { [registry]: { origin: registry, displayName: "Package Registry", account: null, signIn: { phase: "idle" }, error: null } } });
     render(<PlaybooksTab project={PROJECT} />);
     expect(screen.queryByTestId("new-playbook-org")).toBeNull();
     expect(screen.getByTestId("new-playbook").textContent).not.toContain(space);
@@ -2407,7 +2406,7 @@ describe("playbook-library-121: publication setup owns publishing names and lice
         const original = commandMock.getMockImplementation()!;
         commandMock.mockImplementation((type, ...args) => type === "registry.orgs" ? Promise.resolve({ orgs: [] }) : original(type, ...args));
         await openSetup({
-          space: groupsState({ instances: [] }),
+          space: spaceState({ instances: [] }),
           registryAccounts: { [origin]: { origin, displayName: "Registry", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } },
         });
         await publicationDefaults("");

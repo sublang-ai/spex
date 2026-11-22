@@ -24,7 +24,7 @@ async function placed(name: string, match: (first: StandinHost, second: StandinH
   const first = await startHost();
   const second = await startHost({ person: { id: "1002", login: "bob", displayName: "Bob" } });
   const dataDir = mkdtempSync(join(fixture.scratch, `${name}-`));
-  const key = hostKey(first, "acme/atlas-spex");
+  const key = hostKey(first, "ada/atlas-spex");
   const clone = clonePath(dataDir, key);
   const shim = holdingGit(match(first, second, clone), options);
   const home = await startHome(name, { host: first, dataDir, project: false, env: { PATH: shim.path } });
@@ -44,7 +44,7 @@ async function placed(name: string, match: (first: StandinHost, second: StandinH
   }, 30_000);
   const { key: local } = await addFolder(home, gitFolder("atlas"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, name: "atlas" } });
   await home.client.waitRepository(mark, key, (row) => row.sync.phase === "done", 30_000);
   attachByHand(home, key, second);
   const synced = await home.client.settle("space.sync", { repository: key }, 30_000);

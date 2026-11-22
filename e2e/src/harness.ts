@@ -32,10 +32,9 @@ import type {
   AgentOptions,
   Command,
   CommandResults,
-  GroupsState,
+  SpaceState,
   PlacementState,
   RepositoryState,
-  SeatOptions,
   ServerMessage,
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
@@ -69,16 +68,8 @@ import {
   type StandinHost,
   type StandinPerson,
   type StandinRegistry,
-  type StandinServer,
   type StubSlcStep,
 } from "@sublang/spex-core/testing";
-// The stand-in hub (hub-2, hub-3) is the core's own test module, not
-// re-exported from its testing entry.
-import {
-  STANDIN_HUB_CA,
-  startStandinHub,
-  type StandinHub,
-} from "../../packages/core/dist/testing/standin-hub.js";
 import {
   startServer,
   type RunningServer,
@@ -184,7 +175,7 @@ export interface AppOptions {
    */
   remote?: "bare";
   /**
-   * A stand-in Git host (git-host-12) for the Groups journeys, started
+   * A stand-in Git host (git-host-12) for the Space journeys, started
    * before the shell with its URL in `SPEX_HOST_URL`, so the new home
    * records it and signs in there by the device flow the served shell
    * runs (space-3). `registry` also starts a stand-in registry
@@ -212,28 +203,13 @@ export interface AppOptions {
     displayName?: string;
     registry?: boolean;
     share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
-    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
-    third?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean };
+    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; registry?: boolean };
+    third?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
    * and the account's set-up awaited (space-4). Needs `host`. */
   signedIn?: boolean;
-  /**
-   * Team servers for the places journeys (DR-133): each a stand-in hub
-   * over TLS (hub-2, hub-3) listed by the stand-in instance as a server
-   * of its team group under `name` (servers-5), its tickets redeemed
-   * there, and its relays piped to a further core standing as the
-   * person's seat — a plain served core on a scratch root of its own,
-   * booted with `seat`'s options as a journey's app is, in seat mode
-   * where `seatMode` is true — while this app's core trusts the hubs'
-   * fixture CA beside the system's (core-service-128). A seat booted
-   * with `host: true` shares
-   * this app's own stand-in instance, and the registry it fronts, in
-   * place of starting one of its own (`host.share`), so its `signedIn`
-   * signs the seat in there as the same person. Needs `host`.
-   */
-  servers?: { name: string; seat?: AppOptions; seatMode?: boolean }[];
   /**
    * Playbook authoring (DR-058): a stub `slc` on the toolchain path
    * — passing, failing once at gears2fsm and then passing, asking for
@@ -304,8 +280,6 @@ export const SECOND_HOST_NAME = "Second stand-in";
  * (`host.third`, DR-128). */
 export const THIRD_HOST_NAME = "Third stand-in";
 /** The stand-in's team group and its id (git-host-12). */
-export const HOST_GROUP = "acme";
-export const HOST_GROUP_ID = "2002";
 
 /** Your own group's name in a home: the one `home.yaml` records once
  * the home has written it — a sign-in renames it (space-59). */
@@ -328,22 +302,21 @@ export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
 }
 
-/** Every row of the Groups state, as your own group and the instances'
- * headings hold them (space-30). */
-export function rowsOf(state: GroupsState): RepositoryState[] {
-  return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+/** Every project and records row in the personal Space state (space-30). */
+export function rowsOf(state: SpaceState): RepositoryState[] {
+  return state.repositories;
 }
 
-/** The entry the Groups state lists for the instance at `origin`, in any
+/** The entry the Space state lists for the instance at `origin`, in any
  * spelling of it (space-30). */
-export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
+export function instanceOf(state: SpaceState, origin: string): SpaceState["instances"][number] | undefined {
   const canonical = canonicalOrigin(origin);
   return state.instances.find((instance) => instance.origin === canonical);
 }
 
-/** One repository's state out of the Groups state (space-30): under
+/** One repository's state out of the Space state (space-30): under
  * your own group or an instance's heading. */
-export function repositoryOf(state: GroupsState, key: string): RepositoryState {
+export function repositoryOf(state: SpaceState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key}`);
@@ -616,9 +589,9 @@ export class CoreClient {
   /** The first `space.state` at or after `from` that `check` accepts. */
   async waitSpace(
     from: number,
-    check: (state: GroupsState) => boolean,
+    check: (state: SpaceState) => boolean,
     timeoutMs = 30_000,
-  ): Promise<GroupsState> {
+  ): Promise<SpaceState> {
     const start = Date.now();
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
@@ -679,21 +652,6 @@ export const PEER_SESSION_TITLE = "Plan the release on the other laptop";
 // The app under test
 // ---------------------------------------------------------------------------
 
-/** A team server of the journey (`AppOptions.servers`, DR-133). */
-export interface TeamServer {
-  /** The server as the stand-in instance lists it (servers-5). */
-  server: StandinServer;
-  /** Its stand-in hub: `admissions` holds each bearer it minted, and a
-   * journey scripts its relays (hub-3). */
-  hub: StandinHub;
-  /** The core the hub relays to as the person's seat: an app of its
-   * own, with its own arrange-only client, root and port. */
-  seat: App;
-  /** The seat's place, `<instance origin>#<server id>`
-   * (core-service-128). */
-  place: string;
-}
-
 export interface App {
   /** The one access URL: origin plus token. */
   url: string;
@@ -731,8 +689,6 @@ export interface App {
    * undefined where that instance fronts none (`host.registry`,
    * `host.second.registry`, environments-18). */
   registries: (StandinRegistry | undefined)[];
-  /** The team servers `AppOptions.servers` started, in its order. */
-  servers: TeamServer[];
   /** Your own group's spex repository's key, as `home.yaml` now names
    * it (storage-1). */
   readonly ownKey: string;
@@ -812,13 +768,13 @@ async function boot(
   return { server, core };
 }
 
-export async function startApp(options: AppOptions = {}, seat?: SeatOptions): Promise<App> {
+export async function startApp(options: AppOptions = {}): Promise<App> {
   const scratch = mkdtempSync(join(tmpdir(), "spex-e2e-"));
   // A start that fails leaves no root behind: removed outright before
   // the shell boots, closed with the shell after.
   const started: Started = {};
   try {
-    return await arrangeApp(scratch, options, started, seat);
+    return await arrangeApp(scratch, options, started);
   } catch (error) {
     // The failure that stopped the start is the one reported.
     if (started.app) await started.app.close().catch(() => undefined);
@@ -841,7 +797,6 @@ async function arrangeApp(
   scratch: string,
   options: AppOptions,
   started: Started,
-  seat?: SeatOptions,
 ): Promise<App> {
   const home = join(scratch, "home");
   mkdirSync(home, { recursive: true });
@@ -902,7 +857,7 @@ async function arrangeApp(
     // fronting a registry of its own where asked, started before it and
     // closed after it (environments-18).
     if (spec.second) {
-      const { backend, displayName, person, canCreateGroup } = spec.second;
+      const { backend, displayName, person } = spec.second;
       let fronted: StandinRegistry | undefined;
       if (spec.second.registry) {
         fronted = await startStandinRegistry({ dir: join(scratch, "registry-2") });
@@ -915,7 +870,6 @@ async function arrangeApp(
         ...(fronted ? { registry: fronted.url } : {}),
       });
       owned.push(second);
-      if (canCreateGroup !== undefined) second.script.canCreateGroup = canCreateGroup;
       hosts.push(second);
       registries.push(fronted);
     }
@@ -923,14 +877,13 @@ async function arrangeApp(
     // the first's Git backend or on one of its own (DR-128).
     if (spec.third) {
       if (hosts.length < 2) throw new Error("host.third needs a second instance");
-      const { backend, displayName, person, canCreateGroup } = spec.third;
+      const { backend, displayName, person } = spec.third;
       const third = await startStandinHost({
         ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-3") }),
         displayName: displayName ?? THIRD_HOST_NAME,
         ...(person ? { person } : {}),
       });
       owned.push(third);
-      if (canCreateGroup !== undefined) third.script.canCreateGroup = canCreateGroup;
       hosts.push(third);
       registries.push(undefined);
     }
@@ -939,32 +892,6 @@ async function arrangeApp(
     for (const service of owned.reverse()) await service.close().catch(() => undefined);
   };
   started.closeOwned = closeOwned;
-  // The team servers (DR-133): each hub started, its seat's core booted
-  // and the hub relaying to it, the server then listed by the instance
-  // — closed after this app's core, the seat before its hub.
-  const servers: TeamServer[] = [];
-  if (options.servers?.length) {
-    const instance = host;
-    if (!instance) throw new Error("servers need host");
-    for (const [index, entry] of options.servers.entries()) {
-      const hub = await startStandinHub({ redeem: (ticket) => instance.script.redeemTicket(ticket) });
-      owned.push(hub);
-      // A seat asking for a host shares this app's instance, where its
-      // `signedIn` signs it in.
-      const seatOptions: AppOptions =
-        entry.seat?.host === true
-          ? { ...entry.seat, host: { share: { host: instance, ...(registry ? { registry } : {}) } } }
-          : (entry.seat ?? {});
-      const seat = await startApp(seatOptions, entry.seatMode
-        ? { serverId: `srv_${index + 1}`, serverName: entry.name, personId: instance.script.person.id }
-        : undefined);
-      owned.push(seat);
-      hub.relayTo(seat.url.replace(/^http/, "ws"));
-      const server: StandinServer = { id: `srv_${index + 1}`, name: entry.name, group: HOST_GROUP, address: hub.url };
-      instance.script.servers.push(server);
-      servers.push({ server, hub, seat, place: `${canonicalOrigin(instance.url)}#${server.id}` });
-    }
-  }
   if (options.compiler) {
     writeFileSync(configPath, compilerConfig(options.compiler));
   } else if (options.develop) {
@@ -978,7 +905,7 @@ async function arrangeApp(
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
   // Both hosts use this explicit isolated Spex home.
 
-  // The Groups journeys' Git environment (space-32, space-37): Git found
+  // The Space journeys' Git environment (space-32, space-37): Git found
   // on the PATH, configured only through this environment — no identity,
   // so the committer fallback engages.
   let remotePath: string | undefined;
@@ -1074,7 +1001,6 @@ async function arrangeApp(
           }) as typeof fetch } : {}),
           home,
           own: E2E_OWN,
-          ...(seat ? { seat } : {}),
           // New projects must have a real baseline, independent of the
           // test host's identity and signing policy.
           runCommand: async (command, args, cwd, commandEnv) => {
@@ -1088,9 +1014,6 @@ async function arrangeApp(
           ...(options.forge
             ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
             : {}),
-          // The hubs' fixture CA, trusted beside the system's where the
-          // core presents a ticket at a team server (DR-133).
-          ...(options.servers?.length ? { serverCertificateAuthorities: [STANDIN_HUB_CA] } : {}),
         },
   };
 
@@ -1121,7 +1044,6 @@ async function arrangeApp(
     hosts,
     registry,
     registries,
-    servers,
     get ownKey() {
       return ownKey(dataDir);
     },
@@ -1391,7 +1313,7 @@ export async function refreshProjectKey(app: App): Promise<string | undefined> {
  * account's set-up awaited — your own group renamed after the login,
  * created on the host and pushed (space-4, space-59, space-65).
  */
-export async function signInCore(app: App, host: StandinHost | undefined = app.host): Promise<GroupsState> {
+export async function signInCore(app: App, host: StandinHost | undefined = app.host): Promise<SpaceState> {
   if (!host) throw new Error("signing in needs a host");
   const from = app.core.mark();
   const started = await app.core.command("space.signin.start", { url: host.url });
@@ -1421,10 +1343,9 @@ export async function selectRegistryCore(app: App, origin: string, repository: s
 /** Whether a sign-in's set-up has ended: signed in at the instance at
  * `origin` (the default instance unless named), nothing in flight, and
  * your own group's spex repository at an instance (space-4). */
-export function ownSetUp(state: GroupsState, origin: string = state.defaultInstance): boolean {
+export function ownSetUp(state: SpaceState, origin: string = state.defaultInstance): boolean {
   if (!instanceOf(state, origin)?.signedIn || state.signIn.phase !== "idle") return false;
-  const { name } = state.own;
-  const own = state.own.repositories.find((repository) => repository.key === `${name}/${name}-spex`);
+  const own = state.repositories.find((repository) => repository.own);
   return own !== undefined && own.state !== "local-only" && own.sync.phase !== "running";
 }
 
@@ -1435,19 +1356,19 @@ export function ownSetUp(state: GroupsState, origin: string = state.defaultInsta
  * namespace there: `<name>-spex` created there and pushed, its clone
  * moving under that instance's folder (space-58, DR-127); the
  * project's key and remote follow it. */
-export async function pickGroup(
+export async function pickPersonalSpace(
   app: App,
-  options: { host?: StandinHost; namespace?: boolean; name?: string; groupId?: string; groupPath?: string } = {},
+  options: { host?: StandinHost; name?: string } = {},
 ): Promise<RepositoryState> {
   const host = options.host ?? app.host;
   if (!host || !app.projectId) throw new Error("a pick needs a host and the project");
   const name = options.name ?? "demo-project";
-  const path = options.namespace ? host.script.person.login : options.groupPath ?? HOST_GROUP;
+  const path = host.script.person.login;
   const key = hostKey(host, `${path}/${name}-spex`);
   const from = app.core.mark();
   await app.core.command("space.pick", {
     repository: app.projectId,
-    choice: { kind: "create", instance: host.url, groupId: options.namespace ? null : options.groupId ?? HOST_GROUP_ID, name },
+    choice: { kind: "create", instance: host.url, name },
   });
   const state = await app.core.waitSpace(from, (candidate) => {
     try { return repositoryOf(candidate, key).sync.phase === "done"; } catch { return false; }
@@ -1484,7 +1405,7 @@ export async function arrangeHostPeer(app: App): Promise<void> {
   const session = await app.core.command("session.create", { projectId: app.projectId });
   app.sessionId = session.id;
   await runTurn(app, session.id, SESSION_TITLE);
-  await pickGroup(app);
+  await pickPersonalSpace(app);
   await app.peerPush(async (dir) => {
     mkdirSync(join(dir, "config"), { recursive: true });
     writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
@@ -1504,56 +1425,7 @@ export async function arrangeHostPeer(app: App): Promise<void> {
   writeFileSync(join(local, "playbook.config.yaml"), LOCAL_PROJECT_CONFIG);
 }
 
-/** The peer member of the team group the stand-in lists (git-host-12). */
-export const PEER_MEMBER = { id: "1002", login: "bob", displayName: "Bob Peer", role: "Developer" };
 
-/**
- * The second device's arrangement against the stand-in (space-36): the
- * team group holds the demo project's spex repository, which a peer —
- * `bob`, a member beside the account — pushed with a configuration, a
- * titled session and one queued intent, its `project.json` naming the
- * code by a path this machine serves. Returns the code's path.
- */
-export async function seedHostProject(app: App): Promise<{ key: string; code: string }> {
-  const host = app.host;
-  if (!host) throw new Error("the seeded project needs a host");
-  const code = join(dirname(app.dataDir), "code-remote", "demo-project");
-  seedDemoProject(code);
-  const repo = host.script.addRepository({
-    group: HOST_GROUP,
-    name: "demo-project-spex",
-    project: { format: 1, name: "demo-project", remote: code },
-    members: [PEER_MEMBER],
-  });
-  const key = hostKey(host, `${HOST_GROUP}/demo-project-spex`);
-  const dir = join(dirname(app.dataDir), "peer");
-  git(dirname(app.dataDir), "clone", "-q", "--branch", "spex", repo.bare, dir);
-  // The team's settings name players alone (core-service-2): the ones
-  // the demo's run calls, which this home's own roster sets up.
-  mkdirSync(join(dir, "config"), { recursive: true });
-  writeFileSync(join(dir, "config", "playbook.config.yaml"), LOCAL_PROJECT_CONFIG);
-  prepareStorageGitFiles(dir);
-  app.sessionId = await seedHistorySession(join(dir, "sessions"), join(dirname(app.dataDir), "peer-code"), [
-    { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },
-    { type: "captain_reply", turnId: 1, timestamp: Date.now() + 1, text: "Planned on the other laptop." },
-    { type: "turn_finished", turnId: 1, timestamp: Date.now() + 2 },
-  ]);
-  writeIntentFile(dir, "Queued on the other laptop");
-  // The peer's Spex placed these records at the stand-in, so they carry
-  // the tracked file naming that placement (storage-36), as every
-  // computer opening them receives it: nothing of it is left to send.
-  mkdirSync(join(dir, "placements"), { recursive: true });
-  writeFileSync(
-    join(dir, "placements", `${hostFolder(host)}.yaml`),
-    `format: 1\ninstance: ${JSON.stringify(host.url)}\nid: ${JSON.stringify(repo.id)}\n`,
-  );
-  git(dir, "add", "-A", "--", ".");
-  git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer records");
-  git(dir, "push", "-q", "origin", "HEAD:spex");
-  app.peerDir = dir;
-  app.remotePath = repo.bare;
-  return { key, code };
-}
 
 /** The sign-in card's chooser of Spaces (space-115): each Space of the
  * public registry's directory by its display name, then "Other
@@ -1643,15 +1515,15 @@ export async function signInThroughPage(
   const how = via ?? ((await section.count()) > 0 ? "again" : (await listed.count()) > 0 ? "add" : "card");
   // The card "Add a Space…" opens stands in its place until closed, as
   // after a start the core refused (space-3).
-  const groups = page.getByTestId("space-groups");
-  if (how === "add" && (await groups.getByTestId("space-add-card").count()) === 0) {
-    await groups.getByTestId("space-add-space").click();
+  const projects = page.getByTestId("space-projects");
+  if (how === "add" && (await projects.getByTestId("space-add-card").count()) === 0) {
+    await projects.getByTestId("space-add-space").click();
   }
   const where =
     how === "card"
       ? page.getByTestId("space-header").getByTestId("space-signin-card")
       : how === "add"
-        ? groups.getByTestId("space-add-card")
+        ? projects.getByTestId("space-add-card")
         : section.getByTestId("space-instance-heading");
   const control = where.getByTestId(how === "again" ? "space-signin-again" : "space-signin");
   if (how !== "again") {
@@ -1683,11 +1555,11 @@ export async function signInThroughPage(
   await expect(heading.getByRole("heading", { level: 2 })).toHaveText(new RegExp(` · @${host.script.person.login}$`));
 }
 
-/** An instance's section of the Groups list (space-1): its heading and
+/** A Space's section of the project list (space-1): its heading and
  * what it lists. Stand-ins share their host name, so a journey finds an
  * instance by its origin, never by its words. */
 export function instanceSection(page: Page, host: StandinHost) {
-  return page.getByTestId("space-groups").getByTestId(`space-instance-${host.url}`);
+  return page.getByTestId("space-projects").getByTestId(`space-instance-${host.url}`);
 }
 
 /** A spex repository's line for its placement at a stand-in instance,

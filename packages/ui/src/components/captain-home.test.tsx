@@ -36,7 +36,7 @@ import type {
 import type { ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
-import { groupsState, instanceState } from "../fixtures/groups-state.js";
+import { spaceState, instanceState } from "../fixtures/space-state.js";
 import { activateLanguage } from "../i18n.js";
 import {
   setClientForTests,
@@ -89,7 +89,7 @@ function renderHome({
   onNavigate = vi.fn(),
   onOpenPalette = vi.fn(),
   onOpenOwnProject = vi.fn(),
-  onOpenFromGroups = vi.fn(),
+  onOpenFromSpace = vi.fn(),
   hasProject = true,
   hasProjects = true,
   playbooks = PLAYBOOKS as PlaybookSummary[],
@@ -132,7 +132,7 @@ function renderHome({
       onOpenAgentCard={onOpenAgentCard}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
-      onOpenFromGroups={onOpenFromGroups}
+      onOpenFromSpace={onOpenFromSpace}
       onNavigate={onNavigate}
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
@@ -150,7 +150,7 @@ function renderHome({
     onNavigate,
     onOpenPalette,
     onOpenOwnProject,
-    onOpenFromGroups,
+    onOpenFromSpace,
     view,
   };
 }
@@ -350,21 +350,21 @@ describe("run-view-172: beside the two ways in, the member's groups", () => {
       .getAllByRole("button")
       .map((button) => button.getAttribute("data-testid"));
 
-  test("signed in to an instance, Open a project from your groups opens the palette at them", () => {
+  test("signed in to an instance, Open a project from your Space opens the palette at them", () => {
     useAppStore.setState({
-      space: groupsState({ instances: [instanceState("https://spex.pub")] }),
+      space: spaceState({ instances: [instanceState("https://spex.pub")] }),
       loadSpace: vi.fn(async () => {}),
     });
-    const { onOpenFromGroups, onOpenPalette, onNavigate } = renderHome({ hasProject: false, hasProjects: false });
+    const { onOpenFromSpace, onOpenPalette, onNavigate } = renderHome({ hasProject: false, hasProjects: false });
     // [run-view-172] a third action of the secondary style, after the
     // local-project and Academy actions, on their line.
-    expect(welcomeButtons()).toEqual(["home-add-project", "home-academy", "home-open-from-groups"]);
-    const open = screen.getByTestId("home-open-from-groups");
-    expect(open.textContent).toBe("Open a project from your groups");
+    expect(welcomeButtons()).toEqual(["home-add-project", "home-academy", "home-open-from-space"]);
+    const open = screen.getByTestId("home-open-from-space");
+    expect(open.textContent).toBe("Open a project from your Space");
     expect(open.className).toBe(screen.getByTestId("home-academy").className);
     expect(open.parentElement).toBe(screen.getByTestId("home-academy").parentElement);
     fireEvent.click(open);
-    expect(onOpenFromGroups).toHaveBeenCalledOnce();
+    expect(onOpenFromSpace).toHaveBeenCalledOnce();
     expect(onOpenPalette).not.toHaveBeenCalled();
     expect(onNavigate).not.toHaveBeenCalled();
   });
@@ -373,17 +373,17 @@ describe("run-view-172: beside the two ways in, the member's groups", () => {
     // Listed but signed out counts as signed in nowhere: the Space
     // surface's heading carries "Sign in again" (space-3).
     useAppStore.setState({
-      space: groupsState({ instances: [instanceState("https://spex.pub", { signedIn: false })] }),
+      space: spaceState({ instances: [instanceState("https://spex.pub", { signedIn: false })] }),
       loadSpace: vi.fn(async () => {}),
     });
-    const { onOpenFromGroups, onNavigate } = renderHome({ hasProject: false, hasProjects: false });
+    const { onOpenFromSpace, onNavigate } = renderHome({ hasProject: false, hasProjects: false });
     expect(welcomeButtons()).toEqual(["home-add-project", "home-academy", "home-sign-in"]);
     const signIn = screen.getByTestId("home-sign-in");
     expect(signIn.textContent).toBe("Sign in to your Space");
     expect(signIn.className).toBe(screen.getByTestId("home-academy").className);
     fireEvent.click(signIn);
     expect(onNavigate).toHaveBeenCalledWith("Space");
-    expect(onOpenFromGroups).not.toHaveBeenCalled();
+    expect(onOpenFromSpace).not.toHaveBeenCalled();
   });
 
   test("before this computer's groups are read, neither stands and the page reads them", async () => {
@@ -393,30 +393,30 @@ describe("run-view-172: beside the two ways in, the member's groups", () => {
     expect(welcomeButtons()).toEqual(["home-add-project", "home-academy"]);
     await vi.waitFor(() => expect(loadSpace).toHaveBeenCalledOnce());
     // Read signed in, the action stands.
-    act(() => useAppStore.setState({ space: groupsState({ instances: [instanceState("https://spex.pub")] }) }));
-    expect(welcomeButtons()).toEqual(["home-add-project", "home-academy", "home-open-from-groups"]);
+    act(() => useAppStore.setState({ space: spaceState({ instances: [instanceState("https://spex.pub")] }) }));
+    expect(welcomeButtons()).toEqual(["home-add-project", "home-academy", "home-open-from-space"]);
     expect(loadSpace).toHaveBeenCalledOnce();
   });
 
   test("in Chinese, the actions read in the page's language", () => {
     activateLanguage("zh");
     try {
-      useAppStore.setState({ space: groupsState(), loadSpace: vi.fn(async () => {}) });
+      useAppStore.setState({ space: spaceState(), loadSpace: vi.fn(async () => {}) });
       renderHome({ hasProject: false, hasProjects: false });
       expect(screen.getByTestId("home-sign-in").textContent).toBe("登录你的 Space");
       cleanup();
-      useAppStore.setState({ space: groupsState({ instances: [instanceState("https://spex.pub")] }) });
+      useAppStore.setState({ space: spaceState({ instances: [instanceState("https://spex.pub")] }) });
       renderHome({ hasProject: false, hasProjects: false });
-      expect(screen.getByTestId("home-open-from-groups").textContent).toBe("从群组打开项目");
+      expect(screen.getByTestId("home-open-from-space").textContent).toBe("从你的 Space 打开项目");
     } finally {
       activateLanguage("en");
     }
   });
 
   test("with projects to pick from, neither stands", () => {
-    useAppStore.setState({ space: groupsState({ instances: [instanceState("https://spex.pub")] }) });
+    useAppStore.setState({ space: spaceState({ instances: [instanceState("https://spex.pub")] }) });
     renderHome({ hasProject: false, hasProjects: true });
-    expect(screen.queryByTestId("home-open-from-groups")).toBeNull();
+    expect(screen.queryByTestId("home-open-from-space")).toBeNull();
     expect(screen.queryByTestId("home-sign-in")).toBeNull();
   });
 });
@@ -601,7 +601,7 @@ describe("RUN-45: readiness heals at hand", () => {
           onRecheckReadiness={async () => setReadiness(READY)}
           onOpenPalette={vi.fn()}
           onOpenOwnProject={vi.fn()}
-          onOpenFromGroups={vi.fn()}
+          onOpenFromSpace={vi.fn()}
           onNavigate={vi.fn()}
           onSaveCaptain={vi.fn(async () => {})}
           onStart={onStart}
@@ -636,7 +636,7 @@ describe("RUN-45: readiness heals at hand", () => {
           }}
           onOpenPalette={vi.fn()}
           onOpenOwnProject={vi.fn()}
-          onOpenFromGroups={vi.fn()}
+          onOpenFromSpace={vi.fn()}
           onNavigate={vi.fn()}
           onSaveCaptain={vi.fn(async () => {})}
           onStart={onStart}
@@ -672,7 +672,7 @@ describe("RUN-45: readiness heals at hand", () => {
           onRecheckReadiness={async () => setReadiness([unconfirmed])}
           onOpenPalette={vi.fn()}
           onOpenOwnProject={vi.fn()}
-          onOpenFromGroups={vi.fn()}
+          onOpenFromSpace={vi.fn()}
           onNavigate={vi.fn()}
           onSaveCaptain={vi.fn(async () => {})}
           onStart={onStart}

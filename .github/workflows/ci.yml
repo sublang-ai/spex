@@ -310,20 +310,11 @@ jobs:
             PLAYWRIGHT_BROWSERS_PATH="$SPEX_PACKAGED_BROWSER_CACHE" SPEX_BROWSER_REQUIRE_EMPTY_CACHE=1 SPEX_BROWSER_APP_EXECUTABLE="$packaged_app" npm run test:browser-host
           fi
 
-  hub-lane:
-    needs: changes
-    if: needs.changes.result == 'success' && needs.changes.outputs.full == 'true' && needs.changes.outputs.channel == 'app'
-    uses: ./.github/workflows/hub-lane.yml
-    with:
-      release-tag: ${{ inputs.release-tag || '' }}
-    permissions:
-      contents: read
-
   # One stable required check verifies every selected job, including when
   # a failed dependency would otherwise make a dependent job look skipped.
   checks:
     if: always()
-    needs: [changes, test, journeys, desktop-browser, hub-lane]
+    needs: [changes, test, journeys, desktop-browser]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

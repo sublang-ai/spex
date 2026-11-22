@@ -29,6 +29,7 @@ Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row contr
 Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in opening a server immediately from the explicit project-opening request.
 
 Amended by [DR-215](215-add-to-a-group-and-start-working.md) in adding a project also opening it on its chosen server.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
 
 ## Context
 

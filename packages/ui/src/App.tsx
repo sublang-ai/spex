@@ -6,30 +6,18 @@
 // the sessions the reader opened. Keyboard shortcuts live
 // renderer-side so the UI runs unmodified in a browser (SHELL-10).
 
+import { useShallow } from "zustand/react/shallow";
 import { ApprovalInbox, ApprovalFeedback } from "./components/ApprovalInbox.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EnvironmentState, GroupsState, IntentInfo, LedgerState, PlaybookAvailability, SessionInfo } from "@sublang/spex-core/protocol";
+import type { EnvironmentState, SpaceState, IntentInfo, LedgerState, PlaybookAvailability, SessionInfo } from "@sublang/spex-core/protocol";
 
-import type { ProjectInfo } from "@sublang/spex-core/protocol";
 import {
-  isLocalPlace,
-  LOCAL_PLACE_KEY,
-  placeKey,
-  placeLabel,
   safeStorageGet,
   safeStorageSet,
   SURFACE_KEY,
   useAppStore,
   type AppStore,
 } from "./state/store.js";
-import { signingInAt, usePlaces } from "./state/places.js";
-import {
-  PlaceStoreContext,
-  useEachPlace,
-  useJoinedAttention,
-  usePlaceStore,
-  usePlaceStores,
-} from "./state/place-context.js";
 import {
   ATTENTION_MARK_CLASS,
   ATTENTION_RANK,
@@ -48,14 +36,13 @@ import { PlaybooksSurface } from "./components/PlaybooksSurface.js";
 import { PackagesTab } from "./components/PackagesTab.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
-import { PlaceSelector } from "./components/PlaceSelector.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
 import {
   NavRail,
   SURFACES,
   SURFACE_LABELS,
-  type NavPlace,
+  type ProjectTree,
   type Surface,
 } from "./components/NavRail.js";
 import {
@@ -67,7 +54,7 @@ import {
 
 /** A record another surface asked the spec view to open, with where
  * it was asked from (spec-view-57), at the place of its project. */
-type PendingRecord = { place: string; projectId: string; path: string; origin: RecordOrigin };
+type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { openingAt, openingProjects } from "./lib/space.js";
@@ -99,20 +86,15 @@ const TAB_WORDS: Record<AttentionItem["kind"], () => string> = {
     i18n._({ id: "unread turn", comment: "tab name: a turn nobody has read" }),
 };
 
-/** The applet tabs of a place's project (applets-1): from the
- * project's environment and your own group's as the place last read
- * them, on this computer alone — a seat's relay carries the protocol
- * alone (DR-161). */
 function projectApplets(
   state: {
     environments: Record<string, EnvironmentState>;
-    space?: GroupsState;
+    space?: SpaceState;
     playbookLists?: { own: PlaybookAvailability[] };
   },
-  local: boolean,
   projectId: string | undefined,
 ): AppletTabEntry[] {
-  if (!local || !projectId) return [];
+  if (!projectId) return [];
   const own = ownRepositoryKey(state.space, state.playbookLists?.own);
   return appletTabs([
     state.environments[projectId],
@@ -199,22 +181,10 @@ function attentionOf(
  * needs longer than a flap (run-view-50). */
 export const NEVER_CONNECTED_GRACE_MS = 8_000;
 
-/** Redial one place alone (run-view-50): its connection is let go and
- * dialed afresh, every other place's untouched. */
-function redial(store: AppStore): void {
-  store.close();
-  store.getState().connect();
-}
-
-/** One place's connection banner (run-view-50, run-view-168): the
- * local core's names its endpoint, a seat's names its server; each
- * reads its own store's connection alone. */
 function ConnectionBanner({ store }: { store: AppStore }) {
   const connection = store((state) => state.connection);
   const everConnected = store((state) => state.everConnected);
   const coreUrl = store((state) => state.coreUrl);
-  const local = isLocalPlace(store.place);
-  const server = placeLabel(store.place);
   // A boot that never connects must say so (run-view-50): after a
   // grace period the page names the endpoint it keeps dialing.
   // The clock runs from mount, untouched by the dial-close-dial flaps
@@ -234,22 +204,15 @@ function ConnectionBanner({ store }: { store: AppStore }) {
     return (
       <div
         role="alert"
-        data-place={store.place.key}
         className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
       >
-        {local
-          ? i18n._(
+        {i18n._(
               "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app.",
               { endpoint: scrubbed ?? i18n._("its endpoint") },
-            )
-          : i18n._({
-              id: "Can't reach {server} — retrying every second.",
-              comment: "banner: a team server's seat never answered; {server} is the server's name",
-              values: { server },
-            })}
+            )}
         <button
           type="button"
-          onClick={() => (local ? window.location.reload() : redial(store))}
+          onClick={() => (window.location.reload())}
           className="font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
           {i18n._({ id: "Retry", comment: "take the failed read again" })}
@@ -260,35 +223,21 @@ function ConnectionBanner({ store }: { store: AppStore }) {
   if (connection === "mismatch") {
     return (
       <div
-        data-place={store.place.key}
         className="border-b border-red-300 bg-red-50 px-4 py-1.5 text-center text-xs text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
       >
-        {local
-          ? i18n._(
+        {i18n._(
               "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this.",
-            )
-          : i18n._({
-              id: "{server} speaks a different protocol version than this window — it needs the same Spex release as this app.",
-              comment: "banner: a team server's seat runs another protocol version; {server} is the server's name",
-              values: { server },
-            })}
+            )}
       </div>
     );
   }
   return (
     <div
-      data-place={store.place.key}
       className="border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
     >
-      {local
-        ? i18n._(
+      {i18n._(
             "Reconnecting to the Spex core… actions are paused until the connection returns.",
-          )
-        : i18n._({
-            id: "Reconnecting to {server}… actions there are paused until the connection returns.",
-            comment: "banner: the connection to a team server's seat dropped; {server} is the server's name",
-            values: { server },
-          })}
+          )}
     </div>
   );
 }
@@ -302,18 +251,11 @@ function RefreshErrorBanner({ store }: { store: AppStore }) {
   if (!refreshError || connection !== "open") return null;
   return (
     <div
-      data-place={store.place.key}
       className="flex items-center justify-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
     >
       {/* The core's own words for what failed ride as data inside the
           one sentence the page owns (localization-4). */}
-      {isLocalPlace(store.place)
-        ? i18n._("Connected, but {reason}", { reason: refreshError })
-        : i18n._({
-            id: "Connected to {server}, but {reason}",
-            comment: "banner: a team server's seat answered but its state failed to load; {server} is the server's name",
-            values: { server: placeLabel(store.place), reason: refreshError },
-          })}
+      {i18n._("Connected, but {reason}", { reason: refreshError })}
       <button
         type="button"
         onClick={() =>
@@ -335,84 +277,11 @@ function RefreshErrorBanner({ store }: { store: AppStore }) {
   );
 }
 
-/** Each seat's banners, beside the local core's (run-view-168): a
- * connection, its banner and a protocol mismatch are per place. */
-function SeatBanners({ banner }: { banner: "connection" | "refresh" }) {
-  const seats = usePlaces((state) => state.seats);
-  return seats.map(({ store }) =>
-    banner === "connection" ? (
-      <ConnectionBanner key={store.place.key} store={store} />
-    ) : (
-      <RefreshErrorBanner key={store.place.key} store={store} />
-    ),
-  );
-}
+
 
 /** One persistent polite live region (DR-010 §7): announces the
  * moments the product is built around without spamming. */
-function Announcer({ note }: { note?: { text: string } }) {
-  const connection = useAppStore((state) => state.connection);
-  const everConnected = useAppStore((state) => state.everConnected);
-  const [message, setMessage] = useState({ text: "", revision: 0 });
-  const announce = useCallback((text: string) => {
-    setMessage((previous) => ({ text, revision: previous.revision + 1 }));
-  }, []);
-  // The core-derived attention queue is the one derivation (DR-035),
-  // joined across the places (dashboard-9).
-  const joined = useJoinedAttention();
-  const blockingCount = joined.badge;
-  const first = joined.entries[0]?.entry;
-  const latestDetail = first?.kind === "question" ? first.title : undefined;
-  const lastCount = useRef(0);
-  const lastConnection = useRef(connection);
-  // "Restored" is only true after a loss: the first open is a boot,
-  // not a recovery, and must not be announced as one.
-  const lost = useRef(false);
 
-  useEffect(() => {
-    if (blockingCount > lastCount.current) {
-      announce(
-        latestDetail
-          ? i18n._("A player is waiting for your reply: {detail}", {
-              detail: latestDetail,
-            })
-          : i18n._(
-              "{count, plural, one {# session needs your attention} other {# sessions need your attention}}",
-              { count: blockingCount },
-            ),
-      );
-    }
-    lastCount.current = blockingCount;
-  }, [blockingCount, latestDetail, announce]);
-
-  useEffect(() => {
-    if (!everConnected) return;
-    if (connection !== lastConnection.current) {
-      if (connection === "open") {
-        if (lost.current) announce(i18n._("Connection restored."));
-        lost.current = false;
-      } else if (connection === "closed") {
-        announce(
-          i18n._("Connection to the Spex core lost — reconnecting."),
-        );
-        lost.current = true;
-      }
-      lastConnection.current = connection;
-    }
-  }, [connection, everConnected, announce]);
-
-  // The palette closes after acceptance; its note must survive that
-  // unmount. A fresh event also replaces identical previous wording.
-  useEffect(() => {
-    if (note) announce(note.text);
-  }, [note, announce]);
-
-  return (
-    <div aria-live="polite" role="status" className="sr-only" data-testid="app-live">
-      <span key={message.revision}>{message.text}</span>
-    </div>
-  );
-}
 
 /** Session tab identity (DR-011): the first Boss turn names the tab
  * — the project name lives in the sidebar, not on tabs. The listing's
@@ -448,7 +317,7 @@ function WorkspaceSurface({
   onOpenAgentCard,
   onOpenPalette,
   onOpenOwnProject,
-  onOpenFromGroups,
+  onOpenFromSpace,
   attentionBySession,
   pendingFocus,
   onFocusHandled,
@@ -470,9 +339,8 @@ function WorkspaceSurface({
   onOpenAgentCard: (adapter: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
-  /** The palette at the shown place's "From your groups" (run-view-172,
-   * run-view-174). */
-  onOpenFromGroups: () => void;
+  /** Open the palette on personal Space projects. */
+  onOpenFromSpace: () => void;
   /** Per-project spec view state, held above the workspace so a
    * draft under edit survives every surface (spec-view-51), keyed by
    * place and project (run-view-168). */
@@ -498,7 +366,7 @@ function WorkspaceSurface({
 }) {
   // The place this surface shows (run-view-168): every read and act
   // here is that place's core's.
-  const store = usePlaceStore();
+  const store = useAppStore;
   const sessions = store((state) => state.sessions);
   const views = store((state) => state.views);
   const composers = store((state) => state.composers);
@@ -560,20 +428,19 @@ function WorkspaceSurface({
   const opening = project === undefined ? openingAt(space, currentProjectId) : undefined;
   // A tab per installed applet of the project's environment and your
   // own group's (applets-1), read as the core last reported them.
-  const localPlace = isLocalPlace(store.place);
   const ownKey = ownRepositoryKey(space, playbookLists?.own);
   const applets = useMemo(
-    () => projectApplets({ environments, space, playbookLists }, localPlace, registeredId),
-    [environments, space, playbookLists, localPlace, registeredId],
+    () => projectApplets({ environments, space, playbookLists }, registeredId),
+    [environments, space, playbookLists, registeredId],
   );
   useEffect(() => {
-    if (connection !== "open" || !localPlace || !registeredId) return;
+    if (connection !== "open" || !registeredId) return;
     void loadEnvironment(registeredId).catch(() => {});
-    // Your own group's key comes with Space or the playbook lists; the
+    // Your personal key comes with Space or the playbook lists; the
     // lists are read for it where neither is.
     if (ownKey === undefined) void loadPlaybookLists(registeredId).catch(() => {});
     else if (ownKey !== registeredId) void loadEnvironment(ownKey).catch(() => {});
-  }, [connection, localPlace, registeredId, ownKey, loadEnvironment, loadPlaybookLists]);
+  }, [connection, registeredId, ownKey, loadEnvironment, loadPlaybookLists]);
   // The working set (run-view-48): the sessions this project has open,
   // working and idle alike — never derived from liveness, so a turn
   // settling leaves its transcript exactly where the eye already is.
@@ -663,7 +530,7 @@ function WorkspaceSurface({
   const summary =
     configState?.status === "valid" ? configState.summary : undefined;
 
-  // A session runs with your own group's config and its project's on
+  // A session runs with your personal config and its project's on
   // top (core-service-2), so the slash menus offer that project's
   // composed catalog — yours alone while it is not read, or refused
   // (playbook-library-34, DR-104: every member gets the same tools).
@@ -742,7 +609,7 @@ function WorkspaceSurface({
       onOpenAgentCard={onOpenAgentCard}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
-      onOpenFromGroups={onOpenFromGroups}
+      onOpenFromSpace={onOpenFromSpace}
       // The playbooks are the project's own tab (DR-172): a way there
       // from the start view opens it.
       onNavigate={(surface) => (surface === "Playbooks" ? pickTab("playbooks") : onNavigate(surface))}
@@ -1095,7 +962,7 @@ function WorkspaceSurface({
                   </span>
                 </>
               ) : null}
-              {project && editorDirty(specViewStates[placeKey(store.place, project.id)]) ? (
+              {project && editorDirty(specViewStates[project.id]) ? (
                 <>
                   <span className="sr-only">
                     {i18n._({
@@ -1188,34 +1055,25 @@ function WorkspaceSurface({
           onWriteSpec={(path, content, baseVersion) =>
             writeSpec(project.id, path, content, baseVersion)
           }
-          // The example is seeded at a folder this page names, so it is
-          // this computer's alone: a seat's projects are opened among
-          // the member's groups, its core allocating every folder
-          // (run-view-169).
-          onSeedExample={
-            isLocalPlace(store.place)
-              ? () => {
-                  setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
-                  void openAcademyExample().catch((cause: Error) => {
-                    setSeedErrors((current) => ({
-                      ...current,
-                      [project.id]:
-                        cause.message || i18n._("seeding the example failed"),
-                    }));
-                  });
-                }
-              : undefined
-          }
+          onSeedExample={() => {
+            setSeedErrors((current) => ({ ...current, [project.id]: undefined }));
+            void openAcademyExample().catch((cause: Error) => {
+              setSeedErrors((current) => ({
+                ...current,
+                [project.id]: cause.message || i18n._("seeding the example failed"),
+              }));
+            });
+          }}
           seedError={seedErrors[project.id]}
-          viewState={specViewStates[placeKey(store.place, project.id)] ?? initialSpecViewState}
-          onViewState={(next) => onSpecViewState(placeKey(store.place, project.id), next)}
+          viewState={specViewStates[project.id] ?? initialSpecViewState}
+          onViewState={(next) => onSpecViewState(project.id, next)}
           openRecordPath={
-            pendingRecord?.projectId === project.id && pendingRecord.place === store.place.key
+            pendingRecord?.projectId === project.id
               ? pendingRecord.path
               : undefined
           }
           openRecordOrigin={
-            pendingRecord?.projectId === project.id && pendingRecord.place === store.place.key
+            pendingRecord?.projectId === project.id
               ? pendingRecord.origin
               : undefined
           }
@@ -1316,78 +1174,41 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteNote, setPaletteNote] = useState<{ text: string }>();
   const [paletteAddProject, setPaletteAddProject] = useState(false);
-  // The place whose "From your groups" the palette opens at, by its key
-  // (run-view-172, run-view-174).
-  const [paletteGroupsAt, setPaletteGroupsAt] = useState<string>();
+  const [paletteSpaceFirst, setPaletteSpaceFirst] = useState(false);
   const openPalette = () => {
     setPaletteAddProject(false);
-    setPaletteGroupsAt(undefined);
+    setPaletteSpaceFirst(false);
     setPaletteOpen(true);
   };
   const openAddProject = () => {
     setPaletteAddProject(true);
-    setPaletteGroupsAt(undefined);
+    setPaletteSpaceFirst(false);
     setPaletteOpen(true);
   };
-  const openFromGroups = (place: string) => {
+  const openFromSpace = () => {
     setPaletteAddProject(false);
-    setPaletteGroupsAt(place);
+    setPaletteSpaceFirst(true);
     setPaletteOpen(true);
   };
   const configState = useAppStore((state) => state.configState);
   const railCollapsed = useAppStore((state) => state.railCollapsed);
   const setRailCollapsed = useAppStore((state) => state.setRailCollapsed);
   const connection = useAppStore((state) => state.connection);
-  // Every place (run-view-168): this computer's, then each open seat's.
-  const stores = usePlaceStores();
-  const storeAt = (place?: string): AppStore =>
-    (place === undefined ? undefined : stores.find((store) => store.place.key === place)) ?? useAppStore;
-  // The place the Projects surface shows: the one whose project or
-  // session the reader last opened — this computer's until then, and
-  // again once a seat it showed is closed.
-  const [shownPlace, setShownPlace] = useState<string>(LOCAL_PLACE_KEY);
-  const shown = storeAt(shownPlace);
-  useEffect(() => {
-    if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
-  }, [shown, shownPlace]);
-  // The place Playbooks, Settings and Space show, as the place selector names it
-  // (run-view-168): this computer's until the reader picks a seat, and
-  // again once a seat it showed is closed; a project's tabs stand at the
-  // project's place (DR-172).
-  const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
-  const configured = storeAt(configuredPlace);
-  const [folderReview, setFolderReview] = useState<{ place: string; nonce: number }>();
+  const [folderReview, setFolderReview] = useState<number>();
   const folderReviewSeq = useRef(0);
-  const openFolderReview = (store: AppStore): void => {
-    setConfiguredPlace(store.place.key);
-    setFolderReview({ place: store.place.key, nonce: ++folderReviewSeq.current });
+  const openFolderReview = (): void => {
+    setFolderReview(++folderReviewSeq.current);
     setSurface("Space");
   };
-  useEffect(() => {
-    if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
-  }, [configured, configuredPlace]);
-  // The code host a place's Groups row asked its Settings to take a
-  // credential for (space-103, settings-48), until that place's
-  // Credentials section has opened at it.
-  const [credentialAsk, setCredentialAsk] = useState<{ place: string; host: string }>();
   // The agent a failure asked Settings to open at (run-view-179,
   // settings-52), until that place's Settings has opened its row.
-  const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
+  const [agentAsk, setAgentAsk] = useState<string>();
   // The adapter the home's readiness notice asked Settings to show
   // (run-view-45, settings-70), until that place's Settings has.
-  const [cardAsk, setCardAsk] = useState<{ place: string; adapter: string }>();
-  /** Go to a surface on behalf of `store`'s place: Playbooks, Settings
-   * and Space open at that place (run-view-168). */
-  const navigateFrom = (store: AppStore) => (next: Surface) => {
-    if (next === "Playbooks" || next === "Settings" || next === "Space") {
-      setConfiguredPlace(store.place.key);
-    }
-    setSurface(next);
-  };
+  const [cardAsk, setCardAsk] = useState<string>();
   // Each place's sidebar inputs, read from its own store.
-  const placeStates = useEachPlace((state) => ({
+  const local = useAppStore(useShallow((state) => ({
     projects: state.projects,
     projectsRead: state.projectsRead === true,
     sessions: state.sessions,
@@ -1401,38 +1222,15 @@ export function App() {
     activeSessionId: state.activeSessionId,
     expandedProjects: state.expandedProjects,
     workspaceTabs: state.workspaceTabs,
-    // A seat's groups name the projects the palette opens there
-    // (run-view-169), read once it is connected.
     space: state.space,
     connection: state.connection,
-  }));
-  const local = placeStates[0]!.value;
-  // The seats the local core holds, each with its sign-in at its
-  // instance (core-service-142): the palette says where one still runs.
-  const seatStates = useAppStore((state) => state.seats);
-  // The badge and every dot re-source from the one core-side ledger
-  // fold (DR-035, dashboard-9/10): each place's dots from its own, the
-  // badge summing every place's (dashboard-9). A place speaking another
-  // protocol version is no connected core: it marks nothing, as it adds
-  // nothing to the queue and the badge (run-view-168).
-  const attentionByPlace = useMemo(
-    () =>
-      new Map(
-        placeStates.map(({ store, value }) => [
-          store.place.key,
-          attentionOf(
-            value.connection === "mismatch" ? undefined : value.ledger,
-            value.sessions,
-            value.views,
-          ),
-        ]),
-      ),
-    [placeStates],
+  })));
+  const ledger = local.connection === "mismatch" ? undefined : local.ledger;
+  const attentionCount = ledger?.badge ?? 0;
+  const attentionBySession = useMemo(
+    () => attentionOf(ledger, local.sessions, local.views),
+    [ledger, local.sessions, local.views, local.language],
   );
-  const attentionAt = (place: string): Map<string, AttentionItem> =>
-    attentionByPlace.get(place) ?? new Map();
-  const attentionCount = useJoinedAttention().badge;
-  const attentionBySession = attentionAt(shown.place.key);
   // An attention activation owed its landing in the thread
   // (run-view-91): held until the session's run view takes it.
   const [pendingFocus, setPendingFocus] = useState<{
@@ -1455,31 +1253,28 @@ export function App() {
   const prevTabRef = useRef<Record<string, string>>({});
 
   /** Show `store`'s place on the Projects surface. */
-  const showPlace = (store: AppStore) => {
-    setShownPlace(store.place.key);
-    setSurface("Workspace");
-  };
+  const showWorkspace = () => setSurface("Workspace");
 
   // An attention entry lands at its turn's place, or at its failure's
   // onset where it names no turn (run-view-91).
   // A session is opened at its own place, this computer's unless one
   // is named (dashboard-9, run-view-168).
-  const openSessionAndShow = (sessionId: string, turnId?: number, place?: string, focusAt?: number) => {
-    const store = storeAt(place);
+  const openSessionAndShow = (sessionId: string, turnId?: number, focusAt?: number) => {
+    const store = useAppStore;
     // The transcript keeps a failed read and its Retry in place.
     void store.getState().focusSession(sessionId).catch(() => {});
     setPendingFocus(
       turnId !== undefined || focusAt !== undefined ? { sessionId, turnId, at: focusAt } : undefined,
     );
-    showPlace(store);
+    showWorkspace();
   };
 
   // Start on an intent stages its dispatch (run-view-86): the store
   // picks the lane — the live session's composer, or the Captain home —
   // at the intent's own place.
-  const startIntentAt = (store: AppStore) => async (intent: IntentInfo) => {
-    await store.getState().stageDispatch(intent);
-    showPlace(store);
+  const startIntent = async (intent: IntentInfo) => {
+    await useAppStore.getState().stageDispatch(intent);
+    showWorkspace();
   };
 
   // An intent picked off the Dashboard or a project's Overview opens
@@ -1490,14 +1285,13 @@ export function App() {
     null,
   );
   const openIntentFrom =
-    (surface: RecordOrigin["surface"], store: AppStore = useAppStore) =>
+    (surface: RecordOrigin["surface"]) =>
     (projectId: string, path: string, anchor: string) => {
-      const state = store.getState();
+      const state = useAppStore.getState();
       state.setCurrentProject(projectId);
       state.setWorkspaceTab(projectId, "specs");
-      showPlace(store);
+      showWorkspace();
       setPendingRecord({
-        place: store.place.key,
         projectId,
         path,
         origin: { surface, projectId, anchor },
@@ -1509,7 +1303,7 @@ export function App() {
   const [pendingReturn, setPendingReturn] = useState<RecordOrigin>();
   const returnToOrigin = (origin: RecordOrigin) => {
     // The record was read on the Projects surface, at the place shown.
-    const state = shown.getState();
+    const state = useAppStore.getState();
     const registered = state.projects.some(
       (project) => project.id === origin.projectId,
     );
@@ -1560,8 +1354,8 @@ export function App() {
   // needs the human (DR-011), not the last-active tab — read from the
   // one ledger fold (DR-035) of the project's own place, this
   // computer's unless one is named (run-view-168).
-  const pickProject = (projectId: string, place?: string) => {
-    const store = storeAt(place);
+  const pickProject = (projectId: string) => {
+    const store = useAppStore;
     const state = store.getState();
     const needy = state.ledger?.attention.find(
       (entry) => entry.projectId === projectId,
@@ -1571,7 +1365,7 @@ export function App() {
     } else {
       state.setCurrentProject(projectId);
     }
-    showPlace(store);
+    showWorkspace();
   };
 
   // Returning from a terminal sign-in self-heals readiness (DR-009).
@@ -1627,7 +1421,7 @@ export function App() {
     const onKeydown = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
       // The current project is the shown place's (run-view-168).
-      const state = shown.getState();
+      const state = useAppStore.getState();
       const projectId = state.currentProjectId;
       if (meta && !event.shiftKey && !event.altKey) {
         const index = Number.parseInt(event.key, 10);
@@ -1646,7 +1440,7 @@ export function App() {
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
           setPaletteAddProject(false);
-          setPaletteGroupsAt(undefined);
+          setPaletteSpaceFirst(false);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1696,7 +1490,7 @@ export function App() {
             ...openIds,
             "start",
             ...PINNED_TABS,
-            ...projectApplets(state, isLocalPlace(shown.place), projectId).map((entry) => entry.tab),
+            ...projectApplets(state, projectId).map((entry) => entry.tab),
           ];
           event.preventDefault();
           setSurface("Workspace");
@@ -1744,7 +1538,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  }, [surface, paletteOpen, shown]);
+  }, [surface, paletteOpen]);
 
   const playbookCount =
     configState?.status === "valid"
@@ -1763,57 +1557,33 @@ export function App() {
     return tab;
   };
 
-  // The sidebar's places (run-view-67, run-view-168): each lists its
-  // own projects and sessions, and every act on a row is taken at the
-  // row's own place.
-  const navPlaces: NavPlace[] = placeStates.map(({ store, value }) => ({
-    key: store.place.key,
-    label: placeLabel(store.place),
-    projects: value.projects,
-    // The projects its core is opening, read from its Groups state
-    // (run-view-168).
-    opening: openingProjects(value.space, value.projects),
-    sessions: value.sessions,
-    attention: attentionAt(store.place.key),
-    currentProjectId: value.currentProjectId,
-    activeSessionId:
-      store === shown
-        ? activeTabSessionId(value.workspaceTabs, value.currentProjectId)
-        : undefined,
-    shown: store === shown,
-    // The place's heading shows that place on the Projects surface: its
-    // current project's view, or its welcome page where it holds no project.
-    onShow: () => showPlace(store),
-    expanded: value.expandedProjects,
+  const projectTree: ProjectTree = {
+    projects: local.projects,
+    opening: openingProjects(local.space, local.projects),
+    sessions: local.sessions,
+    attention: attentionBySession,
+    currentProjectId: local.currentProjectId,
+    activeSessionId: activeTabSessionId(local.workspaceTabs, local.currentProjectId),
+    expanded: local.expandedProjects,
     onExpanded: (projectId, expanded) =>
-      store.getState().toggleProjectExpanded(projectId, expanded),
-    onPickProject: (projectId) => pickProject(projectId, store.place.key),
+      useAppStore.getState().toggleProjectExpanded(projectId, expanded),
+    onPickProject: pickProject,
     onActivateSession: (sessionId) =>
-      openSessionAndShow(sessionId, undefined, store.place.key),
+      openSessionAndShow(sessionId),
     onNewSession: (projectId) => {
-      const state = store.getState();
+      const state = useAppStore.getState();
       state.setCurrentProject(projectId);
       state.setWorkspaceTab(projectId, "start");
-      showPlace(store);
+      showWorkspace();
     },
     onOpenSpecs: (projectId) => {
-      const state = store.getState();
+      const state = useAppStore.getState();
       state.setCurrentProject(projectId);
       state.setWorkspaceTab(projectId, "specs");
-      showPlace(store);
+      showWorkspace();
     },
-    onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
-  }));
-
-  // A seat holding no project has no welcome page of its own. A saved
-  // conversation remains readable there before its files are located.
-  useEffect(() => {
-    if (shownPlace === LOCAL_PLACE_KEY) return;
-    const place = navPlaces.find((entry) => entry.key === shownPlace);
-    const state = shown.getState();
-    const readingSaved = state.sessions.some((session) => session.id === state.activeSessionId);
-    if (place && place.projects.length === 0 && (place.opening?.length ?? 0) === 0 && !readingSaved) setShownPlace(LOCAL_PLACE_KEY);
-  });
+    onDeleteSession: (sessionId) => useAppStore.getState().deleteSession(sessionId),
+  };
 
   // The rail foot's other tenant. A broken config keeps its red voice
   // in both rail states (DR-030) — a first-hour failure must not go
@@ -1823,7 +1593,7 @@ export function App() {
       <button
         type="button"
         data-testid="config-status"
-        onClick={() => navigateFrom(useAppStore)("Settings")}
+        onClick={() => setSurface("Settings")}
         title={i18n._("Open Settings to see what's wrong")}
         // The status is the core's own enum: a machine word travels as
         // it is in every language (localization-1).
@@ -1852,57 +1622,31 @@ export function App() {
   return (
     <div className="flex h-full flex-col">
       <ConnectionBanner store={useAppStore} />
-      <SeatBanners banner="connection" />
       <ApprovalInbox />
       <ApprovalFeedback />
       <RefreshErrorBanner store={useAppStore} />
-      <SeatBanners banner="refresh" />
-      <Announcer note={paletteNote} />
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
-          groupsAt={paletteGroupsAt}
+          spaceFirst={paletteSpaceFirst}
           projects={local.projects}
           sessions={local.sessions}
-          attention={attentionAt(LOCAL_PLACE_KEY)}
+          attention={attentionBySession}
           // The current project is the shown place's (run-view-168).
-          currentProjectId={shown === useAppStore ? local.currentProjectId : undefined}
-          seats={placeStates.slice(1).map(({ store, value }) => ({
-            key: store.place.key,
-            label: placeLabel(store.place),
-            projects: value.projects,
-            sessions: value.sessions,
-            attention: attentionAt(store.place.key),
-            currentProjectId: store === shown ? value.currentProjectId : undefined,
-            // Its sign-in at its instance not yet complete, the palette's
-            // entry for it says it signs in there (run-view-168,
-            // core-service-142).
-            signingIn: signingInAt(seatStates, local.space, store.place.key),
-          }))}
+          currentProjectId={local.currentProjectId}
           onPickFolder={
             window.spexNative
               ? () => window.spexNative!.pickDirectory()
               : undefined
           }
           onPick={(projectId) => pickProject(projectId)}
-          onPickAt={(place, projectId) => pickProject(projectId, place)}
-          // A new server connection starts immediately; Space shows
-          // its progress, sign-in and any refusal after the palette closes.
-          onShowSpace={() => {
-            setConfiguredPlace(LOCAL_PLACE_KEY);
-            setSurface("Space");
-            setLanding({ on: "surface" });
-          }}
-          // A group's project opened at a place is current there at
-          // once, the Projects surface showing that place (run-view-168).
-          onOpened={(place, projectId) => pickProject(projectId, place)}
+          onOpened={pickProject}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
-          onNote={(text) => setPaletteNote({ text })}
           onClose={() => {
             setPaletteOpen(false);
             setPaletteAddProject(false);
-            setPaletteGroupsAt(undefined);
+            setPaletteSpaceFirst(false);
           }}
         />
       ) : null}
@@ -1913,7 +1657,7 @@ export function App() {
           attentionCount={attentionCount}
           collapsed={railCollapsed}
           onCollapsed={setRailCollapsed}
-          places={navPlaces}
+          projects={projectTree}
           onAddProject={openAddProject}
           foot={configFoot}
         />
@@ -1927,91 +1671,58 @@ export function App() {
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
           {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
-            // Playbooks, Settings and Space show one place at a time, the
-            // one the selector names (run-view-168, DR-176): a seat has a
-            // global environment of its own. With no seat open there is
-            // none to pick. A project's tabs stand at its place.
-            <PlaceStoreContext.Provider value={configured}>
-              {stores.length > 1 ? (
-                <PlaceSelector
-                  stores={stores}
-                  shown={configured}
-                  onShow={(store) => setConfiguredPlace(store.place.key)}
-                />
-              ) : null}
+            <>
               {surface === "Playbooks" ? (
-                <PlaybooksSurface key={configured.place.key} onNavigate={navigateFrom(configured)} />
+                <PlaybooksSurface onNavigate={setSurface} />
               ) : surface === "Settings" ? (
                 <SettingsSurface
-                  key={configured.place.key}
-                  credentialHost={
-                    credentialAsk?.place === configured.place.key ? credentialAsk.host : undefined
-                  }
-                  onCredentialHostShown={() => setCredentialAsk(undefined)}
-                  agentRow={agentAsk?.place === configured.place.key ? agentAsk.agent : undefined}
+                  agentRow={agentAsk}
                   onAgentRowShown={() => setAgentAsk(undefined)}
-                  agentCard={cardAsk?.place === configured.place.key ? cardAsk.adapter : undefined}
+                  agentCard={cardAsk}
                   onAgentCardShown={() => setCardAsk(undefined)}
                 />
               ) : (
                 <SpaceSurface
-                  key={configured.place.key}
-                  reviewRequest={folderReview?.place === configured.place.key ? folderReview.nonce : undefined}
+                  onOpenProject={pickProject}
+                  reviewRequest={folderReview}
                   onReviewOpened={() => setFolderReview(undefined)}
                   onOpenSession={(sessionId) =>
-                    openSessionAndShow(sessionId, undefined, configured.place.key)
+                    openSessionAndShow(sessionId)
                   }
-                  // A row's "Show on <server>" names the seat's place
-                  // (space-111); everything else opens at the place shown.
-                  onOpenProject={(projectId, place) => pickProject(projectId, place ?? configured.place.key)}
-                  // A failed code clone's host opens this place's
-                  // Credentials section at it (space-103, settings-48).
-                  onAddCredential={(host) => {
-                    setCredentialAsk({ place: configured.place.key, host });
-                    setSurface("Settings");
-                  }}
                 />
               )}
-            </PlaceStoreContext.Provider>
+            </>
           ) : surface === "Dashboard" ? (
             <DashboardSurface
               onOpenSession={openSessionAndShow}
               onOpenIntent={openIntentFrom("dashboard")}
-              onStartIntent={startIntentAt(useAppStore)}
-              // A link to a project opens it at the project's place,
-              // the Projects surface showing that place (run-view-168).
-              onNavigate={(_surface, place) => showPlace(place)}
+              onStartIntent={startIntent}
+              onNavigate={showWorkspace}
             />
           ) : (
-            // The Projects surface reads the place it shows (run-view-168).
-            <PlaceStoreContext.Provider value={shown}>
+            <>
               <WorkspaceSurface
-                key={shown.place.key}
-                onNavigate={navigateFrom(shown)}
-                onOpenFolderReview={() => openFolderReview(shown)}
+                onNavigate={setSurface}
+                onOpenFolderReview={openFolderReview}
                 onOpenAgentSettings={(agent) => {
-                  setAgentAsk({ place: shown.place.key, agent });
-                  navigateFrom(shown)("Settings");
+                  setAgentAsk(agent);
+                  setSurface("Settings");
                 }}
                 onOpenAgentCard={(adapter) => {
-                  setCardAsk({ place: shown.place.key, adapter });
-                  navigateFrom(shown)("Settings");
+                  setCardAsk(adapter);
+                  setSurface("Settings");
                 }}
                 onOpenPalette={openPalette}
-                // This computer's welcome adds a local project; a seat's
-                // greets the member with its server form. Either opens
-                // the palette at its place's groups (run-view-172,
-                // run-view-174).
                 onOpenOwnProject={openAddProject}
-                onOpenFromGroups={() => openFromGroups(LOCAL_PLACE_KEY)}
+                onOpenFromSpace={openFromSpace}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}
                 onOpenSession={(sessionId, turnId) =>
-                  openSessionAndShow(sessionId, turnId, shown.place.key)
+                  openSessionAndShow(sessionId, turnId)
                 }
-                onOpenIntent={openIntentFrom("overview", shown)}
-                onStartIntent={startIntentAt(shown)}
+                onOpenIntent={openIntentFrom("overview")}
+                onStartIntent={startIntent}
                 pendingRecord={pendingRecord}
                 onRecordOpened={() => setPendingRecord(null)}
                 onReturn={returnToOrigin}
@@ -2023,7 +1734,7 @@ export function App() {
                   }))
                 }
               />
-            </PlaceStoreContext.Provider>
+            </>
           )}
         </main>
       </div>

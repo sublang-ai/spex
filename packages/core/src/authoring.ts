@@ -104,8 +104,7 @@ export interface AuthorManagerOptions {
   configPath: string;
   env: NodeJS.ProcessEnv;
   /** The environment a compile's agent run inherits, read as each
-   * compile is asked for: on a seat, its credentials as they stand then
-   * (core-service-126); `env` where absent. */
+   * compile starts. Defaults to `env`. */
   agentEnv?: () => NodeJS.ProcessEnv;
   adapterImports?: PlayerAdapterImports;
   compileSpawner?: LineSpawner;

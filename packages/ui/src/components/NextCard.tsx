@@ -14,7 +14,7 @@ import type {
   QueueSchedule,
 } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
 import { intentTitle } from "./DeliveryCard.js";
@@ -48,7 +48,7 @@ export function NextCard({
   /** Stage the intent into the home composer (run-view-86/88). */
   onStartIntent?: (intent: IntentInfo) => Promise<void> | void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const closeIntent = store((state) => state.closeIntent);
   const queueIntent = store((state) => state.queueIntent);
   const [staging, setStaging] = useState(false);

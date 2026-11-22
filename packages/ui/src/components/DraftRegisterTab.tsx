@@ -30,7 +30,7 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { applyLocalPatch } from "../lib/config-ops.js";
 import {
   agentBlockOf,
@@ -189,13 +189,13 @@ export function DraftRegisterTab({
   onRegister: (input: RegisterInput) => Promise<void>;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [openRole, setOpenRole] = useState<string>();
   const gearRef = useRef<HTMLButtonElement>(null);
   // A project's session, or one of the global environment, kept with
-  // your own group's records (core-service-96).
+  // your personal records (core-service-96).
   const ofProject = store((state) => state.projects.some((entry) => entry.id === draft.projectId));
   const registryAccounts = store((state) => state.registryAccounts);
   // A publish goes to the registry of the session's environment, as the

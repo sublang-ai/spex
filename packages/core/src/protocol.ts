@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 34;
+export const PROTOCOL_VERSION = 35;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -61,10 +61,10 @@ export const INSTANCE_FOLDER_PATTERN = new RegExp(`^${INSTANCE_SEGMENT}$`);
 /** A spex repository's key: its clone's path under `workspace/`, the
  * name ending in `-spex` (storage-1, projects-10). A clone at an
  * instance lies under that instance's folder, its key's first segment,
- * with at least its group's or its namespace's segment before its name
- * (`@spex.sublang.ai/acme/a-spex`, DR-127); every other segment is spelled as
+ * with at least its account's namespace before its name
+ * (`@spex.sublang.ai/ada/a-spex`, DR-127); every other segment is spelled as
  * the Git host spells its paths — letters, digits, `.`, `_` and `-`,
- * never starting with a dot or a hyphen — so a host's group or
+ * never starting with a dot or a hyphen — so a namespace or
  * repository name stands as a segment unchanged, and only an instance's
  * folder begins with `@`. A project is named by its spex repository's
  * key. */
@@ -74,13 +74,9 @@ export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
  * carries it (space-29, DR-127): the core reads it in any spelling and
  * refuses one the home does not list. */
 const instanceOriginSchema = z.string().min(1);
-/** What a pick or a Place chooses at an instance (space-29): a spex
- * repository it lists, to join, or a group there by its host id — your
- * namespace there by none — to create `<name>-spex` in, `name` given
- * without its `-spex` suffix. */
-const groupChoiceSchema = z.union([
+const placementChoiceSchema = z.union([
   z.object({ kind: z.literal("join"), instance: instanceOriginSchema, hostId: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("create"), instance: instanceOriginSchema, groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("create"), instance: instanceOriginSchema, name: z.string().min(1) }).strict(),
 ]);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
@@ -206,8 +202,7 @@ export interface SessionPlayerSummary {
    * evidence that a lane is shared, and by whom. */
   boundBy: string[];
   /** A player a binding names — a written entry's, or the default
-   * `dev.<role>` of a placed playbook no entry binds — that your own
-   * group's roster lacks: it plays on the Captain's block without its
+   * `dev.<role>` of a placed playbook no entry binds — that the global roster lacks: it plays on the Captain's block without its
    * instruction until it is set up (core-service-2, settings-46). */
   toSetUp?: boolean;
 }
@@ -268,7 +263,7 @@ export type SessionAgentSettingsMap = Record<string, SessionAgentSettings>;
 export const CAPTAIN_AGENT_ID = "captain";
 
 /** Where a composed playbook's bindings come from (core-service-2): the
- * project's entry, the global one — your own group's — or the default
+ * project's entry, the global entry or the default
  * binding of each role to `dev.<role>`. */
 export type PlaybookOrigin = "project" | "own" | "default";
 
@@ -354,7 +349,7 @@ export interface MachineGraph {
 export interface ConfigSummary {
   path: string;
   captain: AgentSummary;
-  /** Every player your own group's file declares, then each player a
+  /** Every player the global configuration file declares, then each player a
    * binding names that the file lacks, flagged `toSetUp` (DR-032,
    * settings-46). */
   players: SessionPlayerSummary[];
@@ -374,7 +369,7 @@ export type ConfigState =
       seeded: boolean;
       reseeded?: boolean;
       missingPlayers?: MissingPlayer[];
-      /** Your own group's state alone (core-service-45): the digest of
+      /** Global configuration only (core-service-45): the digest of
        * the file's bytes it was composed from, which a `config.batch`
        * names to say which config its edits were made against. A
        * project's composition carries none. */
@@ -383,7 +378,7 @@ export type ConfigState =
   | { status: "invalid"; path: string; errors: string[] }
   | { status: "missing"; path: string };
 
-/** A player a project's config names for a role that your own group's
+/** A player a project's config names for a role that the global
  * roster lacks (core-service-2, settings-46): reported before a session
  * of that project starts, and offered to add in Settings. */
 export interface MissingPlayer {
@@ -428,7 +423,7 @@ export interface EnvironmentState {
    * (playbook-library-93). */
   published?: { name: string; version: string; url: string } | null;
   /** The folder a request by path is relative to on this device
-   * (environments-2): the paired working folder, or your own group's
+   * (environments-2): the paired working folder, or the personal settings
    * clone; null where none is paired. */
   pathRoot: string | null;
   /** Collaboration and Git-source brokerage origin, independent of packages. */
@@ -438,8 +433,7 @@ export interface EnvironmentState {
   /** For a project, whether its `spex.yaml` and `spex.lock` are both in
    * the code's `HEAD` in its working folder, false while either is not —
    * untracked, added but uncommitted, or no repository or commit at all —
-   * so the environment is this device's alone; null for your own
-   * group's, which syncs with its clone, and for a project whose working
+   * so the environment is this device's alone; null for the global environment, which syncs with its clone, and for a project whose working
    * folder this device does not hold (environments-14,
    * environments-26). */
   committed?: boolean | null;
@@ -493,7 +487,7 @@ export interface EnvironmentPackage {
   /** Where the package's provided spec stands in a project's environment
    * (environments-14); absent where it provides no spec, where its files
    * are not here as the lock locks them, where no copy is written under
-   * `specs/` yet — the next install writes it — and in your own group's
+   * `specs/` yet — the next install writes it — and in the global
    * environment, whose spec is placed as a skill named in `exports`
    * (environments-8). */
   placement?: {
@@ -544,7 +538,7 @@ export interface PlaybookAvailability {
    * its command where that is the cause. */
   standsAside?: { reason: string; winner?: string };
   /** The environments placing a playbook of this id: the project's, the
-   * global — your own group's — or both. */
+   * global, or both. */
   placedBy: ("project" | "own")[];
   /** The configs holding a written entry for it: the project's, the
    * global, both or neither. */
@@ -608,10 +602,7 @@ export interface ProjectInfo {
   path: string;
   name: string;
   registeredAt: number;
-  /** The spex repository holding the project's records: its key, its
-   * name (`<name>-spex`), its group's path, and whether that group is
-   * your own. */
-  repository: { key: string; name: string; group: string; own: boolean };
+  repository: { key: string; name: string };
 }
 
 /** Playbook's closed failure-code list, re-exported here unchanged
@@ -838,9 +829,6 @@ export interface ReadinessEntry {
   ultracodeSupported?: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
-  /** On a team server's seat alone (settings-49): the adapter's
-   * credential class and its phrase. */
-  credential?: AdapterCredential;
 }
 
 export interface ReadinessFault {
@@ -848,32 +836,9 @@ export interface ReadinessFault {
   requirement: string;
 }
 
-/** `unset`: no base URL, or Anthropic's own host; `third-party`: any
- * other host, named; `unknown`: a value with no host to read;
- * `hidden`: on a seat, where nothing of it is reported. */
 export type BaseUrlState =
-  | { state: "unset" | "unknown" | "hidden" }
+  | { state: "unset" | "unknown" }
   | { state: "third-party"; host: string };
-
-/** A seat's credential classes (settings-49): the member's own, the
- * administrator's shared sign-in, a shared file that cannot be read, a
- * credential the agent's status command reports expired or refused, or
- * no form set. */
-export type CredentialClass = "own" | "shared" | "unreadable" | "expired" | "none";
-
-export interface AdapterCredential {
-  class: CredentialClass;
-  /** The class in the reader's words; for `none`, how to set one. */
-  phrase: string;
-}
-
-/** The credentials a seat's member placed (settings-48), no secret
- * among them: each code host with its username, if any, and each agent
- * with the names of the forms set. */
-export interface CredentialList {
-  hosts: { name: string; username?: string }[];
-  agents: { name: AdapterName; names: string[] }[];
-}
 
 /** What a run reported spending. `costSources` names every provenance
  * the summed cost came from — a cost is only as trustworthy as its
@@ -956,8 +921,7 @@ export interface IntentAuthor {
 }
 
 /** The runtime a record is assigned to (DR-134): one core on one home,
- * named by the home's `device`, with a label for display alone — the
- * server's name on a seat, the host name elsewhere. */
+ * named by the home's `device`, with a label for display. */
 export interface AssignedRuntime {
   device: string;
   label: string;
@@ -1274,18 +1238,10 @@ export const commandSchema = z.discriminatedUnion("type", [
     assetId: mediaAssetSchema.shape.assetId, offset: z.number().int().nonnegative(),
     length: z.number().int().positive().max(MEDIA_CHUNK_BYTES) }).strict(),
   /** With `projectId`, the configuration a session of that project
-   * runs with: your own group's, the project's own file on top, its
+   * runs with: the global configuration, the project's own file on top, its
    * environment's playbooks first (core-service-2, environments-9). */
   z.object({ type: z.literal("config.get"), id, projectId: repositoryKeySchema.optional() }),
   z.object({ type: z.literal("readiness.get"), id }),
-  // A seat member's own credentials (settings-48, storage-44): a code
-  // host's token, `values` {token, username?}, or an agent's, `values`
-  // {<NAME>: value} over its forms; the core checks each field and
-  // refuses `invalid_request` before anything is written.
-  z.object({ type: z.literal("credential.set"), id, kind: z.enum(["host", "agent"]), name: z.string(),
-    values: z.record(z.string(), z.string()) }).strict(),
-  z.object({ type: z.literal("credential.remove"), id, kind: z.enum(["host", "agent"]), name: z.string() }).strict(),
-  z.object({ type: z.literal("credential.list"), id }).strict(),
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
   z.object({ type: z.literal("project.list"), id }),
   z.object({ type: z.literal("project.register"), id, path: z.string().min(1) }),
@@ -1371,10 +1327,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("usage.days"), id }),
   /** `repository` names the spex repository whose config the op
-   * writes — a project's, or your own group's, the default
+   * writes — a project's or the global configuration (the default)
    * (playbook-library-3, DR-103). */
   z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema, repository: repositoryKeySchema.optional() }),
-  /** Edits of your own group's file applied all or none, against the
+  /** Edits of the global configuration file applied all or none, against the
    * revision the client saw (core-service-44). */
   z.object({ type: z.literal("config.batch"), id, ops: z.array(configBatchOpSchema).min(1), revision: z.string().min(1) }),
   z.object({ type: z.literal("compile.check"), id }),
@@ -1405,7 +1361,7 @@ export const commandSchema = z.discriminatedUnion("type", [
      * always writes inside one, so it is always named. */
     projectId: repositoryKeySchema,
     /** The spex repository to enable in — the project's, the default,
-     * or your own group's (playbook-library-7, playbook-library-69). */
+     * or the global playbook library (playbook-library-7, playbook-library-69). */
     repository: repositoryKeySchema.optional(),
   }),
   z.object({
@@ -1531,7 +1487,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   // whose environment installs it, `applet` its id, `project` the spex
   // repository of the project whose tab shows it.
   z.object({ type: z.literal("applet.open"), id, repository: repositoryKeySchema, applet: z.string().min(1), project: repositoryKeySchema }).strict(),
-  // Groups (space-29, DR-103): the core performs every Git operation,
+  // Space records (space-29, DR-246): the core performs every Git operation,
   // one spex repository at a time, `repository` naming it by its key
   // and `instance` an instance by its origin (DR-127); long commands
   // reply `accepted` at once and report their outcome as `space.state`.
@@ -1544,10 +1500,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("environment.registry.set"), id, repository: repositoryKeySchema, origin: instanceOriginSchema }).strict(),
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
-  /** `url`: the instance's URL as the reader gave it, held by its origin;
-   * `ticket`, on a seat alone, the ticket the member's client presented
-   * for it (git-host-27, DR-164). */
-  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional(), ticket: z.string().min(1).optional() }).strict(),
+  z.object({ type: z.literal("space.signin.start"), id, url: z.string().min(1), reportCompletion: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("space.signin.cancel"), id, startId: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.signout"), id, instance: instanceOriginSchema }).strict(),
   /** `instance`: the signed-out instance to remove from the home (space-82). */
@@ -1557,9 +1510,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     repository: repositoryKeySchema,
     /** `instance`: the one the choice is at. */
-    choice: groupChoiceSchema,
-    /** Obsolete sharing acknowledgement, accepted and ignored (space-57). */
-    noticed: z.boolean().optional(),
+    choice: placementChoiceSchema,
   }).strict(),
   /** A placement added at an instance the clone holds none at
    * (space-97, DR-128), its choice as a pick's. */
@@ -1568,9 +1519,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     repository: repositoryKeySchema,
     /** `instance`: the one the choice is at. */
-    choice: groupChoiceSchema,
-    /** Obsolete sharing acknowledgement, accepted and ignored (space-57). */
-    noticed: z.boolean().optional(),
+    choice: placementChoiceSchema,
   }).strict(),
   /** A placement left (space-98, DR-128): `instance` the placement's;
    * `confirmed` the reader's second Remove, after a leave stopped for
@@ -1579,58 +1528,11 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.leave"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, confirmed: z.boolean().optional() }).strict(),
   /** A placement a placement file of the clone names, attached
    * (space-99, DR-128): `instance` the one the file names; selecting it
-   * authorizes sharing. The optional `noticed` field is ignored. */
-  z.object({ type: z.literal("space.attach"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, noticed: z.boolean().optional() }).strict(),
+   * attaches this account’s copy. */
+  z.object({ type: z.literal("space.attach"), id, repository: repositoryKeySchema, instance: instanceOriginSchema }).strict(),
   /** `instance`: the one the row stands under (space-1). */
   z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
-  // Members of a spex repository's placement by its key — `instance` the
-  // placement's, its first where omitted — or of a group by its host id
-  // at its instance; exactly one (space-29, DR-128), a group with its
-  // instance (parseCommand). Share and unshare name theirs alike.
-  z.object({ type: z.literal("space.members"), id, instance: instanceOriginSchema.optional(), repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
-  // Groups and sharing (DR-114, space-29), a group at the instance named.
-  z.object({ type: z.literal("space.group.create"), id, instance: instanceOriginSchema, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
-  // Undo in Spex (DR-120, space-29): a group of the instance renamed or
-  // deleted by its host id, a spex repository moved by its key into a
-  // group by its host id, or into your own group where none is named.
-  z
-    .object({
-      type: z.literal("space.group.rename"),
-      id,
-      instance: instanceOriginSchema,
-      group: z.string().min(1),
-      name: z.string().min(1).optional(),
-      path: z.string().min(1).optional(),
-    })
-    .strict(),
-  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1), confirmPath: z.string().optional() }).strict(),
-  z.object({ type: z.literal("space.group.deletionCheck"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
-  z.object({ type: z.literal("space.group.restore"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
-  /** `instance`: the placement's, its first where omitted (space-29, DR-128). */
-  z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, instance: instanceOriginSchema.optional(), groupId: z.string().min(1).nullable() }).strict(),
-  z
-    .object({
-      type: z.literal("space.share"),
-      id,
-      instance: instanceOriginSchema.optional(),
-      group: z.string().min(1).optional(),
-      repository: repositoryKeySchema.optional(),
-      login: z.string().min(1),
-      role: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal("space.unshare"),
-      id,
-      instance: instanceOriginSchema.optional(),
-      group: z.string().min(1).optional(),
-      repository: repositoryKeySchema.optional(),
-      login: z.string().min(1),
-    })
-    .strict(),
-  /** The way a test or a reader gives a clone a remote until the Git
-   * host sets it up (DR-103); null removes it. */
+  /** Configure or remove an explicit records remote. */
   z.object({ type: z.literal("space.remote.set"), id, repository: repositoryKeySchema, url: z.string().nullable() }).strict(),
   z.object({ type: z.literal("space.fetch"), id, repository: repositoryKeySchema }).strict(),
   z
@@ -1644,7 +1546,6 @@ export const commandSchema = z.discriminatedUnion("type", [
       placement: instanceOriginSchema.nullable().optional(),
       choices: z.record(z.string().min(1), spaceChoiceSchema).optional(),
       join: z.boolean().optional(),
-      noticed: z.boolean().optional(),
     })
     .strict(),
   z.object({ type: z.literal("space.cancel"), id, repository: repositoryKeySchema }).strict(),
@@ -1665,16 +1566,6 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
   z.object({ type: z.literal("space.notice.dismiss"), id, notice: z.string().min(1), dismissed: z.boolean() }).strict(),
-  // Team servers (core-service-128, DR-133): the servers each signed-in
-  // instance lists, and a seat on one opened or closed, the server named
-  // by its instance's origin and its id there. `consented` records the
-  // person's explicit Open request; absent or false, the core refuses
-  // the open and asks nothing.
-  z.object({ type: z.literal("server.list"), id }).strict(),
-  z.object({ type: z.literal("server.open"), id, instance: instanceOriginSchema, serverId: z.string().min(1), consented: z.boolean().optional() }).strict(),
-  z.object({ type: z.literal("server.close"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
-  /** The seat's sign-in at its instance started again (core-service-142). */
-  z.object({ type: z.literal("server.signin"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),
   // Authoring sessions (DR-058, core-service-96): each in the spex
   // repository of the project `projectId` names; one activity per
   // session, Boss messages queue while a turn or compile runs.
@@ -1775,10 +1666,6 @@ export interface CommandResults {
   "media.read": {asset: MediaAsset; offset: number; data: string; eof: boolean};
   "config.get": ConfigState;
   "readiness.get": ReadinessEntry[];
-  /** The credentials after the write, as `credential.list` lists them. */
-  "credential.set": CredentialList;
-  "credential.remove": CredentialList;
-  "credential.list": CredentialList;
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
@@ -1859,14 +1746,14 @@ export interface CommandResults {
   "registry.orgs": { orgs: { name: string; path: string; provider?: string }[] };
   "registry.directory": { spaces: { origin: string; displayName: string; signIn: string[] }[] };
   "environment.registry.set": EnvironmentState;
-  "space.get": GroupsState;
+  "space.get": SpaceState;
   "space.refresh": { accepted: true };
   "space.signin.start":
     | { flow: "browser"; url: string }
     | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number; interval: number };
   "space.signin.cancel": { stopped: boolean };
-  "space.signout": GroupsState;
-  "space.forget": GroupsState;
+  "space.signout": SpaceState;
+  "space.forget": SpaceState;
   "space.pick": { accepted: true };
   /** Once the creation or the join is accepted at the host, the sync
    * following as state (space-29). */
@@ -1876,17 +1763,7 @@ export interface CommandResults {
   /** Once its remote is added, the sync following as state (space-29). */
   "space.attach": { accepted: true };
   "space.join": { accepted: true };
-  "space.members": { members: HostMemberInfo[] };
-  "space.group.create": { group: { id: string; fullPath: string; name: string } };
-  "space.group.rename": { group: { id: string; fullPath: string; name: string } };
-  "space.group.delete": { status: "scheduled" | "deleted" };
-  "space.group.deletionCheck": { group: { id: string; fullPath: string; name: string }; contents: { kind: "project" | "group" | "records" | "server"; name: string }[] };
-  "space.group.restore": { group: { id: string; fullPath: string; name: string } };
-  /** `fullPath`: the repository's path in the instance after the move. */
-  "space.repository.move": { repository: { id: string; fullPath: string } };
-  "space.share": { members: HostMemberInfo[] };
-  "space.unshare": { members: HostMemberInfo[] };
-  "space.remote.set": GroupsState;
+  "space.remote.set": SpaceState;
   "space.fetch": { accepted: true };
   "space.sync": { accepted: true };
   /** `false` when no transport child was running. */
@@ -1894,18 +1771,8 @@ export interface CommandResults {
   "space.diff": { patch: string; truncated: boolean };
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
-  "space.repair.decline": GroupsState;
-  "space.notice.dismiss": GroupsState;
-  "server.list": ServerListing;
-  /** The seat's place and its lease's expiry in Unix milliseconds; never
-   * its endpoint or its bearer (core-service-128). */
-  "server.open": { place: string; leaseExpiresAt: number };
-  "server.close": { closed: true };
-  /** Whether the seat's Groups state is read anew, and its sign-in
-   * started where it is not signed in; false while a read or a flow of
-   * this core's own runs there (core-service-142). The outcome follows
-   * as `server.state`. */
-  "server.signin": { started: boolean };
+  "space.repair.decline": SpaceState;
+  "space.notice.dismiss": SpaceState;
   "draft.list": DraftInfo[];
   /** The org and license a new playbook of the project starts from,
    * null where no license is derived (playbook-library-103). */
@@ -2180,7 +2047,7 @@ export interface BuiltinPlaybookInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Groups (space-30, DR-103)
+// Personal records and projects (space-30, DR-246)
 // ---------------------------------------------------------------------------
 
 /** A stored-file problem, with optional facts for human guidance. The
@@ -2206,9 +2073,8 @@ export interface DiagnosticRepair {
   /** The spex repository's key: the unpaired clone's, or the one the
    * folder's pair names. */
   repository?: string;
-  /** The spex repository's name and its group, for an unpaired clone. */
+  /** The name of an unpaired records clone. */
   name?: string;
-  group?: string;
   /** A real project's recorded name, never inferred from storage names. */
   projectName?: string;
   /** At most three recent conversations, recognizable without displaying
@@ -2266,7 +2132,7 @@ export type SyncCause =
   /** A leave's units no remaining placement received (space-98). */
   | "unreceived";
 
-export type SpaceOp = "sync" | "check" | "join" | "move" | "place" | "leave" | "attach";
+export type SpaceOp = "sync" | "check" | "join" | "place" | "leave" | "attach";
 
 export type SpaceChange = "new" | "updated" | "deleted";
 
@@ -2336,12 +2202,6 @@ export type SpaceSyncPhase =
       retry: boolean;
       /** A leave's units no remaining placement received (space-98). */
       count?: number;
-      /** On a seat, the https code host a join's failed code clone
-       * needs a credential of the member's for, or whose credential of
-       * theirs cannot be read, by the name the Credentials section
-       * takes it (space-103, settings-48); absent for any other
-       * failure. */
-      credential?: string;
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
@@ -2351,10 +2211,7 @@ export type SpaceSyncPhase =
 export type CodeKind = "space" | "elsewhere" | "none" | "unknown";
 
 export interface RepositoryState {
-  /** The clone's path under `workspace/`, beginning with its instance's
-   * folder where it lies at an instance (`@spex.sublang.ai/acme/a-spex`,
-   * DR-127); for a row the host lists in a group held as colliding,
-   * `<folder>/<path>@<id>`, naming no clone (space-61). */
+  /** The clone’s path relative to the workspace, or the listed personal repository’s key. */
   key: string;
   /** Its instance's origin (storage-31, DR-127): the one its key's
    * folder names, the one a migration deferred it to, else the one its
@@ -2368,15 +2225,14 @@ export interface RepositoryState {
    * there, as its row reads; for a row an instance lists and this device
    * lacks, that instance's; null while none does — local only, a remote
    * the reader named, or its instance signed out with no signed-in
-   * instance listing it. Its members panel and its Sync's refusal read
-   * it (space-1). */
+   * instance listing it. */
   governing: string | null;
   /** `<name>-spex`, the clone's folder name. */
   name: string;
   /** Its first placement's host id, or the listed repository's with no
    * clone here; null where none is known. */
   id: string | null;
-  /** Your own group's spex repository. */
+  /** True for the personal settings, sessions and playbooks repository. */
   own: boolean;
   /** Where a project's code is, as its row's code glyph is titled
    * (space-1, core-service-145): "Code: <where>", <where> the display
@@ -2385,8 +2241,7 @@ export interface RepositoryState {
    * reader set it, or the remote itself where it names no host; "Code:
    * no remote" where `project.json` names none; null while the default
    * instance or an instance the home lists has not reported its Git
-   * origin, and for a repository with no `project.json` — a group's own,
-   * your own group's own. */
+   * origin, and for personal settings, which have no `project.json`. */
   code: string | null;
   /** What `code` says, for the glyph a client draws (space-1):
    * "space" under a listed instance's reported Git origin, "elsewhere"
@@ -2448,13 +2303,7 @@ export interface PlacementState {
   /** The host's words for read-only or unreachable. */
   reason: string | null;
   /** A creation or branch preparation waiting at the host (space-64). */
-  waiting: { step: "create" | "branch"; group: string; message: string } | null;
-  members: number | null;
-  visibility: string | null;
-  /** What its instance's last read said the person may do on it —
-   * manage its members, move it to another group; both false until one
-   * is held. */
-  can: { manageMembers: boolean; transfer: boolean };
+  waiting: { step: "create" | "branch"; message: string } | null;
   /** Against this placement's `spex`; null where no clone holds it. */
   branch: PlacementBranch | null;
   incoming: SpaceUnit[];
@@ -2462,8 +2311,6 @@ export interface PlacementState {
    * (space-8). */
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
-  /** Compatibility field: sharing is authorized by the destination, always true. */
-  noticed: boolean;
   /** What the last sync left on its line (space-87). */
   outcome:
     | null
@@ -2471,72 +2318,7 @@ export interface PlacementState {
     | { kind: "stopped"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean };
 }
 
-/** A spex repository's or a group's member as the host reports them
- * (space-30, space-62): no page of the host (DR-120). */
-export interface HostMemberInfo {
-  id: string;
-  login: string;
-  displayName: string | null;
-  role: string;
-  /** The repository's or group's own membership (space-30, DR-114). */
-  direct: boolean;
-  /** The path in the instance of the group the membership comes through
-   * where it is not direct, else null. */
-  via: string | null;
-}
-
-/** A team server a signed-in instance lists for the person
- * (core-service-128, DR-133): its instance's origin, its id there, its
- * name, its group's path in the instance, and whether a seat this core
- * opened is open at it. */
-export interface ServerInfo { instance: string; id: string; name: string; group: string; open: boolean }
-
-/** `server.list`'s reply (core-service-128): every server each signed-in
- * instance lists, in the home's order of instances and each instance's
- * own, and one entry per instance whose read failed, with the failure as
- * the reader reads it (git-host-11); one instance failing hides no
- * other's servers. */
-export interface ServerListing { servers: ServerInfo[]; failures: { instance: string; message: string }[] }
-
-/** A seat's relay (core-service-128, core-service-129): connecting to
- * the seat, open, closed, or mismatched — the seat speaking another
- * protocol version. */
-export type SeatRelayState = "connecting" | "open" | "closed" | "mismatched";
-
-/** A seat's sign-in at its instance (core-service-142): pending until
- * the seat's hello and its Groups state are read; running while the
- * seat's flow waits for the person's approval at `verificationUri`, the
- * instance's page with the code carried in it, until `expiresAt` in
- * Unix milliseconds; signed in once the seat's Groups state lists its
- * instance signed in; failed with the seat's one-sentence cause. Nothing
- * of the seat's app token. */
-export type SeatSignIn =
-  | { state: "pending" }
-  | { state: "running"; verificationUri: string; expiresAt: number }
-  | { state: "signedIn" }
-  | { state: "failed"; cause: string };
-
-/** An open seat (core-service-128, DR-133): its instance's origin, its
- * server's id there, the server's name and group, its place, the lease's
- * expiry in Unix milliseconds, its relay's state and its sign-in at the
- * instance (core-service-142). Never its endpoint or its bearer. */
-export interface SeatState {
-  instance: string;
-  serverId: string;
-  name: string;
-  group: string;
-  /** `<instance origin>#<server id>` (storage-45): the place, shown by
-   * the server's name. */
-  place: string;
-  leaseExpiresAt: number;
-  relay: SeatRelayState;
-  signIn: SeatSignIn;
-}
-
-/** The home, its groups and their spex repositories (space-30,
- * DR-127): your own group, then every instance the home lists with its
- * groups. */
-export interface GroupsState {
+export interface SpaceState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
   /** The default instance's origin, which the sign-in card holds (space-3). */
@@ -2546,12 +2328,7 @@ export interface GroupsState {
     /** `instance`: the origin being signed in to. */
     | { phase: "running"; instance: string; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; instance: string; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
-  /** Your own group, keyed `own`: its folder name; whether that folder
-   * still bears this device's user name, as it does until a sign-in names
-   * it after a login (storage-2, space-59), which its heading reads
-   * (space-1); and its rows — its own spex repository and the clones no
-   * instance's heading holds (space-1). */
-  own: { name: string; named: boolean; repositories: RepositoryState[] };
+  repositories: RepositoryState[];
   /** Every instance the home lists, in its order (space-1). */
   instances: InstanceState[];
   diagnostics: StorageDiagnostic[];
@@ -2570,9 +2347,7 @@ export interface InstanceState {
   host: string;
   /** As last read, null until one is. */
   displayName: string | null;
-  /** The account there; `canCreateGroup` as its last read said (DR-114),
-   * false until one is held. */
-  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean };
+  account: { id: string; login: string; displayName: string | null };
   signedIn: boolean;
   /** It signed this device out (git-host-4), held for the core's run
    * (space-3). */
@@ -2581,35 +2356,6 @@ export interface InstanceState {
   read: { phase: "idle" } | { phase: "running" } | { phase: "failed"; message: string };
   /** Its last complete view, retained while reading or after failure. */
   readAt: number | null;
-  /** Its own roles in its order, empty until a read is held. */
-  roles: { id: string; name: string; mayPush: boolean }[];
-  /** Its groups, your namespace there, and each other account's login
-   * under which it lists a spex repository (space-1). */
-  groups: InstanceGroupState[];
-}
-
-/** A group an instance lists, or a namespace there (space-30): keyed with
- * its instance by id, a namespace by login. */
-export interface InstanceGroupState {
-  /** The host's id; null for a namespace and for a key's group no read
-   * lists. */
-  id: string | null;
-  /** A namespace's login — your login there, `mine`, or another
-   * account's; null for a group. */
-  login: string | null;
-  mine: boolean;
-  /** The path in the instance. */
-  fullPath: string;
-  name: string;
-  /** What its last read said the person may do there; all false until
-   * one is held, and in a namespace. */
-  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean; restore?: boolean };
-  pendingDeletion?: boolean;
-  deletionRoot?: string;
-  /** The rows standing elsewhere one of whose placements this group or
-   * namespace holds, each shown as one line (space-1, DR-128). */
-  placed: { key: string; name: string }[];
-  repositories: RepositoryState[];
 }
 
 /** One entry of a `space.tree` level of a clone, annotated from the
@@ -2681,7 +2427,7 @@ export interface ConfigStateMessage {
   /** Each project's composed configuration, as `config.get` with its
    * `projectId` answers it, keyed by the project's id: what a session
    * of that project offers and runs with (core-service-2). Absent while
-   * your own group's config is not valid. */
+   * the global configuration is not valid. */
   projects?: Record<string, ConfigState>;
 }
 
@@ -2758,15 +2504,9 @@ export type SpaceSignInCompletedMessage = {
 
 export interface SpaceStateMessage {
   type: "space.state";
-  state: GroupsState;
+  state: SpaceState;
 }
 
-/** The open seats, whole (core-service-128): broadcast to every client
- * on every change, and sent to each client as it connects. */
-export interface ServerStateMessage {
-  type: "server.state";
-  seats: SeatState[];
-}
 
 /** One authoring record, to the subscribers of the draft's channel. */
 export interface DraftRecordMessage {
@@ -2832,7 +2572,6 @@ export type ServerMessage =
   | SpaceSignInCompletedMessage
   | { type: "registry.state"; state: RegistryState }
   | SpaceStateMessage
-  | ServerStateMessage
   | EnvironmentStateMessage
   | DraftRecordMessage
   | DraftStateMessage
@@ -2867,12 +2606,6 @@ export function parseCommand(raw: unknown): ParseCommandResult {
       (command.type === "turn.submit" && command.intentId === undefined)) &&
       command.text.length === 0 && !command.attachments?.length) {
       return { ok: false, error: "text or an attachment is required", id: command.id };
-    }
-    // A group is a host id at one instance, so a command naming one names
-    // that instance too; a spex repository's key names its own (space-29).
-    if ((command.type === "space.members" || command.type === "space.share" || command.type === "space.unshare") &&
-      command.group !== undefined && command.instance === undefined) {
-      return { ok: false, error: "instance: a group is named with its instance", id: command.id };
     }
     // Choices and a join are each for one placement, which the
     // sync names (space-29, DR-128).

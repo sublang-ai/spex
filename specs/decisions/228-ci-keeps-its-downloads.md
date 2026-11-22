@@ -9,6 +9,7 @@ Accepted (2026-11-09) after GitHub's release-asset timeouts of 2026-11-08 failed
 Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push to `main`: the cache seed runs there, validating nothing.
 
 Extended by [DR-230](230-the-seed-keeps-what-it-verified.md): the seed installs and fetches Electron in jobs of their own, each saving what it verified and retrying its downloads.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group and seat examples in user guidance, and the hub lane in app validation and download caching.
 
 ## Context
 

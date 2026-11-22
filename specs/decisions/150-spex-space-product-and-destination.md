@@ -9,6 +9,7 @@ Accepted (2026-10-25), on the owner's naming direction.
 Amends [DR-103](103-the-home-and-its-groups.md) in the IDE destination's name: Space replaces Groups, while group objects keep their name.
 Amends [DR-127](127-a-home-signed-in-to-several-instances.md) in the default origin for a newly created home.
 Clarifies [DR-120](120-the-instance-is-the-space.md): Spex Space names the server product, and an instance remains one deployment of it.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

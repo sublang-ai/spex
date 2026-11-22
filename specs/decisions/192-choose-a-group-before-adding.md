@@ -15,6 +15,7 @@ Amended by [DR-187](187-the-group-chooser-belongs-to-its-project.md) in the choo
 Amended by [DR-198](198-consistent-inline-group-actions.md) in repeated activation of the chooser, which focuses and preserves its existing state.
 
 Amended by [DR-215](215-add-to-a-group-and-start-working.md) in the sharing review and the action continuing to the selected server.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

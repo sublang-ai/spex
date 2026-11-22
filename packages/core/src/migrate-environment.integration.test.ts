@@ -64,7 +64,7 @@ const installed = (state: EnvironmentState, name: string): boolean => state.pack
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
   const key = hostKey(host, `${LOGIN}/${name}-spex`);
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: null, name } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name } });
   const row = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.equal(row.sync.phase, "done", JSON.stringify(row.sync));
   return key;

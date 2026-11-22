@@ -9,13 +9,14 @@ Accepted (2026-10-24) on the owner's direction — a simple and reliable bound, 
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-132](132-team-servers.md) in Lifecycle's "the hub stops the seat's unit" at the lease's end: the hub does so while it runs; whether one runs or not, the service manager's sweep stops, within a minute, every seat whose recorded lease has expired, under a lock per seat that the hub holds while it records a lease.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-- [DR-132](132-team-servers.md) bounds a seat's execution by its lease — sixty minutes without a successful read of the membership ends it — and has the hub stop the unit at the lease's end; the hub is one unprivileged process, the only one the service manager's policy lets run the helper, and leases survive its restart so that an upgrade or a crash cuts no member's running turn [[hub-5](../packages/hub.md#hub-5)].
+- [DR-132](132-team-servers.md) bounds a seat's execution by its lease — sixty minutes without a successful read of the membership ends it — and has the hub stop the unit at the lease's end; the hub is one unprivileged process, the only one the service manager's policy lets run the helper, and leases survive its restart so that an upgrade or a crash cuts no member's running turn `hub-5`.
 - While no hub runs — a crash loop, an administrator's stop, a hub that cannot start — no seat stops; a seat whose lease lapses meanwhile runs until the next hub start, past the bound and past the member's removal from the group.
 - [DR-132](132-team-servers.md) declines the seat's own word on its access: its processes are the member's.
-- The helper's `stop` is idempotent and runs as root directly; the lease table is an owner-only file of a documented shape that the hub alone writes [[hub-8](../packages/hub.md#hub-8)].
+- The helper's `stop` is idempotent and runs as root directly; the lease table is an owner-only file of a documented shape that the hub alone writes `hub-8`.
 - The service manager runs a oneshot service on a timer at a fixed period as root, independent of any other process, and does not start it again while it still runs [[1]] [[2]].
 - The owner's direction: a simple and reliable solution at a good return, not one that meets every case to its maximum; running work preserved across brief hub restarts.
 

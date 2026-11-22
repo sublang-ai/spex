@@ -31,7 +31,7 @@ import {
   type Resolution,
 } from "@sublang/spex/environment";
 import { builtinPackage } from "./builtins.js";
-import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
+import type { EnvironmentState, SpaceState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "@sublang/spex/git-host";
 import { holdingFetch } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
@@ -137,7 +137,7 @@ const installedFrom = (state: EnvironmentState, name: string, registry: string):
 
 /** A repository's row in the Groups state, under your own group or an
  * instance's heading (space-30), asserted to stand there. */
-function rowOf(state: GroupsState, key: string): RepositoryState {
+function rowOf(state: SpaceState, key: string): RepositoryState {
   const row = rowsOf(state).find((candidate) => candidate.key === key);
   assert.ok(row, `${key} is listed under your own group or an instance's heading`);
   return row;
@@ -206,21 +206,21 @@ function pairedAlone(home: Home, key: string): boolean {
     && existsSync(join(environmentRoot(home.dataDir, key), "spex.lock"));
 }
 
-/** Pick a project into your namespace at an instance (space-58), its
+/** Pick a project into your namespace at a Space (space-97), its
  * clone moved under that instance's folder (storage-35): its key. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
   const key = hostKey(host, `${LOGIN}/${name}-spex`);
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: null, name } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name } });
   const row = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.deepEqual([row.sync.phase, row.instance], ["done", host.url], JSON.stringify(row.sync));
   return key;
 }
 
-/** Join a repository a group at an instance holds (space-63), pairing
+/** Join a repository in the Space account’s namespace (space-63), pairing
  * `folder` where given: its key, once its row reads reachable. */
 async function joinAt(home: Home, host: StandinHost, path: string, folder?: string): Promise<string> {
-  const repository = host.script.addRepository({ group: "acme", name: path.split("/").pop()! });
+  const repository = host.script.addRepository({ group: LOGIN, name: path.split("/").pop()! });
   const key = hostKey(host, path);
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -369,10 +369,13 @@ test("environments-38, environments-5, environments-12, environments-3, environm
   // until paired; each new pairing writes one naming the public
   // registry and its Space, requesting nothing — the built-in spec
   // package is global (environments-11, storage-6).
-  const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
+  // Both Spaces see the same personal namespace on the shared backing store.
+  // Keep only the second signed in so it supplies these fixtures and their binding.
+  await signOut(home, first);
+  const joined = await joinAt(home, second, "ada/joined-spex", gitFolder("joined"));
   await environmentOf(home, joined, () => pairedAlone(home, joined));
   assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
-  const rebound = await joinAt(home, second, "acme/rebound-spex");
+  const rebound = await joinAt(home, second, "ada/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   assert.equal((await home.client.expectOk("environment.get", { repository: rebound })).committed, null, "[environments-14] no working folder on this device: committed is unknown, not false");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
@@ -381,7 +384,8 @@ test("environments-38, environments-5, environments-12, environments-3, environm
   // One joined at the first, the default instance, with its working
   // folder paired records that Space separately and uses the public registry
   // (environments-11, environments-2).
-  const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
+  await signIn(home, first);
+  const atFirst = await joinAt(home, first, "ada/at-first-spex", gitFolder("at-first"));
   await environmentOf(home, atFirst, () => pairedAlone(home, atFirst));
   assert.equal(spaceOf(home, atFirst), first.url, "a fresh independent environment records collaboration separately from its public registry");
   // A local-only project picked into the first, the default instance,
@@ -703,7 +707,7 @@ test("environments-38, environments-17, environments-12: searches use explicit r
   // (environments-17).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.search", { repository: hostKey(second, "acme/none-spex"), query: "search" }, "not_found");
+  await home.client.expectError("environment.search", { repository: hostKey(second, "ada/none-spex"), query: "search" }, "not_found");
   assert.deepEqual([searched(R1, one), searched(R2, two)], [[], []]);
 
   // The second's registry refusing the second's token refuses the

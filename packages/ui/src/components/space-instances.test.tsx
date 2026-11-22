@@ -20,21 +20,16 @@
 // space-1). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { SpaceState, InstanceState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
-import { repositoryRow } from "../fixtures/groups-state.js";
 import { setClientForTests } from "../state/store.js";
 import {
-  BRANCH,
-  KEY,
   MIN,
   NOW,
-  NO_CAN,
   ORIGIN,
   OWN,
-  OWN_REPO,
   SECOND,
   answer,
   base,
@@ -42,16 +37,14 @@ import {
   commandMock,
   deliver,
   installClient,
-  instance,
   live,
-  namespace,
   noInstance,
-  renderGroups,
+  renderSpace,
   ownRepo,
   repo,
   signedOutAt,
   twoInstances,
-} from "../fixtures/groups.js";
+} from "../fixtures/space.js";
 
 beforeEach(installClient);
 
@@ -61,67 +54,6 @@ afterEach(() => {
   setClientForTests(undefined);
   vi.useRealTimers();
 });
-
-/** Where gamma's code is, as the core phrases it for its row (space-1):
- * outside every Space's Git origin. */
-const CODE = "Code: github.com";
-/** A project's records on this computer only, in your own group's
- * folder: they have never been at a Space. */
-const GAMMA = "jane/gamma-spex";
-/** The second Space's records for the same code. */
-const LISTED = "@second.example/acme/gamma-spex";
-
-/** A group a Space lists, by its id there. */
-function group(id: string, fullPath: string, name: string, repositories: RepositoryState[] = []): InstanceGroupState {
-  return { id, login: null, mine: false, fullPath, name, can: NO_CAN, placed: [], repositories };
-}
-
-/** A home signed in to the fixtures' Space, as jane, and to the second
- * one, as jada, each listing the given entries, your own group holding
- * the given rows. */
-function twoHome(first: InstanceGroupState[], second: InstanceGroupState[], own: RepositoryState[] = [OWN_REPO]): GroupsState {
-  const home = twoInstances({ own: { name: "jane", named: false, repositories: own }, instance: { groups: first } });
-  return {
-    ...home,
-    instances: home.instances.map((entry) => (entry.origin === SECOND ? { ...entry, groups: second } : entry)),
-  };
-}
-
-/** Both Spaces hold `acme` under the id 3; the first also lists bob's
- * records, the second records under a login jane that is not yours
- * there, a group `lab`, and in its `acme` the records of gamma's code.
- * gamma is local only in your own group's folder, and the opened project
- * local only under the first Space's folder. */
-function pickHome(): GroupsState {
-  const gamma = repositoryRow(GAMMA, { name: "gamma-spex", code: CODE, codeKind: "elsewhere", folder: "/Users/jane/code/gamma" });
-  const local = repo({ state: "local-only", remote: null, id: null, code: CODE, codeKind: "elsewhere", branch: null, members: null });
-  const listed = repo({ key: LISTED, instance: SECOND, name: "gamma-spex", id: "71", remote: null, code: CODE, codeKind: "elsewhere", folder: null, members: 1, state: "absent", branch: null });
-  const notes = (key: string, id: string) => repo({ key, name: "notes-spex", id, remote: null, code: null, folder: null });
-  return twoHome(
-    [namespace("jane", [local]), group("3", "acme", "Acme"), namespace("bob", [notes("@spex.example/bob/notes-spex", "80")], false)],
-    [
-      group("3", "acme", "Acme Works", [listed]),
-      namespace("jada"),
-      namespace("jane", [notes("@second.example/jane/notes-spex", "81")], false),
-      group("8", "lab", "lab"),
-    ],
-    [OWN_REPO, gamma],
-  );
-}
-
-/** A row's line at a Space, by its origin, in the row's Sync tab, which
- * the row's name opens where it is not open (space-87, space-1). */
-const lineAt = (key: string, origin: string): HTMLElement => {
-  if (!screen.queryByTestId(`space-lines-${key}`)) fireEvent.click(screen.getByTestId(`space-repo-${key}`));
-  return within(screen.getByTestId(`space-lines-${key}`)).getByTestId(`space-line-${origin}`);
-};
-
-/** A row's overflow menu, "More", opened where it is not open
- * (space-1). */
-const moreOf = (key: string): HTMLElement => {
-  if (!screen.queryByTestId(`space-row-more-${key}-menu`)) fireEvent.click(screen.getByTestId(`space-row-more-${key}`));
-  return screen.getByTestId(`space-row-more-${key}-menu`);
-};
 
 /** A Space's section of the groups list, by its origin. */
 const sectionOf = (origin: string): HTMLElement => screen.getByTestId(`space-instance-${origin}`);
@@ -138,29 +70,13 @@ const headingMore = (origin: string): HTMLElement => {
 const sections = (): HTMLElement[] => screen.getAllByTestId(/^space-instance-https?:/);
 
 /** A home whose Spaces change as a test says, by origin. */
-function changed(home: GroupsState, origin: string, over: Partial<InstanceState>): GroupsState {
+function changed(home: SpaceState, origin: string, over: Partial<InstanceState>): SpaceState {
   return { ...home, instances: home.instances.map((entry) => (entry.origin === origin ? { ...entry, ...over } : entry)) };
 }
 
-/** The first Space lets the person create a group and lists acme holding
- * a-spex; the second, read five minutes ago, says not, and lists — in an
- * order of its own — your records there, bob's, lab and its own acme
- * holding its a-spex. */
-function headingsHome(): GroupsState {
-  const aSpex = (key: string, instance: string, id: string) =>
-    repo({ key, instance, name: "a-spex", id, remote: null, code: null, folder: null });
-  const home = twoHome(
-    [namespace("jane", [repo()]), group("3", "acme", "Acme", [aSpex("@spex.example/acme/a-spex", ORIGIN, "60")])],
-    [
-      namespace("jada"),
-      namespace("bob", [aSpex("@second.example/bob/notes-spex", SECOND, "82")], false),
-      group("8", "lab", "lab"),
-      group("3", "acme", "Acme Works", [aSpex("@second.example/acme/a-spex", SECOND, "61")]),
-    ],
-  );
-  return changed(changed(home, ORIGIN, { account: { ...home.instances[0]!.account, canCreateGroup: true } }), SECOND, {
-    readAt: NOW - 5 * MIN,
-  });
+function headingsHome(): SpaceState {
+  return changed(twoInstances({}, [repo(), repo({ instance: SECOND, key: "@second.example/jada/academy-spex" })]), SECOND, { readAt: NOW - 5 * MIN, displayName: "Second Example",
+    account: { id: "8", login: "jada", displayName: null } });
 }
 
 /** The directory of Spaces the card chooses from (environments-39): both
@@ -189,147 +105,12 @@ function answering(directory: unknown): void {
 }
 
 describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, space-61, space-11, space-28)", () => {
-  test("space-1: headings in home order, each '<Space> · @<login>' with its overflow and Sign out, New group where a read is held — disabled and titled where the Space says not — and no read time", async () => {
-    await renderGroups(headingsHome(), { open: false });
-    expect(sections().map((section) => section.dataset.testid)).toEqual([`space-instance-${ORIGIN}`, `space-instance-${SECOND}`]);
-    expect(screen.getByRole("group", { name: "Second Example" })).toBe(sectionOf(SECOND));
-    const first = within(sectionOf(ORIGIN));
-    const second = within(sectionOf(SECOND));
-    // Each heading carries its display name and the login there, with
-    // Sign out, its consequence in its title (space-1, DR-171).
-    expect(first.getByRole("heading", { level: 2 }).textContent).toBe("Spex Example · @jane");
-    expect(second.getByRole("heading", { level: 2 }).textContent).toBe("Second Example · @jada");
-    expect(first.getByRole("button", { name: "Sign out" })).toBeTruthy();
-    expect(second.getByRole("button", { name: "Sign out" }).getAttribute("title")).toBe(
-      "Signs this computer out of Second Example; every record stays here",
-    );
-    // No read time stands on a heading (space-1).
-    expect(screen.queryByTestId("space-read-at")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/Read (just now|\d+m ago)|Not read yet/);
-    // New group where the Space lets the person create one; disabled and
-    // titled where it says not — no link, no sentence (space-1, DR-120).
-    const firstNew = first.getByTestId("space-new-group") as HTMLButtonElement;
-    expect(firstNew.textContent).toBe("New group…");
-    expect(firstNew.disabled).toBe(false);
-    expect(firstNew.hasAttribute("title")).toBe(false);
-    const secondNew = second.getByTestId("space-new-group") as HTMLButtonElement;
-    expect(secondNew.disabled).toBe(true);
-    expect(secondNew.title).toBe("Made by the people who run Second Example");
-    expect(screen.queryByText(/Groups are made by/)).toBeNull();
-    // One overflow, "More", holding "Remove from this list", disabled
-    // while signed in (space-1, space-82).
-    const menu = headingMore(SECOND);
-    const remove = within(menu).getByTestId("space-instance-remove") as HTMLButtonElement;
-    expect(within(remove).getByText("Remove from this list")).toBeTruthy();
-    expect(within(remove).getByText("Sign out first")).toBeTruthy();
-    expect(remove.disabled).toBe(true);
-    expect(within(menu).getAllByRole("menuitem")).toEqual([remove]);
-    // The heading's controls, the overflow after Sign out (space-1,
-    // space-28).
-    const row = second.getByTestId("space-instance-heading").firstElementChild!;
-    expect([...row.querySelectorAll(":scope > button, :scope > span > button")].map((button) => button.getAttribute("data-testid"))).toEqual([
-      "space-new-group",
-      "space-signout",
-      "space-instance-more",
-    ]);
-    // Beneath each heading its own entries: Personal while it holds a
-    // row, then every group by its name in the order of their paths — its
-    // path beside it where the two differ — then another account's login
-    // as "Shared by @<login>" (space-1).
-    expect(first.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Personal", "Acme · acme"]);
-    expect(second.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      "Acme Works · acme",
-      "lab",
-      "Shared by @bob",
-    ]);
-    // Each acme stands beneath its own Space, holding its own rows.
-    expect(first.getByTestId("space-row-@spex.example/acme/a-spex")).toBeTruthy();
-    expect(second.getByTestId("space-row-@second.example/acme/a-spex")).toBeTruthy();
-    expect(first.queryByTestId("space-row-@second.example/acme/a-spex")).toBeNull();
-    // New group makes a root group at the Space whose heading carries it
-    // (space-68).
-    fireEvent.click(firstNew);
-    const editor = first.getByTestId("space-new-group-editor");
-    fireEvent.change(within(editor).getByLabelText("Group name"), { target: { value: "Workshop" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(calls("space.group.create")).toEqual([{ instance: ORIGIN, name: "Workshop", path: "workshop", parent: null }]));
-    cleanup();
 
-    // Before a read is held, no New group (space-1).
-    await renderGroups(changed(headingsHome(), ORIGIN, { readAt: null }), { open: false });
-    expect(within(sectionOf(ORIGIN)).queryByTestId("space-new-group")).toBeNull();
-    expect(within(sectionOf(SECOND)).getByTestId("space-new-group")).toBeTruthy();
-  });
 
-  test("space-68: repeating New group focuses the existing draft, while explicit cancellation closes it", async () => {
-    await renderGroups(headingsHome(), { open: false });
-    const first = within(sectionOf(ORIGIN));
-    const opener = first.getByTestId("space-new-group");
-    fireEvent.click(opener);
-    const editor = first.getByTestId("space-new-group-editor");
-    expect(first.getByRole("group", { name: "New group at Spex Example" })).toBe(editor);
-    expect(first.getByRole("heading", { name: "New group at Spex Example" }).textContent).toBe("New group at Spex Example");
-    expect(first.getByTestId("space-instance-heading").contains(editor)).toBe(true);
-    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
-    const path = within(editor).getByLabelText("Path") as HTMLInputElement;
-    fireEvent.change(name, { target: { value: "Research team" } });
-    fireEvent.change(path, { target: { value: "research-custom" } });
-    opener.focus();
-    fireEvent.click(opener);
-    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
-    expect(name.value).toBe("Research team");
-    expect(path.value).toBe("research-custom");
-    expect(document.activeElement).toBe(name);
-    expect(document.getElementById(opener.getAttribute("aria-controls")!)?.contains(editor)).toBe(true);
-    expect(calls("space.group.create")).toEqual([]);
-    fireEvent.keyDown(name, { key: "Escape" });
-    expect(first.queryByTestId("space-new-group-editor")).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(opener));
-    fireEvent.click(opener);
-    expect((first.getByLabelText("Group name") as HTMLInputElement).value).toBe("");
-  });
-
-  test("space-68: pending creation cannot be closed or replaced through its heading", async () => {
-    let reject!: (error: Error) => void;
-    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === "space.group.create"
-      ? new Promise((_resolve, refused) => { reject = refused; }) : answer(type, fields));
-    await renderGroups(headingsHome(), { open: false });
-    const first = within(sectionOf(ORIGIN));
-    const opener = first.getByTestId("space-new-group") as HTMLButtonElement;
-    const signout = first.getByTestId("space-signout") as HTMLButtonElement;
-    const more = first.getByTestId("space-instance-more") as HTMLButtonElement;
-    fireEvent.click(opener);
-    const editor = first.getByTestId("space-new-group-editor");
-    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
-    fireEvent.change(name, { target: { value: "Research team" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
-    expect(opener.disabled).toBe(true);
-    expect(signout.disabled).toBe(true);
-    expect(more.disabled).toBe(true);
-    fireEvent.click(opener);
-    fireEvent.click(signout);
-    fireEvent.click(more);
-    fireEvent.keyDown(name, { key: "Escape" });
-    fireEvent.keyDown(name, { key: "Enter" });
-    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
-    expect(calls("space.group.create")).toHaveLength(1);
-    expect(calls("space.signout")).toEqual([]);
-    await act(async () => { reject(new Error("Creation refused")); });
-    await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("Creation refused"));
-    expect(opener.disabled).toBe(false);
-    expect(signout.disabled).toBe(false);
-    expect(more.disabled).toBe(false);
-    opener.focus();
-    fireEvent.click(opener);
-    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
-    expect(name.value).toBe("Research team");
-    expect(document.activeElement).toBe(name);
-    expect(within(editor).getByRole("alert").textContent).toBe("Creation refused");
-  });
 
   test("space-1, git-host-5: a failed read reads on its heading alone, the other's view kept, and Refresh, titled with the last read, reads until every read's outcome", async () => {
     const home = changed(headingsHome(), ORIGIN, { read: { phase: "failed", message: "Could not reach Spex Example" } });
-    await renderGroups(home, { open: false });
+    await renderSpace(home, { open: false });
     const first = within(sectionOf(ORIGIN));
     const second = within(sectionOf(SECOND));
     // The failure stands on the first's heading alone, its last view kept
@@ -337,10 +118,10 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(first.getByTestId("space-read-error").textContent).toBe("Could not reach Spex Example");
     expect(first.getByRole("alert")).toBe(first.getByTestId("space-read-error"));
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(first.getByTestId("space-row-@spex.example/acme/a-spex")).toBeTruthy();
+    expect(first.getByTestId("space-row-@spex.example/jane/academy-spex")).toBeTruthy();
     // The second's view and its controls stand as they were.
     expect(second.queryByTestId("space-read-error")).toBeNull();
-    expect(second.getByTestId("space-row-@second.example/acme/a-spex")).toBeTruthy();
+    expect(second.getByTestId("space-row-@second.example/jada/academy-spex")).toBeTruthy();
     // Refresh offers the ordinary retry, titled with when the Spaces were
     // last read; while any read runs it reads "Reading…" until every
     // read's outcome (space-1).
@@ -359,7 +140,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
   test("space-3: Sign in again's flow reads on that heading as 'Continue in your browser' and 'Open <Space>'; every other sign-in control is disabled while it runs", async () => {
     answering(undefined);
     const out = signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, headingsHome()));
-    await renderGroups(out, { open: false });
+    await renderSpace(out, { open: false });
     const first = within(sectionOf(ORIGIN));
     const second = within(sectionOf(SECOND));
     const firstAgain = first.getByTestId("space-signin-again") as HTMLButtonElement;
@@ -420,7 +201,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
   test.each(["en", "zh"] as const)("space-3, space-66: where the Space signed this computer out, its heading reads '<Space> · signed out · @<login>' beside Sign in again and its overflow's Remove from this list (%s)", async (language) => {
     activateLanguage(language);
     const zh = language === "zh";
-    await renderGroups(signedOutAt(SECOND, { byHost: true }, headingsHome()), { open: false });
+    await renderSpace(signedOutAt(SECOND, { byHost: true }, headingsHome()), { open: false });
     const second = within(sectionOf(SECOND));
     expect(second.getByRole("heading", { level: 2 }).textContent).toBe(
       zh ? "Second Example · 已退出登录 · @jada" : "Second Example · signed out · @jada",
@@ -434,146 +215,8 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(second.getByTestId("space-instance-heading").querySelectorAll("p")).toHaveLength(0);
   });
 
-  test("space-61, space-11, space-120: under a signed-out heading a row reads 'Signed out of <Space>' with no Retry and no Leave; a row still read reachable there refuses Sync now with 'Sign in to <Space> first'", async () => {
-    const stale = "@spex.example/acme/a-spex";
-    const pathRemote = "@spex.example/acme/b-spex";
-    const home = twoHome(
-      [
-        namespace("jane", [repo({ state: "unreachable", reason: "Sign in again" })]),
-        group("3", "acme", "Acme", [
-          repo({ key: stale, name: "a-spex", id: "60", code: null, folder: null }),
-          repo({ key: pathRemote, name: "b-spex", id: null, code: null, remote: "/srv/b-spex.git", state: "unreachable", reason: "the folder is gone" }),
-        ]),
-      ],
-      [group("3", "acme", "Acme Works", [repo({ key: "@second.example/acme/c-spex", instance: SECOND, name: "c-spex", id: "62", state: "unreachable", reason: "the device is offline" })]), namespace("jada")],
-      // Your own group's own records, their clone here, which the second
-      // lists too, are governed by the second once the first is signed
-      // out (git-host-5).
-      [ownRepo({ governing: SECOND, branch: BRANCH })],
-    );
-    await renderGroups(signedOutAt(ORIGIN, {}, home), { open: false });
-    // The controls a row's state offers, beside its name and its "More".
-    const controls = (key: string) =>
-      within(screen.getByTestId(`space-row-${key}`))
-        .getAllByRole("button")
-        .filter((button) => !button.dataset.testid?.startsWith("space-repo-") && !button.dataset.testid?.startsWith("space-row-more-"));
-    // Signed out, a row at the Space reads "Signed out of <Space>" and
-    // offers no Retry, and no row a sign-in: its heading's Sign in again
-    // is the one (space-61, space-120, space-3).
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Signed out of Spex Example");
-    expect(controls(KEY)).toEqual([]);
-    // No row offers Leave…, Place at… or Move… (DR-172).
-    expect(within(moreOf(KEY)).queryByTestId(`space-row-leave-${KEY}`)).toBeNull();
-    expect(screen.queryByText(/^(Leave…|Place at…|Move…)$/)).toBeNull();
-    // A row still read reachable there refuses "Sync now" naming the
-    // Space, the reason beside the disabled entry, and its line offers no
-    // Members (space-11, space-87).
-    const sync = within(moreOf(stale)).getByTestId(`space-row-sync-${stale}`) as HTMLButtonElement;
-    expect(sync.disabled).toBe(true);
-    expect(within(sync).getByText("Sign in to Spex Example first")).toBeTruthy();
-    expect(within(lineAt(stale, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
-    // A path remote is reached without the Space, so it retries.
-    expect(controls(pathRemote).map((button) => button.textContent)).toEqual(["Retry"]);
-    // The other Space, signed in, retries its own (space-2).
-    expect(controls("@second.example/acme/c-spex").map((button) => button.textContent)).toEqual(["Retry"]);
-    // Your own group's own records follow the signed-in Space governing
-    // them: "Sync now" stands, and Members on its line (space-60, space-1).
-    expect((within(moreOf(OWN_REPO.key)).getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement).disabled).toBe(false);
-    expect(within(lineAt(OWN_REPO.key, ORIGIN)).getByTestId("space-line-members")).toBeTruthy();
-    cleanup();
 
-    // Governed by none, with no signed-in Space to follow, they wait for
-    // their own, named by its host name before any read (space-11,
-    // space-1).
-    await renderGroups(
-      signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, changed(home, ORIGIN, { displayName: null, readAt: null }))),
-      { open: false },
-    );
-    const ownSync = within(moreOf(OWN_REPO.key)).getByTestId(`space-row-sync-${OWN_REPO.key}`) as HTMLButtonElement;
-    expect(within(ownSync).getByText("Sign in to spex.example first")).toBeTruthy();
-    expect(ownSync.disabled).toBe(true);
-    expect(within(lineAt(OWN_REPO.key, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
-  });
 
-  test("space-62, space-69: a row's invitation reads the roles and the username guidance of the Space the core names as governing it", async () => {
-    // Signed out of the first; the third, listed before the second and
-    // signed in, does not list your own group's own records, which the
-    // second governs (git-host-5).
-    const THIRD = "https://third.example";
-    const home = twoHome([namespace("jane")], [namespace("jada")], [ownRepo({ governing: SECOND, can: { manageMembers: true, transfer: false }, branch: BRANCH })]);
-    const roles = [
-      { id: "1", name: "Viewer", mayPush: false },
-      { id: "2", name: "Editor", mayPush: true },
-    ];
-    const state = signedOutAt(ORIGIN, {}, {
-      ...home,
-      instances: [
-        home.instances[0]!,
-        instance({ origin: THIRD, host: "third.example", displayName: "Third Example", account: { id: "90", login: "jen", displayName: null, canCreateGroup: false }, groups: [namespace("jen")] }),
-        { ...home.instances[1]!, roles },
-      ],
-    });
-    await renderGroups(state, { open: false });
-    expect(sections().map((section) => section.dataset.testid)).toEqual([`space-instance-${ORIGIN}`, `space-instance-${THIRD}`, `space-instance-${SECOND}`]);
-    // Members on its line reads that copy from the core, and Share offers
-    // the governing Space's login field and roles (space-62, space-69).
-    fireEvent.click(within(lineAt(OWN_REPO.key, ORIGIN)).getByTestId("space-line-members"));
-    const panel = await screen.findByTestId(`space-members-${OWN_REPO.key}@${ORIGIN}`);
-    await within(panel).findAllByTestId(/^space-member-/);
-    expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key, instance: ORIGIN }]);
-    fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}`));
-    const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}-editor`);
-    expect(within(editor).getByLabelText("Usernames")).toBeTruthy();
-    expect(editor.textContent).toContain("Second Example");
-    expect(within(within(editor).getByRole("combobox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Viewer",
-      "Editor",
-    ]);
-  });
-
-  test("space-28: every heading control reads at most 14 characters, busy forms included, and the heading stacks below 20rem, its primary control last and full-width", async () => {
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
-      type === "space.signout"
-        ? new Promise(() => {})
-        : type === "space.signin.start"
-          ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: `${SECOND}/login/device?user_code=WDJB-MJHT`, expiresAt: NOW + 15 * MIN }
-          : answer(type, fields),
-    );
-    await renderGroups(signedOutAt(SECOND, { byHost: true }, headingsHome()), { open: false });
-    const seen = new Set<string>();
-    const measure = () => {
-      for (const heading of screen.getAllByTestId("space-instance-heading")) {
-        for (const button of within(heading).getAllByRole("button")) {
-          const text = (button.textContent ?? "").trim();
-          seen.add(text);
-          expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
-          expect((button.getAttribute("aria-label") ?? text).length).toBeGreaterThan(0);
-        }
-      }
-    };
-    measure();
-    fireEvent.click(within(sectionOf(SECOND)).getByTestId("space-signin-again"));
-    await within(sectionOf(SECOND)).findByTestId("space-signin-link");
-    fireEvent.click(within(sectionOf(ORIGIN)).getByRole("button", { name: "Sign out" }));
-    await waitFor(() => expect(within(sectionOf(ORIGIN)).getByTestId("space-signout").textContent).toBe("Signing out…"));
-    measure();
-    for (const label of ["New group…", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel", "⋯More"]) {
-      expect(seen, label).toContain(label);
-    }
-    // Each Space is a container; below 20rem its fields stack, the
-    // primary control full-width and the overflow after it.
-    for (const section of sections()) {
-      expect(section.className.split(/\s+/)).toContain("@container");
-      const row = within(section).getByTestId("space-instance-heading").firstElementChild!;
-      expect(row.className).toContain("flex-col");
-      expect(row.className).toContain("@xs:flex-row");
-      const buttons = [...row.querySelectorAll("button")];
-      expect(buttons.at(-1)!.getAttribute("aria-haspopup")).toBe("menu");
-      const primary = buttons.at(-2)!;
-      expect(primary.className).toContain("w-full");
-      expect(primary.className).toContain("@xs:w-auto");
-    }
-  });
 
   test.each(["en", "zh"] as const)("space-28, space-6, space-82: the heading's controls and the notes of Sign out and Remove from this list read the catalog's words (%s)", async (language) => {
     activateLanguage(language);
@@ -585,7 +228,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
           ? { ...headingsHome(), instances: headingsHome().instances.filter((entry) => entry.origin !== SECOND) }
           : answer(type, fields),
     );
-    await renderGroups(headingsHome(), { open: false });
+    await renderSpace(headingsHome(), { open: false });
     const second = within(sectionOf(SECOND));
     fireEvent.click(second.getByTestId("space-signout"));
     const again = await second.findByTestId("space-signin-again");
@@ -608,7 +251,7 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
 
   test("space-3, space-115: listing no Space, the header is the card titled by its act with no sentence; with no directory the field 'Space address' stands alone holding the default Space's origin", async () => {
     answering(undefined);
-    await renderGroups(noInstance(), { open: false });
+    await renderSpace(noInstance(), { open: false });
     const header = within(card());
     expect(header.getByRole("heading", { level: 2 }).textContent).toBe("Sign in to a Space");
     expect(screen.getByRole("group", { name: "Sign in to a Space" })).toBe(card());
@@ -634,7 +277,7 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
 
   test("space-115, space-3: with a directory, one chooser lists its Spaces by display name with the chosen one's providers as icons, preselecting the default Space; a choice starts at its origin, and the flow reads 'Continue in your browser' with 'Open <Space>' and Cancel", async () => {
     answering(DIRECTORY);
-    await renderGroups(noInstance(), { open: false });
+    await renderSpace(noInstance(), { open: false });
     const chooser = (await within(card()).findByTestId("space-signin-chooser")) as HTMLSelectElement;
     expect(within(card()).getByRole("combobox", { name: "Space" })).toBe(chooser);
     expect([...chooser.options].map((option) => option.textContent)).toEqual(["Spex Example", "Second Example", "Other Space…"]);
@@ -675,7 +318,7 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
 
   test("space-115: 'Other Space…' reveals the field 'Space address', empty with its placeholder, whose typed origin starts the sign-in; a default the directory does not list preselects it, the field holding that origin", async () => {
     answering(DIRECTORY);
-    await renderGroups(noInstance(), { open: false });
+    await renderSpace(noInstance(), { open: false });
     const chooser = (await within(card()).findByTestId("space-signin-chooser")) as HTMLSelectElement;
     fireEvent.change(chooser, { target: { value: "other" } });
     const field = within(card()).getByRole("textbox", { name: "Space address" }) as HTMLInputElement;
@@ -695,158 +338,10 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
     // directory afresh.
     installClient();
     answering({ spaces: [DIRECTORY.spaces[1]] });
-    await renderGroups(noInstance(), { open: false });
+    await renderSpace(noInstance(), { open: false });
     const unlisted = (await within(card()).findByTestId("space-signin-chooser")) as HTMLSelectElement;
     expect(unlisted.value).toBe("other");
     expect((within(card()).getByRole("textbox", { name: "Space address" }) as HTMLInputElement).value).toBe(ORIGIN);
-  });
-});
-
-describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
-  test("space-58: labelled Space selection scopes the group choices and resets a destination without sending anything", async () => {
-    await renderGroups(pickHome(), { open: false });
-    const openPicker = async (key: string): Promise<HTMLElement> => {
-      await act(async () => { fireEvent.click(screen.getByTestId(`space-row-pick-${key}`)); });
-      return screen.getByTestId(`space-picker-${key}`);
-    };
-    const picker = await openPicker(GAMMA);
-    const opener = screen.getByTestId(`space-row-pick-${GAMMA}`);
-    const formId = picker.id;
-    expect(formId).not.toBe("");
-    expect(opener.getAttribute("aria-controls")).toBe(formId);
-    expect(picker.closest("li[data-state]")).toBe(screen.getByTestId(`space-row-${GAMMA}`));
-    const chooser = within(picker).getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
-    const submit = () => within(picker).getByTestId(`space-pick-submit-${GAMMA}`) as HTMLButtonElement;
-    expect([...chooser.options].map((option) => [option.value, option.textContent])).toEqual([
-      [ORIGIN, "Spex Example"], [SECOND, "Second Example"],
-    ]);
-    expect(chooser.value).toBe(ORIGIN);
-    expect(within(picker).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`]);
-    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@jane", "space-pick-group-acme"]);
-    expect(within(picker).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
-    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
-    expect(submit().disabled).toBe(false);
-    fireEvent.change(chooser, { target: { value: SECOND } });
-    expect(opener.getAttribute("aria-controls")).toBe(formId);
-    expect(picker.id).toBe(formId);
-    expect(submit().disabled).toBe(true);
-    expect(within(picker).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@jada", "space-pick-group-acme", "space-pick-group-lab"]);
-    expect(within(picker).getByTestId(`space-pick-listed-group-${LISTED}`).textContent).toBe("Acme Works · acme");
-    expect(within(picker).queryByRole("textbox")).toBeNull();
-    expect(calls("space.pick")).toEqual([]);
-    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
-    expect(calls("space.pick")).toEqual([]);
-    fireEvent.click(submit());
-    await waitFor(() => expect(calls("space.pick")).toEqual([
-      { repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: "3", name: "gamma" } },
-    ]));
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-
-    const confirm = async (key: string, origin: string, option: string) => {
-      const form = await openPicker(key);
-      const select = within(form).queryByRole("combobox", { name: "Space" });
-      if (select) fireEvent.change(select, { target: { value: origin } });
-      fireEvent.click(within(form).getByTestId(option));
-      fireEvent.click(within(form).getByTestId(`space-pick-submit-${key}`));
-    };
-    await confirm(GAMMA, ORIGIN, "space-pick-group-acme");
-    await waitFor(() => expect(calls("space.pick")[1]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "gamma" } }));
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    await confirm(GAMMA, SECOND, "space-pick-group-@jada");
-    await waitFor(() => expect(calls("space.pick")[2]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: null, name: "gamma" } }));
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    await confirm(GAMMA, SECOND, `space-pick-repo-${LISTED}`);
-    await waitFor(() => expect(calls("space.pick")[3]).toEqual({ repository: GAMMA, choice: { kind: "join", instance: SECOND, hostId: "71" } }));
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-
-    // A project already keyed under one Space offers that Space alone.
-    const keyed = await openPicker(KEY);
-    expect(within(keyed).queryByRole("combobox")).toBeNull();
-    expect(within(keyed).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`]);
-    fireEvent.click(within(keyed).getByTestId("space-pick-group-acme"));
-    fireEvent.click(within(keyed).getByTestId(`space-pick-submit-${KEY}`));
-    await waitFor(() => expect(calls("space.pick")[4]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "academy" } }));
-    cleanup();
-
-    commandMock.mockClear();
-    await renderGroups(signedOutAt(SECOND, {}, pickHome()), { open: false });
-    const alone = await openPicker(GAMMA);
-    expect(within(alone).queryByRole("combobox")).toBeNull();
-    expect(within(alone).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
-    cleanup();
-
-    commandMock.mockClear();
-    await renderGroups(signedOutAt(ORIGIN, {}, pickHome()), { open: false });
-    const blocked = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
-    expect(blocked.disabled).toBe(true);
-    expect(blocked.title).toBe("Sign in to a Space first");
-    const second = await openPicker(GAMMA);
-    expect(within(second).queryByRole("combobox")).toBeNull();
-    expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${SECOND}`]);
-    expect(within(second).getByTestId(`space-pick-repo-${LISTED}`)).toBeTruthy();
-  });
-
-  test("space-58: a Space signing out clears its selection before another Space is shown", async () => {
-    const home = pickHome();
-    await renderGroups(home, { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${GAMMA}`));
-    const picker = screen.getByTestId(`space-picker-${GAMMA}`);
-    fireEvent.change(within(picker).getByRole("combobox", { name: "Space" }), { target: { value: SECOND } });
-    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
-    deliver(signedOutAt(SECOND, {}, home));
-    const submit = within(picker).getByTestId(`space-pick-submit-${GAMMA}`) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    expect(within(picker).queryByRole("combobox")).toBeNull();
-    expect(within(picker).getByTestId(`space-pick-instance-${ORIGIN}`)).toBeTruthy();
-    expect(within(picker).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    fireEvent.click(submit);
-    expect(calls("space.pick")).toEqual([]);
-  });
-
-});
-
-describe("SPACE: Open here at the row's Space (space-63, space-111, space-29)", () => {
-  const FIRST_DOCS = "@spex.example/acme/team/docs-spex";
-  const SECOND_DOCS = "@second.example/acme/team/docs-spex";
-
-  /** Each Space lists a project this computer lacks at the same path,
-   * under its own id. */
-  function joinHome(): GroupsState {
-    const absent = (key: string, instance: string, id: string) =>
-      repo({ key, instance, name: "docs-spex", id, remote: null, code: "git@github.com:acme/docs.git", folder: null, state: "absent", branch: null });
-    return twoHome(
-      [namespace("jane"), group("2", "acme/team", "team", [absent(FIRST_DOCS, ORIGIN, "52")])],
-      [group("2", "acme/team", "team", [absent(SECOND_DOCS, SECOND, "62")]), namespace("jada")],
-    );
-  }
-
-  async function joinInto(key: string, folder: string): Promise<void> {
-    // This computer the only place, Open reads "Open here" alone
-    // (space-111).
-    const open = screen.getByTestId(`space-row-open-${key}`);
-    expect(open.textContent).toBe("Open here");
-    fireEvent.click(open);
-    fireEvent.change(screen.getByTestId(`space-join-${key}-path`), { target: { value: folder } });
-    fireEvent.click(within(screen.getByTestId(`space-join-${key}`)).getByRole("button", { name: "Open here" }));
-  }
-
-  test("space-63, space-29: Open here sends the Space its row stands under", async () => {
-    // The first Space's row opens at the first, with its id.
-    await renderGroups(joinHome(), { open: false });
-    await joinInto(FIRST_DOCS, "/Users/jane/code/docs");
-    await waitFor(() => expect(calls("space.join")).toEqual([{ instance: ORIGIN, hostId: "52", folder: "/Users/jane/code/docs" }]));
-    cleanup();
-
-    // With the second listed first, its row stands under its heading and
-    // opens there, with its own id.
-    commandMock.mockClear();
-    const home = joinHome();
-    await renderGroups({ ...home, defaultInstance: SECOND, instances: [...home.instances].reverse() }, { open: false });
-    await joinInto(SECOND_DOCS, "/Users/jane/code/docs-second");
-    await waitFor(() =>
-      expect(calls("space.join")).toEqual([{ instance: SECOND, hostId: "62", folder: "/Users/jane/code/docs-second" }]),
-    );
   });
 });
 
@@ -869,7 +364,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
   }
 
   /** The sign-in the core reports running at the second Space. */
-  const runningAtSecond = (code = "WDJB-MJHT"): GroupsState => ({
+  const runningAtSecond = (code = "WDJB-MJHT"): SpaceState => ({
     ...base(),
     signIn: { phase: "running", instance: SECOND, flow: "device", userCode: code, verificationUri: DEVICE(code), since: NOW },
   });
@@ -879,11 +374,11 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
   const field = (): HTMLInputElement => within(card()).getByRole("textbox", { name: "Space address" }) as HTMLInputElement;
 
   test("space-1: Add a Space… stands at the list's foot, absent while the home lists none", async () => {
-    await renderGroups(headingsHome(), { open: false });
+    await renderSpace(headingsHome(), { open: false });
     expect(add().textContent).toBe("Add a Space…");
     expect(add().disabled).toBe(false);
     // At the list's foot: inside the list, after every Space's section.
-    const list = screen.getByTestId("space-groups");
+    const list = screen.getByTestId("space-projects");
     expect(list.lastElementChild!.contains(add())).toBe(true);
     for (const section of sections()) {
       expect(section.compareDocumentPosition(add()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -896,27 +391,27 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
 
     // Signed out of the one Space it lists, the home still lists it, and
     // the foot stands beneath its heading.
-    await renderGroups(signedOutAt(ORIGIN), { open: false });
+    await renderSpace(signedOutAt(ORIGIN), { open: false });
     expect(sectionOf(ORIGIN).compareDocumentPosition(add()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     cleanup();
 
     // Listing none, the header is the card and no foot stands (space-1,
     // space-3).
-    await renderGroups(noInstance(), { open: false });
+    await renderSpace(noInstance(), { open: false });
     expect(screen.getByTestId("space-signin-card")).toBeTruthy();
     expect(screen.queryByTestId("space-add-space")).toBeNull();
   });
 
   test("space-3: it opens the card 'Sign in to a Space' in its place, the field alone holding the default Space's origin where no directory reads; Escape closes it, focus back; an origin the core refuses reads in the card with the field kept; a second origin starts the flow there; Add a Space… is disabled while any flow runs", async () => {
     startsAtSecond();
-    await renderGroups(base(), { open: false });
+    await renderSpace(base(), { open: false });
     fireEvent.click(add());
     // The card stands in its place, titled by its act, its field holding
     // the default Space's origin, focused and selected, with Sign in its
     // one primary control and Cancel beside it, and no sentence (space-3).
     expect(screen.queryByTestId("space-add-space")).toBeNull();
     expect(screen.getByRole("group", { name: "Sign in to a Space" })).toBe(card());
-    expect(screen.getByTestId("space-groups").lastElementChild!.contains(card())).toBe(true);
+    expect(screen.getByTestId("space-projects").lastElementChild!.contains(card())).toBe(true);
     expect(screen.queryByTestId("space-signin-card")).toBeNull();
     expect(field().value).toBe(ORIGIN);
     await waitFor(() => expect(document.activeElement).toBe(field()));
@@ -986,7 +481,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
     // While a heading's flow runs, Add a Space… is disabled, and opens
     // nothing; its end enables it again (space-3).
     commandMock.mockClear();
-    await renderGroups(signedOutAt(SECOND, {}, twoInstances()), { open: false });
+    await renderSpace(signedOutAt(SECOND, {}, twoInstances()), { open: false });
     const again = within(sectionOf(SECOND)).getByTestId("space-signin-again");
     fireEvent.click(again);
     await within(sectionOf(SECOND)).findByTestId("space-signin-link");
@@ -1000,7 +495,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
 
   test("space-115: with a directory the card's chooser preselects the default Space, focused, and its choice starts there", async () => {
     answering(DIRECTORY);
-    await renderGroups(base(), { open: false });
+    await renderSpace(base(), { open: false });
     // The directory is read once the surface stands.
     await waitFor(() => expect(calls("registry.directory")).toHaveLength(1));
     fireEvent.click(add());
@@ -1015,7 +510,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
 
   test("space-3: Cancel stops the flow the card runs and closes it; a flow ended without an account reads in the card with Sign in again, a card opened afresh reading none; a flow another client runs at an unlisted Space reads in the card at the foot", async () => {
     startsAtSecond();
-    await renderGroups(base(), { open: false });
+    await renderSpace(base(), { open: false });
     // A denial ends the card's flow: its cause with "Sign in again", the
     // field keeping the origin (space-3).
     fireEvent.click(add());
@@ -1088,7 +583,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
       if (type !== "space.signin.start") return answer(type, fields);
       return { flow: "device", userCode: "QRST-UVWX", verificationUri: `${ORIGIN}/login/device?user_code=QRST-UVWX`, expiresAt: NOW + 15 * MIN };
     });
-    await renderGroups(twoInstances(), { open: false });
+    await renderSpace(twoInstances(), { open: false });
     fireEvent.click(add());
     // The field holds the default Space's origin, signed in already; Sign
     // in starts there as it stands (space-3, git-host-2).
@@ -1117,7 +612,7 @@ describe("SPACE: Add a Space… at the list's foot (space-1, space-3, space-28, 
     activateLanguage(language);
     startsAtSecond();
     const zh = language === "zh";
-    await renderGroups(base(), { open: false });
+    await renderSpace(base(), { open: false });
     expect(add().textContent).toBe(zh ? "添加 Space…" : "Add a Space…");
     const seen: string[] = [add().textContent ?? ""];
     fireEvent.click(add());
@@ -1159,7 +654,7 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
   const KEPT = "Still syncing: a — stop them first";
 
   /** A home that lists the Spaces but the one at `origin`. */
-  const without = (home: GroupsState, origin: string): GroupsState => {
+  const without = (home: SpaceState, origin: string): SpaceState => {
     const instances = home.instances.filter((entry) => entry.origin !== origin);
     return { ...home, instances, defaultInstance: instances[0]?.origin ?? home.defaultInstance };
   };
@@ -1170,7 +665,7 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
 
   test("space-82, space-29: 'Remove from this list' is offered on a signed-out heading only, sends space.forget { instance } asking nothing first, a refusal standing beneath the heading with the heading kept; success removes the heading, and with none left the header is the card again", async () => {
     // Signed in at both, every heading's entry stands disabled (space-1).
-    await renderGroups(headingsHome(), { open: false });
+    await renderSpace(headingsHome(), { open: false });
     expect(removeOf(ORIGIN).disabled).toBe(true);
     expect(removeOf(SECOND).disabled).toBe(true);
     cleanup();
@@ -1189,7 +684,7 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
       if (refuse) throw new Error(KEPT);
       return without(out, SECOND);
     });
-    await renderGroups(out, { open: false });
+    await renderSpace(out, { open: false });
     const first = within(sectionOf(ORIGIN));
     const second = within(sectionOf(SECOND));
     // On the signed-out heading its overflow stands after Sign in again
@@ -1260,7 +755,7 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
       type === "space.forget" ? noInstance() : answer(type, fields),
     );
-    await renderGroups(signedOutAt(ORIGIN), { open: false });
+    await renderSpace(signedOutAt(ORIGIN), { open: false });
     expect(screen.queryByTestId("space-signin-card")).toBeNull();
     fireEvent.click(removeOf(ORIGIN));
     await screen.findByTestId("space-signin-card");
@@ -1274,10 +769,10 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
   });
 
   test("space-1: with no Space left after a removal, the list holds 'This computer' alone, 'Your sessions' reading no phrase and no key phrase about sign-in", async () => {
-    // The last Space removed: your own group's own records' remote and id
+    // The last Space removed: your personal own records' remote and id
     // dropped while their files stand (space-82, storage-36).
-    const forgotten = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null, placedAt: [ORIGIN, SECOND] });
-    await renderGroups(noInstance({ own: { name: "jane", named: false, repositories: [forgotten] } }), { open: false });
+    const forgotten = ownRepo({ instance: null, state: "local-only", remote: null, id: null, lastSync: null, placedAt: [ORIGIN, SECOND] });
+    await renderSpace(noInstance({ repositories: [forgotten] }), { open: false });
     expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toContain("This computer");
     expect(screen.queryByText(/named after your login|synced once you sign in|On this computer only|Only you/)).toBeNull();
     expect(screen.queryByTestId(`space-repo-state-${OWN}`)?.textContent ?? "").toBe("");
@@ -1289,7 +784,7 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
       return answer(type, fields);
     });
     const out = signedOutAt(SECOND, {}, headingsHome());
-    await renderGroups(out, { open: false });
+    await renderSpace(out, { open: false });
     fireEvent.click(removeOf(SECOND));
     expect((await within(sectionOf(SECOND)).findByTestId("space-remove-refusal")).textContent).toBe(KEPT);
     // Signed in there again, the heading's entry stands disabled and no

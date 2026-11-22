@@ -43,6 +43,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- Space lists your own projects. Choose a Space to sync a project's records, then sign in on another device to open it there. Each IDE uses one core. [DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)
+
 - Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.
 
 - The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report.
@@ -949,6 +951,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
 
 ### Removed
+
+- Groups, membership, invitations, project sharing and team servers have been retired, including the hub, seats and IDE relay. The client protocol is now version 35. Development homes that relied on those features require a fresh start.
 
 - The core no longer keeps `local/endpoint.json` in the home, and its
   hello names the protocol version alone, without the attached CLI's

@@ -279,17 +279,17 @@ test("projects-40, projects-9: a project placed at two stand-in instances, while
     && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
 
   // A fixture repository whose spex repository is created in the
-  // first's acme and then placed in the second's, both synced.
+  // first account’s namespace and placed in the second account’s, both synced.
   const { key: local } = await addFolder(home, gitFolder("atlas"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
-  const key = hostKey(first, "acme/atlas-spex");
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, name: "atlas" } });
+  const key = hostKey(first, "ada/atlas-spex");
   await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
-  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: "2002", name: "atlas" } }, 30_000);
+  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, name: "atlas" } }, 30_000);
   assert.deepEqual(placed.placements.map((line) => [line.attached, line.outcome?.kind]), [[true, "synced"], [true, "synced"]]);
   const clone = clonePath(home.dataDir, key);
   const firstBare = bareOf(first, key);
-  const secondBare = second.script.repositories.find((repository) => repository.group.fullPath === "acme" && repository.path === "atlas-spex")?.bare;
+  const secondBare = second.script.repositories.find((repository) => repository.group.fullPath === "bob" && repository.path === "atlas-spex")?.bare;
   assert.ok(secondBare, "created at the second");
   const sessionsAt = (bare: string): string[] => git(bare, "ls-tree", "-r", "--name-only", "spex", "sessions").split("\n").filter((path) => path !== "");
 
@@ -340,8 +340,8 @@ test("projects-9, projects-40: a project whose one placement holds a peer's chan
   await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase === "done", 30_000);
   const { key: local } = await addFolder(home, gitFolder("cedar"));
   mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "cedar" } });
-  const key = hostKey(host, "acme/cedar-spex");
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name: "cedar" } });
+  const key = hostKey(host, "ada/cedar-spex");
   await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
   const clone = clonePath(home.dataDir, key);
   const bare = bareOf(host, key);

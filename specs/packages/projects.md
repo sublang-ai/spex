@@ -17,7 +17,7 @@ Integration coverage exercises registration and card state against fixture repos
 
 When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
 
-- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in to any instance, through the picker of each signed-in instance's matching spex repositories, your namespace there and its groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
+- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] locally, the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
 - Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
 - No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
 
@@ -74,7 +74,7 @@ When the core clones a project's code, it shall use the canonical HTTPS equivale
 
 #### projects-37
 
-When the core clones a project's code using its canonical remote URL [[projects-44](#projects-44)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it — except, on a seat, a remote at a host the member placed a token for, which the app's helper serves with that token [[git-host-9](git-host.md#git-host-9)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-132](../decisions/132-team-servers.md)).
+When the core clones a project's code using its canonical remote URL [[projects-44](#projects-44)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it.
 
 ### The Overview Tab
 
@@ -147,13 +147,13 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 The local project palette shall distinguish adding an existing project from creating a new one, with tooltips explaining each action, and filter registered projects by name or path ([DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
 
 - Without a native picker, the switcher offers Add and Create on the typed path, both disabled until a path is entered; with a native picker, it offers the folder action for adding and leaves creation to the add form.
-- With no project registered across any connected place there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
+- With no project registered  there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
-- every palette mode, including its group chooser, integrates a borderless cross labelled Close at the trailing edge of its existing title or search row, without a separate close-only strip ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)), with the same dismissal and opener-focus return as Escape or clicking the backdrop; a submitted group choice keeps all dismissal routes disabled until its outcome [[space-58](space.md#space-58)] ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
+- every palette mode, integrates a borderless cross labelled Close at the trailing edge of its existing title or search row, without a separate close-only strip ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)), with the same dismissal and opener-focus return as Escape or clicking the backdrop.
 
 #### projects-42
 
-When the welcome page's local-project action [[run-view-172](run-view.md#run-view-172)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the local-project add form, regardless of the selected place or whether projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice where the native picker exists, or an existing-repository path where it does not, and a separate expandable new-project path with its specs-scaffold option ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
+When the welcome page's local-project action [[run-view-172](run-view.md#run-view-172)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the local-project add form, whether or not projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice where the native picker exists, or an existing-repository path where it does not, and a separate expandable new-project path with its specs-scaffold option ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
 
 - when the native folder picker is available, the folder choice shall receive initial focus;
 - without a native folder picker, the existing-path field shall receive initial focus;
@@ -247,7 +247,6 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 - Pairing a repair's spex repository with a folder keeps its key; a clone no pair names prompts the repair without silently pairing anything [[projects-10](#projects-10)].
 - Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
 - Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].
-- Signed in to two stand-in instances each holding a group `acme`: the picker offers the `acme` of each, and picking the second's pairs the folder with a spex repository the second stand-in lists and the first does not [[projects-1](#projects-1)].
 
 #### projects-18
 
@@ -366,7 +365,7 @@ Where the local project palette renders with a fixture client, the integration s
 - With or without registered projects, adding an existing project and creating a new one send their distinct actions; English and Chinese labels explain the two effects [[projects-42](#projects-42)] [[projects-25](#projects-25)].
 - With one project holding a live session and one without, only the live project's row shows its running count beside a pulsing dot [[projects-23](#projects-23)].
 - No text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
-- the normal picker, empty picker, local-project add form and group chooser place their accessible Close cross beside the title or search, without stealing the task's initial focus, close without submission and return focus to their actual opener; the palette group chooser's held submission disables Close, and refusal restores it with the destination retained [[projects-22](#projects-22)].
+- the normal picker, empty picker and local-project add form place their accessible Close cross beside the title or search, without stealing the task's initial focus, close without submission and return focus to their actual opener [[projects-22](#projects-22)].
 
 ### Refusal Coverage
 

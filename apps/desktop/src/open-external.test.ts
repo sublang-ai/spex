@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CoreService, type GroupsState, type RegistryState } from "@sublang/spex-core";
+import { CoreService, type SpaceState, type RegistryState } from "@sublang/spex-core";
 import { startStandinHost } from "@sublang/spex-core/testing";
 
 import { desktopCoreOptions } from "./core-options.js";
@@ -169,7 +169,7 @@ test("app-shell-38: the desktop's real core opens Space and active registry sign
   // sign-in works with no Space and leaves the home's Space state alone.
   const homeBeforeRegistry = readFileSync(join(scratch, "home", "home.yaml"), "utf8");
   assert.deepEqual(service.instanceOrigins(), []);
-  assert.equal(((await command("space.get")) as GroupsState).instances.length, 0);
+  assert.equal(((await command("space.get")) as SpaceState).instances.length, 0);
   await command("registry.get", { origin: first.url });
   assert.equal(await channel(`${first.url}/login/app`), false);
   type BrowserFlow = { flow: string; url: string };
@@ -212,7 +212,7 @@ test("app-shell-38: the desktop's real core opens Space and active registry sign
   assert.equal(await channel(denied.url), false, "a failed flow no longer permits its origin");
   first.script.browser = "approve";
   assert.deepEqual(service.instanceOrigins(), []);
-  assert.equal(((await command("space.get")) as GroupsState).instances.length, 0);
+  assert.equal(((await command("space.get")) as SpaceState).instances.length, 0);
   assert.equal(readFileSync(join(scratch, "home", "home.yaml"), "utf8"), homeBeforeRegistry);
   opened.length = 0;
 
@@ -231,7 +231,7 @@ test("app-shell-38: the desktop's real core opens Space and active registry sign
   await (await fetch(location)).text();
   const deadline = Date.now() + 30_000;
   for (;;) {
-    const state = (await command("space.get")) as GroupsState;
+    const state = (await command("space.get")) as SpaceState;
     if (state.signIn.phase === "idle" && state.instances.some((entry) => entry.origin === first.url && entry.signedIn)) break;
     assert.ok(Date.now() < deadline, `the first never read signed in: ${JSON.stringify(state.signIn)}`);
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));

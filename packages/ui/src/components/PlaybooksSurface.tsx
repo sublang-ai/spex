@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PlaybookAvailability } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { ownRepositoryKey } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { AuthoringWorkspace } from "./AuthoringWorkspace.js";
@@ -33,7 +33,7 @@ export function PlaybooksSurface({
 }: {
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const configState = store((state) => state.configState);
   const readiness = store((state) => state.readiness);
   const connection = store((state) => state.connection);
@@ -53,7 +53,7 @@ export function PlaybooksSurface({
   // for a project's tab binds as that project would, and is not this
   // page's.
   const lists = readLists?.projectId === null ? readLists : undefined;
-  // The global environment is your own group's spex repository's, as
+  // The global environment is your personal spex repository's, as
   // Space or the list names it.
   const ownKey = ownRepositoryKey(space, readLists?.own);
 

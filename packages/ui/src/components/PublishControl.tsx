@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import type { EnvironmentState, PublishPreview } from "@sublang/spex-core/protocol";
 import { publishTargetAt, type PublishTarget } from "../lib/environments.js";
 import type { PublicationOptions } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { RegistryFlowLine, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { signingInLabel } from "./SpaceSignIn.js";
@@ -174,7 +174,7 @@ function PublishAttempt({
   choseSignIn = false,
   readError,
 }: PublishProps & { choseSignIn?: boolean; readError?: string }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const environment = store((state) => state.environments[repository]);
   const previewPublish = store((state) => state.previewPublish);
   const publish = store((state) => state.publishSpecPackage);

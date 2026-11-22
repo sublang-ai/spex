@@ -147,7 +147,7 @@ test("run-view-159: project intent staging and draft submission preserve ordered
   const files: MediaAsset[] = [{ assetId: `sha256:${"a".repeat(64)}`, name: "chart.png", mimeType: "image/png", byteLength: 12 }];
   const intentId = "0b6f7c1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e";
   useAppStore.setState({
-    projects: [{ id: "me/project-spex", path: "/project", name: "project", registeredAt: 0, repository: { key: "me/project-spex", name: "project-spex", group: "me", own: true } }],
+    projects: [{ id: "me/project-spex", path: "/project", name: "project", registeredAt: 0, repository: { key: "me/project-spex", name: "project-spex" } }],
     drafts: { d1: { id: "d1", instance: "72000000-0000-4000-8000-0000000000d1", projectId: "me/project-spex", createdAt: 0, touchedAt: 0, firstLine: null, activity: "idle", state: "draft", queued: [], player: null, agent: { adapter: "claude" }, ready: true, failures: 0 } },
   });
   await act(async () => useAppStore.getState().stageDispatch({ id: intentId, projectId: "me/project-spex", text: "", attachments: files, createdAt: 1 }));

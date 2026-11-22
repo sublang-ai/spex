@@ -377,9 +377,9 @@ describe("SET: the session-player roster", () => {
     );
   });
 
-  test.each(["hidden", "third-party"] as const)("adding a Claude player uses the core’s provider defaults with a %s base URL", async (state) => {
+  test.each(["unknown", "third-party"] as const)("adding a Claude player uses the core’s provider defaults with a %s base URL", async (state) => {
     renderSettings(READINESS.map((entry) => entry.adapter === "claude"
-      ? { ...entry, defaultModels: {}, baseUrl: state === "hidden" ? { state } : { state, host: "provider.example" } } : entry));
+      ? { ...entry, defaultModels: {}, baseUrl: state === "unknown" ? { state } : { state, host: "provider.example" } } : entry));
     fireEvent.click(screen.getByTestId("player-add"));
     fireEvent.change(screen.getByTestId("player-add-id"), { target: { value: "dev.docs" } });
     const form = within(screen.getByTestId("player-add-form"));
@@ -392,7 +392,7 @@ describe("SET: the session-player roster", () => {
   });
 });
 
-describe("settings-46: your own group's file, and the players to set up", () => {
+describe("settings-46: your personal file, and the players to set up", () => {
   afterEach(() => useAppStore.setState({ projects: [], space: undefined }));
 
   test("a player a binding names and the roster lacks plays on the Captain's agent, and Add creates it from the Captain's block", async () => {
@@ -514,7 +514,7 @@ describe("settings-46: your own group's file, and the players to set up", () => 
     // a project's playbooks and bindings are its Playbooks tab's.
     expect(screen.queryByTestId("settings-scope")).toBeNull();
     expect(document.body.textContent).not.toContain(OWN_KEY);
-    expect(document.body.textContent).not.toContain("Your own group's config");
+    expect(document.body.textContent).not.toContain("Your personal config");
     expect(document.body.innerHTML).not.toContain("A project's playbooks and role bindings are edited in Playbooks");
     expect(screen.getByTitle("Shared with the playbook CLI — edits made outside appear here").textContent).toBe(CONFIG.summary!.path);
   });

@@ -219,10 +219,7 @@ async function main(): Promise<void> {
     renameSync(sidecar, smokeHandshake);
   }
 
-  // The dock badge reads the one attention count the core reads
-  // (app-shell-4, core-service-129): its own ledger fold's badge
-  // (DR-035) plus each open seat's, re-read whenever either moves, so
-  // the dock and the app never disagree.
+  // Mirror the attention queue of the core running this desktop.
   service.events.onLedgerChange = () => {
     if (process.platform === "darwin") {
       app.setBadgeCount(service?.attentionCount() ?? 0);

@@ -1,37 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A Space's section of the groups list (space-1, DR-127, DR-172): its
-// heading, then its groups, Personal and every other account's login
-// beneath it. Signed in, the heading reads the Space's
-// display name — its host name until a read names one — beside
-// "@<login>", with "New group…" where its read is held (space-68),
-// disabled and titled "Made by the people who run <Space>" where the
-// read says the person may not create one (DR-120), one overflow "More"
-// holding "Remove from this list", disabled, and Sign out (space-6) as
-// its last control; a failed read stands on this heading alone
-// (git-host-5). Signed out, the heading keeps the name it last read —
-// "<Space> · signed out · @<login>" where the Space signed this computer
-// out (space-3) — with "Sign in again", whose flow reads on it, and the
-// overflow's "Remove from this list", which removes the Space from this
-// list (space-82). The heading carries nothing of packages or the
-// registry (DR-173). Below 20rem the heading stacks, its last control
-// full-width. While the home lists any Space, "Add a Space…" stands at
-// the list's foot and opens the sign-in card in its place (space-1,
-// space-3). Every act is a command whose outcome arrives as state
-// (space-29).
+// A Space's account controls and the card for signing in to another Space.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
+import type { SpaceState, InstanceState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { instanceName, instanceOf, originOf } from "../lib/instances.js";
-import { seatName } from "../lib/space.js";
 import { spaceNameOf, SpaceChooser } from "./SpaceDirectory.js";
 import { MoreMenu } from "./SpaceMenu.js";
-import { GroupNameEditor } from "./SpaceMembers.js";
-import { ALERT_INK, ATTACHED_OWNER } from "./SpacePanel.js";
+import { ALERT_INK } from "./SpacePanel.js";
 import {
   causePhrase,
   focusCardField,
@@ -110,20 +90,15 @@ function InstanceHeading({
   signIn: SignInFlow;
   onNote: Note;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const spaceSignOut = store((state) => state.spaceSignOut);
   const spaceForget = store((state) => state.spaceForget);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string>();
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string>();
-  const [creating, setCreating] = useState(false);
-  const [creatingPending, setCreatingPending] = useState(false);
-  const [createFocus, setCreateFocus] = useState(0);
-  const createId = useId();
   const againRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const newGroupRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const origin = instance.origin;
   const name = instanceName(instance);
@@ -150,14 +125,11 @@ function InstanceHeading({
     if (instance.signedIn) setRemoveError(undefined);
   }, [instance.signedIn]);
 
-  // At a seat's place the server is named where this computer would be
-  // (space-112).
-  const seat = seatName(store.place);
 
   /** Sign out of this Space (space-6): the reply is the state, the
    * heading kept, signed out, and focus moves to its "Sign in again". */
   const signOut = async () => {
-    if (!connected || signingOut || creatingPending) return;
+    if (!connected || signingOut) return;
     setSigningOut(true);
     setSignOutError(undefined);
     try {
@@ -247,14 +219,6 @@ function InstanceHeading({
           comment: "on a Space's heading, after its name: the Space signed this computer out; {login} is the account to sign in again as",
         })
       : undefined;
-  // The read the heading's New group follows (space-1): held, the Space
-  // says whether the person may create a group there.
-  const readHeld = instance.readAt !== null;
-  const madeBy = i18n._({
-    id: "Made by the people who run {space}",
-    values: { space: name },
-    comment: "the title of a disabled New group where the Space says the person may not create a group there; {space} is its display name",
-  });
   const removeEntry = {
     label: i18n._({
       id: "Remove from this list",
@@ -266,27 +230,21 @@ function InstanceHeading({
       ? i18n._({ id: "Sign out first", comment: "why \"Remove from this list\" is not offered while signed in to that Space" })
       : undefined,
     title: !instance.signedIn
-      ? seat === undefined
-        ? i18n._({
+      ? i18n._({
             id: "Every record stays on this computer",
             comment: "the title of \"Remove from this list\": nothing is deleted",
-          })
-        : i18n._({
-            id: "Every record stays on {place}",
-            values: { place: seat },
-            comment: "the title of \"Remove from this list\" on a team server's Space; {place} is the server's name",
           })
       : undefined,
     onSelect: () => void remove(),
   };
   const more = (
-    <MoreMenu key="more" of={name} testId="space-instance-more" buttonRef={moreRef} entries={[removeEntry]} disabled={creatingPending} />
+    <MoreMenu key="more" of={name} testId="space-instance-more" buttonRef={moreRef} entries={[removeEntry]} />
   );
 
   return (
     <div
       data-testid="space-instance-heading"
-      className={`flex min-w-0 flex-col gap-2 ${creating && instance.signedIn ? ATTACHED_OWNER : ""}`}
+      className={`flex min-w-0 flex-col gap-2 `}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         // Escape cancels the flow in flight here (space-3).
         if (event.key !== "Escape" || !runningHere) return;
@@ -294,7 +252,7 @@ function InstanceHeading({
         signIn.cancel();
       }}
     >
-      <div className={`${ROW} ${creating && instance.signedIn ? "px-2 pt-1" : ""}`}>
+      <div className={`${ROW} `}>
         {/* The name owns the slack and truncates with its title; what
             stands beside it follows the separator in the secondary tone
             (space-1). */}
@@ -315,39 +273,17 @@ function InstanceHeading({
             to another. */}
         {instance.signedIn ? (
           <>
-            {readHeld ? (
-              <button
-                key="new-group"
-                ref={newGroupRef}
-                type="button"
-                data-testid="space-new-group"
-                aria-expanded={creating}
-                aria-controls={creating ? createId : undefined}
-                className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
-                disabled={!connected || !instance.account.canCreateGroup || creatingPending}
-                title={instance.account.canCreateGroup ? undefined : madeBy}
-                onClick={() => { setCreating(true); setCreateFocus((value) => value + 1); }}
-              >
-                {i18n._({ id: "New group…", comment: "open the name and path editor for a group at this Space" })}
-              </button>
-            ) : null}
             <button
               key="signout"
               type="button"
               data-testid="space-signout"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
-              disabled={!connected || signingOut || creatingPending}
+              disabled={!connected || signingOut}
               title={
-                seat === undefined
-                  ? i18n._({
+                i18n._({
                       id: "Signs this computer out of {space}; every record stays here",
                       values: { space: name },
                       comment: "Sign out's title on a Space's heading; {space} is its display name",
-                    })
-                  : i18n._({
-                      id: "Signs {place} out of {space}; every record stays there",
-                      values: { place: seat, space: name },
-                      comment: "Sign out's title on a team server's Space; {place} is the server's name, {space} the Space's display name",
                     })
               }
               onClick={() => void signOut()}
@@ -412,31 +348,11 @@ function InstanceHeading({
           {lines}
         </div>
       ) : null}
-      {creating && instance.signedIn ? (
-        <div id={createId} className="min-w-0">
-          <GroupNameEditor
-            testId="space-new-group-editor"
-            instance={origin}
-            parent={null}
-            scope={{ space: name }}
-            connected={connected}
-            canCreate={instance.account.canCreateGroup}
-            focusRequest={createFocus}
-            onPendingChange={setCreatingPending}
-            onClose={() => {
-              setCreating(false);
-              // Closing never strands focus (DR-010 §6).
-              setTimeout(() => newGroupRef.current?.focus(), 0);
-            }}
-            onNote={onNote}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }
 
-/** The groups list's foot while the home lists any Space (space-1,
+/** The project list's foot while the home lists any Space (space-1,
  * space-3): "Add a Space…", disabled while any sign-in starts or runs,
  * which opens the sign-in card "Sign in to a Space" in its place — its
  * chooser preselecting the default Space (space-115), focused, with Sign
@@ -453,7 +369,7 @@ export function AddInstance({
   connected,
   signIn,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   connected: boolean;
   signIn: SignInFlow;
 }) {
@@ -614,7 +530,7 @@ export function AddInstance({
       >
         {i18n._({
           id: "Add a Space…",
-          comment: "at the groups list's foot: opens the card \"Sign in to a Space\" for another Space",
+          comment: "at the project list's foot: opens the card \"Sign in to a Space\" for another Space",
         })}
       </button>
     );

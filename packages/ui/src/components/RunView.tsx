@@ -28,7 +28,7 @@ import {
   CAPTAIN_SPLIT_MAX,
   CAPTAIN_SPLIT_MIN,
 } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { SessionRecovery } from "./SessionRecovery.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { ParkedRun } from "./ParkedRun.js";
@@ -323,7 +323,7 @@ export function RunView({
   /** Open Settings at an agent's row (run-view-179, settings-52). */
   onOpenAgentSettings?: (agentId: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const externalWriter = session.externalWriter;
   const media = useComposerAttachments(sessionAttachmentKey(session.id), { kind: "project", id: session.projectId });
   readOnly ||= !!externalWriter;

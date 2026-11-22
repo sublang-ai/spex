@@ -61,7 +61,7 @@ export function BindingEditorPopover({
   binding: RoleBindingSummary;
   players: SessionPlayerSummary[];
   /** A project's entry names the player alone: tuning is personal and
-   * lives in your own group's settings (playbook-library-4, DR-103). */
+   * lives in your personal settings (playbook-library-4, DR-103). */
   playerOnly?: boolean;
   /** Under a project's Global heading (playbook-library-4): "Same as
    * global" stands first, chosen while the project names no other

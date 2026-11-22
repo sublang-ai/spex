@@ -5,8 +5,8 @@
 
 ## Intent
 
-This spec covers a project's Playbooks and Packages tabs across their user-visible behavior, the implementation behind them, and the integration coverage that verifies them: the Packages tab managing the spec packages the environments of the project and your own group install — adding, updating, installing, removing and publishing them with the registry account they use — and the project's Playbooks tab and the global Playbooks surface listing the playbooks those spec packages place, which run with default players, mapping playbook roles to players and overriding a role for one project, and authoring new playbooks as spec packages under development in a chat-assisted workspace that compiles them in the environment's folder, requests them from that environment and adds them, backed by an authoring conversation runner, an authoring session store, compile execution, registry generation and config writes ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)).
-Playbook entries live in the config files of the spex repositories a session runs with — the global config, your own group's, and the project's — which remain the source of truth under their fail-closed validation rules; a playbook's module comes from an environment's lock and never from a path in a shared file; compilation runs the app's own copy of the external `slc` toolchain, on the app's runtime or a Node.js meeting the compiler's floor, with its compiled outputs beside the playbook's text.
+This spec covers a project's Playbooks and Packages tabs across their user-visible behavior, the implementation behind them, and the integration coverage that verifies them: the Packages tab managing the spec packages the global and project environments install — adding, updating, installing, removing and publishing them with the registry account they use — and the project's Playbooks tab and the global Playbooks surface listing the playbooks those spec packages place, which run with default players, mapping playbook roles to players and overriding a role for one project, and authoring new playbooks as spec packages under development in a chat-assisted workspace that compiles them in the environment's folder, requests them from that environment and adds them, backed by an authoring conversation runner, an authoring session store, compile execution, registry generation and config writes ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)).
+Playbook entries live in the config files of the spex repositories a session runs with — the global config and the project's — which remain the source of truth under their fail-closed validation rules; a playbook's module comes from an environment's lock and never from a path in a shared file; compilation runs the app's own copy of the external `slc` toolchain, on the app's runtime or a Node.js meeting the compiler's floor, with its compiled outputs beside the playbook's text.
 Verification requires integration coverage of the surfaces' compile, request, add and config write paths, where correctness spans the external `slc` process, generated registry artifacts, the environments and the config files.
 
 ## External Behavior
@@ -83,7 +83,7 @@ While an environment's current requests include a direct path source and the env
 When the user overrides a role for the project or sets one back to "Same as global" [[playbook-library-4](#playbook-library-4)], or removes a listed entry [[playbook-library-2](#playbook-library-2)], the Playbooks tab shall write the project's config: an override writes the `playbooks.<id>` entry with a player per required role — the chosen player for that role, and for each other the player the global binding names [[core-service-2](core-service.md#core-service-2)] — a role set back takes the global binding's player again, the entry removed once every role equals the global binding's, and a removal deletes the entry, each write modifying no other entry and reflecting the new state in the list ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
 - a project's entry names players by name alone; the global entry may carry each role's tuning [[playbook-library-4](#playbook-library-4)];
-- a teammate whose roster lacks a player the project's entry names sees it as a player to set up [[settings-46](settings.md#settings-46)], the playbook running meanwhile [[core-service-2](core-service.md#core-service-2)].
+- a project entry naming a player missing from the current global roster shows that player as needing setup [[settings-46](settings.md#settings-46)], the playbook running meanwhile [[core-service-2](core-service.md#core-service-2)].
 
 ### Role Binding
 
@@ -363,7 +363,7 @@ When the core package derives a playbook's artifacts from its FSM, the core pack
 
 The project's Playbooks and Packages tabs and the Playbooks surface shall read "Playbooks" and "Packages" and name things and acts in the reader's words, never by the config or environment write behind them ([DR-010](../decisions/010-interface-craft.md) §2, [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- things: "playbook", "package" — "spec package" where its nature is explained — and `spex.yaml`, `spex.lock` and `meta.yaml` by their file names, never environment, manifest, request or lock as a noun, resolve or request as an act, nor a spex repository; "Global" for what applies to every project of yours, never Personal, your own group's or every project of yours;
+- things: "playbook", "package" — "spec package" where its nature is explained — and `spex.yaml`, `spex.lock` and `meta.yaml` by their file names, never environment, manifest, request or lock as a noun, resolve or request as an act, nor a spex repository; "Global" for what applies to every project of yours, never Personal, the global or every project of yours;
 - acts: a role is overridden for the project or set back to "Same as global"; a package is added, removed, updated, installed or published, "Update" and "Install" the only two acts bringing packages up to date; an authoring session is deleted behind a confirm whose choices read "Delete" and "Keep"; the creation control reads "New playbook".
 
 #### playbook-library-29
@@ -416,7 +416,7 @@ While a compile is running, the Playbooks tab shall render a secondary cancel co
 
 #### playbook-library-28
 
-While your own group's config is missing or invalid, the Playbooks tab shall replace its content with a gate that (1) explains that the Captain can only run playbooks listed on this tab, (2) states that playbooks need a valid config and directs the user to fix it in Settings, and (3) renders "Settings" as a navigation control when the host app provides surface navigation, falling back to plain text otherwise.
+While the global config is missing or invalid, the Playbooks tab shall replace its content with a gate that (1) explains that the Captain can only run playbooks listed on this tab, (2) states that playbooks need a valid config and directs the user to fix it in Settings, and (3) renders "Settings" as a navigation control when the host app provides surface navigation, falling back to plain text otherwise.
 
 ### Installed Playbooks
 
@@ -426,7 +426,7 @@ When an install places a spec package's files or finds them installed already [[
 
 - the module bundled again replaces the installed one atomically under the bytes read, a module changed meanwhile standing, and leaves the store's copy and the lock's digests as they were ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a `<id>.registry.ts` missing or failing to bundle leaves the module as it is, and the install goes on, its report naming the module and why;
-- a path source's playbook folders where its path resolves [[environments-2](environments.md#environments-2)] get the engine links alone, listed in the `.git/info/exclude` of the working folder, or of your own group's clone, holding them before any link is made, their files left as they are; where your own group's clone cannot list them, the install fails with its cause and makes no link;
+- a path source's playbook folders where its path resolves [[environments-2](environments.md#environments-2)] get the engine links alone, listed in the `.git/info/exclude` of the working folder, or of the local global clone, holding them before any link is made, their files left as they are; where the local global clone cannot list them, the install fails with its cause and makes no link;
 - an artifact folder gone by the time it is prepared — its clone moved by a sync meanwhile [[environments-7](environments.md#environments-7)] — takes no link and is not made again, nothing of the moved clone's old place recreated.
 
 ## Internal Behavior
@@ -602,7 +602,7 @@ When an authoring session's compile settles, the conversation runner shall start
 
 #### playbook-library-69
 
-When an authoring session's playbook is added, the Add path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], request the spec package by path from the environment the session belongs to [[core-service-96](core-service.md#core-service-96)] [[environments-26](environments.md#environments-26)], unless it is already requested, and resolve and install it [[environments-15](environments.md#environments-15)], write any player the submission names but your own group's roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and mark the session added [[playbook-library-70](#playbook-library-70)]:
+When an authoring session's playbook is added, the Add path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], request the spec package by path from the environment the session belongs to [[core-service-96](core-service.md#core-service-96)] [[environments-26](environments.md#environments-26)], unless it is already requested, and resolve and install it [[environments-15](environments.md#environments-15)], write any player the submission names but the global roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and mark the session added [[playbook-library-70](#playbook-library-70)]:
 
 - the one-shot `compile.run` is an authoring-style compile followed by this same path in one reply, so both share one helper, its `meta.yaml`, where the folder holds none, made as a session's [[playbook-library-70](#playbook-library-70)] with the registry-only default org or `local` where none is available, and the project's derived license [[playbook-library-103](#playbook-library-103)], no license where none is derived;
 - each write is an ordinary write of its own file under the version it read [[environments-15](environments.md#environments-15)] [[shared-config-roundtrip-1](shared-config-roundtrip.md#shared-config-roundtrip-1)]; any failure after one of the writes leaves them written, undoes nothing, and the refusal names the writes made — the request, the lock, the install, each player, the entry — with the failure's own code and words ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
@@ -684,7 +684,7 @@ Where a registry release holds that compiled `review` with its module bundled ca
 
 #### playbook-library-109
 
-Where two scratch homes run real cores whose own groups' clones sync through the stand-in host, and the first home's clone holds a spec package with a playbook, when the test suite requests it by path in your own group's environment while the clone's `.git/info` is a file, installs it again once that is a folder, and syncs both homes, the test suite shall assert that the first install failed, the environment's state naming the `.git/info/exclude` that cannot list the engine links, with no engine link made in the playbook folder [[playbook-library-46](#playbook-library-46)]; that once installed again the playbook folder gained the engine links, the clone's `.git/info/exclude` listing them in its managed block beside a line the reader wrote there, and Git reporting none of them [[playbook-library-46](#playbook-library-46)]; that the first home's sync reaches done with the host's `spex` holding the folder's files and no link [[playbook-library-46](#playbook-library-46)]; and that on the second home the playbook folder gains the engine links once its sync installs the lock, ignored by its clone's Git, and its next sync reaches done [[playbook-library-46](#playbook-library-46)].
+Where two scratch homes run real cores whose personal global records sync through the stand-in host, and the first home's clone holds a spec package with a playbook, when the test suite requests it by path in the global environment while the clone's `.git/info` is a file, installs it again once that is a folder, and syncs both homes, the test suite shall assert that the first install failed, the environment's state naming the `.git/info/exclude` that cannot list the engine links, with no engine link made in the playbook folder [[playbook-library-46](#playbook-library-46)]; that once installed again the playbook folder gained the engine links, the clone's `.git/info/exclude` listing them in its managed block beside a line the reader wrote there, and Git reporting none of them [[playbook-library-46](#playbook-library-46)]; that the first home's sync reaches done with the host's `spex` holding the folder's files and no link [[playbook-library-46](#playbook-library-46)]; and that on the second home the playbook folder gains the engine links once its sync installs the lock, ignored by its clone's Git, and its next sync reaches done [[playbook-library-46](#playbook-library-46)].
 
 #### playbook-library-98
 
@@ -692,7 +692,7 @@ Where the core runs with the scripted fake adapter and a stub `slc`, when an aut
 
 #### playbook-library-110
 
-Where the core runs with the scripted fake adapter and a stub `slc` on a home holding a paired project, when an authoring session of the global environment is created, compiles its playbook and is added through `draft.register`, the test suite shall assert that the session's spec package folder stands at `spex-packages/<org>/<id>` inside your own group's clone, the global environment's folder [[playbook-library-51](#playbook-library-51)], and that the Add is accepted: the global `spex.yaml` requests the spec package by that path, its lock resolves it there, and the global config holds the playbook's entry keyed by the derived roles, the project's config and `spex.yaml` unchanged [[playbook-library-7](#playbook-library-7)] [[playbook-library-69](#playbook-library-69)].
+Where the core runs with the scripted fake adapter and a stub `slc` on a home holding a paired project, when an authoring session of the global environment is created, compiles its playbook and is added through `draft.register`, the test suite shall assert that the session's spec package folder stands at `spex-packages/<org>/<id>` inside the local global clone, the global environment's folder [[playbook-library-51](#playbook-library-51)], and that the Add is accepted: the global `spex.yaml` requests the spec package by that path, its lock resolves it there, and the global config holds the playbook's entry keyed by the derived roles, the project's config and `spex.yaml` unchanged [[playbook-library-7](#playbook-library-7)] [[playbook-library-69](#playbook-library-69)].
 
 #### playbook-library-18
 
@@ -764,13 +764,13 @@ Where a scratch home holds a project whose environment requests two spec package
 
 #### playbook-library-123
 
-Where a scratch home's global environment requests the built-in spec package, at an older release than the app ships, a stand-in registry spec package providing a playbook, and by path a spec package in your own group's clone, and a project's environment requests another spec package providing a playbook, an authoring session standing in each environment, when the Playbooks surface renders and the suite drives its controls, the test suite shall assert:
+Where a scratch home's global environment requests the built-in spec package, at an older release than the app ships, a stand-in registry spec package providing a playbook, and by path a spec package in the local global clone, and a project's environment requests another spec package providing a playbook, an authoring session standing in each environment, when the Playbooks surface renders and the suite drives its controls, the test suite shall assert:
 
 - the surface lists each spec package the global environment requests as the Packages tab's row reads it, each with the playbooks it places beneath it, under a header carrying the registry chooser, the account at the global environment's registry and one "Add…" [[playbook-library-122](#playbook-library-122)] [[playbook-library-119](#playbook-library-119)], and lists no playbook of the project's and names no project [[playbook-library-122](#playbook-library-122)];
 - the built-in spec package stands as an ordinary row with its version, "Update to ⟨shipped⟩" sending `environment.resolve`, and Remove in its overflow, while the path request's overflow offers Publish and the registry request's none [[playbook-library-92](#playbook-library-92)] [[playbook-library-113](#playbook-library-113)];
 - ✎ on a role writes the global config's entry with the chosen player and its tuning, the project's config unchanged, and the project's Playbooks tab lists that role's new player under Global with no dot [[playbook-library-122](#playbook-library-122)] [[playbook-library-4](#playbook-library-4)] [[playbook-library-1](#playbook-library-1)];
 - a spec package added through "Add…" is requested in the global `spex.yaml`, the project's unchanged, and its playbook lists beneath its row at once and under Global on the project's tab [[playbook-library-122](#playbook-library-122)] [[playbook-library-92](#playbook-library-92)] [[playbook-library-1](#playbook-library-1)];
-- the Authoring section lists the global environment's authoring sessions and none of the project's, the project tab's listing none of the global's, and "New playbook" there creates its session and its spec package at `spex-packages/⟨org⟩/⟨id⟩/` in your own group's clone, opening its workspace [[playbook-library-50](#playbook-library-50)] [[playbook-library-51](#playbook-library-51)];
+- the Authoring section lists the global environment's authoring sessions and none of the project's, the project tab's listing none of the global's, and "New playbook" there creates its session and its spec package at `spex-packages/⟨org⟩/⟨id⟩/` in the local global clone, opening its workspace [[playbook-library-50](#playbook-library-50)] [[playbook-library-51](#playbook-library-51)];
 - with every spec package removed through its row's Remove, the built-in spec package's among them, the surface reads "No playbooks yet" above "Add…" and the project's tab lists no Global heading [[playbook-library-122](#playbook-library-122)] [[playbook-library-92](#playbook-library-92)] [[playbook-library-1](#playbook-library-1)].
 
 ### Binding Coverage
@@ -803,7 +803,7 @@ While a compile driven through the app store is running, the test suite shall as
 
 #### playbook-library-31
 
-Where your own group's config state is missing or invalid, the test suite shall assert that the Playbooks tab renders the config gate — the Captain-scope explanation and the fix-it-in-Settings direction [[playbook-library-28](#playbook-library-28)] — with "Settings" as an activatable navigation control when a navigation callback is supplied and as plain text when it is not, and that no playbook list or compile form is rendered.
+Where the global config state is missing or invalid, the test suite shall assert that the Playbooks tab renders the config gate — the Captain-scope explanation and the fix-it-in-Settings direction [[playbook-library-28](#playbook-library-28)] — with "Settings" as an activatable navigation control when a navigation callback is supplied and as plain text when it is not, and that no playbook list or compile form is rendered.
 
 ### Authoring Coverage
 
@@ -865,7 +865,7 @@ Where the core runs with the scripted fake adapter, when authoring sessions are 
 
 #### playbook-library-104
 
-Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` at each instance while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha` and `team-two` at `acme/workshop/team`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once its selected registry — the first for the local-only project — where the home holds that registry's grant, and no Space account or other registry [[playbook-library-103](#playbook-library-103)]:
+Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a personal project at each Space while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once its selected registry — the first for the local-only project — where the home holds that registry's grant, and no Space account or other registry [[playbook-library-103](#playbook-library-103)]:
 
 | `LICENSE` | `license` replied |
 | --- | --- |
@@ -874,13 +874,13 @@ Where the core runs with the scripted fake adapter on a home signed in to two st
 | another license's text | none |
 | absent | none |
 
-| The first instance's registry | `org` for `tester/project-spex` | `org` for `@<first>/acme/workshop/team/graph-spex` | `org` for `@<second>/acme/workshop/team/graph-spex` |
+| The first instance's registry | `org` for `tester/project-spex` | `org` for `@<first>/tester/graph-spex` | `org` for `@<second>/tester/graph-spex` |
 | --- | --- | --- | --- |
 | refusing the first registry's app token (`401`) | empty | empty | `alpha-two` |
 | out of service (`500`) | empty | empty | `alpha-two` |
 | listing no org | empty | empty | `alpha-two` |
-| listing `workshop-261011` alone | `workshop-261011` | `workshop-261011` | `alpha-two` |
-| listing `acme-work` at `acme/work`, `alpha` at `alpha`, and `workshop` at `acme/workshop` | `acme-work` | `acme-work` | `alpha-two` |
+| listing `alpha-one` alone | `alpha-one` | `alpha-one` | `alpha-two` |
+| listing `alpha-one` at `alpha-one`, `beta` at `beta`, and `gamma` at `gamma` | `alpha-one` | `alpha-one` | `alpha-two` |
 | not asked, the home signed out of the first registry | empty | empty | `alpha-two` |
 | not asked, the home signed out of both registries | empty | empty | empty |
 

@@ -37,11 +37,11 @@ import type {
 
 import { DashboardSurface } from "./DashboardSurface.js";
 import { OverviewTab } from "./ProjectsSurface.js";
-import { setClientForTests, useAppStore, type AppStore } from "../state/store.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
 import { initialSessionView } from "../state/reducer.js";
 import { SpexCommandError } from "../lib/client.js";
 import { currentLocale } from "../i18n.js";
-import { groupsState } from "../fixtures/groups-state.js";
+import { spaceState } from "../fixtures/space-state.js";
 
 afterEach(() => {
   cleanup();
@@ -55,8 +55,8 @@ const NOW = Date.now();
 const MIN = 60_000;
 
 const PROJECTS = [
-  { id: "me/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex", group: "me", own: true } },
-  { id: "me/beta-spex", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "me/beta-spex", name: "beta-spex", group: "me", own: true } },
+  { id: "me/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex" } },
+  { id: "me/beta-spex", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "me/beta-spex", name: "beta-spex" } },
 ];
 
 const EMPTY_TREE: SpecTreeState = {
@@ -90,9 +90,9 @@ function q(
   return { intent: info({ id, projectId, text }), state: "queued", ...over };
 }
 
-/** A Groups state holding no spex repository: the Overview's records
+/** A Space state holding no spex repository: the Overview's records
  * field reads its row from it (projects-4). */
-const EMPTY_GROUPS = groupsState();
+const EMPTY_GROUPS = spaceState();
 
 /** Seed the real store; the client is faked via setClientForTests. */
 function seed(over: Record<string, unknown> = {}) {
@@ -139,7 +139,7 @@ function renderSurface(over: {
   onOpenSession?: Mock<(sessionId: string, turnId?: number) => void>;
   onOpenIntent?: Mock<(projectId: string, path: string, anchor: string) => void>;
   onStartIntent?: Mock<(intent: IntentInfo) => void>;
-  onNavigate?: Mock<(surface: "Workspace", place: AppStore) => void>;
+  onNavigate?: Mock<(surface: "Workspace") => void>;
 } = {}) {
   const onOpenSession =
     over.onOpenSession ?? vi.fn<(sessionId: string, turnId?: number) => void>();
@@ -148,7 +148,7 @@ function renderSurface(over: {
     vi.fn<(projectId: string, path: string, anchor: string) => void>();
   const onStartIntent =
     over.onStartIntent ?? vi.fn<(intent: IntentInfo) => void>();
-  const onNavigate = over.onNavigate ?? vi.fn<(surface: "Workspace", place: AppStore) => void>();
+  const onNavigate = over.onNavigate ?? vi.fn<(surface: "Workspace") => void>();
   render(
     <DashboardSurface
       onOpenSession={onOpenSession}
@@ -3147,7 +3147,7 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     expect(empty.textContent).toBe("No projects yet · Add a project");
     fireEvent.click(within(empty).getByRole("button", { name: "Add a project" }));
     // This computer's place, whose projects the band lists (run-view-168).
-    expect(onNavigate).toHaveBeenCalledWith("Workspace", useAppStore);
+    expect(onNavigate).toHaveBeenCalledWith("Workspace");
   });
 
   test("a registered project with an empty ledger keeps every band instructive", () => {

@@ -1,18 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Agents section (settings-5, DR-204): a standing card for Claude
-// and one for Codex whether or not a role uses them, then an entry per
-// other adapter the config names. A card says its readiness and who
-// uses it, Claude's model service and each card's default model; one
-// not ready says what to do by its fault's kind (settings-63) — in the
-// Workshop what is missing and its setup guide (settings-71) — and how
-// to configure it on this computer, or on a seat where to set a
-// credential. With a valid config a card gives every agent of its
-// adapter one model (settings-59, settings-60), and Claude's behind a
-// third-party service lists the roles still naming an official model
-// and sets them to Provider default (settings-61, settings-62) — each
-// change one `config.batch` against the revision shown.
+// Agent readiness, configuration and model actions.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type {
@@ -22,8 +11,7 @@ import type {
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
-import { isLocalPlace } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useAgentOptions, modelDisplay, modelDisplayText, providerDefaultDisplay, providerDefaultLabel } from "../lib/agent-options.js";
 import {
@@ -100,18 +88,8 @@ function refusalText(error: unknown): string {
   return named ? i18n._("Nothing was written: {message} — {named}", { message, named }) : message;
 }
 
-/** The steps that configure an agent here (settings-5), where the
- * Workshop's routes stand not: on a seat a pointer to the Credentials
- * section; on this computer the manual steps. */
-function HowToConfigure({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
-  if (seat) {
-    return (
-      <details data-testid={`agent-howto-${entry.adapter}`} className={mutedClass}>
-        <summary className="cursor-pointer">{i18n._("How to configure")}</summary>
-        <p className="mt-1">{i18n._("Set your own credential for this agent in the Credentials section below.")}</p>
-      </details>
-    );
-  }
+/** The manual steps for configuring an agent (settings-5). */
+function HowToConfigure({ entry }: { entry: ReadinessEntry }) {
   const steps = manualSteps(entry);
   return (
     <details data-testid={`agent-howto-${entry.adapter}`} className={mutedClass}>
@@ -163,13 +141,13 @@ function closingLine(closing: "re-check" | "restart"): string {
     : i18n._("Then quit Spex completely and open it again — see How to configure.");
 }
 
-function FaultLines({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
+function FaultLines({ entry }: { entry: ReadinessEntry }) {
   const faults = faultsOf(entry);
   if (faults.length === 0) return null;
   return (
     <ul data-testid={`agent-faults-${entry.adapter}`} className="flex flex-col gap-1">
       {faults.map((fault) => {
-        const guidance = faultGuidance(entry, fault, { workshop: WORKSHOP, seat });
+        const guidance = faultGuidance(entry, fault, { workshop: WORKSHOP });
         return (
           <li key={`${fault.kind}:${fault.requirement}`} data-testid={`agent-fault-${fault.kind}`} className="flex flex-col">
             {guidance.local !== undefined ? (
@@ -229,7 +207,7 @@ function OneModel({ entry, state, catalog, focusRequest, onClose, onPendingChang
   onClose(): void;
   onPendingChange(pending: boolean): void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const labelId = useId();
   const [value, setValue] = useState("");
   const [asking, setAsking] = useState(false);
@@ -369,7 +347,7 @@ function OneModel({ entry, state, catalog, focusRequest, onClose, onPendingChang
  * and each project's composition shown again before it is reported, so
  * the reader confirms over what the files now hold, never the list the
  * refused batch was built from (settings-60, settings-62). */
-async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpInput[], revision: string | undefined): Promise<void> {
+async function send(store: typeof useAppStore, ops: ConfigBatchOpInput[], revision: string | undefined): Promise<void> {
   try {
     const state = await store.getClient().command("config.batch", { ops, revision: revision ?? "" });
     store.setState({ configState: state });
@@ -381,7 +359,7 @@ async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpI
 
 /** Official names behind a third-party service (settings-61, -60). */
 function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const projectConfigs = store((s) => s.projectConfigs);
   const projects = store((s) => s.projects);
   const [asking, setAsking] = useState(false);
@@ -484,7 +462,7 @@ function RecommendedTag({ adapter, ready }: { adapter: AdapterName; ready: boole
   return <span data-testid={`agent-tag-${adapter}`} className="rounded border border-neutral-300 px-1.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">{i18n._({ id: "Recommended", comment: "tag beside the Claude agent card's name" })}</span>;
 }
 
-function AgentCard({ entry, state, seat, optionsEpoch }: { entry: ReadinessEntry; state: ConfigState | undefined; seat: boolean; optionsEpoch: number }) {
+function AgentCard({ entry, state, optionsEpoch }: { entry: ReadinessEntry; state: ConfigState | undefined; optionsEpoch: number }) {
   // Read again after each Re-check, never on the window's own readiness
   // refresh (settings-5, DR-217).
   const catalog = useAgentOptions(entry.adapter, optionsEpoch);
@@ -514,8 +492,8 @@ function AgentCard({ entry, state, seat, optionsEpoch }: { entry: ReadinessEntry
   const changeId = useId();
   // A local credential with the Workshop switch on: what is missing
   // and the setup guide (settings-71), else the steps (settings-5).
-  const routes = notReady && WORKSHOP && !seat
-    ? faultsOf(entry).map((fault) => faultGuidance(entry, fault, { workshop: true, seat: false }).local).find((local) => local !== undefined)
+  const routes = notReady && WORKSHOP
+    ? faultsOf(entry).map((fault) => faultGuidance(entry, fault, { workshop: true }).local).find((local) => local !== undefined)
     : undefined;
   const chips = (
     <span className="flex flex-wrap items-center gap-1">
@@ -562,8 +540,8 @@ function AgentCard({ entry, state, seat, optionsEpoch }: { entry: ReadinessEntry
         // Its configuration alone: the model settings have nothing to
         // act on before the agent runs (settings-5).
         <div className="flex flex-col gap-2.5">
-          <FaultLines entry={entry} seat={seat} />
-          {routes !== undefined ? <WorkshopRoute entry={entry} local={routes} /> : <HowToConfigure entry={entry} seat={seat} />}
+          <FaultLines entry={entry} />
+          {routes !== undefined ? <WorkshopRoute entry={entry} local={routes} /> : <HowToConfigure entry={entry} />}
         </div>
       ) : (
         <>
@@ -682,11 +660,10 @@ function OtherEntry({ entry }: { entry: ReadinessEntry }) {
 }
 
 export function AgentCards() {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const readiness = store((state) => state.readiness);
   const refreshReadiness = store((state) => state.refreshReadiness);
   const configState = store((state) => state.configState);
-  const seat = !isLocalPlace(store.place);
   const byAdapter = new Map(readiness.map((entry) => [entry.adapter, entry]));
   // A card stands before the core's first answer too, unknown until it
   // comes (settings-5).
@@ -730,7 +707,7 @@ export function AgentCards() {
         </div>
       ) : null}
       <Verdict readiness={readiness} />
-      {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} optionsEpoch={optionsEpoch} />)}
+      {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} optionsEpoch={optionsEpoch} />)}
       {others.map((entry) => <OtherEntry key={entry.adapter} entry={entry} />)}
     </section>
   );

@@ -56,7 +56,7 @@ test("git-host-14, space-37: authenticated LFS Check hydrates a cold reader befo
     requestsAtApply = host.script.requests.filter(request => request.path.startsWith("/git/")).length;
     host.script.refuseTransport("Apply must stay local");
   };
-  const result = await home.client.settle("space.sync", { repository: key, placement: host.url, noticed: true }, 30_000);
+  const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
   assert.equal(result.sync.phase, "done", JSON.stringify(result.sync));
   assert.deepEqual(readFileSync(join(clone, "asset.bin")), incoming);
   assert.match(git(clone, "show", "HEAD:asset.bin"), /^version https:\/\/git-lfs.github.com\/spec\/v1/);
@@ -75,7 +75,7 @@ test("git-host-14, space-37: Stop ends a held authenticated LFS Check before App
   let applied = false;
   home.hooks.beforeStep = ({ step, repository }) => { if (step === "apply" && repository === key) applied = true; };
   const from = home.client.mark();
-  await home.client.expectOk("space.sync", { repository: key, placement: host.url, noticed: true });
+  await home.client.expectOk("space.sync", { repository: key, placement: host.url });
   await entered;
   await home.client.waitRepository(from, key, row => row.sync.phase === "running" && row.sync.step === "check" && row.sync.cancelable);
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
@@ -94,7 +94,7 @@ test("git-host-14: an alternate LFS endpoint receives no brokered credential", a
   const alternate = await startHost();
   git(clone, "config", "lfs.url", `${alternate.gitOrigin}/elsewhere.git/info/lfs`);
   git(clone, "config", "lfs.transfer.maxretries", "0");
-  const result = await home.client.settle("space.sync", { repository: key, placement: host.url, noticed: true }, 30_000);
+  const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
   assert.ok(result.sync.phase === "stopped" && result.sync.step === "check", JSON.stringify(result.sync));
   const requests = alternate.script.requests.filter(request => request.path.startsWith("/git/"));
   assert.ok(requests.length > 0, "real LFS transport reached the alternate endpoint");

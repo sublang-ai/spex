@@ -56,7 +56,7 @@ export function patchPlayer(
  * the provider default; null clears the override so the role inherits
  * the player's (DR-032). `repository` names whose config the entry is
  * in — a project's takes the player alone (playbook-library-4); absent,
- * your own group's. The local core's unless `client` names the core of
+ * your personal. The local core's unless `client` names the core of
  * the place shown (run-view-168). */
 export function bindRole(
   playbookId: string,

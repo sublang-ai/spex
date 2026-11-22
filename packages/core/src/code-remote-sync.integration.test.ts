@@ -11,7 +11,7 @@ const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, startHome, startHost, signIn } = fixture;
 test.after(() => fixture.dispose());
 
-test("space-129: Sync publishes a code remote added after registration and enables a seat's real code open", async (t) => {
+test("space-129: Sync publishes a code remote added after registration and lets a second home open the code", async (t) => {
   const host = await startHost();
   const home = await startHome("remote-refresh", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -19,9 +19,9 @@ test("space-129: Sync publishes a code remote added after registration and enabl
   const folder = gitFolder("published-later");
   git(folder, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "Initial code");
   const local = await addFolder(home, folder);
-  const key = hostKey(host, "acme/published-later-spex");
+  const key = hostKey(host, "ada/published-later-spex");
   const picked = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "published-later" } });
+  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, name: "published-later" } });
   let row = await home.client.waitRepository(picked, key, (r) => r.sync.phase === "done" || r.sync.phase === "stopped");
   assert.equal(row.sync.phase, "done", JSON.stringify(row.sync));
   const file = () => join(clonePath(home.dataDir, key), "project.json");
@@ -47,16 +47,16 @@ test("space-129: Sync publishes a code remote added after registration and enabl
   assert.equal(row.sync.phase, "done", JSON.stringify(row.sync));
   assert.deepEqual(project(), { format: 1, name: "published-later", remote });
   assert.equal(JSON.parse(git(bareOf(host, key), "show", "spex:project.json")).remote, remote);
-  assert.notEqual(row.codeKind, "none", "server opening receives code-backed metadata");
+  assert.notEqual(row.codeKind, "none", "the second home receives code-backed metadata");
 
-  const seat = await startHome("remote-refresh-seat", { host, project: false, extra: { seat: { serverId: "srv_7f3a", serverName: "lab-1", personId: "1001" } } });
-  t.after(() => seat.stop());
-  await signIn(seat, host);
-  const listed = repositoryOf(await seat.client.expectOk("space.get", {}), key);
+  const peer = await startHome("remote-refresh-peer", { host, project: false });
+  t.after(() => peer.stop());
+  await signIn(peer, host);
+  const listed = repositoryOf(await peer.client.expectOk("space.get", {}), key);
   assert.notEqual(listed.codeKind, "none");
-  const opened = seat.client.mark();
-  await seat.client.expectOk("space.join", { instance: host.url, hostId: listed.id! });
-  const joined = await seat.client.waitRepository(opened, key, (r) => r.folder !== null || r.sync.phase === "stopped");
+  const opened = peer.client.mark();
+  await peer.client.expectOk("space.join", { instance: host.url, hostId: listed.id!, folder: join(scratch, "opened-code") });
+  const joined = await peer.client.waitRepository(opened, key, (r) => r.folder !== null || r.sync.phase === "stopped");
   assert.ok(joined.folder, JSON.stringify(joined.sync));
   assert.equal(git(joined.folder!, "rev-parse", "HEAD"), git(folder, "rev-parse", "HEAD"));
 

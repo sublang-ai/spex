@@ -22,7 +22,7 @@ import { splitKey } from "./home.js";
 import type { HostRepository } from "@sublang/spex/git-host";
 import { UUID } from "@sublang/spex/files";
 import { INSTANCE_FOLDER_PATTERN as PROTOCOL_INSTANCE_FOLDER, REPOSITORY_KEY_PATTERN, UUID_PATTERN } from "./protocol.js";
-import { hostKey } from "./space-groups.js";
+import { hostKey } from "./space-catalog.js";
 
 // input, canonical origin, folder
 const CANONICAL: Array<[string, string, string]> = [
@@ -169,9 +169,8 @@ test("keys: a key splits into its instance's folder, the group path in that inst
 
 test("keys: a listed repository's key is its path in the instance, under the instance's folder where one is named", () => {
   const listed = (fullPath: string, path: string): HostRepository => ({
-    id: "17", name: path, path, remoteUrl: "", visibility: "private", archived: false, empty: false, lfs: false, spexBranch: true, project: null,
-    group: { id: "3", fullPath, name: fullPath, kind: "group", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false } },
-    can: { manageMembers: false, transfer: false },
+    id: "17", name: path, path, remoteUrl: "", archived: false, empty: false, lfs: false, spexBranch: true, project: null,
+    group: { fullPath, kind: "user" },
   });
   assert.equal(hostKey(listed("acme/platform", "a-spex")), "acme/platform/a-spex");
   assert.equal(hostKey(listed("acme/platform", "a-spex"), "@spex.pub"), "@spex.pub/acme/platform/a-spex");

@@ -13,6 +13,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-055](055-queue-advancement.md) and [DR-077](077-up-next-is-a-committed-queue.md) in which intent is next: a runtime advances into, and offers to start, only the intents assigned to it.
 - [DR-035](035-intent-ledger.md) in its attention queue and verdicts, and [DR-051](051-runtime-held-for-a-turn.md) and [DR-077](077-up-next-is-a-committed-queue.md) in the project's lane: attention, verdicts and the lane count only the runtime's own records.
 - [DR-036](036-file-state-store.md) in "resumability stays machine-local": it stays with the assigned runtime, named in the records.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

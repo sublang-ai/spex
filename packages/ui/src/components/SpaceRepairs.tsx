@@ -6,12 +6,11 @@
 // Outcomes keep their rows and focus until Refresh.
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { DiagnosticRepair, GroupsState } from "@sublang/spex-core/protocol";
+import type { DiagnosticRepair, SpaceState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
-import { isLocalPlace } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { currentLocale, i18n } from "../i18n.js";
-import { seatName, tildify } from "../lib/space.js";
+import { tildify } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
@@ -54,12 +53,10 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
   onOpenSession(sessionId: string): void;
   onPendingChange(key: string, pending: boolean): void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const rebindProject = store((state) => state.rebindProject);
   const removeProject = store((state) => state.removeProject);
   const decline = store((state) => state.spaceRepairDecline);
-  const local = isLocalPlace(store.place);
-  const seat = seatName(store.place);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
@@ -169,8 +166,8 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
     firstRef.current?.focus();
   };
   const refusalLine = refusal ? <p id={errorId} role="alert" className={`text-xs ${ALERT_INK}`}>{refusal}</p> : null;
-  const showUse = proposal !== undefined && local;
-  const first = showUse ? "use" : local ? "choose" : "defer";
+  const showUse = proposal !== undefined;
+  const first = showUse ? "use" : "choose";
 
   const controls = folderRepair ? (
     <div className="flex flex-wrap items-center gap-2">
@@ -196,12 +193,10 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
           {busy ? i18n._({ id: "Saving…", comment: "saving the project folder for saved conversations" }) : i18n._({ id: "Use {folder}", values: { folder: tildify(proposal.path) }, comment: "use the existing project folder the core checked for these conversations" })}
         </button>
       ) : null}
-      {local ? (
-        <button ref={first === "choose" ? firstRef : undefined} type="button" data-testid="space-repair-choose" className={showUse ? SECONDARY : PRIMARY} disabled={disabled || busy || !repair.repository} onClick={() => { setRefusal(undefined); setEditing(true); }}>
+      {<button ref={first === "choose" ? firstRef : undefined} type="button" data-testid="space-repair-choose" className={showUse ? SECONDARY : PRIMARY} disabled={disabled || busy || !repair.repository} onClick={() => { setRefusal(undefined); setEditing(true); }}>
           {i18n._({ id: "Locate folder…", comment: "locate the existing project files for this saved conversation group" })}
-        </button>
-      ) : null}
-      {canDismiss ? <button ref={first === "defer" ? firstRef : undefined} type="button" data-testid="space-repair-decline" className={LINK} disabled={disabled || busy} onClick={() => void defer()}>
+        </button>}
+      {canDismiss ? <button type="button" data-testid="space-repair-decline" className={LINK} disabled={disabled || busy} onClick={() => void defer()}>
           {declined
             ? i18n._({ id: "Show again", comment: "restore a dismissed folder task or saved-file notice to active review" })
             : i18n._({ id: "Dismiss", comment: "move this folder task or saved-file notice to Dismissed without deleting saved work" })}
@@ -299,9 +294,7 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
         })}</p> : null}
       </div> : null}
       {readError ? <p role="alert" data-testid="space-conversation-error" className={`text-xs ${ALERT_INK}`}>{readError}</p> : null}
-      {folderRepair ? <p className="text-xs text-neutral-500">{seat === undefined
-        ? i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })
-        : i18n._({ id: "The saved work for this folder is no longer on {place}.", values: { place: seat }, comment: "a server's saved project records are gone" })}</p>
+      {folderRepair ? <p className="text-xs text-neutral-500">{i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })}</p>
         : null}
       {recorded ? <div data-testid="space-repair-folder" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
         <span>{repair.directories.length === 1
@@ -369,7 +362,7 @@ function RepairOutcomeRow({
   );
 }
 
-type IssueEntry = GroupsState["diagnostics"][number];
+type IssueEntry = SpaceState["diagnostics"][number];
 
 /** Only the core's explicit capability permits dismissing a notice. */
 const dismissibleNotice = (entry: IssueEntry): boolean =>
@@ -386,7 +379,7 @@ function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged, onPendingCh
   onNoticeChanged(key: string, dismissed: boolean): void;
   onPendingChange(key: string, pending: boolean): void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const dismiss = store((state) => state.spaceNoticeDismiss);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -461,7 +454,7 @@ export function IssuesList({
   onClose,
   onPendingChange,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   connected: boolean;
   /** The header's control opened it. */
   open: boolean;
@@ -475,8 +468,6 @@ export function IssuesList({
   onClose(): void;
   onPendingChange(pending: boolean): void;
 }) {
-  const store = usePlaceStore();
-  const seat = seatName(store.place);
   // Outcomes keep the active task's position until Refresh. Dismissal
   // deliberately moves a task into the separate, collapsed section.
   const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
@@ -621,16 +612,10 @@ export function IssuesList({
       ? "border-amber-300 dark:border-amber-700"
       : "border-neutral-200 dark:border-neutral-800"}`;
   const introduction = introTasks.length > 0 ? <p className="text-sm text-neutral-500">{!hasHistory
-    ? seat === undefined
-      ? i18n._({ id: "To work on a project, locate its files.", comment: "folder tasks contain no saved conversations, so explain only the need for project files" })
-      : i18n._({ id: "To work on a project, its files must be available on {place}.", values: { place: seat }, comment: "folder tasks on the named server contain no saved conversations" })
-    : seat === undefined
-      ? readable
+    ? i18n._({ id: "To work on a project, locate its files.", comment: "folder tasks contain no saved conversations, so explain only the need for project files" })
+    : readable
         ? i18n._({ id: "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.", comment: "one explanation for all project-folder choices, without claiming the files are absent" })
-        : i18n._({ id: "Conversation history is saved on this computer. To work on a project again, locate its files.", comment: "older cores without readable conversation links still explain why project files are needed" })
-      : readable
-        ? i18n._({ id: "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work.", values: { place: seat }, comment: "saved history and required files belong to the named server, which allocates its folders" })
-        : i18n._({ id: "Conversation history is saved on {place}. Project files must be available there for further work.", values: { place: seat }, comment: "server-side folder requirement where no readable conversation links are available" })}</p> : null;
+        : i18n._({ id: "Conversation history is saved on this computer. To work on a project again, locate its files.", comment: "older cores without readable conversation links still explain why project files are needed" })}</p> : null;
   const renderRepair = (id: string) => {
     const row = rows.get(id)!;
     if ("outcomeKey" in row) return <RepairOutcomeRow key={id} outcome={outcomes[row.outcomeKey]!}

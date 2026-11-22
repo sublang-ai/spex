@@ -13,6 +13,7 @@ The reseed of [DR-156](156-an-untouched-seed-follows-the-credentials.md) applies
 Amended by [DR-206](206-the-workshop-points-to-its-guide.md) in "The online service before its address": the action is removed.
 
 Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the child model in a third-party Claude seed.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

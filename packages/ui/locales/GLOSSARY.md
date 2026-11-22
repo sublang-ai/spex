@@ -35,12 +35,9 @@ Product names and the role names Playbook defines stay as authored; everything e
 | turn | 轮次 | one Boss turn; "Turn finished" → 本轮已完成 |
 | conversation | 对话 | |
 | project | 项目 | a Git folder Spex works in; "project folder" for its path |
-| group | 群组 | a team at a Space; a group inside a group shows by nesting, never as "subgroup" |
-| Personal | 个人 | the place your own records go at a Space; never your own group, your namespace or Only you, nor a package's or a playbook's reach |
-| Global | 全局 | what applies to every project of yours, as npm -g; never Personal or your own group's |
-| records | 记录 | what Spex keeps for a project or a group; never spex repository, clone or unit |
-| this computer | 本机 | the local place; "Here" only as a row mark; never device or machine, nor 此设备 |
-| server | 服务器 | a team's machine, by its name; never seat or ticket |
+| Global | 全局 | what applies to every project of yours, as npm -g |
+| records | 记录 | what Spex keeps for a project or for your personal sessions; never spex repository, clone or unit |
+| this computer | 本机 | the computer connected to this IDE; never device or machine, nor 此设备 |
 | Dashboard | 仪表盘 | |
 | Projects (surface) | 项目 | |
 | Settings | 设置 | |
@@ -109,7 +106,5 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
 | Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to a Space or a registry |
 | login | 登录名 | a person's account name at a Space, shown as @login; never 用户名, which is Git's user name |
-| Members | 成员 | a project's or a group's overflow entry |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |
 | Queue (the capture control) | 加入队列 | |
-| Connect / Connected / Disconnect | 连接 / 已连接 / 断开连接 | a server's line |

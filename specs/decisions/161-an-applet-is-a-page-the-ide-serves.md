@@ -13,6 +13,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-033](033-remote-gui-serving.md) and [DR-097](097-media-and-browser-tools-across-hosts.md) in the core's endpoint: beside its WebSocket, the endpoint answers HTTP reads under one capability path per open applet; every other content transfer stays as it is.
 
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where an installed applet stands: installed under the environment's `.spex/`.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

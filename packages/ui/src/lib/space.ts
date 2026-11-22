@@ -17,7 +17,7 @@
 
 import type {
   CodeKind,
-  GroupsState,
+  SpaceState,
   InstanceState,
   PlacementBranch,
   PlacementState,
@@ -29,7 +29,6 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { isLocalPlace, type Place } from "../state/store.js";
 import { instanceNameAt, keyPlacement, placementLastSync, placementName, waitingOf } from "./placements.js";
 import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
@@ -38,6 +37,10 @@ import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
  * runs on are known (DR-049). */
 export function tildify(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)(?=\/|$)/, "~");
+}
+
+export function rowName(repo: RepositoryState): string {
+  return repo.own ? i18n._("Your sessions") : projectName(repo.name);
 }
 
 /** Whether a spex repository's clone is on this computer (space-61): it
@@ -59,8 +62,8 @@ export function clonePath(home: string, key: string): string {
  * reader's language; the host's own words ride the row's title. */
 export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): string {
   return waiting.step === "create"
-    ? i18n._("Waiting for a member who can create it in {group}", { group: waiting.group })
-    : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
+    ? i18n._("Waiting for the Space to create the records")
+    : i18n._("Waiting for the Space to prepare the records branch");
 }
 
 /** A spex repository's last sync (space-61), its key placement's: this
@@ -124,33 +127,17 @@ export function signedOutPhrase(name: string): string {
   });
 }
 
-/** The server whose Space the surface shows at a seat's place, which
- * every phrase naming this computer names instead (space-112); none at
- * this computer. */
-export function seatName(place: Place): string | undefined {
-  return isLocalPlace(place) ? undefined : (place.name ?? place.key);
-}
-
-/** "Not on this computer", or at a seat's place "Not on <server>"
- * (space-87, space-112): `seat` names the server where the surface shows
- * a seat's place. */
-export function notHerePhrase(seat?: string): string {
-  return seat === undefined
-    ? i18n._({ id: "Not on this computer", comment: "a project's records, or a copy of them at a Space, not on this computer" })
-    : i18n._({
-        id: "Not on {place}",
-        values: { place: seat },
-        comment: "a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name",
-      });
+/** The records are not on this computer (space-87). */
+export function notHerePhrase(): string {
+  return i18n._({ id: "Not on this computer", comment: "a project's records, or a copy of them at a Space, not on this computer" });
 }
 
 /** What a spex repository's records read for their state (space-61): the
  * core's aggregate over its placements, a reachable one reading its key
  * placement's last sync, one local only reading nothing (space-120); a
  * waiting step reads on its placement's line instead (space-64,
- * space-87). `seat` names the server where the surface shows a seat's
- * place (space-112). */
-export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?: string): string {
+ * space-87). */
+export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
   switch (repo.state) {
     case "local-only":
       return "";
@@ -160,7 +147,7 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?:
     case "unreachable":
       return hostStatePhrase(repo.state, repo.reason);
     case "absent":
-      return notHerePhrase(seat);
+      return notHerePhrase();
     default:
       // A state the page does not know: the raw value is data.
       return repo.state;
@@ -187,7 +174,7 @@ export interface LinePhrase {
 /** How the phrases of one spex repository name its placements
  * (space-12, space-120): an instance by its display name, the path
  * placement by its remote; whether a line reads "Signed out of <display
- * name>"; and the server a seat's place shows (space-112). */
+ * name>". */
 export interface PhraseNames {
   /** A placement by its instance's origin, null naming the path
    * placement. */
@@ -195,14 +182,13 @@ export interface PhraseNames {
   /** Whether the line is unreachable because this computer is signed out
    * of its instance (space-61). */
   signedOut(line: PlacementState): boolean;
-  seat?: string;
 }
 
 /** The names a spex repository's phrases read (space-12, space-61): a
  * line by its instance's display name as the home last read it, else its
  * host name, the path placement by its remote; a line signed out while it
  * reads unreachable and its instance is signed out. */
-export function phraseNames(groups: GroupsState, repo: RepositoryState, seat?: string): PhraseNames {
+export function phraseNames(groups: SpaceState, repo: RepositoryState): PhraseNames {
   const instanceAt = (origin: string): InstanceState | undefined => groups.instances.find((instance) => instance.origin === origin);
   return {
     nameAt: (origin) => {
@@ -211,7 +197,6 @@ export function phraseNames(groups: GroupsState, repo: RepositoryState, seat?: s
       return origin === null ? "" : instanceNameAt(groups, origin);
     },
     signedOut: (line) => line.state === "unreachable" && line.instance !== null && instanceAt(line.instance)?.signedIn === false,
-    seat,
   };
 }
 
@@ -242,8 +227,7 @@ export function lineOutcome(
  * its state, a reachable one reading its last sync (space-61), a
  * read-only one carrying it beside the host's reason, one at a Space
  * this computer is signed out of "Signed out of <display name>", one a
- * placement file names "Not on this computer" — at a seat's place "Not
- * on <server>" (space-112). Where its last check counted them, its own
+ * placement file names "Not on this computer". Where its last check counted them, its own
  * ahead and behind ride the title of a sync's outcome and of its state
  * (space-8). */
 export function placementPhrase(
@@ -335,7 +319,7 @@ export function placementPhrase(
       };
     }
     case "absent": {
-      const text = notHerePhrase(names.seat);
+      const text = notHerePhrase();
       return { text, title: text, tone: "idle" };
     }
     default:
@@ -490,16 +474,10 @@ export function rowPhrase(
   if (repo.state === "read-only") {
     const text = hostStatePhrase("read-only", repo.reason ?? lines.find((line) => line.state === "read-only")?.reason ?? null);
     const title =
-      names.seat === undefined
-        ? i18n._({
+      i18n._({
             id: "{state} · new sessions stay on this computer",
             values: { state: text },
             comment: "a read-only project's title: the sessions started from now on are not sent",
-          })
-        : i18n._({
-            id: "{state} · new sessions stay on {place}",
-            values: { state: text, place: names.seat },
-            comment: "a read-only row's title on a team server's Space: new sessions stay on the server; {place} is the server's name",
           });
     return { text, title, tone: "idle" };
   }
@@ -560,16 +538,16 @@ export function openingOf(repo: RepositoryState | undefined): OpeningProject | u
   return undefined;
 }
 
-/** Every row a Groups state lists; a state read in part lists what it
+/** Every row a Space state lists; a state read in part lists what it
  * holds. */
-function rowsOf(state: GroupsState): RepositoryState[] {
-  return [...(state.own?.repositories ?? []), ...(state.instances ?? []).flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+function rowsOf(state: SpaceState): RepositoryState[] {
+  return state.repositories;
 }
 
 /** The projects opening at a place (run-view-168): every row of its
- * Groups state whose join runs, left out once its core lists the
+ * Space state whose join runs, left out once its core lists the
  * project. */
-export function openingProjects(state: GroupsState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
+export function openingProjects(state: SpaceState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
   if (!state) return [];
   return rowsOf(state)
     .map((repo) => openingOf(repo))
@@ -578,7 +556,7 @@ export function openingProjects(state: GroupsState | undefined, projects: readon
 
 /** What a place says of opening the project keyed `id` (run-view-168):
  * its join running or stopped, nothing otherwise. */
-export function openingAt(state: GroupsState | undefined, id: string | undefined): OpeningProject | undefined {
+export function openingAt(state: SpaceState | undefined, id: string | undefined): OpeningProject | undefined {
   if (!state || id === undefined) return undefined;
   return openingOf(rowsOf(state).find((repo) => repo.key === id));
 }
@@ -593,36 +571,6 @@ export const personalLabel = (): string =>
  * shared. */
 export const thisComputerLabel = (): string =>
   i18n._({ id: "This computer", comment: "the heading of the projects and sessions kept on this computer alone, in no group at any Space" });
-
-/** A row's name (space-1, DR-159): the spex repository's with its
- * `-spex` dropped, a group's own reading "Group sessions" and your own
- * group's own "Your sessions". */
-export function rowName(group: { fullPath: string }, repo: RepositoryState): string {
-  if (repo.own) {
-    return i18n._({ id: "Your sessions", comment: "the row of your own group's own records: your sessions outside any project" });
-  }
-  if (isGroupRepository(group, repo)) {
-    return i18n._({ id: "Group sessions", comment: "the row of a group's own records: the group's sessions outside any project" });
-  }
-  return projectName(repo.name);
-}
-
-/** A group's own spex repository rather than a project's (DR-103):
- * your own group's, or the one named `<group>-spex` in its group, after
- * the last segment of the group's path as the core names it (space-65),
- * whatever the group's name — a project of that name is refused at
- * creation, the name being taken. */
-export function isGroupRepository(group: { fullPath: string }, repo: RepositoryState): boolean {
-  return repo.own || repo.name === `${lastSegment(group.fullPath)}-spex`;
-}
-
-/** A project's spex repository cloned at the place with no working
- * folder pairing it: a clone whose code found none here, paired later
- * (space-63) — or, at a remote place, one whose code clone failed,
- * joined again into the folder its core allocated (space-103). */
-export function awaitsFolder(group: { fullPath: string }, repo: RepositoryState): boolean {
-  return cloneHere(repo) && !isGroupRepository(group, repo) && repo.folder === null && repo.state !== "local-only";
-}
 
 /** Whether a spex repository a Space lists may hold the records of a
  * project here (space-58): its code read alike — the core names where a
@@ -809,21 +757,13 @@ export function familyName(family: string): string {
   return FAMILY_LABELS[family]?.() ?? family;
 }
 
-/** Every ignored family with its one plain reason (space-25), the
- * server named where this computer would be at a seat's place
- * (space-112); read at render, never at module load. */
-export function staysHere(seat?: string): readonly { family: string; reason: string }[] {
+/** Every ignored family with its plain reason (space-25), read at render. */
+export function staysHere(): readonly { family: string; reason: string }[] {
   return [
     {
       family: i18n._({ id: "provider hints", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("resume tokens for this computer's agent conversations; they work nowhere else")
-          : i18n._({
-              id: "resume tokens for {place}'s agent conversations; they work nowhere else",
-              values: { place: seat },
-              comment: "why provider hints stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("resume tokens for this computer's agent conversations; they work nowhere else"),
     },
     {
       family: i18n._({ id: "in-use files", comment: "a file family that stays on this computer: the files marking which Spex is writing now" }),
@@ -835,24 +775,12 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
         comment: "a file family that stays on this computer",
       }),
       reason:
-        seat === undefined
-          ? i18n._("copies installed from spex.lock; every computer installs its own")
-          : i18n._({
-              id: "copies installed from spex.lock; {place} installs its own",
-              values: { place: seat },
-              comment: "why installed packages stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("copies installed from spex.lock; every computer installs its own"),
     },
     {
       family: i18n._({ id: "where projects live", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("where your project folders are on this computer, in the home file")
-          : i18n._({
-              id: "where your project folders are on {place}, in the home file",
-              values: { place: seat },
-              comment: "why where projects live stays on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("where your project folders are on this computer, in the home file"),
     },
     {
       family: i18n._({ id: "preferences", comment: "a file family that stays on this computer" }),
@@ -861,13 +789,7 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
     {
       family: i18n._({ id: "credentials", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("this computer's sign-in to each Space")
-          : i18n._({
-              id: "{place}'s sign-in to each Space",
-              values: { place: seat },
-              comment: "why credentials stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("this computer's sign-in to each Space"),
     },
     {
       family: i18n._({

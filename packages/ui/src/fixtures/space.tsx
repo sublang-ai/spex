@@ -11,9 +11,7 @@
 import { vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type {
-  GroupsState,
-  HostMemberInfo,
-  InstanceGroupState,
+  SpaceState,
   InstanceState,
   PlacementBranch,
   PlacementState,
@@ -26,10 +24,9 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
-import { useServerOpens } from "../state/server-opens.js";
-import { NO_CAN, namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
+import { placementState, rowOf, type RowOver } from "./space-state.js";
 
-export { NO_CAN, namespace, placementState, type RowOver } from "./groups-state.js";
+export { placementState, type RowOver } from "./space-state.js";
 
 export const NOW = Date.now();
 export const MIN = 60_000;
@@ -42,7 +39,7 @@ export const KEY = "@spex.example/jane/academy-spex";
 export const ORIGIN = "https://spex.example";
 /** A second instance, which a home lists after the first. */
 export const SECOND = "https://second.example";
-/** Your own group's spex repository, in your own group's folder. */
+/** Your personal spex repository, in your personal folder. */
 export const OWN = "jane/jane-spex";
 export const CLONE = `${HOME}/workspace/${KEY}`;
 
@@ -177,10 +174,7 @@ export function placement(over: Partial<PlacementState> = {}): PlacementState {
     instance: ORIGIN,
     path: "jane/academy-spex",
     id: "42",
-    members: 1,
-    visibility: "private",
     branch: BRANCH,
-    noticed: true,
     ...over,
   });
 }
@@ -208,21 +202,17 @@ export function repo(over: RowOver = {}): RepositoryState {
     mergePending: false,
     placedAt: [],
     waiting: null,
-    members: 1,
-    visibility: "private",
     branch: BRANCH,
     local: [],
     incoming: [],
     conflicts: [],
     lastSync: null,
-    noticed: true,
     sync: { phase: "idle" },
-    can: { manageMembers: false, transfer: false },
     ...over,
   });
 }
 
-/** Your own group's spex repository, on the host, as a test says
+/** Your personal spex repository, on the host, as a test says
  * otherwise of it. */
 export function ownRepo(over: RowOver = {}): RepositoryState {
   return repo({
@@ -240,18 +230,8 @@ export function ownRepo(over: RowOver = {}): RepositoryState {
   });
 }
 
-/** Your own group's spex repository, on the host. */
+/** Your personal spex repository, on the host. */
 export const OWN_REPO: RepositoryState = ownRepo();
-
-/** The host's own roles in its order, Developer upward may push
- * (DR-114): what a host read brings. */
-export const ROLES: InstanceState["roles"] = [
-  { id: "10", name: "Guest", mayPush: false },
-  { id: "20", name: "Reporter", mayPush: false },
-  { id: "30", name: "Developer", mayPush: true },
-  { id: "40", name: "Maintainer", mayPush: true },
-  { id: "50", name: "Owner", mayPush: true },
-];
 
 /** The fixtures' instance: signed in as jane with a read held a minute
  * ago, your namespace there empty unless a test says otherwise. */
@@ -260,244 +240,59 @@ export function instance(over: Partial<InstanceState> = {}): InstanceState {
     origin: ORIGIN,
     host: "spex.example",
     displayName: "Spex Example",
-    account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
+    account: { id: "7", login: "jane", displayName: "Jane" },
     signedIn: true,
     hostSignedOut: false,
     read: { phase: "idle" },
     readAt: NOW - MIN,
-    roles: ROLES,
-    groups: [namespace("jane")],
     ...over,
   };
 }
 
 /** What a test says of a home: its fields, and `instance`, merged into
  * the default instance. */
-export type HomeOver = Partial<GroupsState> & { instance?: Partial<InstanceState> };
+export type HomeOver = Partial<SpaceState> & { instance?: Partial<InstanceState> };
 
 /** A signed-in home: your own group with its own spex repository, then
  * the instance with the given ones in your namespace there (space-30). */
-export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
-  const { instance: at, ...rest } = over;
+export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): SpaceState {
+  const { instance: instanceOverrides, ...home } = over;
   return {
     home: HOME,
-    git: { ok: true, version: "2.45.0" },
+    git: { ok: true, version: "2.50" },
     defaultInstance: ORIGIN,
     signIn: { phase: "idle" },
-    // Signed in, your own group's folder bears the login (space-59).
-    own: { name: "jane", named: false, repositories: [OWN_REPO] },
-    instances: [instance({ groups: [namespace("jane", repos)], ...at })],
+    instances: [instance(instanceOverrides)],
+    repositories: [OWN_REPO, ...repos],
     diagnostics: [],
-    // The core carries the count (space-1); the fixture derives it the
-    // same way, so a test state can never claim an impossible pair.
-    issues: 0,
-    ...rest,
-    ...(rest.diagnostics
-      ? { issues: rest.issues ?? rest.diagnostics.filter((d) => d.blocking || (d.repair?.declined === undefined && d.notice?.dismissed === undefined)).length }
-      : {}),
+    ...home,
+    issues: home.issues ?? home.diagnostics?.filter((entry) => !entry.repair?.declined && !entry.notice?.dismissed).length ?? 0,
   };
 }
 
-/** A home with its default instance changed as a test says. */
-export function withInstance(state: GroupsState, over: Partial<InstanceState>): GroupsState {
+export function withInstance(state: SpaceState, over: Partial<InstanceState>): SpaceState {
+  return { ...state, instances: [{ ...state.instances[0]!, ...over }, ...state.instances.slice(1)] };
+}
+
+export function noInstance(over: Partial<SpaceState> = {}, repos: RepositoryState[] = []): SpaceState {
+  return base({ instances: [], repositories: [ownRepo({ instance: null, state: "local-only" }), ...repos.map((repo) => ({ ...repo, instance: null }))], ...over });
+}
+
+export function signedOutAt(origin: string, options: { byHost?: boolean } = {}, state: SpaceState = base()): SpaceState {
   return {
     ...state,
-    instances: state.instances.map((entry) => (entry.origin === state.defaultInstance ? { ...entry, ...over } : entry)),
+    instances: state.instances.map((entry) => entry.origin === origin
+      ? { ...entry, signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" } }
+      : entry),
   };
 }
 
-/** A home whose default instance lists more groups after its own. */
-export function withGroups(state: GroupsState, ...groups: InstanceGroupState[]): GroupsState {
-  const served = state.instances.find((entry) => entry.origin === state.defaultInstance);
-  return withInstance(state, { groups: [...(served?.groups ?? []), ...groups] });
+export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): SpaceState {
+  const state = base(over, repos);
+  return { ...state, instances: [...state.instances, instance({ origin: SECOND, host: "second.example", displayName: "Second Example", account: { id: "8", login: "jada", displayName: null } })] };
 }
 
-/** A home that lists no instance: your own group alone, its folder
- * still bearing this device's user name, its own spex repository on this
- * device only, beside the given rows. */
-export function noInstance(over: Partial<GroupsState> = {}, repos: RepositoryState[] = []): GroupsState {
-  const own = ownRepo({ state: "local-only", remote: null, id: null, lastSync: null });
-  return base({ instances: [], own: { name: "jane", named: true, repositories: [own, ...repos] }, ...over });
-}
-
-/** A home signed out of the instance at `origin`, its entry kept with
- * its account; `byHost` where that instance signed this device out
- * (space-3). A row that instance governed is governed by none, as the
- * core says while no signed-in instance lists it (space-30). */
-export function signedOutAt(origin: string, options: { byHost?: boolean } = {}, state: GroupsState = base()): GroupsState {
-  const ungoverned = (rows: RepositoryState[]): RepositoryState[] =>
-    rows.map((row) => (row.governing === origin ? { ...row, governing: null } : row));
-  return {
-    ...state,
-    own: { ...state.own, repositories: ungoverned(state.own.repositories) },
-    instances: state.instances.map((entry) => ({
-      ...entry,
-      ...(entry.origin === origin ? { signedIn: false, hostSignedOut: options.byHost ?? false, read: { phase: "idle" as const } } : {}),
-      groups: entry.groups.map((group) => ({ ...group, repositories: ungoverned(group.repositories) })),
-    })),
-  };
-}
-
-/** A home signed in to the fixtures' instance and to a second one after
- * it, displayed "Second Example", where you are signed in as jada. */
-export function twoInstances(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): GroupsState {
-  const home = base(over, repos);
-  return {
-    ...home,
-    instances: [
-      ...home.instances,
-      instance({
-        origin: SECOND,
-        host: "second.example",
-        displayName: "Second Example",
-        account: { id: "70", login: "jada", displayName: "Jada", canCreateGroup: false },
-        groups: [namespace("jada")],
-      }),
-    ],
-  };
-}
-
-/** The project at the first instance alone, whose placement file names
- * a repository the second lists (space-95). */
-export const BETA = "@spex.example/jane/beta-spex";
-/** A project on this device only, in your own group's folder. */
-export const GAMMA = "jane/gamma-spex";
-/** A group's own spex repository at the first instance. */
-export const ACME = "@spex.example/acme/acme-spex";
-
-/**
- * A home signed in to two instances, as space-95 arranges it (DR-128):
- * the opened project placed at both — its key placement at the first in
- * your namespace, its second in the second's `workshop`, whose listing
- * names it as placed there; a project at the first alone whose placement
- * file names a repository the second's `workshop` lists, with two
- * members; a local-only project; a group's own spex repository in the
- * first's `acme`; and your own group's own repository placed at both,
- * which each namespace lists. `placedAt` is what the files say.
- */
-export function twoPlacementsHome(): GroupsState {
-  const may = { manageMembers: true, transfer: true };
-  const academy = repo({
-    placedAt: [ORIGIN, SECOND],
-    lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 },
-    can: may,
-    placements: [
-      placement({ lastSync: { at: NOW - 5 * MIN, sent: 1, received: 0 }, can: may }),
-      placementState({
-        instance: SECOND,
-        path: "workshop/academy-spex",
-        id: "52",
-        members: 2,
-        visibility: "private",
-        branch: { ...BRANCH, ahead: 0, behind: 0 },
-        noticed: true,
-        lastSync: { at: NOW - HOUR, sent: 0, received: 1 },
-        can: may,
-      }),
-    ],
-  });
-  const beta = repo({
-    key: BETA,
-    name: "beta-spex",
-    id: "43",
-    remote: "jane/beta-spex",
-    code: "https://github.com/jane/beta.git",
-    folder: "/Users/jane/code/beta",
-    placedAt: [ORIGIN, SECOND],
-    lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 },
-    can: may,
-    placements: [
-      placement({ path: "jane/beta-spex", id: "43", lastSync: { at: NOW - 2 * HOUR, sent: 2, received: 0 }, can: may }),
-      placementState({
-        instance: SECOND,
-        path: "workshop/beta-spex",
-        id: "53",
-        attached: false,
-        state: "absent",
-        members: 2,
-        visibility: "private",
-      }),
-    ],
-  });
-  const gamma = repo({
-    key: GAMMA,
-    name: "gamma-spex",
-    instance: null,
-    id: null,
-    remote: null,
-    code: "https://github.com/jane/gamma.git",
-    folder: "/Users/jane/code/gamma",
-    state: "local-only",
-    branch: null,
-    members: null,
-    visibility: null,
-  });
-  const acme = repo({
-    key: ACME,
-    name: "acme-spex",
-    id: "60",
-    remote: "acme/acme-spex",
-    code: null,
-    folder: null,
-    members: 3,
-    lastSync: { at: NOW - 4 * HOUR, sent: 0, received: 2 },
-    placedAt: [ORIGIN],
-  });
-  const own = ownRepo({
-    placedAt: [ORIGIN, SECOND],
-    placements: [
-      placement({ path: OWN, id: "7", branch: null, lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 } }),
-      placementState({
-        instance: SECOND,
-        path: "jada/jada-spex",
-        id: "71",
-        members: 1,
-        visibility: "private",
-        noticed: true,
-        lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
-      }),
-    ],
-  });
-  const home = twoInstances({}, [academy, beta]);
-  const [first, second] = home.instances;
-  const ownPlaced = [{ key: OWN, name: "jane-spex" }];
-  return {
-    ...home,
-    own: { ...home.own, repositories: [own, gamma] },
-    instances: [
-      {
-        ...first!,
-        groups: [
-          { id: "3", login: null, mine: false, fullPath: "acme", name: "Acme", can: NO_CAN, placed: [], repositories: [acme] },
-          { ...namespace("jane", [academy, beta]), placed: ownPlaced },
-        ],
-      },
-      {
-        ...second!,
-        groups: [
-          {
-            id: "81",
-            login: null,
-            mine: false,
-            fullPath: "workshop",
-            name: "Workshop",
-            can: NO_CAN,
-            placed: [
-              { key: KEY, name: "academy-spex" },
-              { key: BETA, name: "beta-spex" },
-            ],
-            repositories: [],
-          },
-          { ...namespace("jada"), placed: ownPlaced },
-        ],
-      },
-    ],
-  };
-}
-
-/** The opened repository with local changes of every kind, listed out
- * of order so the grouping is what orders them. */
-export function repoState(over: RowOver = {}, home: HomeOver = {}): GroupsState {
+export function repoState(over: RowOver = {}, home: HomeOver = {}): SpaceState {
   return base(home, [
     repo({
       local: [OTHER_UNIT, SETTINGS_UNIT, SESSION_UNIT, RULES_UNIT, INTENT_UNIT, CODE_UNIT, ENVIRONMENT_UNIT, AUTHORING_UNIT, DELETED_SESSION],
@@ -555,15 +350,9 @@ export const READS: Record<string, SpaceReadResult> = {
   "sessions/s2.json": { kind: "withheld", reason: "可能包含提供方令牌——不予显示" },
 };
 
-/** The members the host lists: the repository's own two. */
-export const MEMBERS: HostMemberInfo[] = [
-  { id: "7", login: "jane", displayName: "Jane", role: "Owner", direct: true, via: null },
-  { id: "8", login: "bob", displayName: null, role: "Developer", direct: true, via: null },
-];
-
 /** What `space.get` answers: the tests set it, and a handler may move
  * it as the core would. */
-export const home: { current: GroupsState } = { current: base() };
+export const home: { current: SpaceState } = { current: base() };
 
 export const commandMock = vi.fn();
 
@@ -597,22 +386,6 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
       return { stopped: true };
     case "space.signin.start":
       return { flow: "browser", url: "https://spex.example/login/app?client_id=spex&state=s" };
-    case "space.members":
-      return { members: MEMBERS };
-    case "server.list":
-      return { servers: [], failures: [] };
-    case "space.group.create":
-      return { group: { id: "90", fullPath: fields.path as string, name: fields.name as string } };
-    case "space.share": {
-      // The host lists the account it added at the role it was given.
-      const role = ROLES.find((entry) => entry.id === fields.role)?.name ?? (fields.role as string);
-      const login = fields.login as string;
-      return {
-        members: [...MEMBERS, { id: "9", login, displayName: null, role, direct: true, via: null }],
-      };
-    }
-    case "space.unshare":
-      return { members: MEMBERS.filter((member) => member.login !== fields.login) };
     case "space.diff":
       return {
         patch: `--- a/${fields.path}\n+++ b/${fields.path}\n@@ -1 +1 @@\n-old: 1\n+new: 2\n`,
@@ -645,14 +418,13 @@ export function installClient(): void {
     views: {},
     projects: [],
   } as never);
-  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   delete (window as { spexNative?: unknown }).spexNative;
 }
 
 /** Render the surface over a home; unless told otherwise, open the
  * tested repository's row, which brings its tabs beneath the list. */
-export async function renderGroups(state: GroupsState, options: { open?: boolean } = {}) {
+export async function renderSpace(state: SpaceState, options: { open?: boolean } = {}) {
   home.current = state;
   const onOpenSession = vi.fn<(sessionId: string) => void>();
   const onOpenProject = vi.fn<(projectId: string) => void>();
@@ -666,7 +438,7 @@ export async function renderGroups(state: GroupsState, options: { open?: boolean
 }
 
 /** The core's broadcast of a new state (space-29). */
-export function deliver(state: GroupsState): void {
+export function deliver(state: SpaceState): void {
   home.current = state;
   act(() => deliverServerMessageForTests({ type: "space.state", state }));
 }

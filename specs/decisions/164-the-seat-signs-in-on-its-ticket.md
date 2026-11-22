@@ -10,6 +10,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-159](159-projects-in-groups-opened-where-you-work.md) in "A seat opens when needed": the open hands the ticket it presented to the seat's sign-in, and the approval page is opened only where the space still asks for it; its declined item on the ticket's consent is now decided here.
 - [DR-132](132-team-servers.md) in "A seat signs in to the instance through the device flow": the seat's request carries the ticket beside the server and the person.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

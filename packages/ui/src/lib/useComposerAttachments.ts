@@ -3,14 +3,14 @@
 
 import type { MediaUploadOwner } from "@sublang/spex-core/protocol";
 import type { ComposerAttachmentControls } from "../components/ComposerAttachments.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 
 export const homeAttachmentKey = (projectId: string) => `home:${projectId}`;
 export const sessionAttachmentKey = (sessionId: string) => `session:${sessionId}`;
 export const draftAttachmentKey = (draftId: string) => `draft:${draftId}`;
 
 export function useComposerAttachments(key: string | undefined, owner: MediaUploadOwner | undefined) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const stored = store((state) => key ? state.attachmentDrafts[key] : undefined);
   const files = stored ?? [];
   const controls: ComposerAttachmentControls = {

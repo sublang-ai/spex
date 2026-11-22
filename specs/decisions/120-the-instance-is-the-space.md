@@ -22,6 +22,7 @@ Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the row
 
 Amended by [DR-190](190-membership-with-a-clear-scope.md) in membership guidance and empty-group deletion: guidance names Invite members, and the permission-gated Delete group action states its scope and acknowledges a deletion request.
 Amended by [DR-193](193-group-deletion-follows-the-space-policy.md) in the deletion check and outcome: the empty-group restriction remains, a fresh check names blocking contents, and the Space's scheduling and restoration policy governs the confirmed request.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

@@ -121,7 +121,7 @@ import { shippedBuiltinPackage } from "./builtins.js";
 import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
 import { CredentialChanged } from "@sublang/spex/git-host";
-import { relayHostError } from "./space-groups.js";
+import { relayHostError } from "./space-catalog.js";
 import { migrateEnvironments, type MigratedRepository } from "./migrate-environment.js";
 import { gitEnvironment } from "./storage-git.js";
 import { splitKey } from "./home.js";

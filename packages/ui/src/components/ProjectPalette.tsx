@@ -1,34 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The project palette (DR-011): a centered command palette that is
-// the one place projects are chosen, added, and created. Rows carry
-// each project's live state so quiet runs in other projects stay one
-// keystroke away. With nothing registered there is nothing to filter,
-// so the palette opens as an add flow: the path field focused and the
-// Academy example leading its ordinary list (projects-22). The welcome
-// page and sidebar's add route lead with the native folder picker and
-// keep creating a new project separate (projects-42). The palette owns
-// focus while open — Tab wraps inside it and Escape closes from
-// anywhere in it — and returns focus to the opener with any draft
-// intact (run-view-42). Where any seat is open, the palette lists
-// every place's projects, each naming its place, and names the place a
-// project added here lands at (run-view-168). Every place lists the
-// projects of the member's groups it lacks, under "From your groups" for
-// this computer and "From your groups on <server>" for each seat
-// (run-view-168, DR-159, DR-172), each row reading the project's name and
-// its group — "Personal" for the person's own — and never the records'
-// key: one on this computer is opened into the folder the act's own
-// picker takes — the shell's picker, else a path named in place — as its
-// Space row's "Open here" is (space-63); one at a team server with no
-// folder picked or typed, its core allocating the folder (run-view-169,
-// space-103). A row reads "Opening…" while its open runs and offers "Try
-// again" once it stopped.
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
-  GroupsState,
-  InstanceGroupState,
+  SpaceState,
   ProjectInfo,
   RepositoryState,
   SessionInfo,
@@ -39,23 +14,11 @@ import {
   ATTENTION_RANK,
   type AttentionItem,
 } from "../state/dashboard.js";
-import { useEachPlace } from "../state/place-context.js";
-import { hostIdAt, openOnServer, pendingKey, seatHolding, serverPlace, useServerOpens } from "../state/server-opens.js";
-import { LOCAL_PLACE, LOCAL_PLACE_KEY, placeLabel, useAppStore } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import {
-  allRepositories,
-  anySignedIn,
-  entriesOf,
-  pickInstances,
-  signedInInstances,
-} from "../lib/instances.js";
-import { waitingOf } from "../lib/placements.js";
-import { isGroupRepository, projectName } from "../lib/space.js";
+import { anySignedIn, instanceNameAt, instanceOf } from "../lib/instances.js";
+import { projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
-import { GroupPicker } from "./SpaceGroups.js";
-import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
-import { useServers } from "./SpaceServers.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
 
 /** A refusal as the palette shows it: the core's words, and Git's own
@@ -73,103 +36,29 @@ function refusalOf(cause: unknown): Refusal {
   return typeof output === "string" && output.trim() ? { message, detail: output } : { message };
 }
 
-/** A seat's projects as the palette lists them (run-view-168). */
-export interface PalettePlace {
-  key: string;
-  /** The server's name. */
-  label: string;
-  projects: ProjectInfo[];
-  sessions: SessionInfo[];
-  attention: Map<string, AttentionItem>;
-  /** The seat's current project, where the workspace is on it. */
-  currentProjectId?: string;
-  /** The instance's name while the seat's sign-in there has not
-   * completed (run-view-168, core-service-142): the row's entry for the
-   * server says so. */
-  signingIn?: string;
-}
-
-/** A project this computer may open (run-view-168): records a signed-in
- * Space lists in the member's groups with no clone here, as its "Open
- * here" row stands (space-61). A clone whose code found no folder is
- * paired from its Space row instead (space-63). */
 interface PaletteJoin {
-  /** The origin of the Space whose heading lists it (space-29). */
   instance: string;
-  group: InstanceGroupState;
   repo: RepositoryState;
-  /** Its open stopped: "Try again" sends it again. */
-  again: boolean;
-  /** Its open runs here: the row reads "Opening…". */
   opening: boolean;
+  again: boolean;
 }
 
-function joinable(groups: GroupsState | undefined): PaletteJoin[] {
-  if (!groups) return [];
-  return signedInInstances(groups).flatMap((instance) =>
-    entriesOf(instance).flatMap((group) =>
-      group.repositories
-        .filter((repo) => {
-          if (repo.id === null || repo.state !== "absent") return false;
-          return repo.sync.phase !== "running" || repo.sync.op === "join";
-        })
-        .map((repo) => {
-          const opening = repo.sync.phase === "running" && repo.sync.op === "join";
-          const stopped = repo.sync.phase === "stopped" && repo.sync.op === "join";
-          return { instance: instance.origin, group, repo, opening, again: !opening && stopped };
-        }),
-    ),
-  );
+function joinable(space: SpaceState | undefined): PaletteJoin[] {
+  if (!space) return [];
+  return space.repositories.flatMap((repo) => {
+    if (repo.own || repo.id === null || !repo.instance || !instanceOf(space, repo.instance)?.signedIn) return [];
+    const opening = repo.sync.phase === "running" && repo.sync.op === "join";
+    const again = repo.sync.phase === "stopped" && repo.sync.op === "join";
+    return repo.state === "absent" ? [{ instance: repo.instance, repo, opening, again }] : [];
+  });
 }
 
-/** Whether the member's groups list any project (run-view-168): a
- * group's own records and your own are none. */
-function groupsListProjects(groups: GroupsState): boolean {
-  return signedInInstances(groups).some((instance) =>
-    entriesOf(instance).some((group) =>
-      group.repositories.some((repo) => repo.id !== null && !repo.own && !isGroupRepository(group, repo)),
-    ),
-  );
-}
-
-/** A row's group as the palette names it (run-view-168): "Personal" for
- * the person's own, "Shared by @<login>" for another account's, else the
- * group by its path at the Space. */
-function groupLabel(group: InstanceGroupState): string {
-  if (group.login !== null && group.mine) {
-    return i18n._({ id: "Personal", comment: "your own group at a Space, the place your own records go; never \"your namespace\"" });
-  }
-  if (group.login !== null) {
-    return i18n._({
-      id: "Shared by @{login}",
-      values: { login: group.login },
-      comment: "records another account keeps at a Space and shares with you; {login} is that account",
-    });
-  }
-  return group.fullPath;
-}
-
-/** A row's key: its repository's (run-view-168). */
 function joinKeyOf(entry: PaletteJoin): string {
   return entry.repo.key;
 }
 
-/** "Open here" (space-111): this computer's entry of a project's Open. */
-const openHereLabel = (): string =>
-  i18n._({
-    id: "Open here",
-    comment: "project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside",
-  });
+const openHereLabel = (): string => i18n._("Open here");
 
-/** The reason a server cannot open this project's code (space-111). */
-const needsCodeHostLabel = (): string =>
-  i18n._({
-    id: "A Git remote is required to open this project's code on a server.",
-    comment: "visible reason for a disabled server opening: this project's code has no configured Git remote; records sharing and reading remain separate",
-  });
-
-/** A project of the member's groups as the palette names it: as its
- * code is, never by its `<name>-spex` (DR-159). */
 function projectNameOf(repo: RepositoryState): string {
   return projectName(repo.name);
 }
@@ -181,29 +70,16 @@ export interface ProjectPaletteProps {
    * (dashboard-9, DR-066) — the palette derives no count of its own. */
   attention: Map<string, AttentionItem>;
   currentProjectId?: string;
-  /** Each open seat's projects, after this computer's (run-view-168). */
-  seats?: PalettePlace[];
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
-  /** Pick a seat's project, at its place. */
-  onPickAt?: (place: string, projectId: string) => void;
-  /** A group's project opened at a place (run-view-168): accepted, it
-   * becomes that place's current project by its row's key, which the
-   * project bears once the place's core lists it. */
-  onOpened?: (place: string, projectId: string) => void;
+  onOpened?: (projectId: string) => void;
   /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
   /** Opened from a project-add action: lead with folder selection,
    * keeping project switching and the Academy choice out of this form. */
   addProjectOnly?: boolean;
-  /** Opened at "From your groups": the welcome page's "Open a project
-   * from your groups" (run-view-172). */
-  groupsAt?: string;
-  /** Show a new server connection's progress, sign-in or failure on Space. */
-  onShowSpace?: () => void;
-  /** Forward group-operation feedback to a region that survives this dialog. */
-  onNote?: (message: string) => void;
+  spaceFirst?: boolean;
   onClose: () => void;
 }
 
@@ -211,15 +87,6 @@ interface ProjectRowState {
   running: number;
   attention: number;
   worst?: AttentionItem["kind"];
-}
-
-/** One row of the list: a project at its place — a seat's, or this
- * computer's where `seat` is absent. */
-interface PaletteRow {
-  project: ProjectInfo;
-  seat?: PalettePlace;
-  state?: ProjectRowState;
-  current: boolean;
 }
 
 /** Each project's running and attention counts at one place, from that
@@ -253,7 +120,7 @@ function rowStates(
 
 const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
 
-/** The folder a group's project opens into on this computer, named in
+/** The folder a personal project opens into on this computer, named in
  * place beneath its row where the shell offers no picker, as its Space
  * row asks it (space-63): the path, the act and Cancel, Escape
  * cancelling it alone, a refusal kept beside the path. */
@@ -335,10 +202,10 @@ function JoinFolder({
           className="shrink-0 rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
         >
           {busy
-            ? i18n._({ id: "Opening…", comment: "a project of your groups while it opens: its records and code are downloaded" })
+            ? i18n._({ id: "Opening…", comment: "a project from a Space while it opens: its records and code are downloaded" })
             : i18n._({
                 id: "Open here",
-                comment: "project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside",
+                comment: "project palette: open a personal project on this computer, downloading its records and code into the folder named beside",
               })}
         </button>
         <button
@@ -363,12 +230,6 @@ function JoinFolder({
 const FOCUSABLE = "button, input, select";
 
 export function ProjectPalette(props: ProjectPaletteProps) {
-  const pickerPending = useRef(false);
-  const [pickerSubmitting, setPickerSubmitting] = useState(false);
-  const onPickerPendingChange = useCallback((pending: boolean) => {
-    pickerPending.current = pending;
-    setPickerSubmitting(pending);
-  }, []);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const [pathDraft, setPathDraft] = useState("");
@@ -393,28 +254,16 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
-  // A folder added while signed in asks where its records go, in the
-  // one picker of matching spex repositories and groups (projects-1,
-  // space-58): the key of its local-only spex repository while asked.
-  const [picking, setPicking] = useState<string>();
   const space = useAppStore((state) => state.space);
   const loadSpace = useAppStore((state) => state.loadSpace);
-  // This computer's join of a group's project is its Space row's
-  // (space-63): the same command, with the folder the act picked.
   const spaceJoin = useAppStore((state) => state.spaceJoin);
   const connected = useAppStore((state) => state.connection === "open");
-  const pickingRepo = picking && space
-    ? allRepositories(space).find((repository) => repository.key === picking)
-    : undefined;
-  // A repository that left the Groups state while asked — moved after
-  // its pick — has nothing left to ask.
-  const { onClose } = props;
   useEffect(() => {
-    if (picking && !pickingRepo) onClose();
-  }, [picking, pickingRepo, onClose]);
+    if (connected && !props.addProjectOnly) void loadSpace();
+  }, [connected, loadSpace, props.addProjectOnly]);
   // With no project registered, the ordinary switcher has no filter;
   // the explicit add form works with or without registered projects.
-  const empty = props.projects.length === 0 && (props.seats ?? []).every((seat) => seat.projects.length === 0);
+  const empty = props.projects.length === 0;
   const addProjectOnly = props.addProjectOnly === true;
   const hasFolderPicker = Boolean(props.onPickFolder);
 
@@ -440,142 +289,25 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     else if (addProjectOnly) pathRef.current?.focus();
   }, [creating, addProjectOnly, hasFolderPicker]);
 
-  // This computer's projects first, then each seat's at its place.
-  const listed = useMemo((): PaletteRow[] => {
-    const local = rowStates(props.projects, props.sessions, props.attention);
-    const rows: PaletteRow[] = props.projects.map((project) => ({
-      project,
-      state: local.get(project.id),
-      current: project.id === props.currentProjectId,
-    }));
-    for (const seat of props.seats ?? []) {
-      const states = rowStates(seat.projects, seat.sessions, seat.attention);
-      for (const project of seat.projects) {
-        rows.push({
-          project,
-          seat,
-          state: states.get(project.id),
-          current: project.id === seat.currentProjectId,
-        });
-      }
-    }
-    return rows;
-  }, [props.projects, props.sessions, props.attention, props.currentProjectId, props.seats]);
-  // Each open project names its place while any seat holds one
-  // (run-view-168).
-  const placed = (props.seats ?? []).some((seat) => seat.projects.length > 0);
-  const here = placeLabel(LOCAL_PLACE);
-
-  const filtered = listed.filter(
-    ({ project }) =>
-      project.name.toLowerCase().includes(query.toLowerCase()) ||
-      project.path.toLowerCase().includes(query.toLowerCase()),
-  );
-
-  // This computer's Groups state is read where nothing has read it yet,
-  // as a seat's is (run-view-168).
-  useEffect(() => {
-    if (connected && !useAppStore.getState().space) void loadSpace().catch(() => {});
-  }, [connected, loadSpace]);
-  // The spex repositories of the member's groups this computer lacks,
-  // once its Groups state reads it signed in somewhere, each once,
-  // filtered as the projects are (run-view-168).
+  const states = rowStates(props.projects, props.sessions, props.attention);
+  const search = query.trim().toLowerCase();
+  const filtered = props.projects
+    .filter((project) => project.name.toLowerCase().includes(search) || project.path.toLowerCase().includes(search))
+    .map((project) => ({ project, state: states.get(project.id), current: project.id === props.currentProjectId }));
   const signedIn = anySignedIn(space);
-  const joinAll = signedIn ? joinable(space) : [];
-  const matches = (entry: PaletteJoin): boolean =>
-    entry.repo.name.toLowerCase().includes(query.toLowerCase()) ||
-    entry.group.fullPath.toLowerCase().includes(query.toLowerCase());
-  const joinRows = joinAll.filter(matches);
-  const anyProject = space !== undefined && groupsListProjects(space);
-  // The servers of each signed-in Space the member may open (space-111):
-  // the listing read while any is signed in, again as a seat opens or
-  // closes; and what each open seat holds, for opening its workspace.
-  const seats = props.seats ?? [];
-  const servers = useServers(
-    signedIn && space
-      ? `${signedInInstances(space).map((instance) => instance.origin).join("|")}#${seats.map((seat) => seat.key).join("|")}`
-      : undefined,
-  );
-  const pending = useServerOpens((state) => state.pending);
-  const holdings = new Map(
-    useEachPlace((state) => ({ projects: state.projects, space: state.space })).map(({ store, value }) => [store.place.key, value]),
-  );
-
-  /** A row's other places, as its Space row offers them (space-111,
-   * run-view-168): for each server of its Space the member may open,
-   * "Open on <server>" shows its workspace where that seat holds the
-   * project, otherwise downloads it — disabled with a visible reason while
-   * its records name no code remote, reading "Signing in to <Space>…"
-   * while that seat still signs in — opening the seat immediately where
-   * none is, then joining the project once that seat is signed in. */
-  function placeEntries(repo: RepositoryState): MenuEntry[] {
-    if (repo.own || repo.id === null || repo.state === "local-only" || repo.state === "unreachable") return [];
-    const entries: MenuEntry[] = [];
-    for (const server of (servers.listing?.servers ?? []).filter((each) => each.instance === repo.instance)) {
-      const hostId = hostIdAt(repo, server.instance);
-      if (hostId === null) continue;
-      const at = serverPlace(server);
-      const held = server.open ? holdings.get(at) : undefined;
-      const holding = held ? seatHolding(held, repo.key, server.instance, hostId) : undefined;
-      if (holding?.projectId !== undefined) {
-        const projectId = holding.projectId;
-        entries.push({
-          label: i18n._({
-            id: "Open on {server}",
-            values: { server: server.name },
-            comment: "a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name",
-          }),
-          testId: `palette-show-at-${at}-${repo.key}`,
-          onSelect: () => {
-            props.onPickAt?.(at, projectId);
-            props.onClose();
-          },
-        });
-        continue;
-      }
-      const signingIn = seats.find((seat) => seat.key === at)?.signingIn;
-      const open = pending[pendingKey(at, hostId)];
-      const waiting = open !== undefined && open.stage !== "failed";
-      const noCode = repo.codeKind === "none";
-      entries.push({
-        label:
-          signingIn !== undefined
-            ? i18n._({
-                id: "Signing in to {space}…",
-                values: { space: signingIn },
-                comment: "a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name",
-              })
-            : i18n._({
-                id: "Open on {server}",
-                values: { server: server.name },
-                comment: "a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name",
-              }),
-        ...(noCode ? { title: needsCodeHostLabel(), hint: needsCodeHostLabel() } : {}),
-        testId: `palette-open-at-${at}-${repo.key}`,
-        disabled: noCode || waiting || signingIn !== undefined || busy,
-        onSelect: () => {
-          openOnServer(useAppStore, server, { key: repo.key, hostId });
-          if (!server.open) props.onShowSpace?.();
-          props.onClose();
-        },
-      });
-    }
-    return entries;
-  }
-
-  // Entries the arrow keys traverse, in visual order: the Academy row
-  // where it leads the list, then projects, then each seat's groups'
-  // projects, then Open folder…
+  const joinRows = joinable(space).filter((entry) =>
+    projectNameOf(entry.repo).toLowerCase().includes(search) ||
+    instanceNameAt(space, entry.instance).toLowerCase().includes(search));
   const lead = empty && !addProjectOnly ? 1 : 0;
   const joinStart = lead + filtered.length;
   const entryCount = joinStart + joinRows.length + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
   const openFolderIndex = joinStart + joinRows.length;
 
-  // Opened at "From your groups" (run-view-172): the section in view
+  // Opened at "From your Spaces" (run-view-172): the section in view
   // and, once it lists a project, its first one highlighted and focused
   // — until the reader moves elsewhere first.
-  const landing = useRef(props.groupsAt);
+  const landing = useRef(props.spaceFirst);
   const landingRow = landing.current ? joinRows[0] : undefined;
   const landingKey = landingRow ? joinKeyOf(landingRow) : undefined;
   useEffect(() => {
@@ -583,7 +315,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     if (!at) return;
     sectionRef.current?.scrollIntoView?.({ block: "nearest" });
     if (!landingRow || !landingKey) return;
-    landing.current = undefined;
+    landing.current = false;
     setIndex(joinStart + joinRows.indexOf(landingRow));
     rowRefs.current.get(landingKey)?.focus();
     // The row that lands is the input; it is read once.
@@ -592,38 +324,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   function pick(projectId: string): void {
     props.onPick(projectId);
-    props.onClose();
-  }
-
-  /** Pick a listed row at its own place. */
-  function pickRow(row: PaletteRow): void {
-    if (row.seat) {
-      props.onPickAt?.(row.seat.key, row.project.id);
-      props.onClose();
-    } else pick(row.project.id);
-  }
-
-  /** A folder added (projects-1): it becomes the current project, and
-   * where the home is signed in to any instance and the folder newly
-   * paired, its local-only spex repository asks for its group in place,
-   * offering each signed-in instance it may go to (space-58); otherwise
-   * the palette closes. */
-  async function added(project: ProjectInfo, known: boolean): Promise<void> {
-    props.onPick(project.id);
-    const key = project.repository.key;
-    const row = (): RepositoryState | undefined => {
-      const groups = useAppStore.getState().space;
-      return groups && anySignedIn(groups)
-        ? allRepositories(groups).find((repository) => repository.key === key)
-        : undefined;
-    };
-    if (!known && !row()) await loadSpace().catch(() => {});
-    const repo = known ? undefined : row();
-    const current = useAppStore.getState().space;
-    if (repo && repo.state === "local-only" && !waitingOf(repo) && current && pickInstances(current, repo).length > 0) {
-      setPicking(key);
-      return;
-    }
     props.onClose();
   }
 
@@ -636,9 +336,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       if (create) {
         pick((await props.onCreatePath(path, scaffold)).id);
       } else {
-        const before = new Set(props.projects.map((project) => project.id));
-        const project = await props.onAddPath(path);
-        await added(project, before.has(project.id));
+        pick((await props.onAddPath(path)).id);
       }
     } catch (cause) {
       setError(refusalOf(cause));
@@ -663,7 +361,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Send a group's project's join to this computer's core: `space.join`
+  /** Send a personal project's join to this computer's core: `space.join`
    * naming its instance and host id with `folder`, as its Space row's
    * Join sends it (space-63). Accepted, the project becomes this
    * computer's current one and the palette closes, the join reporting
@@ -675,7 +373,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     setError(undefined);
     try {
       await spaceJoin(entry.instance, entry.repo.id, folder);
-      props.onOpened?.(LOCAL_PLACE_KEY, entry.repo.key);
+      props.onOpened?.(entry.repo.key);
       props.onClose();
     } finally {
       setBusy(false);
@@ -683,7 +381,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Open a group's project on this computer (run-view-168): into the
+  /** Open a personal project on this computer (run-view-168): into the
    * folder the act's own picker takes — the shell's picker, else a path
    * named in place beneath the row (space-63). A refusal stands in the
    * palette. */
@@ -708,10 +406,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       if (!path) return;
       setBusy(true);
       setError(undefined);
-      const before = new Set(props.projects.map((project) => project.id));
       props
         .onAddPath(path)
-        .then((project) => added(project, before.has(project.id)))
+        .then((project) => pick(project.id))
         .catch((cause: unknown) => setError(refusalOf(cause)))
         .finally(() => setBusy(false));
     });
@@ -725,14 +422,14 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
     const row = filtered[at - lead];
     const join = at >= joinStart ? joinRows[at - joinStart] : undefined;
-    if (row) pickRow(row);
+    if (row) pick(row.project.id);
     else if (join) void runJoin(join);
     else if (props.onPickFolder && at === openFolderIndex) openFolder();
   }
 
   /** Arrow keys move the highlight from either input. */
   function moveHighlight(event: React.KeyboardEvent): boolean {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") landing.current = undefined;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") landing.current = false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setIndex((i) => (entryCount === 0 ? 0 : (i + 1) % entryCount));
@@ -767,26 +464,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Every dismissal respects a submitted group choice (space-58). */
-  function close(): void {
-    if (!pickerPending.current) props.onClose();
-  }
-
-  const closeButton = <PanelCloseButton data-testid="palette-close" disabled={pickerSubmitting} onClick={close} />;
+  const close = props.onClose;
+  const closeButton = <PanelCloseButton data-testid="palette-close" onClick={close} />;
 
   /** The dialog's own keys: Escape closes from anywhere inside it,
    * and Tab wraps so focus never leaves it (DR-010 §6). */
   function dialogKeydown(event: React.KeyboardEvent): void {
-    // The application shortcut toggles this dialog, so pending group
-    // submission must guard it as it guards Escape and the backdrop.
-    if (pickerPending.current && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-    // The shared menu owns these keys before the enclosing palette:
-    // Escape dismisses the menu alone, and Tab returns to its trigger.
-    if ((event.key === "Escape" || event.key === "Tab") && dialogRef.current?.querySelector('[role="menu"]')) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -861,22 +544,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
-        {space && pickingRepo ? (
-          // The picker stands in place of the list (space-58): a pick or
-          // Cancel — which leaves it local only — closes the palette.
-          <div data-testid="palette-group-picker" className="min-h-0 flex-1 overflow-y-auto p-2">
-            <GroupPicker
-              groups={space}
-              repo={pickingRepo}
-              connected={connected}
-              headerAction={closeButton}
-              onAdded={() => props.onShowSpace?.()}
-              onClose={props.onClose}
-              onPendingChange={onPickerPendingChange}
-              onNote={(message) => props.onNote?.(message)}
-            />
-          </div>
-        ) : addProjectOnly ? (
+        {addProjectOnly ? (
           <>
           <header className="flex shrink-0 items-start justify-between gap-3 px-4 pt-4">
             <h2 className="min-w-0 flex-1 text-base font-semibold text-neutral-900 dark:text-neutral-100">
@@ -947,6 +615,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
                     </button>
                   </div>
+                  {i18n._("No other projects in your Spaces") }
                 </div>
               ) : null}
             </div>
@@ -1030,7 +699,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             aria-label={i18n._("Filter projects")}
             value={query}
             onChange={(event) => {
-              landing.current = undefined;
+              landing.current = false;
               setQuery(event.target.value);
               setIndex(0);
             }}
@@ -1066,44 +735,21 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </button>
           ) : null}
           {filtered.map((entry, i) => {
-            const { project, seat, state: row } = entry;
-            // This computer's rows keep their keys and test ids; a
-            // seat's are qualified by its place (run-view-168).
-            const key = seat ? `${project.id}@${seat.key}` : project.id;
-            // The row's other places, as its Space row offers them
-            // (run-view-168, space-111): this computer's project's
-            // servers; a seat's project's "Open here" while this computer
-            // lacks it.
-            const repo = space ? allRepositories(space).find((each) => each.key === project.repository.key) : undefined;
-            const joinHere = seat ? joinAll.find((each) => each.repo.key === project.repository.key) : undefined;
-            const places: MenuEntry[] = seat
-              ? joinHere
-                ? [{ label: openHereLabel(), testId: `palette-open-here-${key}`, disabled: busy || joinHere.opening, onSelect: () => void runJoin(joinHere) }]
-                : []
-              : repo
-                ? placeEntries(repo)
-                : [];
+            const { project, state: row } = entry;
+            const key = project.id;
             return (
               <div key={key} className="flex items-center pr-2">
               <button
                 type="button"
                 data-testid={`palette-project-${key}`}
                 title={project.path}
-                onClick={() => pickRow(entry)}
+                onClick={() => pick(project.id)}
                 className={`flex min-w-0 flex-1 items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                   i + lead === clamped ? ROW_ACTIVE : ""
                 }`}
               >
                 <Icon name="folder" className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="truncate">{project.name}</span>
-                {placed ? (
-                  <span
-                    data-testid="palette-place"
-                    className="shrink-0 truncate text-xs text-neutral-500"
-                  >
-                    {seat ? seat.label : here}
-                  </span>
-                ) : null}
                 {entry.current ? (
                   <span className="text-xs text-neutral-500">
                     {i18n._({
@@ -1152,14 +798,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   ) : null}
                 </span>
               </button>
-              {places.length > 0 ? (
-                <MoreMenu
-                  of={project.name}
-                  testId={`palette-project-places-${key}`}
-                  entries={places}
-                  disabled={busy}
-                />
-              ) : null}
               </div>
             );
           })}
@@ -1169,30 +807,23 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </div>
           ) : null}
           {signedIn ? (
-            // The projects of the member's groups this computer lacks
-            // (run-view-168), opened here into the folder the act picks
-            // (space-63), or on a server from the row's places (space-111).
             <div
               ref={sectionRef}
               role="group"
-              data-testid="palette-groups"
-              aria-labelledby="palette-groups-heading"
+              data-testid="palette-spaces"
+              aria-labelledby="palette-spaces-heading"
               className="border-t border-neutral-100 py-1 dark:border-neutral-800"
             >
               <div
-                id="palette-groups-heading"
-                data-testid="palette-groups-heading"
+                id="palette-spaces-heading"
+                data-testid="palette-spaces-heading"
                 className="px-4 py-1 text-xs font-medium text-neutral-500"
               >
-                {i18n._({
-                  id: "From your groups",
-                  comment: "project palette: heading over the projects of the member's groups this computer can open",
-                })}
+                {i18n._("From your Spaces")}
               </div>
               {joinRows.map((entry) => {
                 const key = joinKeyOf(entry);
                 const at = joinStart + joinRows.indexOf(entry);
-                const places = placeEntries(entry.repo);
                 return (
                   <div key={key}>
                     <div className="flex items-center pr-2">
@@ -1213,18 +844,18 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       <Icon name="plus" className="h-3.5 w-3.5 text-neutral-500" />
                       <span className="truncate">{projectNameOf(entry.repo)}</span>
                       <span className="min-w-0 shrink truncate text-xs text-neutral-500">
-                        {groupLabel(entry.group)}
+                        {instanceNameAt(space, entry.instance)}
                       </span>
                       {joining === key || entry.opening ? (
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">
-                          {i18n._({ id: "Opening…", comment: "a project of your groups while it opens: its records and code are downloaded" })}
+                          {i18n._({ id: "Opening…", comment: "a project from a Space while it opens: its records and code are downloaded" })}
                         </span>
                       ) : entry.again ? (
                         // Its open stopped: the row sends it again.
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">
                           {i18n._({
                             id: "Try again",
-                            comment: "on a project of your groups whose open stopped: open it again",
+                            comment: "on a project from a Space whose open stopped: open it again",
                           })}
                         </span>
                       ) : (
@@ -1233,23 +864,11 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">{openHereLabel()}</span>
                       )}
                     </button>
-                    {places.length > 0 ? (
-                      <MoreMenu
-                        of={projectNameOf(entry.repo)}
-                        testId={`palette-join-places-${key}`}
-                        entries={places}
-                        disabled={busy}
-                      />
-                    ) : null}
                     </div>
                     {asking === key ? (
                       <JoinFolder
                         testId={`palette-join-folder-${key}`}
-                        label={
-                          isGroupRepository(entry.group, entry.repo)
-                            ? i18n._({ id: "Folder its sessions run in", comment: "the folder field of a group's own records opened on this computer: where the group's sessions run" })
-                            : i18n._({ id: "Project folder", comment: "the folder field of a project opened on this computer: where its code is downloaded" })
-                        }
+                        label={i18n._("Project folder")}
                         onSubmit={(folder) => sendJoin(entry, folder)}
                         onCancel={() => {
                           setAsking(undefined);
@@ -1261,16 +880,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 );
               })}
               {joinRows.length === 0 && !query ? (
-                <div data-testid="palette-groups-note" className="px-4 py-1 text-xs text-neutral-500">
-                  {anyProject
-                    ? i18n._({
-                        id: "All your groups' projects are open here",
-                        comment: "project palette: every project of the member's groups is open on this computer already",
-                      })
-                    : i18n._({
-                        id: "No projects in your groups yet",
-                        comment: "project palette: the member's groups list no project to open",
-                      })}
+                <div data-testid="palette-spaces-note" className="px-4 py-1 text-xs text-neutral-500">
                 </div>
               ) : null}
             </div>

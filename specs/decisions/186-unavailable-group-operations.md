@@ -7,6 +7,7 @@
 
 Accepted (2026-11-02) on the owner's report that checking a group for deletion displayed an unrelated package-management error.
 Amends [DR-064](064-honest-remote-failure.md) in the relay of a recognized missing-operation response and [DR-193](193-group-deletion-follows-the-space-policy.md) in the explanation of an unavailable deletion or restoration operation.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

@@ -14,11 +14,11 @@
 // space-23..space-25); reveal and copy (space-26); the copy law
 // (space-27) and the roles assistive technology needs (space-44). Every
 // `space.*` call names the records it acts on by their key. The header's
-// sign-in, the headings and "Add a Space…" are groups-instances.test.tsx's.
+// sign-in, the headings and "Add a Space…" are space-instances.test.tsx's.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
+import type { SpaceState, SessionInfo } from "@sublang/spex-core/protocol";
 
 import { SpaceSurface } from "./SpaceSurface.js";
 import { activateLanguage, i18n } from "../i18n.js";
@@ -47,12 +47,12 @@ import {
   home,
   installClient,
   live,
-  renderGroups,
+  renderSpace,
   repo,
   repoState,
   strayRemote,
   type RowOver,
-} from "../fixtures/groups.js";
+} from "../fixtures/space.js";
 
 /** The opened row's one overflow control, "More", opened where it
  * stands closed (space-1, DR-159). */
@@ -78,7 +78,7 @@ afterEach(() => {
   activateLanguage("en");
 });
 
-describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
+describe("SPACE: re-reads on events, never on a timer (space-2)", () => {
   test.each([
     { command: "space.signout", invoke: () => useAppStore.getState().spaceSignOut(ORIGIN) },
     { command: "space.forget", invoke: () => useAppStore.getState().spaceForget(ORIGIN) },
@@ -87,10 +87,10 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
   ])("space-106: $command keeps a newer broadcast over its delayed reply and applies a current reply", async ({ command, invoke }) => {
     const old = repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } });
     const done = repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } });
-    await renderGroups(old);
+    await renderSpace(old);
     expect(syncWords()).toBe("Syncing…");
-    let resolve!: (state: GroupsState) => void;
-    let response = new Promise<GroupsState>((settle) => { resolve = settle; });
+    let resolve!: (state: SpaceState) => void;
+    let response = new Promise<SpaceState>((settle) => { resolve = settle; });
     commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) =>
       type === command ? response : answer(type, fields));
     let pending!: Promise<void>;
@@ -106,7 +106,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
 
     // No announcement overtakes this request: its reply still applies.
     const current = repoState({ sync: { phase: "done", at: NOW + 1, sent: 2, received: 1, pushed: true } });
-    response = new Promise<GroupsState>((settle) => { resolve = settle; });
+    response = new Promise<SpaceState>((settle) => { resolve = settle; });
     act(() => { pending = invoke(); });
     await act(async () => {
       resolve(current);
@@ -117,7 +117,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
   });
 
   test("window focus re-reads; a space.state broadcast replaces the state wholesale, the opened repository staying open", async () => {
-    await renderGroups(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
+    await renderSpace(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
     expect(calls("space.get")).toHaveLength(1);
     act(() => {
       window.dispatchEvent(new Event("focus"));
@@ -133,7 +133,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("9 records to sync");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
     expect(syncWords()).toBe("Sync records");
-    expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
+    expect(useAppStore.getState().space?.repositories.find((repo) => repo.key === KEY)?.state).toBe("reachable");
   });
 
   /** A session of the shown project as `session.state` carries it. */
@@ -150,7 +150,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
 
   test("space-131: session, ledger and configuration announcements re-read once, debounced by 300 ms, never on a timer", async () => {
     useAppStore.setState({ sessions: [sessionInfo()] });
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     const before = calls("space.get").length;
     vi.useFakeTimers();
     announce(
@@ -170,7 +170,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
 
   test("space-131: a running turn's records re-read nothing; its start and settle, this page's intent and a new session re-read once", async () => {
     useAppStore.setState({ sessions: [sessionInfo()] });
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     let count = calls("space.get").length;
     const reread = (times: number) => {
       wait(300);
@@ -236,7 +236,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   });
 
   test("Files & history counts notices and opens neutral review, with a pending merge read in plain words", async () => {
-    await renderGroups(
+    await renderSpace(
       repoState(
         { mergePending: true },
         {
@@ -274,7 +274,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   test("closing blocking review preserves its warning and a new blocker reopens it", async () => {
     const diagnostic = { file: "/records/home.yaml", reason: "could not read saved data", blocking: true };
     const initial = repoState({}, { diagnostics: [diagnostic] });
-    await renderGroups(initial, { open: false });
+    await renderSpace(initial, { open: false });
     expect(screen.getByTestId("space-issues-heading").textContent).toBe("Needs attention");
     fireEvent.click(screen.getByTestId("space-issues-close"));
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
@@ -303,16 +303,16 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       blocking: i18n._("This must be resolved before using the affected data."),
       details: i18n._("Technical details"),
     };
-    const diagnostics: GroupsState["diagnostics"] = [
+    const diagnostics: SpaceState["diagnostics"] = [
       { code: "session-import", file: "/old/sessions/one.json", reason: "unsupported legacy schema 1", blocking: false },
       { code: "session-upgrade", file: "/records/sessions/two.spex.json", reason: "旧版会话无法转换", blocking: false },
       { code: "session-folder-required", file: "/records/sessions/three.spex.json", reason: "invalid sidecar or missing cwd", blocking: false },
       // The same technical text must not choose a session repair when
       // the producer supplied no known classification.
       { file: "/records/home.yaml", reason: "unsupported legacy schema 1", blocking: true },
-      { code: "future-diagnostic" as GroupsState["diagnostics"][number]["code"], file: "/records/other.json", reason: "<script>diagnostic text</script>", blocking: false },
+      { code: "future-diagnostic" as SpaceState["diagnostics"][number]["code"], file: "/records/other.json", reason: "<script>diagnostic text</script>", blocking: false },
     ];
-    await renderGroups(repoState({}, { diagnostics }), { open: false });
+    await renderSpace(repoState({}, { diagnostics }), { open: false });
     expect(screen.getByTestId("space-issues").textContent).toBe(words.heading);
     expect(screen.getByTestId("space-issues").getAttribute("aria-expanded")).toBe("true");
     const rows = screen.getAllByTestId("space-diagnostic");
@@ -355,9 +355,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.rebind") return { id: "jane/infra-spex", name: "infra", path: fields.path, registeredAt: 1 };
       if (type === "project.list") return [];
-      return (await import("../fixtures/groups.js")).answer(type, fields);
+      return (await import("../fixtures/space.js")).answer(type, fields);
     });
-    const { onOpenProject } = await renderGroups(
+    const { onOpenProject } = await renderSpace(
       repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair: unpaired() }] }),
       { open: false },
     );
@@ -407,7 +407,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ],
       details: [{ file: "/records/older.spex.json", reason: "legacy session needs a cwd" }],
     });
-    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
+    await renderSpace(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
     const review = screen.getByRole("button", { name: "Files & history — 1 notice" });
     expect(review.className).toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
@@ -459,7 +459,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       createdAt: NOW, live: false, endedAt: NOW, players: [], initialVisible: [], turns: 1, failed: false,
     }));
     useAppStore.setState({ sessions: indexed });
-    const { onOpenSession } = await renderGroups(repoState({}, { diagnostics }), { open: false });
+    const { onOpenSession } = await renderSpace(repoState({}, { diagnostics }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const rows = screen.getAllByTestId("space-repair");
     expect(rows.map((row) => within(row).getByTestId("space-repair-title").textContent)).toEqual(["Atlas", "Atlas", "Earlier conversations"]);
@@ -501,7 +501,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       if (type === "project.list") return [];
       return answer(type, fields);
     });
-    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no folder", blocking: false, repair: unpaired({ proposal: undefined }) }] }), { open: false });
+    await renderSpace(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no folder", blocking: false, repair: unpaired({ proposal: undefined }) }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
@@ -538,10 +538,10 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.rebind") return { id: KEY, name: "academy", path: fields.path, registeredAt: 1 };
       if (type === "project.list") return [];
-      return (await import("../fixtures/groups.js")).answer(type, fields);
+      return (await import("../fixtures/space.js")).answer(type, fields);
     });
     const repair = unpaired({ repository: KEY, name: KEY.split("/").pop(), key: `${KEY}|/code/infra` });
-    await renderGroups(
+    await renderSpace(
       repoState(
         { sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } },
         { diagnostics: [{ file: `workspace/${KEY}`, reason: "no working folder pairs it", blocking: false, repair }] },
@@ -558,7 +558,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   });
 
   test("a project folder whose records are missing offers Remove project, behind an inline confirm (space-46, projects-9)", async () => {
-    const { answer } = await import("../fixtures/groups.js");
+    const { answer } = await import("../fixtures/space.js");
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.remove") return null;
       if (type === "project.list") return [];
@@ -571,7 +571,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       sessions: 0,
       key: "folder|/code/old",
     };
-    await renderGroups(
+    await renderSpace(
       repoState({}, { diagnostics: [{ file: "home.yaml", reason: "/code/old names a clone that is missing", blocking: false, repair }] }),
       { open: false },
     );
@@ -608,7 +608,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       checked: [{ path: "/gone/worktree", here, repo: false, ...(unknown ? { unknown: true } : {}) }],
       proposal: undefined,
     });
-    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
+    await renderSpace(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(within(row).getByTestId("space-repair-title").textContent).toBe("Infra");
@@ -645,7 +645,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       proposal: undefined,
       declined: NOW - 60_000,
     });
-    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
+    await renderSpace(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
@@ -672,7 +672,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const repairs = [unpaired(), unpaired({ repository: "jane/docs-spex", key: "docs", projectName: "Docs" })];
     const deferred = new Set<string>();
     let otherNotice = true;
-    const report = (): GroupsState => repoState({}, { diagnostics: [
+    const report = (): SpaceState => repoState({}, { diagnostics: [
       ...repairs.map((repair) => ({ file: `workspace/${repair.repository}`, reason: "no folder", blocking: false,
         repair: deferred.has(repair.key) ? { ...repair, declined: NOW } : repair })),
       ...(otherNotice ? [{ file: "/older.json", reason: "unsupported format", blocking: false }] : []),
@@ -685,7 +685,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       }
       return answer(type, fields);
     });
-    const { view, onOpenSession, onOpenProject } = await renderGroups(report(), { open: false });
+    const { view, onOpenSession, onOpenProject } = await renderSpace(report(), { open: false });
     expect(screen.getByTestId("space-issues").textContent).toBe("⚠Files & history (3)");
     fireEvent.click(screen.getByTestId("space-issues"));
     fireEvent.click(within(screen.getAllByTestId("space-repair")[0]!).getByRole("button", { name: "Dismiss" }));
@@ -720,10 +720,10 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   test("folder choices and supported notices share Dismissed, persist across visits, and show again independently", async () => {
     let folderDismissed = false;
     let noticeDismissed = false;
-    let releaseNotice!: (state: GroupsState) => void;
-    const firstNoticeReply = new Promise<GroupsState>((resolve) => { releaseNotice = resolve; });
+    let releaseNotice!: (state: SpaceState) => void;
+    const firstNoticeReply = new Promise<SpaceState>((resolve) => { releaseNotice = resolve; });
     let holdNotice = true;
-    const report = (): GroupsState => repoState({}, { diagnostics: [
+    const report = (): SpaceState => repoState({}, { diagnostics: [
       { file: "/records/infra", reason: "no working folder", blocking: false,
         repair: unpaired({ ...(folderDismissed ? { declined: NOW } : {}) }) },
       { file: "/older/session.json", reason: "unsupported legacy schema 1", code: "session-import", blocking: false,
@@ -741,7 +741,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       }
       return answer(type, fields);
     });
-    const initial = await renderGroups(report(), { open: false });
+    const initial = await renderSpace(report(), { open: false });
     // A conversation return before anything is dismissed is consumed
     // once; a later dismissal must not expand the new section.
     initial.view.rerender(<SpaceSurface onOpenSession={initial.onOpenSession} onOpenProject={initial.onOpenProject} reviewRequest={10} />);
@@ -762,7 +762,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(screen.getByTestId("space-dismissed-notices").textContent).toContain("/older/session.json");
 
     initial.view.unmount();
-    await renderGroups(report(), { open: false });
+    await renderSpace(report(), { open: false });
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(screen.getByTestId("space-issues"));
     expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(false);
@@ -799,7 +799,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       if (type === "space.notice.dismiss") throw new Error("This notice has changed. Refresh to review it.");
       return answer(type, fields);
     });
-    await renderGroups(repoState({}, { diagnostics: [{
+    await renderSpace(repoState({}, { diagnostics: [{
       file: "/old/session.json", reason: "unsupported format", code: "session-upgrade", blocking: false,
       notice: { key: "notice", ...(dismissed ? { dismissed: NOW } : {}) },
     }] }), { open: false });
@@ -816,14 +816,14 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   });
 
   test("unknown, unsupported and blocking diagnostics have no dismissal control, including an old declined blocker", async () => {
-    const diagnostics: GroupsState["diagnostics"] = [
+    const diagnostics: SpaceState["diagnostics"] = [
       { file: "/old/no-capability.json", reason: "unsupported format", code: "session-import", blocking: false },
       { file: "/unknown.json", reason: "unsupported legacy schema 1", blocking: false, notice: { key: "unknown", dismissed: NOW } },
       { file: "/folder.json", reason: "missing folder", code: "session-folder-required", blocking: false, notice: { key: "folder" } },
       { file: "/blocked.json", reason: "blocked import", code: "session-upgrade", blocking: true, notice: { key: "blocked", dismissed: NOW } },
       { file: "/blocked-repair", reason: "blocked folder", blocking: true, repair: unpaired({ declined: NOW }) },
     ];
-    await renderGroups(repoState({}, { diagnostics, issues: 5 }), { open: false });
+    await renderSpace(repoState({}, { diagnostics, issues: 5 }), { open: false });
     expect(screen.getByTestId("space-issues").textContent).toBe("⚠Files & history (5)");
     expect(screen.queryByTestId("space-dismissed")).toBeNull();
     expect(screen.getAllByTestId("space-diagnostic")).toHaveLength(4);
@@ -842,7 +842,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const rows = { infra: pair("infra"), slc: pair("slc"), docs: pair("docs") };
     type Name = keyof typeof rows;
     const standing = new Map<Name, "open" | "declined">([["infra", "open"], ["slc", "open"], ["docs", "open"]]);
-    const report = (): GroupsState => repoState({}, {
+    const report = (): SpaceState => repoState({}, {
       diagnostics: [...standing].map(([name, how]) =>
         how === "declined" ? { ...rows[name], repair: { ...rows[name].repair, declined: NOW } } : rows[name]),
     });
@@ -860,7 +860,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       if (type === "project.list") return [];
       return answer(type, fields);
     });
-    const { onOpenProject } = await renderGroups(report(), { open: false });
+    const { onOpenProject } = await renderSpace(report(), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const items = () => within(screen.getByTestId("space-folder-review")).getAllByRole("listitem");
     const at = (index: number) => items()[index]!;
@@ -908,7 +908,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
 
 describe("SPACE: changes (space-7, space-8, space-10)", () => {
   test("local units group by kind in order with their labels and details; a session row opens its session", async () => {
-    const { onOpenSession } = await renderGroups(repoState());
+    const { onOpenSession } = await renderSpace(repoState());
     const list = screen.getByTestId("space-local-list");
     const headings = within(list).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(headings).toEqual(["Sessions", "Intents", "Authoring", "Packages", "Settings", "Code", "Sync rules", "Other"]);
@@ -934,13 +934,13 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
   });
 
   test("with nothing to send the list reads 'Nothing to send from this computer' under 'To send (0)'", async () => {
-    await renderGroups(repoState({ local: [] }));
+    await renderSpace(repoState({ local: [] }));
     expect(screen.getByText("Nothing to send from this computer")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "To send (0)" })).toBeTruthy();
   });
 
   test("View diff shows the line diff in place for the right side and Hide diff removes it", async () => {
-    await renderGroups(repoState({ incoming: [{ ...SETTINGS_UNIT }] }));
+    await renderSpace(repoState({ incoming: [{ ...SETTINGS_UNIT }] }));
     const row = screen.getByTestId("space-unit-mine-config/playbook.config.yaml");
     fireEvent.click(within(row).getByRole("button", { name: "View diff" }));
     const diffId = "space-diff-mine-config/playbook.config.yaml";
@@ -961,7 +961,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
   });
 
   test("Check fetches, reads 'Checking…' with Stop while it runs, and marks what this computer changed too", async () => {
-    await renderGroups(repoState({ conflicts: [CONFLICTS[0]], incoming: [SESSION_UNIT, INCOMING_INTENT] }));
+    await renderSpace(repoState({ conflicts: [CONFLICTS[0]], incoming: [SESSION_UNIT, INCOMING_INTENT] }));
     // The mark stands on the incoming row alone (space-8).
     expect(screen.getAllByTestId("space-choose-sessions/s1")).toHaveLength(1);
     expect(screen.getByTestId("space-unit-remote-sessions/s1").textContent).toContain("choose");
@@ -986,10 +986,10 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
   });
 
   test("a Space holding no records and records started separately read as such; records in no group offer no Check", async () => {
-    await renderGroups(repoState({ branch: { ...BRANCH, hostEmpty: true, behind: 0 }, incoming: [] }));
+    await renderSpace(repoState({ branch: { ...BRANCH, hostEmpty: true, behind: 0 }, incoming: [] }));
     expect(screen.getByText("Spex Example holds no records yet; Sync will send these")).toBeTruthy();
     cleanup();
-    await renderGroups(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
+    await renderSpace(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
     expect(screen.getByTestId("space-unrelated").textContent).toContain("Started separately at Spex Example");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
     // The row keeps its "Sync records"; "Combine…" stands on the Space's
@@ -1001,7 +1001,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(screen.getByTestId(`space-row-combine-${KEY}`).textContent).toBe("Combine…");
     expect(document.body.textContent).not.toMatch(/\b(Join|Merge histories|Unrelated history)\b/);
     cleanup();
-    await renderGroups(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
+    await renderSpace(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Not checked yet")).toBeTruthy();
   });
@@ -1009,7 +1009,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
 
 describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
   test("Sync sends the command naming the repository and reads 'Syncing…' with the rail naming each step while it runs", async () => {
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     // "Sync records" stands in the row's overflow, titled as what it does
     // (space-1).
     expect(syncWords()).toBe("Sync records");
@@ -1035,7 +1035,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("Sync is refused before the first step with the reason beside the disabled control", async () => {
-    await renderGroups(repoState({ mergePending: true }));
+    await renderSpace(repoState({ mergePending: true }));
     // The reason stands beside "Sync records" in the row's overflow.
     expect(syncControl().disabled).toBe(true);
     expect(syncWords()).toBe("Sync records");
@@ -1044,7 +1044,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     // A displayed blocking diagnostic beneath this clone, perhaps stale
     // once its file is fixed, still shows under issues but leaves Sync
     // usable: Save validates the files as they stand.
-    await renderGroups(repoState({}, { diagnostics: [{ file: `workspace/${KEY}/intents/x.json`, reason: "malformed intent", blocking: true }] }));
+    await renderSpace(repoState({}, { diagnostics: [{ file: `workspace/${KEY}/intents/x.json`, reason: "malformed intent", blocking: true }] }));
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
     expect(syncControl().disabled).toBe(false);
     expect(syncControl().textContent).toBe("Sync records");
@@ -1053,7 +1053,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("a busy refusal from the core lands beside the control", async () => {
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     commandMock.mockImplementationOnce(async () => {
       throw new Error('Wait for "Fix the login redirect"');
     });
@@ -1064,7 +1064,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("a stopped sync shows the step, the host's words, its guidance, Retry and Dismiss", async () => {
-    await renderGroups(
+    await renderSpace(
       repoState({
         branch: { ...BRANCH, ahead: 3 },
         sync: {
@@ -1083,7 +1083,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     expect(card.textContent).toContain("a role that can push");
     expect(card.textContent).toContain("Saved on this computer, not sent yet");
     expect(live()).toContain("Sending stopped");
-    fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
+    fireEvent.click(within(card).getByTestId("space-retry"));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
     fireEvent.click(within(card).getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByTestId("space-stopped")).toBeNull();
@@ -1098,7 +1098,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
       ["timeout", "No answer from Spex Example"],
     ];
     for (const [cause, message] of stops) {
-      await renderGroups(
+      await renderSpace(
         repoState({
           sync: { phase: "stopped", op: "check", step: "check", cause: cause as never, message, guidance: "Then Retry", retry: true },
         }),
@@ -1109,12 +1109,12 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("Retry after a stopped check fetches again; a rejected push reads amber with 'changed again'", async () => {
-    await renderGroups(
+    await renderSpace(
       repoState({
         sync: { phase: "stopped", op: "check", step: "check", cause: "unreachable", message: "Could not reach Spex Example", guidance: "Check the network.", retry: true },
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByTestId("space-retry"));
     await waitFor(() => expect(calls("space.fetch")).toEqual([{ repository: KEY }]));
     deliver(
       repoState({
@@ -1126,7 +1126,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("a finished sync reads its counts, 'Everything is in sync' when nothing moved, and a read-only one what it brought", async () => {
-    await renderGroups(repoState({ sync: { phase: "done", at: NOW, sent: 5, received: 4, pushed: true } }));
+    await renderSpace(repoState({ sync: { phase: "done", at: NOW, sent: 5, received: 4, pushed: true } }));
     expect(screen.getByTestId("space-done-line").textContent).toBe("Synced just now · 5 sent · 4 received");
     fireEvent.click(within(screen.getByTestId("space-done")).getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByTestId("space-done")).toBeNull();
@@ -1141,7 +1141,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   });
 
   test("records started separately offer Combine… on the Space's line, confirmed inline with Cancel focused; the row keeps Sync (space-13)", async () => {
-    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
+    await renderSpace(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
     // The row's one "Sync records" stands as ever (DR-128); "Combine…" on the
     // Space's line, never named Join or Merge (DR-172).
     expect(syncWords()).toBe("Sync records");
@@ -1167,7 +1167,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     commandMock.mockClear();
     // The row offers the same beside its phrase: "Combine…", confirmed
     // inline beneath the row, Cancel focused (space-13, space-120).
-    await renderGroups(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }), { open: false });
+    await renderSpace(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }), { open: false });
     const merge = screen.getByTestId(`space-row-combine-${KEY}`);
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Started separately at Spex Example");
     fireEvent.click(merge);
@@ -1178,36 +1178,21 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
   });
 
-  test.each([
-    { members: 3, noticed: false, visibility: "private" as const },
-    { members: 3, noticed: false, visibility: "public" as const },
-    { members: null, noticed: false },
-    { members: 1, noticed: false },
-    { members: 3, noticed: true },
-  ])("space-57: an explicit first Sync records starts immediately regardless of legacy sharing flags (%j)", async (state) => {
-    await renderGroups(repoState({ ...state, lastSync: null }));
+  test("an explicit Sync records starts immediately", async () => {
+    await renderSpace(repoState());
     fireEvent.click(syncControl());
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
-    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
-    deliver(repoState({ ...state, sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }));
+    deliver(repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }));
     expect(syncWords()).toBe("Syncing…");
     expect(syncControl().disabled).toBe(true);
-    deliver(repoState({ ...state, sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } }));
-    expect(syncWords()).toBe("Sync records");
-    expect(syncControl().disabled).toBe(false);
-    expect(calls("space.sync")).toHaveLength(1);
   });
 
   test("controls are disabled while disconnected", async () => {
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     act(() => useAppStore.setState({ connection: "closed" }));
     // The row's overflow, which holds "Sync records", and its Open.
     expect((screen.getByTestId(`space-row-more-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId(`space-row-open-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
-    // The placement line's Members too, in the Sync tab (space-87).
-    expect((within(lineAt()).getByTestId("space-line-members") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-refresh") as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -1225,7 +1210,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     });
 
   test("choices needed shows the incoming list above the picker with the step line and caption", async () => {
-    await renderGroups(choicesState());
+    await renderSpace(choicesState());
     expect(screen.getByTestId("space-step-line").textContent).toBe("Needs your choice");
     // The caption and the incoming section name the placement's
     // instance (space-8, space-9).
@@ -1250,7 +1235,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("each conflict is a radio group named by its label with nothing preselected; Apply waits for every choice", async () => {
-    await renderGroups(choicesState());
+    await renderSpace(choicesState());
     const session = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
     const settings = screen.getByRole("radiogroup", { name: "Settings changed" });
     for (const group of [session, settings]) {
@@ -1274,7 +1259,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("arrow keys move within a group, and All here / All <display name>'s fill every row", async () => {
-    await renderGroups(choicesState());
+    await renderSpace(choicesState());
     const session = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
     const [mine, remote] = within(session).getAllByRole("radio") as HTMLInputElement[];
     mine.focus();
@@ -1297,7 +1282,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("Apply asks one inline confirm with Cancel focused; Escape keeps the choices; confirming syncs with them", async () => {
-    await renderGroups(choicesState());
+    await renderSpace(choicesState());
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take Spex Example's/));
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep this computer's/));
     fireEvent.click(screen.getByTestId("space-apply"));
@@ -1321,7 +1306,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("a combine waiting for choices lists what is incoming, offers Combine…, and applies with the join", async () => {
-    await renderGroups(
+    await renderSpace(
       choicesState({
         branch: { ...BRANCH, unrelated: true, ahead: null, behind: null },
         incoming: [INCOMING_SESSION, INCOMING_INTENT],
@@ -1352,7 +1337,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("a deletion against a change reads 'deleted' on the deleting side", async () => {
-    await renderGroups(
+    await renderSpace(
       choicesState({
         conflicts: [
           {
@@ -1369,7 +1354,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 
   test("a sync stopped at Apply keeps the picker with the refused unit marked, and Retry carries the choices", async () => {
-    await renderGroups(
+    await renderSpace(
       repoState({
         conflicts: CONFLICTS,
         sync: {
@@ -1386,7 +1371,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     expect(screen.getByTestId("space-conflict-config/playbook.config.yaml").getAttribute("data-marked")).toBe("1");
     expect(screen.getByTestId("space-conflict-sessions/s1").getAttribute("data-marked")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "All here" }));
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByTestId("space-retry"));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
         { repository: KEY, placement: ORIGIN, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
@@ -1396,8 +1381,8 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
 });
 
 describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
-  async function openExplore(state: GroupsState = repoState()) {
-    const rendered = await renderGroups(state);
+  async function openExplore(state: SpaceState = repoState()) {
+    const rendered = await renderSpace(state);
     fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
     await screen.findByTestId("space-tree");
     await screen.findByTestId("space-node-project.json");
@@ -1440,7 +1425,7 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
   });
 
   test("space-1: Explore records and the row's name open their tabs directly beneath the owning row", async () => {
-    await renderGroups(repoState(), { open: false });
+    await renderSpace(repoState(), { open: false });
     fireEvent.click(within(openMore()).getByTestId(`space-row-explore-${KEY}`));
     expect(await screen.findByTestId("space-tree")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Explore" }).getAttribute("aria-selected")).toBe("true");
@@ -1451,7 +1436,7 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(records.previousElementSibling).toBe(row.firstElementChild);
     expect(screen.getAllByTestId("space-repository")).toHaveLength(1);
     cleanup();
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     expect(screen.getByRole("tab", { name: "Sync" }).getAttribute("aria-selected")).toBe("true");
     row = screen.getByTestId(`space-row-${KEY}`);
     records = screen.getByTestId("space-repository");
@@ -1470,7 +1455,7 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     const folderWord = zh ? "保存这些记录的位置" : "where these records are kept";
     const fileWord = zh ? "保存在 Spex Example" : "kept at Spex Example";
     const shared = zh ? "已共享" : "Shared";
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     fireEvent.click(screen.getByRole("tab", { name: zh ? "浏览" : "Explore" }));
     // The core names the folder and each file in it by one family
     // (space-35); the entry reads this interface's word for it, never
@@ -1633,7 +1618,7 @@ describe("SPACE: reveal and copy (space-26)", () => {
   test("with the native bridge the clone reveals in the file manager; a path it refuses says so", async () => {
     const revealPath = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(true);
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), revealPath };
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     // The header holds no path to reveal (space-1).
     expect(screen.queryByTestId("space-path-reveal")).toBeNull();
     const reveal = screen.getByTestId("space-clone-path-reveal");
@@ -1646,7 +1631,7 @@ describe("SPACE: reveal and copy (space-26)", () => {
   });
 
   test("with no clipboard access Copy path falls back to a selectable read-only field", async () => {
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     expect(screen.queryByTestId("space-clone-path-reveal")).toBeNull();
     fireEvent.click(screen.getByTestId("space-clone-path-copy"));
     const field = screen.getByTestId("space-clone-path-field") as HTMLInputElement;
@@ -1658,7 +1643,7 @@ describe("SPACE: reveal and copy (space-26)", () => {
   test("with clipboard access Copy path acknowledges the copy in words", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    await renderGroups(repoState());
+    await renderSpace(repoState());
     const copy = screen.getByTestId("space-clone-path-copy");
     expect(copy.getAttribute("aria-label")).toBe("Copy path");
     fireEvent.click(copy);
@@ -1675,7 +1660,7 @@ const BANNED_WORDS =
 
 describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
   test("no visible text in the records' tabs says ours, theirs, HEAD, origin/spex, MERGE_HEAD, or names the Space or this computer by another word", async () => {
-    const states: GroupsState[] = [
+    const states: SpaceState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
       repoState(),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
@@ -1685,7 +1670,7 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
       repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 2, pushed: true } }),
     ];
     for (const state of states) {
-      await renderGroups(state);
+      await renderSpace(state);
       // The issues list, opened, counts too.
       const issues = screen.queryByTestId("space-issues");
       if (issues) fireEvent.click(issues);
@@ -1705,7 +1690,7 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
   });
 
   test("every control in the records' tabs reads at most 14 characters, its busy form included", async () => {
-    const states: GroupsState[] = [
+    const states: SpaceState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }),
@@ -1716,7 +1701,7 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
     // for, "All <display name>'s" (space-17, space-28, space-58).
     const named = new Set(["Add to a group…", "All Spex Example's"]);
     for (const state of states) {
-      await renderGroups(state);
+      await renderSpace(state);
       for (const button of screen.getAllByRole("button")) {
         // A repository's row is a row, its words its own (space-28).
         if (button.dataset.testid?.startsWith("space-repo-")) continue;
@@ -1729,7 +1714,7 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
   });
 
   test("space-1: the signed-in overview omits the storage-root footer while opened records retain their path controls", async () => {
-    await renderGroups(repoState(), { open: false });
+    await renderSpace(repoState(), { open: false });
     expect(screen.queryByTestId("space-home")).toBeNull();
     expect(screen.queryByTitle(HOME)).toBeNull();
     expect(screen.queryByText(/^Spex keeps this computer's files in /)).toBeNull();
@@ -1738,11 +1723,8 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
   });
 
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
-    await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
+    await renderSpace(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
-    // Your records at the Space stand under "Personal" (space-1).
-    expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toContain("Personal");
     // The panel is named by the row's name, its `-spex` dropped (space-1).
     expect(screen.getByRole("region", { name: "academy" })).toBe(screen.getByTestId("space-repository"));
     expect(screen.getByRole("tablist", { name: "Views of academy" })).toBeTruthy();

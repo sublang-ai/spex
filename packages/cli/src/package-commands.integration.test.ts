@@ -470,6 +470,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   const userVars = { HOME: user, USERPROFILE: user };
   for (const [label, vars, at, cause] of [
     ["a clone of the home", {}, join(clone, "sub"), /lies in the Spex home .+ — run spex in a project folder$/m],
+    ["a project-shaped folder inside the home", {}, join(home, "projects", "app"), /lies in the Spex home .+ — run spex in a project folder$/m],
     ["the home itself", {}, home, /lies in the Spex home .+ — run spex in a project folder$/m],
     ["the user's home folder", userVars, user, /is your home folder, where spex manages no packages — run spex in a project folder$/m],
   ] as [string, NodeJS.ProcessEnv, string, RegExp][]) {
@@ -480,11 +481,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
     assert.match(ran.stderr, cause, `[cli-1] ${label} is no root`);
     assert.deepEqual({ home: snapshot(home), user: snapshot(user) }, before, `[cli-1] ${label}: nothing written`);
   }
-  // A seat's project below the home's projects/ is a working folder.
-  const seat = workingFolder(join(home, "projects", `@${host.replace(":", "_")}`, "tester", "app"));
-  writeFileSync(join(seat, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
-  await ok(seat, "add", "demo/tool@^1.0.0");
-  assert.ok(existsSync(join(seat, "spex.lock")), "[cli-1] a seat's project is a root");
+
 });
 
 test("cli-15: a Git source is shown with no network remote named, and a source changed at one version is an update", async () => {

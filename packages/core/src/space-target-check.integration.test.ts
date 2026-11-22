@@ -42,7 +42,7 @@ function internals(home: Home) {
 
 async function prepared(name: string) {
   const host = await startHost();
-  const unrelated = host.script.addRepository({ group: "acme", name: "unrelated-spex" });
+  const unrelated = host.script.addRepository({ group: "ada", name: "unrelated-spex" });
   const home = await startHome(name, { host, project: false, extra: { signIn: "browser" } });
   const mark = home.client.mark();
   await signIn(home, host);
@@ -56,8 +56,8 @@ async function preparedProject(name: string) {
   const { home } = ready;
   const { key: local } = await addFolder(home, gitFolder(name));
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: ready.host.url, groupId: "2002", name } });
-  const key = hostKey(ready.host, `acme/${name}-spex`);
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: ready.host.url, name } });
+  const key = hostKey(ready.host, `ada/${name}-spex`);
   const row = await home.client.waitRepository(mark, key, (candidate) => candidate.sync.phase === "done", 30_000);
   assert.ok(row.id);
   return { ...ready, key, id: row.id };
@@ -91,7 +91,7 @@ test("git-host-23: an unrelated detail failure fails Refresh but not target sync
   assert.deepEqual([done.sync.phase, done.state], ["done", "reachable"], JSON.stringify(done.sync));
   assert.ok(calls.includes("/api/v1/host/repositories") && calls.includes(`/api/v1/host/repositories/${id}`));
   assert.deepEqual(calls.filter((path) => /^\/api\/v1\/host\/repositories\/[^/]+(?:\/members)?$/.test(path)).sort(), [
-    `/api/v1/host/repositories/${id}`, `/api/v1/host/repositories/${id}/members`,
+    `/api/v1/host/repositories/${id}`,
   ].sort(), "no unrelated detail or members fanout");
   const afterTarget = await home.client.expectOk("space.get", {});
   assert.equal(instanceOf(afterTarget, host.url)?.readAt, instanceOf(before, host.url)?.readAt);
@@ -106,7 +106,7 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
   const clone = clonePath(home.dataDir, OWN);
   const original = readFileSync(join(clone, "config/playbook.config.yaml"));
   const remoteHead = git(host.bareOf(OWN), "rev-parse", "spex");
-  for (const failedPath of ["/api/v1/host/groups", "/api/v1/host/repositories", `/api/v1/host/repositories/${id}`]) {
+  for (const failedPath of ["/api/v1/host/me", "/api/v1/host/repositories", `/api/v1/host/repositories/${id}`]) {
     core.hostClient.fetchImpl = async (input, init) => pathOf(input) === failedPath ? unavailable() : inner(input, init);
     const from = host.script.requests.length;
     const row = await home.client.settle("space.sync", { repository: OWN });
@@ -121,7 +121,7 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
   host.script.removeMember(id);
   const gone = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(gone.sync.phase, "stopped");
-  assert.match(gone.reason ?? "", /No longer shared/);
+  assert.match(gone.reason ?? "", /no longer available/);
   assert.ok(existsSync(clone));
   host.script.revokeDevices();
   const denied = await home.client.settle("space.sync", { repository: OWN });
@@ -129,23 +129,6 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
   assert.match(denied.reason ?? "", /Sign in again/);
   assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.signedIn, false);
   assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), original);
-});
-
-test("git-host-23, space-57: fresh unknown target members do not block a first sync or write an acknowledgement", async (t) => {
-  const { home, host, core } = await prepared("target-unknown-members");
-  t.after(() => home.stop());
-  assert.equal(placementOf(await home.client.repository(OWN), host.url).members, 1);
-  // Same joined clone, first push on this device: forget this scratch
-  // device's last sync through the real preferences API.
-  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
-  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
-  host.script.failMembers(true);
-  const row = await home.client.settle("space.sync", { repository: OWN });
-  const line = placementOf(row, host.url);
-  assert.deepEqual([row.sync.phase, row.state, line.members], ["done", "reachable", null]);
-  assert.ok(line.lastSync);
-  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-  assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), git(clonePath(home.dataDir, OWN), "rev-parse", "spex"));
 });
 
 for (const outcome of ["success", "failure"] as const) {
@@ -171,11 +154,11 @@ for (const outcome of ["success", "failure"] as const) {
     assert.equal(instanceOf(await home.client.expectOk("space.get", {}), host.url)?.read.phase, "running");
     // Only hold the already-buffered answer, not the newer target read.
     core.hostClient.fetchImpl = fetch;
-    host.script.rename(id, { name: "renamed-spex", group: "acme/research" });
+    host.script.rename(id, { name: "renamed-spex", group: "ada" });
     host.script.archive(id);
     const mark = home.client.mark();
     await home.client.expectOk("space.sync", { repository: key });
-    const movedPath = "acme/research/renamed-spex";
+    const movedPath = "ada/renamed-spex";
     const moved = hostKey(host, movedPath);
     const row = await home.client.waitRepository(mark, moved, (candidate) => candidate.sync.phase !== "running", 30_000);
     assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).path], ["done", "read-only", movedPath], JSON.stringify(row));
@@ -197,35 +180,7 @@ for (const outcome of ["success", "failure"] as const) {
   });
 }
 
-test("git-host-23: exact remote discovery records the id; every catalog page participates in fresh namespace collision refusal", async (t) => {
-  const { host, home, core, id } = await prepared("target-collision");
-  t.after(() => home.stop());
-  const clone = clonePath(home.dataDir, OWN);
-  // Your own group's remote is named by the instance's folder (DR-127),
-  // the host's id in its section (storage-34).
-  const folder = hostFolder(host);
-  git(clone, "config", "--unset", `remote.${folder}.spexId`);
-  const restored = await home.client.settle("space.sync", { repository: OWN });
-  assert.equal(restored.sync.phase, "done");
-  assert.equal(git(clone, "config", "--get", `remote.${folder}.spexId`), id);
-  const origin = git(clone, "remote", "get-url", folder);
-  const collision = { id: "2300", fullPath: "bob", name: "Bob's team", kind: "group" as const };
-  host.script.addRepository({ group: "acme", name: "page-two-spex" });
-  host.script.addRepository({ group: "bob", name: "personal-spex" });
-  host.script.groups.push(collision);
-  host.script.rename(id, { group: collision.id });
-  const calls: string[] = [];
-  const inner = core.hostClient.fetchImpl;
-  core.hostClient.fetchImpl = async (input, init) => { calls.push(String(input)); return inner(input, init); };
-  const refused = await home.client.settle("space.sync", { repository: OWN });
-  assert.equal(refused.sync.phase, "stopped");
-  assert.match(refused.reason ?? "", /named like your login/);
-  assert.ok(calls.some((url) => url.includes("?cursor=")), "later pages carry the newly listed user namespace");
-  assert.equal(git(clone, "remote", "get-url", folder), origin);
-  assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "bob/ada-spex")) && !existsSync(clonePath(home.dataDir, hostKey(host, "bob/ada-spex"))));
-});
-
-test("git-host-23: a core move during catalog reading is reconciled before the selected answer is used", async (t) => {
+test("git-host-23: a move out of the personal namespace during catalog reading is refused before transport", async (t) => {
   const { host, home, core, id, key } = await preparedProject("catalog-move");
   t.after(() => home.stop());
   const inner = core.hostClient.fetchImpl;
@@ -237,17 +192,15 @@ test("git-host-23: a core move during catalog reading is reconciled before the s
   const calls = host.script.requests.length;
   await home.client.expectOk("space.sync", { repository: key });
   await gate.reached;
-  // An ordinary authorized host write must invalidate the older catalog,
-  // not wait for its listing or move this running clone itself.
-  await home.client.expectOk("space.repository.move", { repository: key, groupId: "2003" });
+  // Move the repository while Check holds its old catalog response.
+  host.script.rename(id, { name: "catalog-move-spex", group: "acme" });
   core.hostClient.fetchImpl = inner;
   gate.release();
-  const movedPath = "acme/research/catalog-move-spex";
-  const moved = hostKey(host, movedPath);
-  const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
-  assert.deepEqual([row.id, placementOf(row, host.url).path, row.state], [id, movedPath, "reachable"]);
-  assert.ok(host.script.requests.slice(calls).filter((request) => request.path === "/api/v1/host/me").length >= 2, "catalog is reread after the host change");
-  assert.equal(git(clonePath(home.dataDir, moved), "remote", "get-url", hostFolder(host)), `${host.gitOrigin}/${STANDIN_STORAGE}/acme/research/catalog-move-spex.git`);
+  const row = await home.client.waitRepository(from, key, (candidate) => candidate.sync.phase === "stopped", 30_000);
+  assert.deepEqual([row.id, row.state], [id, "unreachable"]);
+  assert.ok(!host.script.requests.slice(calls).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")));
+  assert.ok(existsSync(clonePath(home.dataDir, key)));
+
 });
 
 test("git-host-23: a newer completed full read fences an older target before it can use stale path or access", async (t) => {
@@ -261,12 +214,12 @@ test("git-host-23: a newer completed full read fences an older target before it 
   const from = home.client.mark();
   await home.client.expectOk("space.sync", { repository: key });
   await gate.reached;
-  host.script.rename(id, { name: "new-authority-spex", group: "acme/research" });
+  host.script.rename(id, { name: "new-authority-spex", group: "ada" });
   host.script.archive(id);
   core.hostClient.fetchImpl = inner;
   await core.space.readHost();
   gate.release();
-  const movedPath = "acme/research/new-authority-spex";
+  const movedPath = "ada/new-authority-spex";
   const moved = hostKey(host, movedPath);
   const row = await home.client.waitRepository(from, moved, (candidate) => candidate.sync.phase === "done", 30_000);
   assert.deepEqual([row.state, placementOf(row, host.url).path], ["read-only", movedPath]);
@@ -310,7 +263,7 @@ for (const next of ["signed-out", "another-account"] as const) {
     const origin = git(clone, "remote", "get-url", hostFolder(host));
     const config = readFileSync(join(clone, ".git", "config"));
     const head = git(clone, "rev-parse", "HEAD");
-    host.script.rename(id, { name: "stale-answer-spex", group: "acme/research" });
+    host.script.rename(id, { name: "stale-answer-spex", group: "ada" });
     const inner = core.hostClient.fetchImpl;
     const holds = holdingFetch(inner);
     core.hostClient.fetchImpl = holds.fetch;
@@ -335,14 +288,13 @@ for (const next of ["signed-out", "another-account"] as const) {
       // keeps the first login's name, which no later sign-in renames
       // (space-59).
       const signed = await signIn(home, host);
-      assert.equal(signed.own.name, "ada");
-    }
+      }
     gate.release();
     const row = await home.client.waitRepository(from, key, (candidate) => candidate.sync.phase === "stopped", 30_000);
     assert.equal(row.sync.phase, "stopped");
     if (row.sync.phase === "stopped") assert.match(row.sync.message, /sign-in changed meanwhile/i);
     assert.ok(![...core.targets.values()].some((target) => target.facts.id === id || target.listing?.repository.id === id), "no stale target cache entry");
-    assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, hostKey(host, "acme/research/stale-answer-spex"))));
+    assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, hostKey(host, "ada/stale-answer-spex"))));
     assert.deepEqual(readFileSync(join(clone, ".git", "config")), config);
     assert.equal(git(clone, "remote", "get-url", hostFolder(host)), origin);
     assert.equal(git(clone, "rev-parse", "HEAD"), head);
@@ -366,7 +318,7 @@ test("git-host-23: a failed first-sync Check stops before transport and a fresh 
   let catalogReads = 0;
   core.hostClient.fetchImpl = async (input, init) => {
     if (pathOf(input) === "/api/v1/host/me") catalogReads += 1;
-    if (pathOf(input) === "/api/v1/host/groups" && fail) { fail = false; return unavailable(); }
+    if (pathOf(input) === "/api/v1/host/me" && fail) { fail = false; return unavailable(); }
     return inner(input, init);
   };
   const from = host.script.requests.length;
@@ -383,64 +335,4 @@ test("git-host-23: a failed first-sync Check stops before transport and a fresh 
   assert.ok(retried.sync.phase === "done" && retried.sync.pushed && retried.sync.sent > 0, JSON.stringify(retried.sync));
   assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Keep the local record through a failed Check.");
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-});
-
-test("git-host-23, space-57: membership changing at Check sends directly while a fresh read-only role still prevents a push", async (t) => {
-  const { host, home, core, id } = await prepared("first-sync-membership-change");
-  t.after(() => home.stop());
-  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
-  core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
-  const target = host.script.repositories.find((repository) => repository.id === id)!;
-  const clone = clonePath(home.dataDir, OWN);
-  writeFileSync(join(clone, "notes.md"), "Send this record to the chosen group.\n");
-  let shared = false;
-  home.hooks.beforeStep = (event) => {
-    if (event.step === "check" && !shared) {
-      shared = true;
-      target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
-    }
-  };
-  const row = await home.client.settle("space.sync", { repository: OWN });
-  assert.ok(row.sync.phase === "done" && row.sync.pushed && row.sync.sent > 0, JSON.stringify(row.sync));
-  const line = placementOf(row, host.url);
-  assert.equal(line.members, 2);
-  assert.ok(line.lastSync);
-  assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Send this record to the chosen group.");
-  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-
-  writeFileSync(join(clone, "notes.md"), "Keep this edit here after the role changes.\n");
-  home.hooks.beforeStep = (event) => {
-    if (event.step === "check") host.script.accessLevel(id, "Reporter");
-  };
-  const from = host.script.requests.length;
-  const readOnly = await home.client.settle("space.sync", { repository: OWN });
-  assert.ok(readOnly.sync.phase === "done" && !readOnly.sync.pushed && readOnly.sync.sent === 0, JSON.stringify(readOnly.sync));
-  assert.equal(readOnly.state, "read-only");
-  assert.ok(!host.script.requests.slice(from).some((request) => request.path.endsWith("git-receive-pack")), "the fresh role still prevents a push");
-  assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Send this record to the chosen group.");
-  assert.equal(readFileSync(join(clone, "notes.md"), "utf8"), "Keep this edit here after the role changes.\n");
-});
-
-test("git-host-23, space-57, space-58: a pick prepares its branch and pushes directly when another member joins the selected group before Check", async (t) => {
-  const { host, home, core } = await prepared("pick-first-sync");
-  t.after(() => home.stop());
-  const { key: local } = await addFolder(home, gitFolder("pick-first-sync"));
-  const key = hostKey(host, "acme/pick-first-sync-spex");
-  const acme = host.script.groups.find((group) => group.fullPath === "acme")!;
-  let shared = false;
-  home.hooks.beforeStep = (event) => {
-    if (event.op !== "sync" || event.step !== "check" || event.repository === OWN || shared) return;
-    shared = true;
-    acme.members = [...(acme.members ?? []), { id: "1002", login: "bob", displayName: "Bob", role: "Developer" }];
-  };
-  const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "pick-first-sync" } });
-  const synced = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "done", 30_000);
-  home.hooks.beforeStep = undefined;
-  assert.ok(synced.sync.phase === "done" && synced.sync.pushed && synced.sync.sent > 0, JSON.stringify(synced.sync));
-  const line = placementOf(synced, host.url);
-  assert.deepEqual([line.members, line.outcome?.kind], [2, "synced"]);
-  assert.ok(line.lastSync);
-  assert.equal(core.store.getPref(`sync:${key}:${hostFolder(host)}:noticed`), undefined);
-  assert.equal(git(host.bareOf("acme/pick-first-sync-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
 });

@@ -12,14 +12,13 @@
 // Retry (space-15), a combining only where this page asked it
 // (space-13) — the "Started separately" card (space-13) and in-place
 // line diffs headed "Changes on this computer" and "Changes at <display
-// name>" (space-10). Every side is this computer's — at a seat's place
-// the server's (space-112) — or the Space's by its display name
+// name>" (space-10). Each side names this computer or the Space.
 // (space-17, space-27); Git's own words never lead.
 
 import { createContext, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import type {
-  GroupsState,
+  SpaceState,
   PlacementState,
   RepositoryState,
   SpaceChoice,
@@ -30,7 +29,7 @@ import type {
   SyncStep,
 } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import type { SpaceLastAct } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { heldPlacements, instanceNameAt, keyPlacement, placementAt, placementName } from "../lib/placements.js";
@@ -46,7 +45,6 @@ import {
   lineOutcome,
   notHerePhrase,
   phraseNames,
-  seatName,
   startedSeparately,
   stoppedPhrase,
 } from "../lib/space.js";
@@ -84,9 +82,8 @@ function DiffBox({
   name: string;
   testId: string;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const spaceDiff = store((state) => state.spaceDiff);
-  const seat = seatName(store.place);
   const [patches, setPatches] = useState<{ path: string; patch: string; truncated: boolean }[]>();
   const [error, setError] = useState<string>();
 
@@ -133,13 +130,7 @@ function DiffBox({
     >
       <span data-testid={`${testId}-heading`} className="text-xs text-neutral-500">
         {side === "mine"
-          ? seat === undefined
-            ? i18n._({ id: "Changes on this computer", comment: "a diff's heading: this computer's version against the last version both sides shared" })
-            : i18n._({
-                id: "Changes on {place}",
-                values: { place: seat },
-                comment: "a diff's heading on a team server's Space: the server's version against the last version both sides shared; {place} is the server's name",
-              })
+          ? i18n._({ id: "Changes on this computer", comment: "a diff's heading: this computer's version against the last version both sides shared" })
           : i18n._({
               id: "Changes at {name}",
               values: { name },
@@ -677,7 +668,7 @@ function Card({
  * sync plainly, stopping as "Started separately" again with
  * "Combine…" on their line, the confirm still the reader's (space-13). */
 export function stoppedRetryInput(
-  groups: GroupsState,
+  groups: SpaceState,
   repo: RepositoryState,
   stored: SyncInput | undefined,
   choices: Record<string, Side> | undefined,
@@ -715,7 +706,7 @@ export function SyncTab({
   onNote,
   onPendingChange,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   repo: RepositoryState;
   now: number;
   connected: boolean;
@@ -732,7 +723,7 @@ export function SyncTab({
   onNote: Note;
   onPendingChange?(pending: boolean): void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const spaceFetch = store((state) => state.spaceFetch);
   const spaceSync = store((state) => state.spaceSync);
   const spaceLastAct = store((state) => state.spaceLastAct);
@@ -741,7 +732,6 @@ export function SyncTab({
   const sync = repo.sync;
   const running = sync.phase === "running";
   const held = heldPlacements(repo);
-  const seat = seatName(store.place);
 
   const [busy, setBusy] = useState<"check" | "retry" | "stop">();
   // An accepted long command keeps its control busy until the machine's
@@ -750,7 +740,7 @@ export function SyncTab({
   const [accepted, setAccepted] = useState<{ where: "check" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "retry"; message: string }>();
   const useChoices = useContext(ChoicesContext);
-  const choicesKey = `${store.place.key}|${key}`;
+  const choicesKey = key;
   const picker = conflictsOf(groups, repo);
   const { line: choicesLine, name: choicesName, units: conflictUnits } = picker;
 
@@ -885,7 +875,7 @@ export function SyncTab({
   if (!cloneHere(repo)) {
     return (
       <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-        <p className="text-sm text-neutral-500">{notHerePhrase(seat)}</p>
+        <p className="text-sm text-neutral-500">{notHerePhrase()}</p>
       </div>
     );
   }
@@ -899,13 +889,7 @@ export function SyncTab({
   const checkDisabled =
     disabled || running || pending || repo.mergePending || repo.state === "local-only";
   const nothingToSend =
-    seat === undefined
-      ? i18n._({ id: "Nothing to send from this computer", comment: "a Sync tab's To send list with nothing in it" })
-      : i18n._({
-          id: "Nothing to send from {place}",
-          values: { place: seat },
-          comment: "a Sync tab's To send list on a team server's Space, nothing in it; {place} is the server's name",
-        });
+    i18n._({ id: "Nothing to send from this computer", comment: "a Sync tab's To send list with nothing in it" });
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
@@ -956,7 +940,7 @@ export function SyncTab({
       {sync.phase === "unrelated" ? (
         <Card testId="space-unrelated" tone="amber">
           <span className="font-medium">
-            {startedSeparately(phraseNames(groups, repo, seat).nameAt(sync.placement))}
+            {startedSeparately(phraseNames(groups, repo).nameAt(sync.placement))}
           </span>
         </Card>
       ) : null}
@@ -970,13 +954,7 @@ export function SyncTab({
           {sync.guidance ? <span className="text-xs">{sync.guidance}</span> : null}
           {sync.step === "push" && (keyPlacement(repo)?.branch?.ahead ?? 0) > 0 ? (
             <span className="text-xs">
-              {seat === undefined
-                ? i18n._({ id: "Saved on this computer, not sent yet", comment: "a stopped send's card: the records are saved here and wait to be sent" })
-                : i18n._({
-                    id: "Saved on {place}, not sent yet",
-                    values: { place: seat },
-                    comment: "a stopped send's card on a team server's Space: the records are saved there and wait to be sent; {place} is the server's name",
-                  })}
+              {i18n._({ id: "Saved on this computer, not sent yet", comment: "a stopped send's card: the records are saved here and wait to be sent" })}
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
@@ -1143,7 +1121,7 @@ export function SyncTab({
  * name, its conflicts and their units; whether the picker stands; and
  * the unit a stopped Apply's refusal names. */
 export function conflictsOf(
-  groups: GroupsState,
+  groups: SpaceState,
   repo: RepositoryState,
 ): { line?: PlacementState; name: string; conflicts: SpaceConflict[]; units: Set<string>; stands: boolean; marked?: string } {
   const sync = repo.sync;
@@ -1191,11 +1169,11 @@ export const ChoicesContext = createContext<ChoicesStore>(createChoices());
 /** Forget the choices of every repository whose sync has completed
  * since they were made: a later round asks afresh, nothing preselected
  * (space-17). */
-export function forgetCompleted(store: ChoicesStore, place: string, repos: readonly RepositoryState[]): void {
+export function forgetCompleted(store: ChoicesStore, repos: readonly RepositoryState[]): void {
   const { choices, inputs } = store.getState();
   const done = repos
     .filter((repo) => repo.sync.phase === "done" || repo.sync.phase === "idle")
-    .map((repo) => `${place}|${repo.key}`)
+    .map((repo) => repo.key)
     .filter((key) => key in choices || key in inputs);
   if (done.length === 0) return;
   const drop = <T,>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([key]) => !done.includes(key)));
@@ -1209,8 +1187,7 @@ function chosenOf(choices: Record<string, Side> | undefined, units: Set<string>)
 }
 
 /** A repository's choices picker (space-17, space-18): a row per
- * conflicting unit with "Keep this computer's" — at a seat's place
- * "Keep <server>'s" (space-112) — and "Take <display name>'s",
+ * conflicting unit with "Keep this computer's" and "Take <display name>'s",
  * nothing preselected; "All here" and "All <display name>'s" filling
  * every row; Apply disabled with "N of M chosen" until every row has a
  * choice, then one inline confirm, Cancel focused, starting the sync
@@ -1226,17 +1203,17 @@ export function ConflictsPicker({
   scope,
   onNote,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   repo: RepositoryState;
   now: number;
   connected: boolean;
   scope: string;
   onNote: Note;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const spaceSync = store((state) => state.spaceSync);
   const useChoices = useContext(ChoicesContext);
-  const key = `${store.place.key}|${repo.key}`;
+  const key = repo.key;
   const choices = useChoices((state) => state.choices[key]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1252,7 +1229,6 @@ export function ConflictsPicker({
     if (accepted !== undefined && accepted !== phaseKey) setAccepted(undefined);
   }, [accepted, phaseKey]);
   const applying = busy || accepted !== undefined;
-  const seat = seatName(store.place);
   const ids = useId();
 
   const choose = (next: Record<string, Side>) =>
@@ -1288,13 +1264,7 @@ export function ConflictsPicker({
   const disabled = !connected;
   const labels = {
     mine:
-      seat === undefined
-        ? i18n._({ id: "Keep this computer's", comment: "a choice on records changed on both sides: keep this computer's version" })
-        : i18n._({
-            id: "Keep {place}'s",
-            values: { place: seat },
-            comment: "a choice on records changed on both sides, on a team server's Space: keep the server's version; {place} is the server's name",
-          }),
+      i18n._({ id: "Keep this computer's", comment: "a choice on records changed on both sides: keep this computer's version" }),
     remote: i18n._({
       id: "Take {name}'s",
       values: { name },
@@ -1359,16 +1329,10 @@ export function ConflictsPicker({
             <InlineConfirm
               question={
                 remoteCount === 0
-                  ? seat === undefined
-                    ? i18n._({
+                  ? i18n._({
                         id: "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}",
                         values: { count: total, name },
                         comment: "Apply's confirm, every choice keeping this computer's side; {name} is the Space's display name",
-                      })
-                    : i18n._({
-                        id: "{count, plural, one {Keep {place}'s version? {name}'s stays in Git history} other {Keep {place}'s version of all #? {name}'s stays in Git history}}",
-                        values: { count: total, place: seat, name },
-                        comment: "Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name, {name} the Space's display name",
                       })
                   : i18n._({
                       id: "{count, plural, one {Take {name}'s version of # record?} other {Take {name}'s version of # records?}} The other stays in Git history; a replaced session loses its resume hints and where you stopped reading",

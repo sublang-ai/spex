@@ -35,7 +35,7 @@ import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./gi
 import { OriginRefused } from "@sublang/spex/instance";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
-import { readHostView, relayHostError } from "./space-groups.js";
+import { relayHostError } from "./space-catalog.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 import { createSpaceHarness, stringsOf } from "./testing/space-harness.js";
 
@@ -162,7 +162,7 @@ test("git-host-2: the browser flow signs in through the loopback and stores the 
     assert.equal(back.status, 200);
     assert.match(await back.text(), /may close this browser window/);
     const account = await flow.done;
-    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace", canCreateGroup: true });
+    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace" });
 
     const file = credentialsPath(t.home);
     assert.equal(mode(file), 0o600);
@@ -316,135 +316,6 @@ test("git-host-3: slow_down backs the polling off by five seconds", async () => 
 // ---------------------------------------------------------------------------
 // git-host-27, git-host-28: a seat's device request
 
-test("git-host-28: a seat's device request carries the server and the person; a denied code and a person of another id each end the sign-in failed, storing nothing", async () => {
-  const t = await setup();
-  try {
-    const store = fileCredentialStore(t.home, t.host.url);
-    const seat = new GitHostClient({
-      url: t.host.url,
-      label: "Spex on lab-1",
-      credentials: store,
-      server: { id: "srv_42", personId: "1001" },
-    });
-    // A device request names the server and the person beside the
-    // client id and the label (git-host-27); a client of no seat names
-    // neither.
-    const plain = await t.client.startDeviceSignIn();
-    plain.cancel();
-    await assert.rejects(plain.done, hostError("reauth", { cause: "stopped" }));
-    const denied = await seat.startDeviceSignIn();
-    assert.deepEqual(t.host.script.deviceRequests, [
-      { label: "Spex on test", serverId: null, personId: null },
-      { label: "Spex on lab-1", serverId: "srv_42", personId: "1001" },
-    ]);
-    // The instance denying the code ends it `denied` (git-host-27).
-    t.host.script.denyDevice(denied.userCode);
-    await assert.rejects(denied.done, hostError("reauth", { cause: "denied" }));
-    assert.equal(await store.read(), null, "a denied code stores nothing");
-
-    // A person bearing another permanent id ends it naming the account
-    // signed in, and nothing is stored (git-host-27).
-    t.host.script.person = { id: "1002", login: "bob", displayName: "Bob" };
-    const other = await seat.startDeviceSignIn();
-    t.host.script.approveDevice(other.userCode);
-    await assert.rejects(other.done, hostError("reauth", { cause: "person", words: "bob" }));
-    assert.equal(await store.read(), null, "a person of another id stores nothing");
-    assert.equal(existsSync(credentialsPath(t.home)), false);
-    assert.equal(await seat.signedIn(), false);
-
-    // The admitted person signs in and the token is stored.
-    t.host.script.person = { id: "1001", login: "ada", displayName: "Ada Lovelace" };
-    const admitted = await seat.startDeviceSignIn();
-    t.host.script.approveDevice(admitted.userCode);
-    assert.equal((await admitted.done).id, "1001");
-    assert.ok(await store.read(), "the person's sign-in is stored");
-    assert.deepEqual(t.host.script.deviceRequests.slice(2).map((request) => [request.serverId, request.personId]), [["srv_42", "1001"], ["srv_42", "1001"]]);
-  } finally {
-    await t.dispose();
-  }
-});
-
-// ---------------------------------------------------------------------------
-// git-host-29, git-host-30: the servers listing and the tickets
-
-/** Every file under a directory, at any depth. */
-function filesUnder(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => join(entry.parentPath, entry.name));
-}
-
-/** The failure a call ends with. */
-async function failureOf(call: Promise<unknown>): Promise<unknown> {
-  try {
-    await call;
-  } catch (error) {
-    return error;
-  }
-  return assert.fail("the call must fail");
-}
-
-test("git-host-30: the servers listing and a ticket carry the instance's app token and come back as answered, held nowhere; host_refused, not_found and 429 are relayed as git-host-11 states", async () => {
-  // The 30 s the rate limit asks for hold the next call 0.2 s at most
-  // here, a test-shortened bound (git-host-21).
-  const t = await setup({ holdMaxMs: 200 });
-  try {
-    await browserSignIn(t.client);
-    const stored = await fileCredentialStore(t.home, t.host.url).read();
-    assert.ok(stored);
-    const s = t.host.script;
-    s.servers.push({ id: "srv_lab1", name: "lab-1", group: "acme", address: "https://lab-1.example.test" });
-
-    // The listing and the ticket as the instance answers them (git-host-29).
-    assert.deepEqual(await t.client.servers(), [
-      { id: "srv_lab1", name: "lab-1", group: { id: "2002", fullPath: "acme", name: "Acme", kind: "group" }, address: "https://lab-1.example.test" },
-    ]);
-    const ticket = await t.client.ticket("srv_lab1");
-    const minted = s.tickets.at(-1);
-    assert.ok(minted);
-    assert.deepEqual(ticket, { ticket: minted.ticket, expiresIn: 120, server: { id: "srv_lab1", name: "lab-1", address: "https://lab-1.example.test" } });
-    // Each call carried that instance's app token (git-host-4).
-    assert.deepEqual(s.serverCalls, [
-      { method: "GET", path: "/api/v1/host/servers", bearer: stored.access },
-      { method: "POST", path: "/api/v1/host/servers/srv_lab1/tickets", bearer: stored.access },
-    ]);
-    // Held nowhere after the reply: neither in the client nor in any file
-    // of the home.
-    const client = inspect(t.client, { depth: 10, showHidden: true });
-    assert.ok(!client.includes(minted.ticket), "the client holds no ticket");
-    assert.ok(!client.includes("srv_lab1") && !client.includes("lab-1.example.test"), "the client holds no listing");
-    for (const file of filesUnder(t.home)) {
-      const text = readFileSync(file, "utf8");
-      assert.ok(!text.includes(minted.ticket) && !text.includes("srv_lab1"), `${file} holds nothing of the listing or the ticket`);
-    }
-
-    // Any other answer is relayed as git-host-11 states it.
-    s.refuseHost(1, "a seat on this server needs the Developer role or above in its group");
-    const refused = await failureOf(t.client.ticket("srv_lab1"));
-    assert.ok(hostError("host_refused", { words: "a seat on this server needs the Developer role or above in its group" })(refused));
-    assert.equal(relayHostError(refused, "Stand-in Git host"), "Stand-in Git host refused: a seat on this server needs the Developer role or above in its group");
-    const gone = await failureOf(t.client.ticket("srv_gone"));
-    assert.ok(hostError("not_found", { words: "no server has this id" })(gone));
-    assert.equal(relayHostError(gone, "Stand-in Git host"), "No longer shared with you");
-    s.rateLimit(1, "30");
-    const limited = await failureOf(t.client.servers());
-    assert.ok(hostError("rate_limited", { retryAfter: "30" })(limited));
-    assert.equal(relayHostError(limited, "Stand-in Git host"), "Stand-in Git host asks to wait 30 seconds");
-    await sleep(300);
-    // Every call carried the token; none signed the device out.
-    assert.ok(s.serverCalls.every((call) => call.bearer === stored.access));
-    assert.equal(s.serverCalls.length, 5);
-    assert.equal(t.signedOut.length, 0);
-    assert.equal((await t.client.servers()).length, 1, "a refusal leaves the device signed in");
-  } finally {
-    await t.dispose();
-  }
-});
-
-// ---------------------------------------------------------------------------
-// git-host-4: token keeping
-
 test("git-host-4: an access secret within a minute of expiring is refreshed once before the call", async () => {
   const skew = { ms: 0 };
   const t = await setup({ skew });
@@ -454,14 +325,14 @@ test("git-host-4: an access secret within a minute of expiring is refreshed once
     const before = await store.read();
     skew.ms = 3_600_000 - 30_000;
     const from = t.host.script.requests.length;
-    const [groups, me] = await Promise.all([t.client.groups(), t.client.me()]);
-    assert.equal(groups.length, 3);
+    const [account, me] = await Promise.all([t.client.me(), t.client.me()]);
+    assert.equal(account.login, "ada");
     assert.equal(me.login, "ada");
     assert.equal(refreshGrants(t.host), 1, "two concurrent calls refresh once");
     const after = await store.read();
     assert.ok(before && after && after.access !== before.access && after.refresh !== before.refresh);
     const seen = t.host.script.requests.slice(from).map((r) => r.path);
-    assert.ok(seen.indexOf("/api/v1/auth/token") < seen.indexOf("/api/v1/host/groups"), "the refresh precedes the call");
+    assert.ok(seen.indexOf("/api/v1/auth/token") < seen.indexOf("/api/v1/host/me"), "the refresh precedes the call");
     assert.ok(seen.indexOf("/api/v1/auth/token") < seen.indexOf("/api/v1/host/me"));
   } finally {
     await t.dispose();
@@ -473,8 +344,8 @@ test("git-host-4: a token_expired answer refreshes once and retries; two concurr
   try {
     await browserSignIn(t.client);
     t.host.script.expireAccess();
-    const [groups, repositories] = await Promise.all([t.client.groups(), t.client.repositories()]);
-    assert.equal(groups.length, 3);
+    const [account, repositories] = await Promise.all([t.client.me(), t.client.repositories()]);
+    assert.equal(account.login, "ada");
     assert.deepEqual(repositories, []);
     assert.equal(refreshGrants(t.host), 1);
     assert.equal(t.signedOut.length, 0);
@@ -491,7 +362,7 @@ test("git-host-4: a refused refresh or a revoked device signs the device out", a
     await browserSignIn(t.client);
     t.host.script.refuseRefresh = true;
     skew.ms = 3_600_000;
-    await assert.rejects(t.client.groups(), hostError("reauth"));
+    await assert.rejects(t.client.me(), hostError("reauth"));
     assert.deepEqual(t.signedOut, ["reauth"]);
     assert.equal(existsSync(credentialsPath(t.home)), false);
     assert.equal(await t.client.signedIn(), false);
@@ -731,7 +602,7 @@ test("git-host-4: a held refresh, granted or refused, or a held refusal of a pai
     const overtaken = async (match: (path: string, status: number) => boolean, next: StoredCredential): Promise<void> => {
       const used = await store.read();
       const gate = t.holds.hold(match);
-      const pending = t.client.groups();
+      const pending = t.client.me();
       pending.catch(() => undefined);
       try {
         await gate.reached;
@@ -761,7 +632,7 @@ test("git-host-4: a held refresh, granted or refused, or a held refusal of a pai
     t.host.script.refuseRefresh = false;
     await browserSignIn(t.client);
     t.host.script.revokeDevices();
-    await overtaken((path, status) => path === "/api/v1/host/groups" && status === 401, newer(3));
+    await overtaken((path, status) => path === "/api/v1/host/me" && status === 401, newer(3));
   } finally {
     await t.dispose();
   }
@@ -917,7 +788,7 @@ test("git-host-2, git-host-3: a person read that fails ends either flow failed, 
 // ---------------------------------------------------------------------------
 // git-host-5, -6, -7, -8: reads and writes
 
-test("git-host-5: groups and every spex repository across two pages, followed through a rename and a removal", async () => {
+test("git-host-5: every records repository across two pages, followed through a rename and a removal", async () => {
   const t = await setup();
   try {
     const s = t.host.script;
@@ -926,10 +797,6 @@ test("git-host-5: groups and every spex repository across two pages, followed th
     const c = s.addRepository({ group: "ada", name: "ada-spex", empty: true });
     s.addRepository({ group: "acme", name: "code" });
     await browserSignIn(t.client);
-
-    const groups = await t.client.groups();
-    assert.deepEqual(groups.map((g) => [g.fullPath, g.kind]), [["ada", "user"], ["acme", "group"], ["acme/research", "group"]]);
-    assert.ok(groups.every((g) => typeof g.id === "string" && typeof g.name === "string"));
 
     const from = s.requests.length;
     const repositories = await t.client.repositories();
@@ -945,7 +812,6 @@ test("git-host-5: groups and every spex repository across two pages, followed th
     // path is the instance's, and no page is answered (DR-120).
     assert.equal(first.remoteUrl, `${t.host.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`);
     assert.ok(!("webUrl" in first) && !("url" in first.group));
-    assert.equal(first.visibility, "private");
     assert.equal(first.spexBranch, true);
     assert.equal(first.empty, false);
     assert.deepEqual(first.project, { format: 1, name: "a", remote: "git@example.test:acme/a.git" });
@@ -995,30 +861,24 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
   const t = await setup();
   try {
     await browserSignIn(t.client);
-    const created = await t.client.create({ groupId: "2002", name: "widget-spex", description: "Records of the widget project; its code lives at git@example.test:acme/widget.git" });
+    const created = await t.client.create({ name: "widget-spex", description: "Records of the widget project; its code lives at git@example.test:acme/widget.git" });
     assert.equal(created.status, "created");
     if (created.status !== "created") return;
     const repo = created.repository;
     assert.equal(repo.path, "widget-spex");
-    assert.equal(repo.group.fullPath, "acme");
-    assert.equal(repo.visibility, "private");
+    assert.equal(repo.group.fullPath, "ada");
     assert.equal(repo.empty, false);
     assert.equal(repo.spexBranch, false);
-    const bare = t.host.bareOf("acme/widget-spex");
+    const bare = t.host.bareOf("ada/widget-spex");
     assert.equal(execFileSync("git", ["-C", bare, "ls-tree", "--name-only", "main"], { encoding: "utf8" }).trim(), "README.md");
 
-    const own = await t.client.create({ groupId: null, name: "ada-spex", description: "Ada's own records" });
+    const own = await t.client.create({ name: "ada-spex", description: "Ada's own records" });
     assert.equal(own.status === "created" && own.repository.group.kind, "user");
-    // The own namespace's id names no group of the instance: the
-    // stand-in answers it 404, as Spex Space does (git-host-12).
-    await assert.rejects(t.client.create({ groupId: "2001", name: "mine-spex", description: "" }), hostError("not_found", { words: "The group is not known." }));
-    assert.deepEqual(t.host.script.creations.map((body) => (body as { group_id?: unknown }).group_id), ["2002", null, "2001"]);
-
-    await assert.rejects(t.client.create({ groupId: "2002", name: "widget-spex", description: "" }), hostError("name_taken"));
-    await assert.rejects(t.client.create({ groupId: "2002", name: "Widget", description: "" }), hostError("bad_request"));
+    await assert.rejects(t.client.create({ name: "widget-spex", description: "" }), hostError("name_taken"));
+    await assert.rejects(t.client.create({ name: "Widget", description: "" }), hostError("bad_request"));
 
     t.host.script.refuseCreate("You need the Maintainer role in acme to create projects.");
-    assert.deepEqual(await t.client.create({ groupId: "2002", name: "other-spex", description: "" }), { status: "pending", message: "You need the Maintainer role in acme to create projects." });
+    assert.deepEqual(await t.client.create({ name: "other-spex", description: "" }), { status: "pending", message: "You need the Maintainer role in acme to create projects." });
     t.host.script.refuseCreate(null);
 
     assert.deepEqual(await t.client.prepareBranch(repo.id), { status: "ready" });
@@ -1028,154 +888,6 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
     await t.dispose();
   }
 });
-
-test("git-host-8: members with the host's role names and no page", async () => {
-  const t = await setup();
-  try {
-    const repo = t.host.script.addRepository({
-      group: "acme",
-      name: "team-spex",
-      members: [{ id: "1002", login: "grace", displayName: "Grace Hopper", role: "Developer" }, { id: "1003", login: "alan", displayName: null, role: "Guest" }],
-    });
-    await browserSignIn(t.client);
-    const answer = await t.client.members({ kind: "repository", id: repo.id });
-    const { members } = answer;
-    assert.deepEqual(members.map((m) => [m.login, m.displayName, m.role]), [["ada", "Ada Lovelace", "Owner"], ["grace", "Grace Hopper", "Developer"], ["alan", null, "Guest"]]);
-    assert.ok(members.every((m) => typeof m.id === "string" && m.direct && m.via === null));
-    // No page of the host crosses (DR-120).
-    assert.deepEqual(Object.keys(answer), ["members"]);
-    assert.ok(members.every((m) => Object.keys(m).sort().join() === "direct,displayName,id,login,role,via"), JSON.stringify(members));
-
-    // Every members route failing, as Spex Space's do while its service
-    // identity's read fails, every other route answering (git-host-12):
-    // a read holds the rest of the view, the count unknown (git-host-5).
-    t.host.script.failMembers(true);
-    await assert.rejects(t.client.members({ kind: "repository", id: repo.id }), hostError("unreachable", { words: "The Git host could not be reached." }));
-    await assert.rejects(t.client.members({ kind: "group", id: "2002" }), hostError("unreachable"));
-    await assert.rejects(t.client.addMember({ kind: "repository", id: repo.id }, { login: "bob", role: "developer" }), hostError("unreachable"));
-    await assert.rejects(t.client.removeMember({ kind: "repository", id: repo.id }, "grace"), hostError("unreachable"));
-    const held = await readHostView(t.client);
-    assert.deepEqual(held.groups.map((group) => group.fullPath), ["ada", "acme", "acme/research"]);
-    assert.deepEqual(held.listings.map((listing) => [listing.repository.id, listing.branchPresent, listing.members]), [[repo.id, false, null]]);
-    t.host.script.failMembers(false);
-    const before = t.host.script.requests.length;
-    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [null]);
-    assert.equal(t.host.script.requests.slice(before).filter((request) => /\/repositories\/[^/]+\/members$/.test(request.path)).length, 0, "full views do not enumerate healthy members either");
-    assert.equal((await t.client.members({ kind: "repository", id: repo.id })).members.length, 3, "explicit Members still reads the complete membership");
-  } finally {
-    await t.dispose();
-  }
-});
-
-test("git-host-5, git-host-8: the host's roles, what it lets the person do per group and repository, and a group's members with their source", async () => {
-  const t = await setup();
-  try {
-    const s = t.host.script;
-    const research = s.groups.find((group) => group.fullPath === "acme/research");
-    assert.ok(research);
-    research.can = { createSubgroup: false, manageMembers: true, rename: true, delete: false };
-    research.members = [{ id: "1003", login: "grace", displayName: "Grace Hopper", role: "Developer" }];
-    const managed = s.addRepository({ group: "acme", name: "a-spex", role: "Owner" });
-    const reader = s.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
-    await browserSignIn(t.client);
-
-    // The roles as the host lists them, least first (git-host-5).
-    const described = await t.client.describe();
-    assert.deepEqual(described.roles, [
-      { id: "reporter", name: "Reporter", mayPush: false },
-      { id: "developer", name: "Developer", mayPush: true },
-      { id: "maintainer", name: "Maintainer", mayPush: true },
-      { id: "owner", name: "Owner", mayPush: true },
-    ]);
-    assert.equal((await t.client.me()).canCreateGroup, true);
-    // The description says whether root groups can be made, as Spex Space's
-    // does, and the person's ability says the same (git-host-12).
-    const description = async (): Promise<unknown> => (await fetch(`${t.host.url}/api/v1/host`)).json();
-    assert.equal((await description() as { groups?: unknown }).groups, true);
-    s.canCreateGroup = false;
-    assert.equal((await t.client.me()).canCreateGroup, false);
-    assert.equal((await description() as { groups?: unknown }).groups, false);
-    const groups = await t.client.groups();
-    assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
-      ["ada", { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
-      ["acme", { createSubgroup: true, manageMembers: true, rename: true, delete: true }],
-      ["acme/research", { createSubgroup: false, manageMembers: true, rename: true, delete: false }],
-    ]);
-    const repositories = await t.client.repositories();
-    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true, transfer: true }], [reader.id, { manageMembers: false, transfer: false }]]);
-
-    // A group's members: its own first, then those it inherits, each
-    // with the group it comes through (git-host-8).
-    const { members } = await t.client.members({ kind: "group", id: "2003" });
-    assert.deepEqual(members.map((m) => [m.login, m.role, m.direct, m.via]), [["grace", "Developer", true, null], ["ada", "Owner", false, "acme"]]);
-    const inherited = await t.client.members({ kind: "repository", id: managed.id });
-    assert.deepEqual(inherited.members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
-  } finally {
-    await t.dispose();
-  }
-});
-
-test("git-host-15, git-host-16, git-host-17: group creation and member writes answer as the host does, its words kept whole", async () => {
-  const t = await setup();
-  try {
-    const s = t.host.script;
-    const repo = s.addRepository({ group: "acme", name: "team-spex" });
-    await browserSignIn(t.client);
-
-    // Creation at the top and inside a group, named as typed at the path
-    // given (git-host-15).
-    const top = await t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null });
-    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true, rename: true, delete: true }]);
-    assert.equal(typeof top.id, "string");
-    // At the instance's root the service identity is an Owner beside the
-    // person, and no members listing shows it (git-host-8, DR-120): the
-    // group, and a repository made in it, list the person alone.
-    assert.ok(s.groups.find((group) => group.id === top.id)?.members?.some((member) => member.login === s.serviceAccount.login));
-    assert.deepEqual((await t.client.members({ kind: "group", id: top.id ?? "" })).members.map((m) => [m.login, m.role, m.direct]), [["ada", "Owner", true]]);
-    const inTop = await t.client.create({ groupId: top.id, name: "lumen-spex", description: "" });
-    assert.ok(inTop.status === "created");
-    assert.deepEqual((await t.client.members({ kind: "repository", id: inTop.repository.id })).members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
-    // A root path an account holds is taken, unless the host admits it.
-    await assert.rejects(t.client.createGroup({ name: "Bob", path: "bob", parentId: null }), hostError("name_taken", { words: "This path is taken by an account." }));
-    const named = await t.client.createGroup({ name: "华芯智造", path: "huaxin-mfg", parentId: null });
-    assert.deepEqual([named.fullPath, named.name], ["huaxin-mfg", "华芯智造"]);
-    const sub = await t.client.createGroup({ name: "Team One", path: "team-one", parentId: "2002" });
-    assert.equal(sub.fullPath, "acme/team-one");
-    assert.ok((await t.client.groups()).some((group) => group.id === sub.id && group.fullPath === "acme/team-one"));
-    await assert.rejects(t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null }), hostError("name_taken", { words: "Failed to save group: Path has already been taken." }));
-    s.takenGroups.push("elsewhere");
-    await assert.rejects(t.client.createGroup({ name: "Elsewhere", path: "elsewhere", parentId: null }), hostError("name_taken"));
-    s.refuseGroupCreate("You cannot create groups here.");
-    await assert.rejects(t.client.createGroup({ name: "Other", path: "other", parentId: "2002" }), hostError("host_refused", { words: "You cannot create groups here." }));
-    s.refuseGroupCreate(null);
-
-    // Addition by login at a role's id, to a group and to a repository
-    // (git-host-16).
-    const added = await t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "grace", role: "maintainer" });
-    assert.deepEqual([added.login, added.displayName, added.role, added.direct, added.via], ["grace", "Grace Hopper", "Maintainer", true, null]);
-    const toRepo = await t.client.addMember({ kind: "repository", id: repo.id }, { login: "bob", role: "developer" });
-    assert.equal(toRepo.role, "Developer");
-    assert.deepEqual((await t.client.members({ kind: "repository", id: repo.id })).members.map((m) => [m.login, m.role]), [["ada", "Owner"], ["bob", "Developer"]]);
-    await assert.rejects(t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "zed", role: "developer" }), hostError("not_found", { words: "No account is named zed." }));
-    await assert.rejects(t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "grace", role: "developer" }), hostError("host_refused", { words: "Member already exists" }));
-    s.refuseMembers("You need the Owner role to add members.");
-    await assert.rejects(t.client.addMember({ kind: "repository", id: repo.id }, { login: "alan", role: "reporter" }), hostError("host_refused", { words: "You need the Owner role to add members." }));
-
-    // Removal of a membership of its own (git-host-17).
-    await assert.rejects(t.client.removeMember({ kind: "repository", id: repo.id }, "bob"), hostError("host_refused", { words: "You need the Owner role to add members." }));
-    s.refuseMembers(null);
-    await t.client.removeMember({ kind: "repository", id: repo.id }, "bob");
-    await t.client.removeMember({ kind: "group", id: sub.id ?? "" }, "grace");
-    assert.deepEqual((await t.client.members({ kind: "group", id: sub.id ?? "" })).members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
-    await assert.rejects(t.client.removeMember({ kind: "group", id: "2003" }, "ada"), hostError("not_found", { words: "ada is not a direct member of acme/research." }));
-    await assert.rejects(t.client.removeMember({ kind: "group", id: "2003" }, "zed"), hostError("not_found", { words: "No account is named zed." }));
-  } finally {
-    await t.dispose();
-  }
-});
-
-// ---------------------------------------------------------------------------
-// git-host-9: the credential and the helper
 
 function testGitEnv(scratch: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return {
@@ -1224,7 +936,7 @@ test("git-host-9: a push through the helper carries the brokered credential; one
   const t = await setup();
   try {
     await browserSignIn(t.client);
-    const created = await t.client.create({ groupId: "2002", name: "push-spex", description: "push test" });
+    const created = await t.client.create({ name: "push-spex", description: "push test" });
     assert.equal(created.status, "created");
     if (created.status !== "created") return;
     const remote = created.repository.remoteUrl;
@@ -1264,7 +976,7 @@ test("git-host-9: a push through the helper carries the brokered credential; one
     assert.equal(pushed.code, 0, pushed.stderr);
     assert.equal(existsSync(dirname(file)), false, "the credential's directory is removed after the child");
     assert.ok(t.host.script.requests.slice(from).some((r) => r.path.endsWith("/git-receive-pack") && r.authorization));
-    const bare = t.host.bareOf("acme/push-spex");
+    const bare = t.host.bareOf("ada/push-spex");
     assert.equal(execFileSync("git", ["-C", bare, "show", "spex:project.json"], { encoding: "utf8" }).trim(), JSON.stringify({ format: 1, name: "push", remote: null }));
     assert.equal(existsSync(recorded), false, "the device's own helper was never asked");
     const detail = await t.client.repository(created.repository.id);
@@ -1304,20 +1016,20 @@ test("git-host-11: each failure the host answers is a kind with the host's words
     await browserSignIn(t.client);
     const s = t.host.script;
     s.rateLimit(1, "30");
-    await assert.rejects(t.client.groups(), hostError("rate_limited", { retryAfter: "30", words: "Too many requests to the Git host." }));
+    await assert.rejects(t.client.me(), hostError("rate_limited", { retryAfter: "30", words: "Too many requests to the Git host." }));
     // The hold passes before the next call, which would be refused
     // while it stands (git-host-21).
     await sleep(300);
     s.unavailable(1);
-    await assert.rejects(t.client.groups(), hostError("unreachable", { words: "The Git host did not answer." }));
+    await assert.rejects(t.client.me(), hostError("unreachable", { words: "The Git host did not answer." }));
     s.refuseHost(1, "Your account is blocked: contact support.");
-    await assert.rejects(t.client.groups(), hostError("host_refused", { words: "Your account is blocked: contact support." }));
+    await assert.rejects(t.client.me(), hostError("host_refused", { words: "Your account is blocked: contact support." }));
     await assert.rejects(t.client.repository("9999"), hostError("not_found", { words: "The repository is not shared with this account." }));
-    assert.equal((await t.client.groups()).length, 3, "a failure leaves the device signed in");
+    assert.equal((await t.client.me()).login, "ada", "a failure leaves the device signed in");
     assert.equal(t.signedOut.length, 0);
 
     await t.closeHost();
-    await assert.rejects(t.client.groups(), hostError("unreachable", { words: undefined }));
+    await assert.rejects(t.client.me(), hostError("unreachable", { words: undefined }));
     assert.equal(await t.client.signedIn(), true, "no answer signs nobody out");
   } finally {
     await t.dispose();
@@ -1328,7 +1040,7 @@ test("git-host-11: each failure the host answers is a kind with the host's words
 // git-host-21: the host's rate limit holds every call
 
 test("git-host-21: an opted-in GET recovers repeated throttles within its deadline and preserves excluded calls", async (t) => {
-  for (const scenario of ["success", "second429", "absent", "invalid", "zero", "overcap", "members", "selected", "write"] as const) {
+  for (const scenario of ["success", "second429", "absent", "invalid", "zero", "overcap", "selected", "write"] as const) {
     await t.test(scenario, async () => {
       const s = await setup({ holdMaxMs: 2_500 });
       try {
@@ -1340,12 +1052,11 @@ test("git-host-21: an opted-in GET recovers repeated throttles within its deadli
         const unchanged = statSync(credentialFile, { bigint: true });
         s.host.script.rateLimit(scenario === "second429" ? 2 : 1, retryAfter);
         const options = { wait: true, retryRead: true };
-        const pending = scenario === "members" ? s.client.members({ kind: "repository", id }, options)
-          : scenario === "selected" ? s.client.repository(id, { wait: true })
+        const pending = scenario === "selected" ? s.client.repository(id, { wait: true })
           : scenario === "write" ? s.client.prepareBranch(id, options)
-          : s.client.groups(options);
+          : s.client.me(options);
         if (scenario === "success" || scenario === "second429") {
-          assert.equal((await pending as unknown[]).length, 3);
+          assert.equal((await pending as { login: string }).login, "ada");
           const after = statSync(credentialFile, { bigint: true });
           assert.equal(after.ino, unchanged.ino, "retry continuity never replaces the auth file");
           assert.equal(after.mtimeNs, unchanged.mtimeNs, "retry continuity never rewrites the auth file");
@@ -1353,9 +1064,8 @@ test("git-host-21: an opted-in GET recovers repeated throttles within its deadli
           await assert.rejects(pending, hostError("rate_limited", { retryAfter: retryAfter ?? undefined }));
         }
         const requests = s.host.script.requests.slice(before);
-        assert.ok(requests.every(r => r.path === (scenario === "members" ? `/api/v1/host/repositories/${id}/members`
-          : scenario === "selected" ? `/api/v1/host/repositories/${id}`
-          : scenario === "write" ? `/api/v1/host/repositories/${id}/spex-branch` : "/api/v1/host/groups")));
+        assert.ok(requests.every(r => r.path === (scenario === "selected" ? `/api/v1/host/repositories/${id}`
+          : scenario === "write" ? `/api/v1/host/repositories/${id}/spex-branch` : "/api/v1/host/me")));
         assert.equal(requests.length, scenario === "second429" ? 3 : scenario === "success" ? 2 : 1);
       } finally { await s.dispose(); }
     });
@@ -1371,17 +1081,18 @@ test("git-host-21: changing delays recover, and an over-budget refusal keeps its
       const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url),
         holdMaxMs: outcome === "recover" ? 4_500 : 1_500, fetch: async (input, init) => {
         const response = await fetch(input, init);
-        if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
+        if (new URL(String(input)).pathname !== "/api/v1/host/me") return response;
         attempts += 1;
         if (outcome === "recover" && attempts > 2) return response;
         return Response.json({ error: { code: "rate_limited", message: attempts === 1 ? "First refusal" : "Second refusal" } }, { status: 429, headers: { "Retry-After": attempts === 1 ? "1" : "2" } });
       } });
       if (outcome === "recover") {
-        assert.equal((await client.groups({ wait: true, retryRead: true })).length, 3);
-        const requests = s.host.script.requests.filter(r => r.path === "/api/v1/host/groups");
+        const from = s.host.script.requests.length;
+        assert.equal((await client.me({ wait: true, retryRead: true })).login, "ada");
+        const requests = s.host.script.requests.slice(from).filter(r => r.path === "/api/v1/host/me");
         assert.ok(requests[1].at - requests[0].at >= 1_000, "the first Retry-After is respected");
         assert.ok(requests[2].at - requests[1].at >= 2_000, "the changing Retry-After is respected");
-      } else await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError("rate_limited", { words: "Second refusal", retryAfter: "2" }));
+      } else await assert.rejects(client.me({ wait: true, retryRead: true }), hostError("rate_limited", { words: "Second refusal", retryAfter: "2" }));
     } finally { await s.dispose(); }
   });
 });
@@ -1400,13 +1111,13 @@ test("git-host-21: abort or credential replacement during the retry hold sends n
       const stop = new AbortController();
       s.host.script.rateLimit(2, "1");
       const before = s.host.script.requests.length;
-      const pending = client.groups({ wait: true, retryRead: true, signal: stop.signal });
+      const pending = client.me({ wait: true, retryRead: true, signal: stop.signal });
       const refused = assert.rejects(pending, change === "abort" ? HostWaitStopped : CredentialChanged);
       await holding;
       if (change === "abort") stop.abort();
       else assert.ok(store.replace(original, change === "signout" ? null : { ...original, access: "replacement-fixture-access" }));
       await refused;
-      assert.equal(s.host.script.requests.slice(before).filter(r => r.path === "/api/v1/host/groups").length, 2, "no request uses the old bearer after the second hold");
+      assert.equal(s.host.script.requests.slice(before).filter(r => r.path === "/api/v1/host/me").length, 2, "no request uses the old bearer after the second hold");
       if (change === "replace") assert.equal((await store.read())?.access, "replacement-fixture-access", "refusal preserves the replacement pair");
     } finally { await s.dispose(); }
   });
@@ -1431,7 +1142,7 @@ test("git-host-21: the fixed recovery deadline bounds shared holds and in-flight
             competing = false; entered(); await competingReleased;
             return Response.json({ error: { code: "rate_limited", message: "Other request's hold" } }, { status: 429, headers: { "Retry-After": "4" } });
           }
-          if (path !== "/api/v1/host/groups") return response;
+          if (path !== "/api/v1/host/me") return response;
           attempts += 1;
           if (attempts === 1) return Response.json({ error: { code: "rate_limited", message: "Initial throttle" } }, { status: 429, headers: { "Retry-After": "1" } });
           if (outcome === "deadline" || outcome === "timeout") {
@@ -1452,7 +1163,7 @@ test("git-host-21: the fixed recovery deadline bounds shared holds and in-flight
         const other = client.me({ wait: true });
         const otherFailure = assert.rejects(other, hostError("rate_limited", { retryAfter: "4" }));
         await competingEntered;
-        const pending = client.groups({ wait: true, retryRead: true });
+        const pending = client.me({ wait: true, retryRead: true });
         const refused = assert.rejects(pending, hostError("rate_limited", { retryAfter: "1", words: "Initial throttle" }));
         await held; await sleep(100); release(); await otherFailure;
         let followingSettled = false;
@@ -1464,7 +1175,7 @@ test("git-host-21: the fixed recovery deadline bounds shared holds and in-flight
       } else {
         const kind = outcome === "deadline" ? "rate_limited" : outcome === "refused" ? "host_refused"
           : outcome === "reauth" ? "reauth" : "unreachable";
-        await assert.rejects(client.groups({ wait: true, retryRead: true }), hostError(kind,
+        await assert.rejects(client.me({ wait: true, retryRead: true }), hostError(kind,
           outcome === "deadline" ? { retryAfter: "1", words: "Initial throttle" }
             : outcome === "timeout" ? {} : { words: "Intervening refusal" }));
         if (outcome === "deadline" || outcome === "timeout") assert.equal(transportAborted, true);
@@ -1483,7 +1194,7 @@ test("git-host-21, git-host-4: the one token-expired refresh spans the rate-limi
       const before = refreshGrants(s.host);
       const client = new GitHostClient({ url: s.host.url, label: "Spex on test", credentials: fileCredentialStore(s.home, s.host.url), fetch: async (input, init) => {
         const response = await fetch(input, init);
-        if (new URL(String(input)).pathname !== "/api/v1/host/groups") return response;
+        if (new URL(String(input)).pathname !== "/api/v1/host/me") return response;
         attempts += 1;
         if (attempts === (expired === "before429" ? 2 : 1)) {
           if (expired === "after429") s.host.script.expireAccess();
@@ -1493,9 +1204,9 @@ test("git-host-21, git-host-4: the one token-expired refresh spans the rate-limi
         if (expired === "before429" && attempts === 4) return Response.json({ error: { code: "token_expired", message: "Expired again" } }, { status: 401 });
         return response;
       } });
-      const pending = client.groups({ wait: true, retryRead: true });
+      const pending = client.me({ wait: true, retryRead: true });
       if (expired === "before429") await assert.rejects(pending, hostError("reauth"));
-      else assert.equal((await pending).length, 3);
+      else assert.equal((await pending).login, "ada");
       assert.equal(refreshGrants(s.host) - before, 1, "429 never resets the normal refresh budget");
       assert.equal(attempts, 4);
     } finally { await s.dispose(); }
@@ -1517,7 +1228,7 @@ test("git-host-21, git-host-4: a recovery leaves a held shared refresh on Stop o
       const holds = holdingFetch(async (input, init) => {
         const response = await fetch(input, init);
         const path = new URL(String(input)).pathname;
-        if (path === "/api/v1/host/groups" && ++groups === 1) {
+        if (path === "/api/v1/host/me" && ++groups === 1) {
           s.host.script.expireAccess();
           return Response.json({ error: { code: "rate_limited", message: "Initial throttle" } }, { status: 429, headers: { "Retry-After": "1" } });
         }
@@ -1536,7 +1247,7 @@ test("git-host-21, git-host-4: a recovery leaves a held shared refresh on Stop o
       const shared = client.repositories({ wait: true }).finally(() => { sharedSettled = true; });
       shared.catch(() => undefined);
       await observed;
-      const pending = client.groups({ wait: true, retryRead: true, signal: stop.signal });
+      const pending = client.me({ wait: true, retryRead: true, signal: stop.signal });
       const refused = assert.rejects(pending, outcome === "abort" ? HostWaitStopped
         : hostError("rate_limited", { retryAfter: "1", words: "Initial throttle" }));
       await gate.reached;
@@ -1574,7 +1285,7 @@ test("git-host-21, git-host-11: a 429 holds the calls that wait until the instan
     const limited = async (client: GitHostClient, retryAfter: string | null): Promise<{ words: string; at: number }> => {
       s.rateLimit(1, retryAfter);
       let words = "";
-      await assert.rejects(client.groups(), (error: unknown) => {
+      await assert.rejects(client.me(), (error: unknown) => {
         hostError("rate_limited", { words: "Too many requests to the Git host." })(error);
         assert.equal((error as HostError).retryAfter, retryAfter, "the host's Retry-After is kept raw");
         words = relayHostError(error, "Host");
@@ -1586,7 +1297,7 @@ test("git-host-21, git-host-11: a 429 holds the calls that wait until the instan
      * stand-in. */
     const next = async (client: GitHostClient): Promise<number> => {
       const index = s.requests.length;
-      assert.equal((await client.groups({ wait: true })).length, 3);
+      assert.equal((await client.me({ wait: true })).login, "ada");
       return s.requests[index].at;
     };
 
@@ -1597,7 +1308,7 @@ test("git-host-21, git-host-11: a 429 holds the calls that wait until the instan
     assert.equal(number.words, "Host asks to wait 2 seconds");
     const held = s.requests.length;
     const refusedAt = Date.now();
-    await assert.rejects(t.client.members({ kind: "repository", id: "1001" }), (error: unknown) => {
+    await assert.rejects(t.client.repository("1001"), (error: unknown) => {
       hostError("rate_limited", { retryAfter: "2" })(error);
       assert.equal(relayHostError(error, "Host"), "Host asks to wait 2 seconds");
       return true;
@@ -1611,7 +1322,7 @@ test("git-host-21, git-host-11: a 429 holds the calls that wait until the instan
     s.rateLimit(1, "3");
     s.rateLimit(1, "1");
     const pair = s.requests.length;
-    const answers = await Promise.allSettled([t.client.groups(), t.client.groups()]);
+    const answers = await Promise.allSettled([t.client.me(), t.client.me()]);
     assert.deepEqual(answers.map((answer) => answer.status), ["rejected", "rejected"]);
     assert.ok((await next(t.client)) - s.requests[pair].at >= 2_950, "the next call waits the 3 s out");
 
@@ -1664,7 +1375,7 @@ test("git-host-11: no secret enters an error message", async () => {
     assert.ok(stored);
     t.host.script.revokeDevices();
     try {
-      await t.client.groups();
+      await t.client.me();
       assert.fail("a revoked device must be refused");
     } catch (error) {
       const text = `${String(error)} ${(error as Error).stack ?? ""} ${JSON.stringify(error)}`;
@@ -1754,8 +1465,6 @@ test("git-host-12: two stand-in instances run at once, each at its own origin wi
     const two = instanceClient(homeTwo, second);
     assert.equal((await browserSignIn(one)).account.login, "ada");
     assert.equal((await browserSignIn(two)).account.login, "bob");
-    assert.deepEqual((await one.groups()).map((group) => [group.id, group.fullPath, group.kind]), [["2001", "ada", "user"], ["2002", "acme", "group"], ["2003", "acme/research", "group"]]);
-    assert.deepEqual((await two.groups()).map((group) => [group.id, group.fullPath, group.kind]), [["u1002", "bob", "user"], ["2002", "acme", "group"], ["2003", "acme/research", "group"]]);
 
     // A group `acme` at each, each listing its own repository: two Git
     // systems mint ids that collide.
@@ -1809,12 +1518,12 @@ test("git-host-12: two instances over one Git backend share one transport at one
     // The person's namespace and its repositories, listed by both under
     // the same ids, one added at the first and one created at the second.
     const ns = first.script.addRepository({ group: "ada", name: "ns-spex" });
-    const made = await two.create({ groupId: null, name: "made-spex", description: "made at the second" });
+    const made = await two.create({ name: "made-spex", description: "made at the second" });
     assert.equal(made.status, "created");
     if (made.status !== "created") return;
     assert.notEqual(made.repository.id, ns.id, "one Git system's ids");
-    const namespaceRows = [[ns.id, "2001", `${first.gitOrigin}/ada/ns-spex.git`], [made.repository.id, "2001", `${first.gitOrigin}/ada/made-spex.git`]];
-    const rows = (listed: HostRepository[]) => listed.map((repository) => [repository.id, repository.group.id, repository.remoteUrl]);
+    const namespaceRows = [[ns.id, "ada", `${first.gitOrigin}/ada/ns-spex.git`], [made.repository.id, "ada", `${first.gitOrigin}/ada/made-spex.git`]];
+    const rows = (listed: HostRepository[]) => listed.map((repository) => [repository.id, repository.group.fullPath, repository.remoteUrl]);
     assert.deepEqual(rows(await one.repositories()), namespaceRows);
     assert.deepEqual(rows(await two.repositories()), namespaceRows);
     assert.ok(second.script.repositories.includes(ns));
@@ -1823,10 +1532,8 @@ test("git-host-12: two instances over one Git backend share one transport at one
     // under that system's ids; neither lists the other's.
     const a = first.script.addRepository({ group: "acme", name: "a-spex" });
     const b = second.script.addRepository({ group: "acme", name: "b-spex" });
-    const acmeOf = async (client: GitHostClient) => (await client.groups()).find((group) => group.fullPath === "acme")?.id;
-    assert.notEqual(await acmeOf(two), await acmeOf(one));
-    assert.deepEqual(rows(await one.repositories()).slice(2), [[a.id, a.group.id, `${first.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`]]);
-    assert.deepEqual(rows(await two.repositories()).slice(2), [[b.id, b.group.id, `${first.gitOrigin}/${STANDIN_STORAGE}-2/acme/b-spex.git`]]);
+    assert.deepEqual(rows(await one.repositories()).slice(2), [[a.id, a.group.fullPath, `${first.gitOrigin}/${STANDIN_STORAGE}/acme/a-spex.git`]]);
+    assert.deepEqual(rows(await two.repositories()).slice(2), [[b.id, b.group.fullPath, `${first.gitOrigin}/${STANDIN_STORAGE}-2/acme/b-spex.git`]]);
     assert.equal(first.bareOf("acme/a-spex"), join(first.dir, STANDIN_STORAGE, "acme", "a-spex.git"));
     assert.equal(second.bareOf("acme/b-spex"), join(first.dir, `${STANDIN_STORAGE}-2`, "acme", "b-spex.git"));
     assert.ok(existsSync(b.bare));
@@ -1903,12 +1610,8 @@ test("git-host-12: two instances over one Git backend share one transport at one
     const reporter = await two.repository(ns.id);
     assert.equal(reporter.readOnly?.reason, "access");
     assert.equal(reporter.branch.canPush, false);
-    assert.deepEqual(reporter.can, { manageMembers: false, transfer: false });
     const owner = await one.repository(ns.id);
     assert.equal(owner.readOnly, null);
-    assert.deepEqual(owner.can, { manageMembers: true, transfer: true });
-    assert.deepEqual((await two.members({ kind: "repository", id: ns.id })).members.map((member) => [member.login, member.role]), [["ada", "Reporter"]]);
-    assert.deepEqual((await one.members({ kind: "repository", id: ns.id })).members.map((member) => [member.login, member.role]), [["ada", "Owner"]]);
     commit("while the second answers Reporter");
     assert.equal((await withCredential(credentialTwo, ["-C", clone, "push", "-q", "origin", "spex"])).code, 0);
 

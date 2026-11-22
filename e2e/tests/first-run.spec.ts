@@ -78,7 +78,7 @@ for (const copy of ONBOARDING) {
       // [run-view-172] signed in nowhere, the welcome page leads to the
       // sign-in beside its two ways in.
       await expect(welcome.getByTestId("home-sign-in")).toHaveText(copy.signIn);
-      await expect(welcome.getByTestId("home-open-from-groups")).toHaveCount(0);
+      await expect(welcome.getByTestId("home-open-from-space")).toHaveCount(0);
       await expect(page.getByTestId("start-composer")).toHaveCount(0);
       await expect(page.getByTestId("captain-settings")).toHaveCount(0);
       if (copy.lang === "zh") await shoot(page, "welcome");

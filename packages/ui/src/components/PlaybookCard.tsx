@@ -28,7 +28,7 @@ import {
   type SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import type { SpexClient } from "../lib/client.js";
 import { bindRole } from "../lib/config-ops.js";
 import { i18n } from "../i18n.js";
@@ -154,7 +154,7 @@ export async function writeBinding(
  * row is permanent, and the artifacts arrive on the card's first open
  * — one request, held for every later open. */
 function PlaybookPipeline({ playbookId, repository }: { playbookId: string; repository: string }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [artifacts, setArtifacts] = useState<PlaybookArtifacts>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -311,7 +311,7 @@ function RoleLine({
   readiness: ReadinessEntry[];
   onChanged: () => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [open, setOpen] = useState<string>();
   const anchors = useRef(new Map<string, HTMLButtonElement>());
   const anchorRef = useRef<HTMLButtonElement | null>(null);
@@ -441,7 +441,7 @@ function RemoveEntry({
   repository: string;
   onChanged: () => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (

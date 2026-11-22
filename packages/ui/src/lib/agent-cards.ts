@@ -69,7 +69,7 @@ export function unifyPlan(summary: ConfigSummary, adapter: AdapterName, value: s
   return { changes, left, ops };
 }
 
-/** The models an adapter's agents run in your own group's file, after
+/** The models an adapter's agents run in your personal file, after
  * inheritance (settings-5): each distinct one, `""` for Provider
  * default, so a card can name the one model or say there are several. */
 export function adapterModels(summary: ConfigSummary, adapter: AdapterName): string[] {
@@ -128,7 +128,7 @@ export interface OfficialRole {
   /** "captain", or `<playbook>.<role>`. */
   role: string;
   /** The project whose composition the role is read in, where not
-   * your own group's. */
+   * your personal. */
   projectId?: string;
   model: string;
   field?: "subagentModel";
@@ -137,7 +137,7 @@ export interface OfficialRole {
 
 /** Every role whose primary or child pin is an official Claude name — the
  * Captain by its own fields; each role by its binding's own field,
- * else its player's field — over your own group's config and each project's
+ * else its player's field — over your personal config and each project's
  * composition. A role a project reads exactly as your own config does
  * is listed once. */
 export function officialRoles(state: ConfigState | undefined, projects: Record<string, ConfigState>): OfficialRole[] {
@@ -206,7 +206,7 @@ export function agentName(adapter: string): string {
   return adapter === "claude" ? "Claude" : adapter === "codex" ? "Codex" : adapter;
 }
 
-/** The model service a `claude` card names, or nothing on a seat. */
+/** The model service a Claude card names. */
 export function modelServiceText(baseUrl: BaseUrlState | undefined): string | undefined {
   if (baseUrl?.state === "third-party") {
     return i18n._({ id: "Third party {host}", comment: "Claude's requests go to another provider; the host name stays as it is", values: { host: baseUrl.host } });
@@ -260,10 +260,9 @@ function workshopGuidance(entry: ReadinessEntry, core: string): Guidance {
 }
 
 /** One fault in the reader's next step (settings-63). */
-export function faultGuidance(entry: ReadinessEntry, fault: ReadinessFault, options: { workshop: boolean; seat: boolean }): Guidance {
+export function faultGuidance(entry: ReadinessEntry, fault: ReadinessFault, options: { workshop: boolean }): Guidance {
   const core = fault.requirement;
   if (fault.kind === "runtime") return { core };
-  if (options.seat) return { text: entry.credential?.phrase ?? core, core };
   if (options.workshop && (entry.adapter === "claude" || entry.adapter === "codex")) return workshopGuidance(entry, core);
   if (entry.adapter === "claude") {
     const state = entry.baseUrl?.state ?? "unset";

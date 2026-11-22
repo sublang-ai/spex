@@ -59,7 +59,8 @@ spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex
 When a package command runs, the CLI shall act on the environment whose root is the nearest folder, the current one included, holding `spex.yaml`, else the top level of the Git work tree the current folder lies in, else the current folder, reading and writing its files where they live [[environments-26](environments.md#environments-26)] and starting, finding or needing no core ([DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
 
 - the environment's instance is the `space` its `spex.yaml` names, else the home's default instance [[environments-2](environments.md#environments-2)], independently of its selected registry [[environments-38](environments.md#environments-38)];
-- the home is created where it is missing, with nothing in it but what the command writes; no clone, lease or record of the home is read or written.
+- the home is created where it is missing, with nothing in it but what the command writes; no clone, lease or record of the home is read or written;
+- package commands refuse roots inside the Spex home, the user’s home folder and any folder whose `.spex` contains the Spex home.
 
 ### The environment
 

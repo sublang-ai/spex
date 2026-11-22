@@ -21,6 +21,7 @@ Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in its pres
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the acts offered.
 
 Amended by [DR-215](215-add-to-a-group-and-start-working.md) in per-placement acknowledgement and legacy first-send waits.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: which destinations count for sync.
 
 ## Context
 

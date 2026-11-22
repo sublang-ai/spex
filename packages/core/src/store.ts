@@ -42,7 +42,7 @@ import {
 import { occupied } from "./clone-moves.js";
 import { discardTree, makePrivateDirectory, moveFolder, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
-import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
+import { filedIn, formerPlacementPrefKey, placementPrefKey, readPlacementFiles, readPlacements } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
@@ -109,8 +109,7 @@ export interface StoreOptions {
   legacyDbPath?: string;
   /** The environment Git and the host URL are read from. */
   env?: NodeJS.ProcessEnv;
-  /** The local home for sign-in and routing, or a seat's scoped Codex
-   * home for routing its snapshot (core-service-3). */
+  /** The local home used for sign-in and model routing (core-service-3). */
   home?: SeedHome;
   /** The agents the seed counts as set up, confirmed before the store
    * opens; the credential variables alone where absent (core-service-3). */
@@ -455,20 +454,14 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
 /** The home's preference file (storage-5). */
 export function prefsFileOf(dir: string): string { return join(dir, "local", "prefs.json"); }
 
-/** What a Spex before DR-128 recorded for a repository, one record per
- * kind, moved under its placement `name` where that holds none of its
- * own, the former keys leaving (storage-5); whether anything changed. */
+/** Move the older repository-level sync receipt to the first placement. */
 function adoptFormerPlacementPrefs(prefs: Map<string, unknown>, key: string, name: string): boolean {
-  let changed = false;
-  for (const kind of PLACEMENT_PREF_KINDS) {
-    const former = formerPlacementPrefKey(key, kind);
-    if (!prefs.has(former)) continue;
-    const own = placementPrefKey(key, name, kind);
-    if (!prefs.has(own)) prefs.set(own, prefs.get(former));
-    prefs.delete(former);
-    changed = true;
-  }
-  return changed;
+  const former = formerPlacementPrefKey(key);
+  if (!prefs.has(former)) return false;
+  const own = placementPrefKey(key, name);
+  if (!prefs.has(own)) prefs.set(own, prefs.get(former));
+  prefs.delete(former);
+  return true;
 }
 
 /** The rebuildable forge cache, on this device alone (storage-1). */
@@ -891,7 +884,7 @@ export class Store {
   }
 
   private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
-    const { instance, group, name } = splitKey(repository.key);
+    const { name } = splitKey(repository.key);
     let registeredAt = 0;
     try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
     return {
@@ -899,9 +892,7 @@ export class Store {
       path,
       name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
-      // Your own group's folder lies outside every instance's: a namespace
-      // at an instance bearing its name is not it (DR-127).
-      repository: { key: repository.key, name, group, own: instance === null && group === this.homeFile.ownName },
+      repository: { key: repository.key, name },
     };
   }
 
@@ -1923,7 +1914,7 @@ export class Store {
       this.changePrefs((prefs) => {
         let changed = false;
         for (const { from, to: next } of moves) {
-          for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`))) {
+          for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`) && name.endsWith(":last"))) {
             prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, prefs.get(key));
             prefs.delete(key);
             changed = true;
@@ -2055,7 +2046,7 @@ export class Store {
       // Your own group's clone needs a folder only once it holds sessions.
       if (repository.key === this.homeFile.own() && held.length === 0) continue;
       const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
-      const { group, name } = splitKey(repository.key);
+      const { name } = splitKey(repository.key);
       const projectName = this.readProjectFile(repository).file?.name;
       const label = projectName ?? name;
       const conversations = held.map((meta) => {
@@ -2075,7 +2066,7 @@ export class Store {
         file: relative(this.dir, repository.dir),
         reason: unpairedReason(label),
         blocking: false,
-        repair: { kind: "repository", repository: repository.key, name, group,
+        repair: { kind: "repository", repository: repository.key, name,
           ...(projectName !== undefined ? { projectName } : {}), ...(conversations.length ? { conversations } : {}),
           directories, sessions: held.length, key: repairKey(repository.key, directories) },
       });
@@ -2755,26 +2746,21 @@ export class Store {
    * (storage-5): under its remote's name, else, for the clone's first
    * placement (`first`), what a Spex before DR-128 recorded for the
    * repository. */
-  placementPref<T>(key: string, name: string, kind: PlacementPrefKind, first: boolean): T | undefined {
+  placementPref<T>(key: string, name: string, first: boolean): T | undefined {
     const prefs = this.currentPrefs();
-    const own = placementPrefKey(key, name, kind);
+    const own = placementPrefKey(key, name);
     if (prefs.has(own)) return prefs.get(own) as T;
-    const former = formerPlacementPrefKey(key, kind);
+    const former = formerPlacementPrefKey(key);
     return first && prefs.has(former) ? (prefs.get(former) as T) : undefined;
   }
 
-  /** Record one of a placement's records (storage-5), in one step with
-   * the read: for the clone's first placement (`first`), what a Spex
-   * before DR-128 recorded for the repository becomes its own first —
-   * the record written replacing its kind, the other moved under the
-   * placement's name where none stands there — and the former keys
-   * leave, so no later first placement reads them. */
-  setPlacementPref(key: string, name: string, kind: PlacementPrefKind, value: unknown, first: boolean): void {
+  /** Record a completed sync and retire its older repository-level receipt. */
+  setPlacementPref(key: string, name: string, value: unknown, first: boolean): void {
     this.currentPrefs();
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
     this.changePrefs((prefs) => {
       if (first) adoptFormerPlacementPrefs(prefs, key, name);
-      prefs.set(placementPrefKey(key, name, kind), value);
+      prefs.set(placementPrefKey(key, name), value);
       return true;
     });
   }
@@ -2793,32 +2779,21 @@ export class Store {
   renamePlacementPrefs(key: string, from: string, to: string): void {
     if (from === to) return;
     this.changePrefs((prefs) => {
-      let changed = false;
-      for (const kind of PLACEMENT_PREF_KINDS) {
-        const was = placementPrefKey(key, from, kind);
-        const next = placementPrefKey(key, to, kind);
-        if (prefs.has(was)) {
-          prefs.set(next, prefs.get(was));
-          prefs.delete(was);
-          changed = true;
-        } else if (prefs.delete(next)) changed = true;
-      }
-      return changed;
+      const was = placementPrefKey(key, from);
+      const next = placementPrefKey(key, to);
+      if (!prefs.has(was)) return prefs.delete(next);
+      prefs.set(next, prefs.get(was));
+      prefs.delete(was);
+      return true;
     });
   }
 
-  /** A placement's records leave with its remote (storage-5, space-5):
-   * in one step, those under its name, and, for the clone's first
-   * placement (`first`), what a Spex before DR-128 recorded for the
-   * repository; `kinds` limits them. */
-  dropPlacementPrefs(key: string, name: string, first: boolean, kinds: readonly PlacementPrefKind[] = PLACEMENT_PREF_KINDS): void {
+  /** The last sync receipt leaves with its placement. */
+  dropPlacementPrefs(key: string, name: string, first: boolean): void {
     this.changePrefs((prefs) => {
-      let changed = false;
-      for (const kind of kinds) {
-        if (prefs.delete(placementPrefKey(key, name, kind))) changed = true;
-        if (first && prefs.delete(formerPlacementPrefKey(key, kind))) changed = true;
-      }
-      return changed;
+      const dropped = prefs.delete(placementPrefKey(key, name));
+      const droppedFormer = first && prefs.delete(formerPlacementPrefKey(key));
+      return dropped || droppedFormer;
     });
   }
 

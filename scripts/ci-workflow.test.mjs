@@ -12,7 +12,6 @@ import { parse } from "yaml";
 
 const root = resolve(import.meta.dirname, "..");
 const workflow = parse(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
-const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.yml"), "utf8"));
 
 const AFFECTED = "needs.changes.outputs.affected";
 const SUITE_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'";
@@ -25,7 +24,6 @@ const selected = ({ full = false, channel = "app", docsOnly = false, affected = 
   test: { result: docsOnly ? "skipped" : "success" },
   journeys: { result: full && channel === "app" ? "success" : "skipped" },
   "desktop-browser": { result: full && channel === "app" ? "success" : "skipped" },
-  "hub-lane": { result: full && channel === "app" ? "success" : "skipped" },
 });
 
 test("release-33: PRs cancel only their superseded run; CI has reusable/manual full validation and no nightly or main push (release-30, release-34)", () => {
@@ -83,10 +81,6 @@ test("release-33: the matrix runs affected Linux/Windows PR suites, the core's i
     assert.deepEqual(workflow.jobs[name].strategy.matrix.os, ["ubuntu-latest", "macos-latest"]);
   }
   assert.deepEqual(workflow.jobs.journeys.strategy.matrix.shard, [1, 2, 3]);
-  assert.deepEqual(workflow.jobs["hub-lane"], {
-    needs: "changes", if: FULL_APP_CONDITION, uses: "./.github/workflows/hub-lane.yml", permissions: { contents: "read" },
-    with: { "release-tag": "${{ inputs.release-tag || '' }}" },
-  });
 });
 
 test("release-33: classification chooses the exact full channel and keeps shared documentation gates; app provenance precedes installs (release-34, release-41)", () => {
@@ -170,7 +164,7 @@ test("release-33: one checks gate always evaluates every job with no stand-in or
   const checks = workflow.jobs.checks;
   assert.equal(checks.if, "always()");
   assert.deepEqual(checks.needs.slice().sort(), Object.keys(workflow.jobs).filter((name) => name !== "checks").sort());
-  assert.deepEqual(checks.needs.slice().sort(), ["changes", "desktop-browser", "hub-lane", "journeys", "test"]);
+  assert.deepEqual(checks.needs.slice().sort(), ["changes", "desktop-browser", "journeys", "test"]);
   assert.equal(checks["continue-on-error"], undefined);
   assert.equal(checks.name, undefined);
   const verify = checks.steps.find((step) => step.run === "node scripts/ci-verdict.mjs");
@@ -220,21 +214,6 @@ test("release-33: each journey shard runs its third of the journeys and keeps it
   const report = steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
   assert.ok(report && report.if === "failure()", "a failed shard keeps its report");
   assert.equal(report.with.name, "journey-report-${{ matrix.os }}-${{ matrix.shard }}", "one artifact name per shard");
-});
-
-test("release-33: the hub lane is reusable or manual only, runs as root and keeps its output (release-36)", () => {
-  assert.deepEqual(Object.keys(laneWorkflow.on).sort(), ["workflow_call", "workflow_dispatch"]);
-  assert.equal(laneWorkflow.concurrency["cancel-in-progress"], false);
-  const jobs = Object.values(laneWorkflow.jobs);
-  assert.equal(jobs.length, 1);
-  const [lane] = jobs;
-  assert.equal(lane["runs-on"], "ubuntu-latest");
-  const steps = lane.steps.map((step) => step.run ?? step.uses ?? "");
-  assert.ok(steps.some((step) => /^sudo -n env LANE_COMMIT="\$GITHUB_SHA" LANE_LOGS="\$LANE_LOGS" "\$CHECKOUT\/apps\/hub\/scripts\/privileged-lane\.sh"$/.test(step)), "the lane's script runs as root from the unpacked tree");
-  assert.ok(steps.some((step) => step.includes("git archive --format=tar HEAD | sudo tar -x --no-same-owner -C \"$CHECKOUT\"")), "the commit's tree unpacked outside any home");
-  assert.ok(steps.some((step) => step.includes("sha256sum --check --ignore-missing SHASUMS256.txt") && step.includes("/usr/lib/nodejs")), "Node checked against its sums and placed under root's own directories");
-  const upload = lane.steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
-  assert.ok(upload && upload.if === "always()" && upload.with.name === "hub-lane-log", "the lane's output kept as the run's artifact, pass or fail");
 });
 
 test("release-33: the pre-push check refuses a conflict marker (release-35)", () => {
@@ -439,7 +418,7 @@ test("release-33: the merge-on-green script polls again after a failed or empty 
 });
 
 
-test("release-46: release CI injects the same version before installs, including the archived hub tree", () => {
+test("release-46: release CI injects the same version before installs", () => {
   for (const name of ["changes", "test", "journeys", "desktop-browser"]) {
     const steps = workflow.jobs[name].steps;
     const at = steps.findIndex(step => step.name === "Prepare release version");
@@ -451,15 +430,9 @@ test("release-46: release CI injects the same version before installs, including
   }
   const desktopBuild = workflow.jobs["desktop-browser"].steps.find(step => step.run?.includes("electron-builder"));
   assert.match(desktopBuild.run, /--config\.mac\.identity=null --config\.mac\.forceCodeSigning=false/);
-  const hubSteps = Object.values(laneWorkflow.jobs).flatMap(job => job.steps ?? []);
-  const archive = hubSteps.findIndex(step => step.run?.includes("git archive"));
-  const stamp = hubSteps.findIndex(step => step.name === "Prepare the archived release version");
-  assert(archive >= 0 && stamp > archive);
-  assert.equal(hubSteps[stamp].if, "inputs.release-tag != ''");
-  assert.match(hubSteps[stamp].run, /release-version\.mjs.*--channel=app/);
 });
 
-const workflowsByName = Object.fromEntries(["ci", "app-release", "release", "hub-lane", "caches"]
+const workflowsByName = Object.fromEntries(["ci", "app-release", "release", "caches"]
   .map((name) => [name, parse(readFileSync(join(root, `.github/workflows/${name}.yml`), "utf8"))]));
 const DOWNLOAD_CACHES = "./.github/actions/download-caches";
 const installs = (step) => /(^|\n)\s*npm ci(\s|$)/.test(step.run ?? "");

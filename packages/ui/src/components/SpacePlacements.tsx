@@ -1,71 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's placements in its Sync tab (space-87, DR-128,
-// DR-159, DR-172), never on its row: one line per placement in the order
-// the core sends them — those its clone holds in the order added, the
-// path placement last, then each a placement file names that no remote
-// here holds, then each instance a creation waits at — naming its
-// Space's display name and the path of the group it is in there, nothing
-// in your namespace and never the records' own `-spex` name, or the path
-// placement's remote, with what that placement did: the step in flight at it, a step
-// waiting at the Space, the outcome the last sync left there, or its own
-// state and last sync (space-61, space-12, space-15, space-64). A row
-// with no clone here carries none.
-//
-// A reachable placement at a Space carries Members, its panel beneath
-// the line (space-62). The outcome the last sync left carries its way
-// forward: records started separately "Combine…", confirmed
-// inline (space-13); a stop Retry (space-15); and an unreachable
-// placement whose Space is signed in, on a row still reachable, Retry
-// reading the Spaces again (space-61). A placement a file of the clone
-// names and no remote here holds reads "Not on this computer" with no
-// control: attaching it is not offered here (DR-172). An act confirmed
-// beneath the line hands focus back to the control that asked, or to
-// the row's name while that control is busy (DR-010 §6). Each control is
-// described by the line's Space name, so two lines' alike controls are
-// told apart. The Space's name owns the slack, the path yields below
-// @md, the phrase truncates with its title, Members shows its mark below
-// @md and below @xs the controls wrap beneath (space-28).
+// The Sync tab's placement lines, with progress, outcomes and conflict actions.
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { GroupsState, InstanceGroupState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { SpaceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { instanceOf } from "../lib/instances.js";
-import { alsoPlacedAt, governingOfPlacement, placementName, standingEntry } from "../lib/placements.js";
-import { cloneHere, lineOutcome, personalLabel, phraseNames, placementPhrase, seatName, type LinePhrase } from "../lib/space.js";
-import { Icon } from "./Icon.js";
+import { placementName } from "../lib/placements.js";
+import { cloneHere, lineOutcome, phraseNames, placementPhrase, type LinePhrase } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { MembersPanel } from "./SpaceMembers.js";
-import { ALERT_INK, ATTACHED_OWNER, ATTENTION_INK } from "./SpacePanel.js";
+import { ALERT_INK, ATTENTION_INK } from "./SpacePanel.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
-/** How an entry an instance lists is named where records are shared
- * into it (space-57, space-58): a group by its name, your namespace
- * "Personal", another account's by its login. */
-export function entryName(entry: InstanceGroupState): string {
-  if (entry.login === null) return entry.name;
-  return entry.mine ? personalLabel() : `@${entry.login}`;
-}
-
-/** The path of the group a placement is in at its Space (space-87):
- * the part of its path before the last "/", never the records' own
- * `-spex` name; none in your namespace there, which reads as Personal,
- * nor for the path placement. */
-export function placementGroupPath(groups: GroupsState, repo: RepositoryState, line: PlacementState): string | null {
-  if (line.instance === null || repo.own) return null;
-  const parent = line.path.split("/").slice(0, -1).join("/");
-  if (!parent) return null;
-  const standing = standingEntry(groups, repo, line);
-  if (standing?.login != null && standing.mine) return null;
-  const login = instanceOf(groups, line.instance)?.account.login;
-  return login !== undefined && parent.toLowerCase() === login.toLowerCase() ? null : parent;
-}
-
-/** "Combine…" (space-13, DR-172): records started separately at a Space
- * brought into one; its confirm follows. */
 export const combineLabel = (): string =>
   i18n._({ id: "Combine…", comment: "beside \"Started separately at <display name>\": asks to bring both sets of records into one; its confirm follows" });
 
@@ -117,7 +66,7 @@ export function PlacementLines({
   onNote,
   onPendingChange,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   repo: RepositoryState;
   now: number;
   /** The sync phase the reader dismissed on this row's Sync tab. */
@@ -182,7 +131,7 @@ function PlacementLine({
   onNote,
   onPendingChange,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   repo: RepositoryState;
   rowName: string;
   line: PlacementState;
@@ -193,29 +142,22 @@ function PlacementLine({
   onNote: Note;
   onPendingChange(instance: string | null, pending: boolean): void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const spaceSync = store((state) => state.spaceSync);
   const spaceFetch = store((state) => state.spaceFetch);
   const spaceRefresh = store((state) => state.spaceRefresh);
   const spaceLastAct = store((state) => state.spaceLastAct);
-  const [opened, setOpened] = useState<"members" | "combine">();
-  const [membersPending, setMembersPending] = useState(false);
-  useEffect(() => { onPendingChange(line.instance, membersPending); }, [line.instance, membersPending, onPendingChange]);
-  useEffect(() => () => { onPendingChange(line.instance, false); }, [line.instance, onPendingChange]);
-  const [membersFocus, setMembersFocus] = useState(0);
+  const [opened, setOpened] = useState<"combine">();
   const [busy, setBusy] = useState<LineAct>();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves (DR-010 §3, space-29).
   const [accepted, setAccepted] = useState<{ act: LineAct; key: string }>();
   const [error, setError] = useState<string>();
   const nameId = useId();
-  const membersId = useId();
-  const membersRef = useRef<HTMLButtonElement>(null);
   const combineRef = useRef<HTMLButtonElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
   const name = placementName(groups, line);
-  const groupPath = placementGroupPath(groups, repo, line);
-  const phrase = placementPhrase(repo, line, now, dismissed, phraseNames(groups, repo, seatName(store.place)));
+  const phrase = placementPhrase(repo, line, now, dismissed, phraseNames(groups, repo));
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -246,16 +188,8 @@ function PlacementLine({
     instanceOf(groups, line.instance)?.signedIn === true &&
     repo.state !== "unreachable";
   const showRetry = stoppedRetry || unreachableRetry;
-  // The Space governing the placement: its roles and display name, and
-  // whether its acts stand (space-1, space-62, git-host-5).
-  const governing = governingOfPlacement(groups, repo, line);
-  const governed = line.attached && line.instance !== null && governing?.signedIn === true;
-  // Members on a reachable placement at a Space (space-87, space-62).
-  const showMembers = governed && line.state === "reachable";
-  const membersLabel = i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" });
 
   const close = (ref: { current: HTMLButtonElement | null }) => {
-    if (membersPending) return;
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => ref.current?.focus(), 0);
@@ -334,7 +268,7 @@ function PlacementLine({
       data-testid={`space-line-${origin}`}
       data-state={line.state}
       data-attached={String(line.attached)}
-      className={`flex min-w-0 flex-col gap-1 ${opened === "members" ? ATTACHED_OWNER : ""}`}
+      className="flex min-w-0 flex-col gap-1"
     >
       {/* Below @xs the controls wrap beneath the name and the phrase
           (DR-041). */}
@@ -345,15 +279,7 @@ function PlacementLine({
         {/* The path placement is named by its remote; a Space's
             placement by its Space, the path of its group beside it —
             none in your namespace (space-87). */}
-        {groupPath !== null ? (
-          <span
-            data-testid="space-line-at"
-            className="hidden min-w-0 max-w-[35%] truncate text-neutral-500 @md:inline"
-            title={groupPath}
-          >
-            {groupPath}
-          </span>
-        ) : null}
+
         <span
           data-testid="space-line-state"
           data-tone={phrase.tone}
@@ -362,28 +288,8 @@ function PlacementLine({
         >
           {phrase.text}
         </span>
-        {showMembers || showCombine || showRetry ? (
+        {showCombine || showRetry ? (
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            {showMembers ? (
-              <button
-                ref={membersRef}
-                type="button"
-                data-testid="space-line-members"
-                aria-label={membersLabel}
-                aria-describedby={nameId}
-                title={membersLabel}
-                aria-expanded={opened === "members"}
-                aria-controls={opened === "members" ? membersId : undefined}
-                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || membersPending}
-                onClick={() => { setOpened("members"); setMembersFocus((value) => value + 1); }}
-              >
-                {/* Below @md the control keeps its name and shows its mark
-                    (DR-041). */}
-                <span className="hidden @md:inline">{membersLabel}</span>
-                <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
-              </button>
-            ) : null}
             {/* The outcome's way forward stands last, the line's primary
                 act (DR-041). */}
             {showCombine ? (
@@ -394,7 +300,7 @@ function PlacementLine({
                 aria-describedby={nameId}
                 aria-expanded={opened === "combine"}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending || membersPending}
+                disabled={!connected || pending}
                 onClick={() => setOpened((was) => (was === "combine" ? undefined : "combine"))}
               >
                 {workingOn("combine") ? combiningLabel() : combineLabel()}
@@ -410,7 +316,7 @@ function PlacementLine({
                 // is retried (space-2).
                 title={unreachableRetry ? i18n._({ id: "Reads every signed-in Space again", comment: "the title of Retry on records a Space could not be read for" }) : undefined}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending || membersPending}
+                disabled={!connected || pending}
                 onClick={retry}
               >
                 {workingOn("retry")
@@ -429,25 +335,6 @@ function PlacementLine({
       {opened === "combine" && showCombine ? (
         <div data-testid="space-line-combine-confirm" className="px-2">
           <CombineConfirm onConfirm={combine} onCancel={() => close(combineRef)} />
-        </div>
-      ) : null}
-      {opened === "members" && showMembers && governing && line.instance !== null ? (
-        <div id={membersId} className="min-w-0">
-          <MembersPanel
-            embedded
-            focusRequest={membersFocus}
-            onPendingChange={setMembersPending}
-            instance={governing}
-            target={{ repository: repo.key, instance: line.instance }}
-            id={`${repo.key}@${line.instance}`}
-            name={rowName}
-            canManage={line.can.manageMembers}
-            alsoPlacedAt={alsoPlacedAt(groups, repo, line)}
-            connected={connected}
-            refreshes={refreshes}
-            onClose={() => close(membersRef)}
-            onNote={onNote}
-          />
         </div>
       ) : null}
     </li>

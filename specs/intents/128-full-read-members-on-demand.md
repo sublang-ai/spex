@@ -9,7 +9,7 @@ Implemented and independently reviewed by GPT-6 Astra; two stale CI assertions c
 
 ## Intent
 
-Keep full-view catalog and detail authority while omitting eager member enumeration; selected-destination reads and explicit Members retain their existing behavior [[git-host-5](../packages/git-host.md#git-host-5)] [[git-host-22](../packages/git-host.md#git-host-22)] [[git-host-8](../packages/git-host.md#git-host-8)].
+Keep full-view catalog and detail authority while omitting eager member enumeration; selected-destination reads and explicit Members retain their existing behavior [[git-host-5](../packages/git-host.md#git-host-5)] [[git-host-22](../packages/git-host.md#git-host-22)] `git-host-8`.
 
 ## Deliverables
 

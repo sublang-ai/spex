@@ -18,7 +18,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { DraftInfo, PlaybookAvailability, ProjectInfo } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import { NEUTRAL_BLOCK } from "../lib/config-ops.js";
 import { draftPackagePath } from "../lib/drafts.js";
@@ -63,7 +63,7 @@ export function takenIds(lists: readonly (readonly PlaybookAvailability[])[]): M
  * its success line standing until the page is left
  * (playbook-library-61); the live region says it. */
 export function useRevealedCard(rows: readonly PlaybookAvailability[], announce: (note: string) => void) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const revealPlaybook = store((state) => state.revealPlaybook);
   const consumeRevealPlaybook = store((state) => state.consumeRevealPlaybook);
   const [revealed, setRevealed] = useState<string>();
@@ -89,7 +89,7 @@ export function useRevealedCard(rows: readonly PlaybookAvailability[], announce:
 /** The live region narrating the authoring sessions' transitions
  * (DR-010 §7), and anything else the page says. */
 export function useLiveNote() {
-  const drafts = usePlaceStore()((state) => state.drafts);
+  const drafts = useAppStore((state) => state.drafts);
   const [note, setNote] = useState("");
   const previous = useRef<Record<string, DraftInfo>>({});
   useEffect(() => {
@@ -144,7 +144,7 @@ export function PlaybooksTab({
   project: ProjectInfo;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const configState = store((state) => state.configState);
   const readiness = store((state) => state.readiness);
   const connection = store((state) => state.connection);

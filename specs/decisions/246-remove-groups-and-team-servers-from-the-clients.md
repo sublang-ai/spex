@@ -5,8 +5,8 @@
 
 ## Status
 
-Proposed (2026-11-22).
-On acceptance this would supersede the following decisions in full.
+Accepted (2026-11-22) on the owner's approval.
+This decision supersedes the following decisions in full.
 
 | Workflow | Decisions |
 | --- | --- |
@@ -15,7 +15,7 @@ On acceptance this would supersede the following decisions in full.
 | Multi-core IDE and Open on a server | [DR-133](133-one-desktop-over-several-cores.md), [DR-210](210-open-on-a-server-without-an-acknowledgement.md) |
 | Team servers and seats, ticket sign-in, shared subscriptions, lease sweep and privileged CI lane | [DR-132](132-team-servers.md), [DR-164](164-the-seat-signs-in-on-its-ticket.md), [DR-201](201-shared-codex-subscription-access.md), [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md), [DR-149](149-the-privileged-lane-runs-on-ci.md) |
 
-Other decisions would receive scoped amendments.
+This decision amends the following decisions within the listed scope.
 
 | Affected scope | Decisions |
 | --- | --- |
@@ -42,7 +42,6 @@ Spex has no public users who need an upgrade path for these features.
 
 **At each Space, a person sees only their own projects and records.**
 Wherever Spex identifies the service, it names only the Space, including in replies, keys, folders and documents ([DR-120](120-the-instance-is-the-space.md)).
-On acceptance, replace the workshop-and-personal-groups rule in `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` with this rule.
 
 - Space shows a flat project list for each signed-in account. Opening or creating a local project needs no Space account and opens no destination picker. To sync its records, the person chooses a Space and the IDE uses their own namespace there. On a second computer they can sign in, select the project and open it using the existing folder and records flow.
 - Remove group trees, group sessions, membership and invitations, project sharing, and group choices from Space, project rows, the welcome screen and the project picker. Delete their commands and listings from the client protocol.
