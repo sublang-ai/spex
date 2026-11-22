@@ -2544,13 +2544,13 @@ test("space-59: a sign-in while home.yaml stops reading as the rename begins mov
   assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).filter((name) => !name.startsWith(".") && !name.startsWith("@")), [OWN], "no folder named after the login");
 });
 
-test("space-59: a sign-in whose move of your own group's clone fails after the project's moved puts the project's clone back, home.yaml unchanged", { skip: asRoot }, async (t) => {
+test("space-59: a sign-in whose move of the personal records clone fails after the project's moved puts the project's clone back, home.yaml unchanged", { skip: asRoot }, async (t) => {
   const host = await startHost();
   const home = await startHome("lower-partial", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
   const sessionId = await runTurn(home, key, "Before the sign-in");
-  // Your own group's clone moves last; a folder that may not be written
+  // The personal records clone moves last; a folder that may not be written
   // refuses its move to another parent (its `..` would change), after
   // the project's moved.
   const own = ownClone(home.dataDir);
@@ -2559,11 +2559,11 @@ test("space-59: a sign-in whose move of your own group's clone fails after the p
   try {
     ({ said } = await consoleErrors(() => signIn(home, host)));
   } finally { chmodSync(own, 0o755); }
-  const refused = said.find((line) => line.includes("your own group's folder did not move"));
-  assert.ok(refused?.includes(`${OWN}-spex' -> `), `your own group's clone's rename failed: ${said.join("\n")}`);
+  const refused = said.find((line) => line.includes("the personal records folder did not move"));
+  assert.ok(refused?.includes(`${OWN}-spex' -> `), `the personal records clone's rename failed: ${said.join("\n")}`);
   assert.ok(!said.some((line) => line.includes("did not move back")), "the project's clone moved back");
   assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone is back where it was, its session with it");
-  assert.ok(existsSync(join(own, ".git")), "your own group's clone stays");
+  assert.ok(existsSync(join(own, ".git")), "the personal records clone stays");
   assert.ok(!existsSync(join(home.dataDir, "workspace", LOGIN)), "nothing is left under the login's folder");
   const file = Home.load(home.dataDir).file;
   assert.equal(file.own, OWN);
@@ -2580,14 +2580,14 @@ test("space-59: a sign-in whose write of home.yaml fails after every clone moved
   const { failed } = failHomeWrite(home);
   const { said } = await consoleErrors(() => signIn(home, host));
   assert.ok(failed(), "the write of home.yaml was reached");
-  assert.ok(said.some((line) => line.includes("your own group's folder did not move")), said.join("\n"));
+  assert.ok(said.some((line) => line.includes("the personal records folder did not move")), said.join("\n"));
   assert.ok(!said.some((line) => line.includes("did not move back")), "every clone moved back");
   // The sign-in wrote its account; the move wrote nothing.
   const file = Home.load(home.dataDir).file;
   assert.equal(file.own, OWN);
   assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, key]]);
   assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone is back where it was, its session with it");
-  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "your own group's clone is back");
+  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "the personal records clone is back");
   assert.ok(!existsSync(join(home.dataDir, "workspace", LOGIN)), "nothing is left under the login's folder");
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
   await home.stop();

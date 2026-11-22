@@ -76,6 +76,8 @@ When a signed-in Space is first read after startup, refreshed or read at sign-in
 When sync checks a Space placement, the core shall independently re-read that Space's current account, complete catalog and matched target's repository details before fetching or writing, and refuse the destination unless the fresh result matches the placement's identity [[git-host-5](#git-host-5)] and identifies the repository in the signed-in account's own namespace ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
 - a target answer governs the repository's path, branch and access without advancing the full-view read time;
+- Git must use the Space-approved records address for a check, push or clone. A Git setting that would rewrite it stops the transfer with guidance to check the rewrite rules;
+- a user-supplied records remote is eligible for external Git transport only after the core classifies its destination [[space-5](space.md#space-5)];
 - a changed account or credential [[git-host-4](#git-host-4)] refuses the step and prevents a stale result from being published;
 - a valid move within the personal namespace follows the clone's unchanged-path guards [[space-60](space.md#space-60)].
 
@@ -114,12 +116,14 @@ When a client sends `space.signout` naming a signed-in instance, the core shall 
 
 #### git-host-11
 
+When a Space call fails, the core shall report the corresponding cause in the reader's language, preserving the Space's own refusal or waiting message under the reporting rules [[space-15](space.md#space-15)] ([DR-064](../decisions/064-honest-remote-failure.md)).
 
 | Answer | Relayed as |
 | --- | --- |
 | `pending` | waiting, with the words, on the step's row |
 | `name_taken` | the name is taken |
-| `host_refused` | refused, with the words |
+| `host_refused`, `bad_request` | refused, with the words |
+| `not_found` | the records are no longer available in this Space account |
 | `rate_limited` | the host asks to wait N seconds — its `Retry-After`'s number, or the seconds until its HTTP date, none below zero — or a moment, where it gives neither |
 | `reauth_required`, `token_revoked`, `invalid_token` | sign in again |
 | `provider_unavailable`, no answer | the host could not be reached |
@@ -190,6 +194,8 @@ When a real core syncs an individual repository against the stand-in Space, the 
 
 - an unrelated repository detail failure leaves the selected sync available and the full read time unchanged;
 - a repository moved outside the personal namespace stops the transfer, retains its local files and receives no new records, including during catch-up;
+- before the first account read after startup, a separate Git address reported by a Space is refused as an external records remote. An unavailable description blocks an ambiguous HTTP(S) destination while an explicitly configured local path still syncs;
+- a Git URL rewrite, separate push URL or HTTP redirect cannot divert a records transfer to an unverified Space repository;
 - target, catalog and authentication failures prevent transfer, and a held response across sign-out cannot restore access;
 - a later complete read supersedes an earlier target read, while a target-only check after restart leaves the first full read due.
 

@@ -253,6 +253,10 @@ msgstr "{count, plural, one {# saved conversation} other {# saved conversations}
 msgid "{count, plural, one {# session needs you} other {# sessions need you}}"
 msgstr "{count, plural, one {# session needs you} other {# sessions need you}}"
 
+#: src/App.tsx
+msgid "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
+msgstr "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
+
 #. what a package provides: its count of skills for agents
 #: src/lib/environments.ts
 msgid "{count, plural, one {# skill} other {# skills}}"
@@ -826,6 +830,10 @@ msgstr "A playbook is a workflow written in plain language. Spex turns it into s
 #: src/lib/labels.ts
 msgid "A player finishes its step"
 msgstr "A player finishes its step"
+
+#: src/App.tsx
+msgid "A player is waiting for your reply: {detail}"
+msgstr "A player is waiting for your reply: {detail}"
 
 #: src/components/SettingsSurface.tsx
 msgid "A player named {id} already exists — edit it above instead."
@@ -1589,7 +1597,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
-#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentCards.tsx
 #: src/components/AgentEditor.tsx
@@ -1600,7 +1607,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/EnvironmentSection.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
-#: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
 #: src/components/PublishSetup.tsx
 #: src/components/RegistryAccount.tsx
@@ -2281,6 +2287,14 @@ msgstr "Connecting…"
 #: src/lib/client.ts
 msgid "connection closed"
 msgstr "connection closed"
+
+#: src/App.tsx
+msgid "Connection restored."
+msgstr "Connection restored."
+
+#: src/App.tsx
+msgid "Connection to the Spex core lost — reconnecting."
+msgstr "Connection to the Spex core lost — reconnecting."
 
 #. a sign-in in flight: it continues on the Space's page in the browser
 #: src/components/SpaceSignIn.tsx
@@ -3393,10 +3407,6 @@ msgstr "From the registry"
 msgid "From the registry · {range}"
 msgstr "From the registry · {range}"
 
-#: src/components/ProjectPalette.tsx
-msgid "From your Spaces"
-msgstr "From your Spaces"
-
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -4072,8 +4082,6 @@ msgid "Moved to Dismissed in Space → Files & history. Your conversations are k
 msgstr "Moved to Dismissed in Space → Files & history. Your conversations are kept."
 
 #. the folder field's refusal of an empty path
-#. the folder field's refusal of an empty path
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceProjects.tsx
 msgid "Name a folder"
 msgstr "Name a folder"
@@ -4260,10 +4268,6 @@ msgstr "No open pull requests."
 #: src/components/PublishSetup.tsx
 msgid "No orgs to publish to"
 msgstr "No orgs to publish to"
-
-#: src/components/ProjectPalette.tsx
-msgid "No other projects in your Spaces"
-msgstr "No other projects in your Spaces"
 
 #. Add…'s registry search found nothing
 #: src/components/EnvironmentSection.tsx
@@ -4682,10 +4686,10 @@ msgstr "Open {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
 
-#. welcome page action: opens the project palette at your personal projects available from a Space
+#. welcome page action: opens the Space surface to show projects available from a Space
 #: src/components/CaptainHome.tsx
-msgid "Open a project from your Space"
-msgstr "Open a project from your Space"
+msgid "Open a project from Space"
+msgstr "Open a project from Space"
 
 #. a step: the coder opens the pull request
 #: src/lib/step-words.ts
@@ -4705,8 +4709,6 @@ msgstr "Open and send a message to pick it up."
 msgid "Open folder…"
 msgstr "Open folder…"
 
-#. project palette: open a personal project on this computer, downloading its records and code into the folder named beside
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceProjects.tsx
 msgid "Open here"
 msgstr "Open here"
@@ -4808,8 +4810,6 @@ msgstr "opened the pull request"
 msgid "Opening the applet…"
 msgstr "Opening the applet…"
 
-#. a project from a Space while it opens: its records and code are downloaded
-#. a project from a Space while it opens: its records and code are downloaded
 #. a project's row while it is opened here: its records and code are downloaded
 #. a project's row while it is opened here: its records and code clone
 #. a project's row while it is opened here: its records and code clone
@@ -4819,7 +4819,6 @@ msgstr "Opening the applet…"
 #: src/components/NavRail.tsx
 #: src/components/PlaybookAuthoring.tsx
 #: src/components/PlaybooksTab.tsx
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceProjects.tsx
 #: src/lib/space.ts
 msgid "Opening…"
@@ -5121,10 +5120,6 @@ msgstr "Previously used folder"
 #: src/components/SpaceRepairs.tsx
 msgid "Previously used folders"
 msgstr "Previously used folders"
-
-#: src/components/ProjectPalette.tsx
-msgid "Project folder"
-msgstr "Project folder"
 
 #. the local folder containing the project files, separate from saved conversation history
 #: src/components/SpaceProjects.tsx
@@ -7388,8 +7383,6 @@ msgid "transcript could not be loaded: {reason}"
 msgstr "transcript could not be loaded: {reason}"
 
 #. error boundary: re-render the surface in place
-#. on a project from a Space whose open stopped: open it again
-#: src/components/ProjectPalette.tsx
 #: src/main.tsx
 msgid "Try again"
 msgstr "Try again"

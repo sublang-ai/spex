@@ -2,7 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import type { Page } from "@playwright/test";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { Home } from "@sublang/spex-core";
+import { seedDemoProject } from "@sublang/spex-core/testing";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   LOCAL_MODEL, LOCAL_PROJECT_CONFIG, LOCAL_TURN, PEER_TURN, SESSION_TITLE,
@@ -409,61 +411,123 @@ test.describe("exploring", () => {
 });
 
 test.describe("personal projects on two computers", () => {
-  test.use({ appOptions: { host: { displayName: "Personal Space" }, project: true, codeRemote: true } });
+  test.use({ appOptions: { host: { displayName: "Personal Space" } } });
 
-  test("DR-246: sync is explicit and a second home opens the personal project in an existing folder", async ({ app, page, browser }) => {
-    test.setTimeout(120_000);
-    const host = app.host!;
-    const localKey = app.projectId!;
-    const work = await app.core.command("session.create", { projectId: localKey });
-    await runTurn(app, work.id, SESSION_TITLE);
-    await open(page, app);
-    await nav(page, "Space").click();
-    await signInThroughPage(page, app);
-    const personal = instanceSection(page, host);
-    await expect(personal.getByRole("heading", { name: /Personal Space/ })).toBeVisible();
-    const localRow = page.getByRole("group", { name: "This computer" }).getByRole("button", { name: "demo-project", exact: true });
-    await expect(localRow).toBeVisible();
-    const localRecordsKey = (await localRow.getAttribute("data-testid"))!.slice("space-repo-".length);
-    const local = repositoryOf(await app.core.command("space.get", {}), localRecordsKey);
-    expect(local.state).toBe("local-only");
-    expect(local.placements).toEqual([]);
-    await rowAct(page, localRecordsKey, "destination");
-    const destination = page.getByTestId(`space-destination-${localRecordsKey}`);
-    await expect(destination.getByRole("combobox", { name: "Space" })).toHaveValue(host.url);
-    await destination.getByRole("button", { name: "Sync records" }).click();
-    const row = personal.getByRole("button", { name: "demo-project", exact: true });
-    await expect(row).toBeVisible({ timeout: 45_000 });
-    const key = (await row.getAttribute("data-testid"))!.slice("space-repo-".length);
-    await expect(phraseOf(page, key)).toHaveText(/^Synced /, { timeout: 45_000 });
-    const remote = git(app.projectDir, "remote", "get-url", "origin");
-    const second = await startApp({ host: { share: { host } } });
-    const secondPage = await browser.newPage();
-    try {
-      const folder = join(second.home, "existing-project");
-      git(second.home, "clone", "-q", remote, folder);
-      await open(secondPage, second);
-      await nav(secondPage, "Space").click();
-      await signInThroughPage(secondPage, second);
-      await nav(secondPage, "Projects").click();
-      await secondPage.getByTestId("home-open-from-space").click();
-      const palette = secondPage.getByTestId("project-palette");
-      const listed = palette.getByTestId(`palette-join-${key}`);
-      await expect(listed).toBeFocused();
-      await expect(listed).toContainText("Personal Space");
-      await listed.click();
-      const editor = palette.getByTestId(`palette-join-folder-${key}`);
-      await editor.getByRole("textbox").fill(folder);
-      await editor.getByRole("button", { name: "Open here" }).click();
-      await expect(secondPage.getByTestId(`sidebar-project-${key}`)).toBeVisible({ timeout: 45_000 });
-      await expect(secondPage.getByTestId(`sidebar-session-${work.id}`)).toBeVisible();
-      expect(realpathSync(repositoryOf(await second.core.command("space.get", {}), key).folder!)).toBe(realpathSync(folder));
-      expect(existsSync(join(folder, "README.md"))).toBe(true);
-      await expect(secondPage.getByRole("button", { name: /^(Servers|Groups)$/ })).toHaveCount(0);
-      await expect(secondPage.getByTestId("sidebar-place-heading")).toHaveCount(0);
-    } finally {
-      await secondPage.close();
-      await second.close();
-    }
-  });
+  for (const [existing, title] of [
+    [true, "space-40: sync and open a personal project in an existing folder"],
+    [false, "space-36: sync and open a personal project by cloning into a new folder"],
+  ] as const) {
+    test(title, async ({ app, page, browser }) => {
+      test.setTimeout(120_000);
+      const host = app.host!;
+      seedDemoProject(app.projectDir);
+      const remote = join(app.home, "demo-project.git");
+      git(app.home, "clone", "-q", "--bare", app.projectDir, remote);
+      git(app.projectDir, "remote", "add", "origin", remote);
+      await open(page, app);
+      if (existing) {
+        await nav(page, "Space").click();
+        await signInThroughPage(page, app);
+        await nav(page, "Projects").click();
+      }
+      await page.getByTestId("home-add-project").click();
+      const palette = page.getByTestId("project-palette");
+      await palette.getByTestId("palette-path").fill(app.projectDir);
+      await palette.getByTestId("palette-add").click();
+      // A successful local add returns straight to the project task (space-40).
+      await expect(palette).toBeHidden();
+      await expect(page.getByTestId("captain-home")).toContainText("demo-project");
+      const localKey = (await app.core.command("project.list", {}))[0]!.id;
+      const work = await app.core.command("session.create", { projectId: localKey });
+      await runTurn(app, work.id, SESSION_TITLE);
+      const intent = await app.core.command("intent.queue", { projectId: localKey, text: "Document the login redirect" });
+      await nav(page, "Space").click();
+      if (!existing) await signInThroughPage(page, app);
+      const personal = instanceSection(page, host);
+      await expect(personal.getByRole("heading", { name: /Personal Space/ })).toBeVisible();
+      const localRow = page.getByRole("group", { name: "This computer" }).getByRole("button", { name: "demo-project", exact: true });
+      await expect(localRow).toBeVisible();
+      const localRecordsKey = (await localRow.getAttribute("data-testid"))!.slice("space-repo-".length);
+      const local = repositoryOf(await app.core.command("space.get", {}), localRecordsKey);
+      expect(local.state).toBe("local-only");
+      expect(local.placements).toEqual([]);
+      await rowAct(page, localRecordsKey, "destination");
+      const destination = page.getByTestId(`space-destination-${localRecordsKey}`);
+      await expect(destination.getByRole("combobox", { name: "Space" })).toHaveValue(host.url);
+      await destination.getByRole("button", { name: "Sync records" }).click();
+      const row = personal.getByRole("button", { name: "demo-project", exact: true });
+      await expect(row).toBeVisible({ timeout: 45_000 });
+      const key = (await row.getAttribute("data-testid"))!.slice("space-repo-".length);
+      await expect(phraseOf(page, key)).toHaveText(/^Synced /, { timeout: 45_000 });
+      const projectRow = personal.getByTestId(`space-row-${key}`);
+      await rowAct(page, key, "explore");
+      await expect(projectRow.getByRole("tab", { name: "Explore" })).toHaveAttribute("aria-selected", "true");
+      await expect(projectRow.getByRole("tab", { name: "Sync" })).toBeVisible();
+      const second = await startApp({ host: { share: { host } } });
+      const secondPage = await browser.newPage();
+      try {
+        const folder = join(second.home, "second-project");
+        if (existing) git(second.home, "clone", "-q", remote, folder);
+        await open(secondPage, second);
+        await nav(secondPage, "Space").click();
+        await signInThroughPage(secondPage, second);
+        await nav(secondPage, "Projects").click();
+        await secondPage.getByTestId("home-open-from-space").click();
+        const secondRow = instanceSection(secondPage, host).getByTestId(`space-row-${key}`);
+        await expect(secondRow).toHaveAttribute("data-state", "absent");
+        await expect(secondRow.getByTestId(`space-repo-state-${key}`)).toHaveText("");
+        expect(repositoryOf(await second.core.command("space.get", {}), key).folder).toBeNull();
+        await secondRow.getByRole("button", { name: "Open here", exact: true }).click();
+        const editor = secondRow.getByTestId(`space-join-${key}`);
+        await editor.getByRole("textbox").fill(folder);
+        await editor.getByRole("button", { name: "Open here" }).click();
+        const sidebarProject = secondPage.getByTestId(`sidebar-project-${key}`);
+        await expect(sidebarProject).toBeVisible({ timeout: 45_000 });
+        if (await sidebarProject.getAttribute("aria-expanded") === "false") {
+          await sidebarProject.getByRole("button", { name: /Show sessions in / }).click();
+        }
+        await expect(secondPage.getByTestId(`sidebar-session-${work.id}`)).toBeVisible();
+        await expect(secondRow).toHaveAttribute("data-state", "reachable");
+        expect(realpathSync(repositoryOf(await second.core.command("space.get", {}), key).folder!)).toBe(realpathSync(folder));
+        expect(existsSync(join(folder, "README.md"))).toBe(true);
+        expect(git(folder, "remote", "get-url", "origin")).toBe(remote);
+        await secondRow.getByRole("button", { name: "Open project", exact: true }).click();
+        await secondPage.getByRole("tab", { name: "Overview" }).click();
+        await expect(secondPage.getByTestId("overview-tab")).toContainText(intent.text);
+        await expect(secondPage.getByRole("button", { name: /^(Servers|Groups)$/ })).toHaveCount(0);
+        await expect(secondPage.getByTestId("sidebar-place-heading")).toHaveCount(0);
+
+        if (!existing) {
+          const secondWork = await second.core.command("session.create", { projectId: key });
+          await runTurn(second, secondWork.id, "Review the redirect");
+          await showSpace(secondPage);
+          await secondRow.getByTestId(`space-repo-${key}`).click();
+          await rowAct(secondPage, key, "sync");
+          await expect(secondRow.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+          const tracked = git(bareOf(host, key), "ls-tree", "-r", "--name-only", "spex").split("\n");
+          expect(tracked).toContain(`sessions/${work.id}.json`);
+          expect(tracked).toContain(`sessions/${secondWork.id}.json`);
+        }
+      } finally {
+        await secondPage.close();
+        await second.close();
+      }
+      if (existing) {
+        // Arrange a saved conversation whose records no longer have a paired folder (space-40).
+        await app.stop();
+        renameSync(app.projectDir, join(app.home, "relocated-project"));
+        const home = Home.load(app.dataDir);
+        home.unpair(key);
+        home.save();
+        await app.start();
+        await open(page, app);
+        await showSpace(page);
+        await personal.getByTestId("space-signout").click();
+        await expect(personal.getByTestId("space-signin-again")).toBeVisible();
+        await page.getByTestId("space-issues").click();
+        await page.getByRole("button", { name: SESSION_TITLE, exact: true }).click();
+        await expect(page.getByTestId("saved-conversation-reader")).toContainText(SESSION_TITLE);
+      }
+    });
+  }
 });

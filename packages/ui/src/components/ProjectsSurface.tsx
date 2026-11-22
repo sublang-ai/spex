@@ -97,13 +97,7 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
   );
 }
 
-/** Where the project's records are (projects-4, DR-172): "Records ·
- * <group> · <standing>" — the group holding them as the Space surface
- * heads it, "Personal" for the person's own and left out while they are
- * in none, and their standing as the Space surface words it (space-61),
- * or a waiting step where one waits (space-64) — read from the Space
- * state, which this line asks for when nothing has read it yet. No
- * records' key or repository name is named. */
+/** Show the Space name and current records status from the Space row (projects-4). */
 function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   const store = useAppStore;
   const space = store((state) => state.space);

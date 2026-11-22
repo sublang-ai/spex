@@ -333,7 +333,7 @@ Where the app starts on a machine whose home holds no config file, while the cor
 
 #### settings-46
 
-While a binding names, for a role, a player the home's file lacks [[core-service-2](core-service.md#core-service-2)] — a project's entry, or the default `dev.<role>` of a playbook no entry binds — the Settings surface shall show that player in the roster as "Plays on the Captain's agent" with an Add control that creates it from the Captain's block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
+While a binding names, for a role, a player the home's file lacks [[core-service-2](core-service.md#core-service-2)] — a project's entry, or the default `dev.<role>` of a playbook no entry binds — the Settings surface shall show that player in the roster as "Plays on the Captain's agent" with an Add control that creates it from the Captain's block ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
 - the Settings surface shows the file it writes — the home's — by its path, naming no spex repository, and names no project file as editable here: a project's role overrides are edited in the project's Playbooks tab [[playbook-library-1](playbook-library.md#playbook-library-1)], and the global bindings on the Playbooks surface [[playbook-library-122](playbook-library.md#playbook-library-122)].
 

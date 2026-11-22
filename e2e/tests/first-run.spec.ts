@@ -167,7 +167,7 @@ test("run-view-97: signed in nowhere, the welcome page's Sign in to your Space s
   await expect(card.getByTestId("space-signin")).toHaveText("Sign in");
 });
 
-test("run-view-42, projects-42: the browser add form keeps paths distinct and owns its keys", async ({
+test("run-view-42, projects-42, space-40: the browser add form keeps paths distinct and creates a local project", async ({
   page,
   app,
 }) => {
@@ -210,6 +210,19 @@ test("run-view-42, projects-42: the browser add form keeps paths distinct and ow
   await path.press("Escape");
   await expect(palette).toBeHidden();
   await expect(addProject).toBeFocused();
+
+  await addProject.click();
+  await create.click();
+  const newFolder = `${app.home}/new-project`;
+  await newPath.fill(newFolder);
+  await palette.getByTestId("palette-create").click();
+  // Create returns to the project task with no Space destination chooser.
+  await expect(palette).toBeHidden();
+  await expect(page.getByTestId("captain-home")).toContainText("new-project");
+  expect(existsSync(`${newFolder}/.git`)).toBe(true);
+  await nav(page, "Space").click();
+  const local = page.getByRole("group", { name: "This computer" });
+  await expect(local.getByRole("button", { name: "new-project", exact: true })).toBeVisible();
 });
 
 test("projects-28: the palette adds, refuses, switches, and the Overview removes", async ({

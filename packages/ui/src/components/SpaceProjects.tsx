@@ -6,7 +6,7 @@ import type { InstanceState, RepositoryState, SpaceState } from "@sublang/spex-c
 
 import { i18n } from "../i18n.js";
 import { instanceName, instanceOf, pickInstances } from "../lib/instances.js";
-import { canRun, heldPlacements, instancePlacements, placeInstances } from "../lib/placements.js";
+import { canRun, heldPlacements, instancePlacements } from "../lib/placements.js";
 import { cloneHere, pickDirectoryBridge, projectName, rowName, rowPhrase, phraseNames, sameCode, thisComputerLabel } from "../lib/space.js";
 import { useAppStore, type SpaceDestination } from "../state/store.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
@@ -89,9 +89,8 @@ function ProjectRow({
   const syncDisabled = disabled || Boolean(refusal) || !heldPlacements(repo).some((line) => canRun(space, line));
   const canOpen = !repo.own && !here && repo.id !== null && repo.instance !== null && signup;
   const canPair = !repo.own && here && !repo.folder && projectId === undefined;
-  const addsAnotherSpace = instancePlacements(repo).length > 0;
-  const destinations = addsAnotherSpace ? placeInstances(space, repo) : pickInstances(space, repo);
-  const canChoose = !repo.own && here && (!addsAnotherSpace || destinations.length > 0);
+  const canChoose = !repo.own && here && instancePlacements(repo).length === 0;
+  const destinations = canChoose ? pickInstances(space, repo) : [];
   const hasDestination = destinations.length > 0;
   const [destinationPending, setDestinationPending] = useState(false);
   const codeId = useId();
@@ -210,7 +209,7 @@ function ProjectRow({
       ) : null}
       {editor === "destination" ? (
         <SpaceDestinationPicker
-          space={space} repo={repo} spaces={destinations} adding={addsAnotherSpace}
+          space={space} repo={repo} spaces={destinations}
           connected={connected} onPendingChange={setDestinationPending} onClose={close} onNote={onNote}
         />
       ) : null}
@@ -234,8 +233,8 @@ function ProjectRow({
   );
 }
 
-function SpaceDestinationPicker({ space, repo, spaces, connected, adding, onPendingChange, onClose, onNote }: {
-  space: SpaceState; repo: RepositoryState; spaces: InstanceState[]; connected: boolean; adding: boolean;
+function SpaceDestinationPicker({ space, repo, spaces, connected, onPendingChange, onClose, onNote }: {
+  space: SpaceState; repo: RepositoryState; spaces: InstanceState[]; connected: boolean;
   onPendingChange(pending: boolean): void; onClose(): void; onNote: Note;
 }) {
   const [origin, setOrigin] = useState(spaces[0]?.origin ?? "");
@@ -254,9 +253,7 @@ function SpaceDestinationPicker({ space, repo, spaces, connected, adding, onPend
     onPendingChange(true);
     setError(undefined);
     try {
-      const client = useAppStore.getClient();
-      if (adding) await client.command("space.place", { repository: repo.key, choice });
-      else await useAppStore.getState().spacePick(repo.key, choice);
+      await useAppStore.getState().spacePick(repo.key, choice);
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;

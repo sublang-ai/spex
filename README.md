@@ -12,7 +12,7 @@
 Spex brings specs and AI workflows into one IDE. Reuse specs, skills,
 playbooks or applets as versioned **spec packages**: find and publish
 packages on [Spex Space](https://spex.sublang.ai), and install them from
-the IDE. Space also offers optional project-record sharing and sync.
+the IDE. Space can also sync your project records between your computers.
 
 ## Why Spex
 

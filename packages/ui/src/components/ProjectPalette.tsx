@@ -3,9 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type {
-  SpaceState,
   ProjectInfo,
-  RepositoryState,
   SessionInfo,
 } from "@sublang/spex-core/protocol";
 
@@ -16,8 +14,6 @@ import {
 } from "../state/dashboard.js";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { anySignedIn, instanceNameAt, instanceOf } from "../lib/instances.js";
-import { projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
 
@@ -36,33 +32,6 @@ function refusalOf(cause: unknown): Refusal {
   return typeof output === "string" && output.trim() ? { message, detail: output } : { message };
 }
 
-interface PaletteJoin {
-  instance: string;
-  repo: RepositoryState;
-  opening: boolean;
-  again: boolean;
-}
-
-function joinable(space: SpaceState | undefined): PaletteJoin[] {
-  if (!space) return [];
-  return space.repositories.flatMap((repo) => {
-    if (repo.own || repo.id === null || !repo.instance || !instanceOf(space, repo.instance)?.signedIn) return [];
-    const opening = repo.sync.phase === "running" && repo.sync.op === "join";
-    const again = repo.sync.phase === "stopped" && repo.sync.op === "join";
-    return repo.state === "absent" ? [{ instance: repo.instance, repo, opening, again }] : [];
-  });
-}
-
-function joinKeyOf(entry: PaletteJoin): string {
-  return entry.repo.key;
-}
-
-const openHereLabel = (): string => i18n._("Open here");
-
-function projectNameOf(repo: RepositoryState): string {
-  return projectName(repo.name);
-}
-
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
   sessions: SessionInfo[];
@@ -72,14 +41,12 @@ export interface ProjectPaletteProps {
   currentProjectId?: string;
   onPickFolder?: () => Promise<string | null>;
   onPick: (projectId: string) => void;
-  onOpened?: (projectId: string) => void;
   /** Register an existing repository by path (store's addProjectByPath). */
   onAddPath: (path: string) => Promise<ProjectInfo>;
   onCreatePath: (path: string, scaffold: boolean) => Promise<ProjectInfo>;
   /** Opened from a project-add action: lead with folder selection,
    * keeping project switching and the Academy choice out of this form. */
   addProjectOnly?: boolean;
-  spaceFirst?: boolean;
   onClose: () => void;
 }
 
@@ -120,112 +87,6 @@ function rowStates(
 
 const ROW_ACTIVE = "bg-neutral-100 dark:bg-neutral-800";
 
-/** The folder a personal project opens into on this computer, named in
- * place beneath its row where the shell offers no picker, as its Space
- * row asks it (space-63): the path, the act and Cancel, Escape
- * cancelling it alone, a refusal kept beside the path. */
-function JoinFolder({
-  testId,
-  label,
-  onSubmit,
-  onCancel,
-}: {
-  testId: string;
-  label: string;
-  onSubmit(folder: string): Promise<void>;
-  onCancel(): void;
-}) {
-  const [path, setPath] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string>();
-  const fieldRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    fieldRef.current?.focus();
-  }, []);
-
-  const submit = async (): Promise<void> => {
-    const folder = path.trim();
-    if (!folder) {
-      setRefusal(i18n._({ id: "Name a folder", comment: "the folder field's refusal of an empty path" }));
-      fieldRef.current?.focus();
-      return;
-    }
-    setBusy(true);
-    setRefusal(undefined);
-    try {
-      await onSubmit(folder);
-    } catch (cause) {
-      setRefusal(cause instanceof Error ? cause.message : String(cause));
-      fieldRef.current?.focus();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div
-      data-testid={testId}
-      className="mx-4 mb-1 flex flex-col gap-1.5 rounded border border-neutral-300 p-2 dark:border-neutral-700"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          onCancel();
-        }
-      }}
-    >
-      <label className="text-xs text-neutral-500 dark:text-neutral-400" htmlFor={`${testId}-path`}>
-        {label}
-      </label>
-      <div className="flex gap-1.5">
-        <input
-          id={`${testId}-path`}
-          ref={fieldRef}
-          data-testid={`${testId}-path`}
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          spellCheck={false}
-          disabled={busy}
-          className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
-        />
-        <button
-          type="button"
-          data-testid={`${testId}-open`}
-          disabled={busy}
-          onClick={() => void submit()}
-          className="shrink-0 rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
-        >
-          {busy
-            ? i18n._({ id: "Opening…", comment: "a project from a Space while it opens: its records and code are downloaded" })
-            : i18n._({
-                id: "Open here",
-                comment: "project palette: open a personal project on this computer, downloading its records and code into the folder named beside",
-              })}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCancel}
-          className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-neutral-700"
-        >
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-      </div>
-      {refusal ? (
-        <p role="alert" data-testid={`${testId}-error`} className="text-xs text-red-600 dark:text-red-400">
-          {refusal}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 /** The controls Tab walks inside the dialog, in document order. */
 const FOCUSABLE = "button, input, select";
 
@@ -237,13 +98,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [creating, setCreating] = useState(false);
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
-  /** The group's project being opened, by its row's key. */
-  const [joining, setJoining] = useState<string>();
-  /** This computer's row asking for its folder in place, by its key,
-   * where the shell offers no picker (space-63). */
-  const [asking, setAsking] = useState<string>();
-  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
-  const sectionRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<Refusal>();
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -254,13 +108,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
-  const space = useAppStore((state) => state.space);
-  const loadSpace = useAppStore((state) => state.loadSpace);
-  const spaceJoin = useAppStore((state) => state.spaceJoin);
-  const connected = useAppStore((state) => state.connection === "open");
-  useEffect(() => {
-    if (connected && !props.addProjectOnly) void loadSpace();
-  }, [connected, loadSpace, props.addProjectOnly]);
   // With no project registered, the ordinary switcher has no filter;
   // the explicit add form works with or without registered projects.
   const empty = props.projects.length === 0;
@@ -294,33 +141,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const filtered = props.projects
     .filter((project) => project.name.toLowerCase().includes(search) || project.path.toLowerCase().includes(search))
     .map((project) => ({ project, state: states.get(project.id), current: project.id === props.currentProjectId }));
-  const signedIn = anySignedIn(space);
-  const joinRows = joinable(space).filter((entry) =>
-    projectNameOf(entry.repo).toLowerCase().includes(search) ||
-    instanceNameAt(space, entry.instance).toLowerCase().includes(search));
   const lead = empty && !addProjectOnly ? 1 : 0;
-  const joinStart = lead + filtered.length;
-  const entryCount = joinStart + joinRows.length + (props.onPickFolder ? 1 : 0);
+  const openFolderIndex = lead + filtered.length;
+  const entryCount = openFolderIndex + (props.onPickFolder ? 1 : 0);
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
-  const openFolderIndex = joinStart + joinRows.length;
-
-  // Opened at "From your Spaces" (run-view-172): the section in view
-  // and, once it lists a project, its first one highlighted and focused
-  // — until the reader moves elsewhere first.
-  const landing = useRef(props.spaceFirst);
-  const landingRow = landing.current ? joinRows[0] : undefined;
-  const landingKey = landingRow ? joinKeyOf(landingRow) : undefined;
-  useEffect(() => {
-    const at = landing.current;
-    if (!at) return;
-    sectionRef.current?.scrollIntoView?.({ block: "nearest" });
-    if (!landingRow || !landingKey) return;
-    landing.current = false;
-    setIndex(joinStart + joinRows.indexOf(landingRow));
-    rowRefs.current.get(landingKey)?.focus();
-    // The row that lands is the input; it is read once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landingKey]);
 
   function pick(projectId: string): void {
     props.onPick(projectId);
@@ -361,46 +185,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Send a personal project's join to this computer's core: `space.join`
-   * naming its instance and host id with `folder`, as its Space row's
-   * Join sends it (space-63). Accepted, the project becomes this
-   * computer's current one and the palette closes, the join reporting
-   * on its Space row (space-63); a refusal is thrown to the caller. */
-  async function sendJoin(entry: PaletteJoin, folder: string): Promise<void> {
-    if (entry.repo.id === null) return;
-    setBusy(true);
-    setJoining(joinKeyOf(entry));
-    setError(undefined);
-    try {
-      await spaceJoin(entry.instance, entry.repo.id, folder);
-      props.onOpened?.(entry.repo.key);
-      props.onClose();
-    } finally {
-      setBusy(false);
-      setJoining(undefined);
-    }
-  }
-
-  /** Open a personal project on this computer (run-view-168): into the
-   * folder the act's own picker takes — the shell's picker, else a path
-   * named in place beneath the row (space-63). A refusal stands in the
-   * palette. */
-  async function runJoin(entry: PaletteJoin): Promise<void> {
-    if (busy || entry.opening || entry.repo.id === null) return;
-    if (!props.onPickFolder) {
-      setError(undefined);
-      setAsking(joinKeyOf(entry));
-      return;
-    }
-    const folder = await props.onPickFolder();
-    if (!folder) return;
-    try {
-      await sendJoin(entry, folder);
-    } catch (cause) {
-      setError(refusalOf(cause));
-    }
-  }
-
   function openFolder(): void {
     void props.onPickFolder?.().then((path) => {
       if (!path) return;
@@ -421,15 +205,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       return;
     }
     const row = filtered[at - lead];
-    const join = at >= joinStart ? joinRows[at - joinStart] : undefined;
     if (row) pick(row.project.id);
-    else if (join) void runJoin(join);
     else if (props.onPickFolder && at === openFolderIndex) openFolder();
   }
 
   /** Arrow keys move the highlight from either input. */
   function moveHighlight(event: React.KeyboardEvent): boolean {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") landing.current = false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setIndex((i) => (entryCount === 0 ? 0 : (i + 1) % entryCount));
@@ -615,7 +396,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       {i18n._({ id: "Add", comment: "register the typed path as an existing repository" })}
                     </button>
                   </div>
-                  {i18n._("No other projects in your Spaces") }
                 </div>
               ) : null}
             </div>
@@ -699,7 +479,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             aria-label={i18n._("Filter projects")}
             value={query}
             onChange={(event) => {
-              landing.current = false;
               setQuery(event.target.value);
               setIndex(0);
             }}
@@ -804,85 +583,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           {filtered.length === 0 && query ? (
             <div className="px-4 py-2 text-sm text-neutral-500">
               {i18n._('No project matches "{query}"', { query })}
-            </div>
-          ) : null}
-          {signedIn ? (
-            <div
-              ref={sectionRef}
-              role="group"
-              data-testid="palette-spaces"
-              aria-labelledby="palette-spaces-heading"
-              className="border-t border-neutral-100 py-1 dark:border-neutral-800"
-            >
-              <div
-                id="palette-spaces-heading"
-                data-testid="palette-spaces-heading"
-                className="px-4 py-1 text-xs font-medium text-neutral-500"
-              >
-                {i18n._("From your Spaces")}
-              </div>
-              {joinRows.map((entry) => {
-                const key = joinKeyOf(entry);
-                const at = joinStart + joinRows.indexOf(entry);
-                return (
-                  <div key={key}>
-                    <div className="flex items-center pr-2">
-                    <button
-                      ref={(node) => {
-                        if (node) rowRefs.current.set(key, node);
-                        else rowRefs.current.delete(key);
-                      }}
-                      type="button"
-                      data-testid={entry.again ? `palette-join-again-${key}` : `palette-join-${key}`}
-                      disabled={busy || entry.opening}
-                      aria-expanded={props.onPickFolder ? undefined : asking === key}
-                      onClick={() => void runJoin(entry)}
-                      className={`flex min-w-0 flex-1 items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-60 dark:hover:bg-neutral-800 ${
-                        at === clamped ? ROW_ACTIVE : ""
-                      }`}
-                    >
-                      <Icon name="plus" className="h-3.5 w-3.5 text-neutral-500" />
-                      <span className="truncate">{projectNameOf(entry.repo)}</span>
-                      <span className="min-w-0 shrink truncate text-xs text-neutral-500">
-                        {instanceNameAt(space, entry.instance)}
-                      </span>
-                      {joining === key || entry.opening ? (
-                        <span className="ml-auto shrink-0 text-xs text-neutral-500">
-                          {i18n._({ id: "Opening…", comment: "a project from a Space while it opens: its records and code are downloaded" })}
-                        </span>
-                      ) : entry.again ? (
-                        // Its open stopped: the row sends it again.
-                        <span className="ml-auto shrink-0 text-xs text-neutral-500">
-                          {i18n._({
-                            id: "Try again",
-                            comment: "on a project from a Space whose open stopped: open it again",
-                          })}
-                        </span>
-                      ) : (
-                        // The row is this computer's entry of its Open
-                        // (space-111, run-view-168): it reads "Open here".
-                        <span className="ml-auto shrink-0 text-xs text-neutral-500">{openHereLabel()}</span>
-                      )}
-                    </button>
-                    </div>
-                    {asking === key ? (
-                      <JoinFolder
-                        testId={`palette-join-folder-${key}`}
-                        label={i18n._("Project folder")}
-                        onSubmit={(folder) => sendJoin(entry, folder)}
-                        onCancel={() => {
-                          setAsking(undefined);
-                          rowRefs.current.get(key)?.focus();
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                );
-              })}
-              {joinRows.length === 0 && !query ? (
-                <div data-testid="palette-spaces-note" className="px-4 py-1 text-xs text-neutral-500">
-                </div>
-              ) : null}
             </div>
           ) : null}
           {props.onPickFolder ? (

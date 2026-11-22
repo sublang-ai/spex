@@ -238,6 +238,46 @@ interface Waiting {
 // another repository after the Space verified its namespace.
 const EXACT_RECORD_DESTINATION = ["-c", "http.followRedirects=false"];
 
+function recordDestinationConfig(urls: Iterable<string>): string[] {
+  return [
+    ...EXACT_RECORD_DESTINATION,
+    ...Array.from(urls).filter((url) => /^https?:\/\//i.test(url))
+      .flatMap((url) => ["-c", `http.${url}.followRedirects=false`]),
+  ];
+}
+
+/** A verified Records URL must also remain the destination Git uses.
+ * Check in the transport's own directory and configuration, before
+ * spawning Git with the Space credential. */
+function verifiedRecordDestination(git: SpaceGit, remote: string, step: SyncStep): string[] {
+  const result = git.runSync(["ls-remote", "--get-url", "--", remote]);
+  requireApprovedRecordDestination(result.code === 0 && result.stdout.toString("utf8").trimEnd() === remote, step);
+  return recordDestinationConfig([remote]);
+}
+
+/** Probe and use a command-scoped remote with the approved URL, so
+ * Git's push-only rewrites are resolved without inheriting a configured
+ * placement's push URL. Git lists command-scoped remotes in `remote -v`. */
+function verifiedRecordPush(git: SpaceGit, remote: string, step: SyncStep): { config: string[]; destination: string } {
+  const destination = `spex-records-${randomUUID()}`;
+  const config = [...recordDestinationConfig([remote]), "-c", `remote.${destination}.url=${remote}`];
+  const result = git.runSync([...config, "remote", "-v"]);
+  const pushes = result.stdout.toString("utf8").split(/\r?\n/)
+    .filter((line) => line.startsWith(`${destination}\t`) && line.endsWith(" (push)"));
+  requireApprovedRecordDestination(result.code === 0 && pushes.length === 1 && pushes[0] === `${destination}\t${remote} (push)`, step);
+  return { config, destination };
+}
+
+function requireApprovedRecordDestination(matches: boolean, step: SyncStep): void {
+  if (!matches) {
+    const message = i18n._({
+      id: "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry.",
+      comment: "A records transfer stopped because Git configuration could change the Space-approved destination",
+    });
+    throw new SpaceStopped(step, { cause: "git", message, guidance: retryGuidance(), retry: true }, false);
+  }
+}
+
 const KIND_ORDER: SpaceUnitKind[] = ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"];
 const WITHHELD_FAMILIES = new Set(["provider hints", "config backup"]);
 const READ_CAP_BYTES = 256 * 1024;
@@ -2401,7 +2441,7 @@ class RepositorySync {
       const credential = await this.owner.credentialFor(instance, remote, "check", this);
       const options = { transport: true, ...(credential ? { credential } : {}) };
       try {
-        const heads = await this.git.run([...EXACT_RECORD_DESTINATION, "ls-remote", "--exit-code", "--heads", remote, `refs/heads/${SPEX_BRANCH}`], options);
+        const heads = await this.git.run([...verifiedRecordDestination(this.git, remote, "check"), "ls-remote", "--exit-code", "--heads", remote, `refs/heads/${SPEX_BRANCH}`], options);
         const run = this.runOf(placement.name);
         if (heads.code === 2) {
           run.remoteEmpty = true;
@@ -2410,7 +2450,7 @@ class RepositorySync {
           return;
         }
         if (heads.code !== 0) throw this.transportStop("check", heads, placement.url, true, placement);
-        const fetched = await this.git.run([...EXACT_RECORD_DESTINATION, "fetch", "-q", "--no-tags", remote, `+refs/heads/${SPEX_BRANCH}:${this.refOf(placement.name)}`], options);
+        const fetched = await this.git.run([...verifiedRecordDestination(this.git, remote, "check"), "fetch", "-q", "--no-tags", remote, `+refs/heads/${SPEX_BRANCH}:${this.refOf(placement.name)}`], options);
         if (fetched.code !== 0) throw this.transportStop("check", fetched, placement.url, true, placement);
         run.remoteEmpty = false;
         run.checkedAt = Date.now();
@@ -2710,7 +2750,11 @@ class RepositorySync {
       if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
       // The Git host's own remote URLs are those it hands over, used as
       // given and never named by the reader (space-5).
-      if (await this.owner.atHostOrigin(url)) {
+      const destination = await this.owner.recordRemoteOrigin(url);
+      if (destination.kind === "unknown") {
+        throw new CoreError("invalid_request", relayHostError(new HostError("unreachable"), this.owner.instanceName(destination.instance.origin)));
+      }
+      if (destination.kind === "space") {
         throw new CoreError("invalid_request", i18n._({
           id: "Choose that Space as a sync destination",
           comment: "Refusal of a remote the reader named for a project's records that lies at a Space, which supplies its own records addresses",
@@ -3664,20 +3708,20 @@ class RepositorySync {
     const later = placement === undefined ? undefined : await this.owner.hostCheckPlacement(this, placement, op);
     const host = placement === undefined ? await this.owner.hostCheck(this, op) : later;
     const target = host?.remote ?? remote;
-    if (!host) await this.owner.requireExternalRecordRemote(target, "check");
     // A later placement as its host's read left it, a follow renaming it.
     const held = later?.placement ?? placement;
     // The remote by its name in the clone, as the host's read left it.
     const name = held === undefined ? this.remoteNamed("check") : held.name;
     const ref = held === undefined ? this.remoteRef() : this.refOf(name);
+    const external = host ? [] : await this.requireExternalDestination(name, target, "check");
     // The instance the check read brokers its transport — the clone's,
     // or the one it followed there (git-host-9, space-60).
     const credential = host ? await this.owner.credentialFor(host.instance, target, "check", this) : null;
     const options = { transport: true, ...(credential ? { credential } : {}) };
     const destination = host ? target : name;
-    const config = host ? EXACT_RECORD_DESTINATION : [];
+    const config = () => host ? verifiedRecordDestination(this.git, target, "check") : external;
     try {
-      const heads = await this.git.run([...config, "ls-remote", "--exit-code", "--heads", destination, `refs/heads/${SPEX_BRANCH}`], options);
+      const heads = await this.git.run([...config(), "ls-remote", "--exit-code", "--heads", destination, `refs/heads/${SPEX_BRANCH}`], options);
       const outcome = { readOnly: host?.readOnly ?? false, at: host?.instance, remote: target, ...(held !== placement && held ? { placement: held } : {}) };
       const run = this.runOf(name);
       if (heads.code === 2) {
@@ -3688,10 +3732,10 @@ class RepositorySync {
         return { empty: true, ...outcome };
       }
       if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, held);
-      const fetched = await this.git.run([...config, "fetch", "-q", "--no-tags", destination, `+refs/heads/${SPEX_BRANCH}:${ref}`], options);
+      const fetched = await this.git.run([...config(), "fetch", "-q", "--no-tags", destination, `+refs/heads/${SPEX_BRANCH}:${ref}`], options);
       if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, held);
       if (storageTreeUsesLfs(this.dir, ref)) {
-        const lfs = await this.git.run([...config, "-c", "lfs.fetchrecentalways=false", "lfs", "fetch", "--include=", "--exclude=", name, ref], options);
+        const lfs = await this.git.run([...EXACT_RECORD_DESTINATION, "-c", "lfs.fetchrecentalways=false", "lfs", "fetch", "--include=", "--exclude=", name, ref], options);
         if (lfs.code !== 0) throw this.transportStop("check", lfs, target, host !== undefined, held);
       }
       run.remoteEmpty = false;
@@ -3753,7 +3797,8 @@ class RepositorySync {
     const credential = await this.owner.credentialFor(instance, remote, "check", this);
     let run: GitRun;
     try {
-      run = await this.git.run([...EXACT_RECORD_DESTINATION, "push", "-q", remote, `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
+      const { config, destination } = verifiedRecordPush(this.git, remote, "check");
+      run = await this.git.run([...config, "push", "-q", destination, `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
     } finally {
       await credential?.dispose();
     }
@@ -3968,6 +4013,19 @@ class RepositorySync {
     this.host.ledgerChanged([this.key]);
   }
 
+  /** Check both the declared remote and the URLs Git will actually use,
+   * including its URL rewrites and any separately configured push URLs. */
+  private async requireExternalDestination(name: string, remote: string, step: "check" | "push"): Promise<string[]> {
+    const args = ["remote", "get-url", "--all", ...(step === "push" ? ["--push"] : []), name];
+    const urls = await this.git.ok(args);
+    const destinations = new Set([remote, ...urls.split(/\r?\n/)]);
+    for (const url of destinations) await this.owner.requireExternalRecordRemote(url, step);
+    if (await this.git.ok(args) !== urls) {
+      throw new SpaceStopped(step, { cause: "git", message: recordsChangedMeanwhile(projectOf(this.key)), guidance: retryGuidance(), retry: true }, false);
+    }
+    return recordDestinationConfig(destinations);
+  }
+
   /** Step 6 — Push `spex` to the placement whose remote bears `name`,
    * setting the upstream where `setUpstream` asks — once, at the first
    * placement (space-12) — with the credential its instance brokers —
@@ -3980,6 +4038,7 @@ class RepositorySync {
     const ref = this.refOf(name);
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `${ref}^{commit}`]);
     if (!setUpstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
+    let external: string[] = [];
     if (at) {
       const held = this.placementsNow().find((entry) => entry.name === name);
       try {
@@ -3990,13 +4049,13 @@ class RepositorySync {
         }
         throw error;
       }
-    } else await this.owner.requireExternalRecordRemote(remote, "push");
+    } else external = await this.requireExternalDestination(name, remote, "push");
     const credential = at ? await this.owner.credentialFor(at, remote, "push", this) : null;
     let run: GitRun;
     try {
       // The upstream names the remote by its name in the clone (DR-127).
-      const args = at ? [...EXACT_RECORD_DESTINATION, "push", "-q", remote, SPEX_BRANCH]
-        : setUpstream ? ["push", "-q", "-u", name, SPEX_BRANCH] : ["push", "-q", name, SPEX_BRANCH];
+      const { config, destination } = at ? verifiedRecordPush(this.git, remote, "push") : { config: external, destination: name };
+      const args = [...config, "push", "-q", ...(!at && setUpstream ? ["-u"] : []), destination, SPEX_BRANCH];
       run = await this.git.run(args, { transport: true, ...(credential ? { credential } : {}) });
     } finally {
       await credential?.dispose();
@@ -5063,7 +5122,8 @@ export class SpaceManager {
     if (known) return known;
     try {
       const described = await instance.client.describe();
-      if (!described.gitOrigin) return undefined;
+      const git = URL.parse(described.gitOrigin);
+      if (!git || (git.protocol !== "http:" && git.protocol !== "https:") || git.username || git.password || git.search || git.hash) return undefined;
       instance.described = { displayName: described.displayName, gitOrigin: described.gitOrigin };
       return described.gitOrigin;
     } catch {
@@ -5099,11 +5159,24 @@ export class SpaceManager {
     return facts.remote !== null && (facts.id !== null || underOrigin(facts.remote, instance.knownOrigin()));
   }
 
-  /** Whether a URL the reader names lies under an instance's own origin
-   * or its Git origin — the default instance's or any the home lists
-   * (space-5, space-29): those are an instance's to hand over. */
-  async atHostOrigin(url: string): Promise<boolean> {
-    return [this.defaultInstance(), ...this.listedInstances()].some((instance) => underOrigin(url, instance.knownOrigin()) || underOrigin(url, instance.origin));
+  /** Classify a path placement before accepting or using it. A Space's
+   * public description identifies its Git endpoint even while signed out. */
+  async recordRemoteOrigin(url: string): Promise<{ kind: "space" | "external" } | { kind: "unknown"; instance: HostInstance }> {
+    if (isAbsolute(url)) return { kind: "external" };
+    const instances = this.reportingInstances();
+    const address = URL.parse(url);
+    const matches = (instance: HostInstance): boolean => address?.origin === instance.origin || this.reportedUnder(url, instance);
+    if (instances.some(matches)) return { kind: "space" };
+    // Space publishes an HTTP(S) origin for brokered Git transport. SSH
+    // and local paths do not need a public description to be classified.
+    if (address?.protocol !== "http:" && address?.protocol !== "https:") return { kind: "external" };
+    await Promise.all(instances.map((instance) => this.gitOriginOf(instance.origin)));
+    if (instances.some(matches)) return { kind: "space" };
+    const unresolved = instances.find((instance) => {
+      const origin = URL.parse(instance.knownOrigin() ?? "");
+      return !origin || (origin.protocol !== "http:" && origin.protocol !== "https:");
+    });
+    return unresolved ? { kind: "unknown", instance: unresolved } : { kind: "external" };
   }
 
   /** The origin a sign-in names (git-host-2, storage-2): the canonical
@@ -5742,7 +5815,9 @@ export class SpaceManager {
 
   /** A configured path remote cannot bypass a Space's ownership check. */
   async requireExternalRecordRemote(remote: string, step: SyncStep): Promise<void> {
-    if (await this.atHostOrigin(remote)) throw new SpaceStopped(step, { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
+    const destination = await this.recordRemoteOrigin(remote);
+    if (destination.kind === "unknown") throw hostStop(step, new HostError("unreachable"), this.nameOf(destination.instance));
+    if (destination.kind === "space") throw new SpaceStopped(step, { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
   }
 
   /** A target answer cannot outlive the account it was requested for. */
@@ -6675,12 +6750,12 @@ export class SpaceManager {
       let run: GitRun;
       try {
         const options = { transport: true, ...(credential ? { credential } : {}) };
-        run = await privately([...EXACT_RECORD_DESTINATION, "clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", "--origin", name, url, dir], options);
+        run = await privately([...verifiedRecordDestination(this.probe, url, "check"), "clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", "--origin", name, url, dir], options);
         if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
           // The host holds no `spex` yet: its default branch, then `spex`
           // beside it (space-32).
           removeTree(dir);
-          run = await privately([...EXACT_RECORD_DESTINATION, "clone", "-q", "--origin", name, url, dir], options);
+          run = await privately([...verifiedRecordDestination(this.probe, url, "check"), "clone", "-q", "--origin", name, url, dir], options);
           if (run.code === 0) run = await privately(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
         }
       } finally {
@@ -6719,7 +6794,7 @@ export class SpaceManager {
       // then does its row read the clone's state (space-61, space-63).
       own(undefined);
     } catch (error) {
-      stop({ cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
+      stop(error instanceof SpaceStopped ? error.failure : { cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
       // The stage, a whole clone where the join did not publish it, is
       // the join's garbage (space-63).

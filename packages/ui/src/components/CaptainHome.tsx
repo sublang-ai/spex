@@ -74,8 +74,6 @@ export interface CaptainHomeProps {
   /** The welcome page's own-project path opens the palette without
    * repeating the Academy choice. */
   onOpenOwnProject?: () => void;
-  /** Focus the personal project list in the project palette. */
-  onOpenFromSpace?: () => void;
   /** Go to a surface in this IDE,
    * and the local form's "Sign in to your Space" the Space surface's
    * sign-in (run-view-172); "Playbooks" opens the project's Playbooks
@@ -476,19 +474,16 @@ export function CaptainHome(props: CaptainHomeProps) {
                 ? i18n._("Opening…")
                 : i18n._("Open the Academy example")}
             </button>
-            {/* Beside them, the member's groups (run-view-172): their
-                projects while the home is signed in to an instance, the
-                Space surface's sign-in while it is not. */}
             {personalSpace === undefined ? null : anySignedIn(personalSpace) ? (
               <button
                 type="button"
                 data-testid="home-open-from-space"
-                onClick={props.onOpenFromSpace ?? props.onOpenPalette}
+                onClick={() => props.onNavigate("Space")}
                 className={WELCOME_SECONDARY}
               >
                 {i18n._({
-                  id: "Open a project from your Space",
-                  comment: "welcome page action: opens the project palette at your personal projects available from a Space",
+                  id: "Open a project from Space",
+                  comment: "welcome page action: opens the Space surface to show projects available from a Space",
                 })}
               </button>
             ) : (

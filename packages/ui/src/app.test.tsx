@@ -31,6 +31,7 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
  * survive a reply the protocol forbids. */
 function defaultReply(type: string): object {
   if (type === "server.list") return { servers: [], failures: [] };
+  if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
   return type === "specs.get"
     ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
     : type === "environment.get"
@@ -52,6 +53,7 @@ vi.mock("./state/store.js", async (importOriginal) => {
 });
 
 import { App } from "./App.js";
+import type { AttentionEntry, LedgerState } from "@sublang/spex-core/protocol";
 import {
   deliverServerMessageForTests,
   setClientForTests,
@@ -854,6 +856,60 @@ describe("run-view-50: a boot that never connects says so, after its grace", () 
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("run-view-50: one app-wide region announces changes", () => {
+  test("announces one loss and restoration through retries, without announcing startup", async () => {
+    const ledger: LedgerState = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) => type === "ledger.get" ? ledger : defaultReply(type));
+    useAppStore.setState({ connection: "connecting", everConnected: false, ledger });
+    render(<App />);
+    const live = screen.getByTestId("app-live");
+    expect(live.getAttribute("role")).toBe("status");
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "open", everConnected: true }));
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.textContent).toBe("Connection to the Spex core lost — reconnecting.");
+    const loss = live.firstElementChild;
+    act(() => useAppStore.setState({ connection: "connecting" }));
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.firstElementChild).toBe(loss);
+    act(() => useAppStore.setState({ connection: "open" }));
+    expect(live.textContent).toBe("Connection restored.");
+    await act(async () => {});
+    expect(screen.getByTestId("app-live")).toBe(live);
+  });
+
+  test("announces increases and new questions, including a question replacing existing attention", async () => {
+    const ledger: LedgerState = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) => type === "ledger.get" ? ledger : defaultReply(type));
+    useAppStore.setState({ ledger });
+    render(<App />);
+    await act(async () => {});
+    const live = screen.getByTestId("app-live");
+    const review: AttentionEntry = {
+      band: "finished", kind: "review", title: "Review migration", projectId: "p1", sessionId: "a-live", since: 10,
+    };
+    const question: AttentionEntry = {
+      ...review, band: "interrupted", kind: "question", title: "Which migration?", since: 20,
+    };
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [review], badge: 1 } }));
+    expect(live.textContent).toBe("1 session needs your attention");
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [question], badge: 1 } }));
+    expect(live.textContent).toBe("A player is waiting for your reply: Which migration?");
+    const announcement = live.firstElementChild;
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [{ ...question }], badge: 1 } }));
+    expect(live.firstElementChild).toBe(announcement);
+    act(() => useAppStore.setState({ ledger }));
+    expect(live.firstElementChild).toBe(announcement);
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [review], badge: 1 } }));
+    expect(live.textContent).toBe("1 session needs your attention");
+    expect(live.firstElementChild).not.toBe(announcement);
   });
 });
 

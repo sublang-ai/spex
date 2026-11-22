@@ -5,6 +5,8 @@
 // transports. Only individual HTTP answers are held/refused.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store.js";
@@ -13,7 +15,7 @@ import { holdingFetch, settled } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, addFolder, startHost, startHome, signIn } = fixture;
+const { git, gitFolder, addFolder, bareRepo, startHost, startHome, signIn } = fixture;
 test.after(() => fixture.dispose());
 const OWN = "ada/ada-spex";
 type Home = Awaited<ReturnType<typeof startHome>>;
@@ -69,6 +71,160 @@ function unavailable(): Response {
 function pathOf(input: Parameters<typeof fetch>[0]): string {
   return new URL(input instanceof Request ? input.url : String(input)).pathname;
 }
+
+test("space-5, space-29, git-host-23: a cold signed-out Space identifies its separate Git endpoint before accepting an external records remote", async (t) => {
+  const backend = await startHost();
+  const host = await startHost({ gitBackend: backend });
+  assert.notEqual(new URL(host.gitOrigin).origin, host.url);
+  const home = await startHome("cold-record-origin", { host });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const url = `${host.gitOrigin}/unlisted/example-spex.git`;
+  const client = internals(home).hostClient;
+  const inner = client.fetchImpl;
+  const reads: string[] = [];
+  client.fetchImpl = async (input, init) => {
+    reads.push(pathOf(input));
+    return inner(input, init);
+  };
+
+  await home.client.expectError("space.remote.set", { repository: key, url }, "invalid_request", /^Choose that Space as a sync destination$/);
+  assert.deepEqual(reads, ["/api/v1/host"], "classification required only a public description");
+  assert.equal(git(clone, "remote"), "", "the refused URL was not persisted");
+  await home.client.expectOk("space.remote.set", { repository: key, url: `${backend.url}/external/example.git` });
+});
+
+test("space-5, git-host-23: after restart an unclassified Git address stops Check before Git and local external sync stays available", async (t) => {
+  const backend = await startHost();
+  const host = await startHost({ gitBackend: backend });
+  const home = await startHome("record-description", { host });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  await home.stop();
+
+  const cold = await startHome("record-description-cold", { host, dataDir: home.dataDir, project: false });
+  t.after(() => cold.stop());
+  const url = `${host.gitOrigin}/unlisted/example-spex.git`;
+  const client = internals(cold).hostClient;
+  const inner = client.fetchImpl;
+  let answer = unavailable();
+  client.fetchImpl = async (input, init) => pathOf(input) === "/api/v1/host" ? answer.clone() : inner(input, init);
+  await cold.client.expectError("space.remote.set", { repository: key, url }, "invalid_request", /^Could not reach /);
+  const synced = await cold.client.settle("space.sync", { repository: key });
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+
+  git(clone, "config", "remote.origin.url", url);
+  const blocked = await cold.client.settle("space.fetch", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.cause, "unreachable");
+  assert.equal(blocked.sync.retry, true);
+
+  // A successful HTTP response still needs to identify a Git endpoint.
+  answer = Response.json({ display_name: "Stand-in Git host", git_origin: "https://[" });
+  const incomplete = await cold.client.settle("space.fetch", { repository: key });
+  assert.equal(incomplete.sync.phase, "stopped");
+  assert.equal(incomplete.sync.cause, "unreachable");
+
+  client.fetchImpl = inner;
+  const identified = await cold.client.settle("space.fetch", { repository: key });
+  assert.equal(identified.sync.phase, "stopped");
+  assert.equal(identified.sync.cause, "gone");
+});
+
+test("space-5, git-host-23: an external records placement checks its effective push destination", async (t) => {
+  const backend = await startHost();
+  const host = await startHost({ gitBackend: backend });
+  const home = await startHome("record-push-destination", { host });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const seeded = await home.client.settle("space.sync", { repository: key });
+  assert.equal(seeded.sync.phase, "done", JSON.stringify(seeded.sync));
+  const saved = git(bare, "rev-parse", "spex");
+
+  git(clone, "config", "remote.origin.pushurl", `${host.gitOrigin}/unlisted/example-spex.git`);
+  writeFileSync(join(clone, "notes.md"), "Local work\n");
+  const blocked = await home.client.settle("space.sync", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.step, "push");
+  assert.equal(blocked.sync.cause, "gone");
+  assert.equal(git(bare, "rev-parse", "spex"), saved, "the successful external Check did not publish the saved local work");
+});
+
+test("space-5: an external HTTP records Check does not follow redirects, even with a matching Git setting", async (t) => {
+  const host = await startHost();
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url ?? "");
+    if (request.url?.startsWith("/records.git/")) response.writeHead(302, { location: "/redirected.git/info/refs" });
+    else response.writeHead(404);
+    response.end();
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => { server.close(); });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const url = `http://127.0.0.1:${address.port}/records.git`;
+  const home = await startHome("external-records-redirect", { host });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await home.client.expectOk("space.remote.set", { repository: key, url });
+  git(clone, "config", `http.${url}.followRedirects`, "true");
+
+  const blocked = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.deepEqual(requests, ["/records.git/info/refs?service=git-upload-pack"]);
+});
+
+test("git-host-23: Git URL rewrites cannot redirect a verified Space records check, push or join", async (t) => {
+  const { home, host, key, id } = await preparedProject("records-rewrite");
+  t.after(() => home.stop());
+  const clone = clonePath(home.dataDir, key);
+  const url = git(clone, "remote", "get-url", hostFolder(host));
+  const elsewhere = `${host.gitOrigin}/unlisted/example-spex`;
+  const prefix = url.slice(0, -4);
+  const rewrite = `url.${elsewhere}.insteadOf`;
+  git(clone, "config", rewrite, prefix);
+  git(clone, "config", `url.${url}.insteadOf`, url);
+  const unchanged = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(unchanged.sync.phase, "idle", JSON.stringify(unchanged.sync));
+  git(clone, "config", "--unset", `url.${url}.insteadOf`);
+
+  const checked = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(checked.sync.phase, "stopped");
+  assert.match(checked.sync.message, /Check the URL rewrite rules/);
+  git(clone, "config", "--unset", rewrite);
+
+  git(clone, "config", "remote." + hostFolder(host) + ".pushurl", `${elsewhere}.git`);
+  git(clone, "config", `url.${elsewhere}.pushInsteadOf`, prefix);
+  git(clone, "config", `url.${url}.pushInsteadOf`, url);
+  writeFileSync(join(clone, "notes.md"), "First change\n");
+  const pushed = await home.client.settle("space.sync", { repository: key });
+  assert.equal(pushed.sync.phase, "done", JSON.stringify(pushed.sync));
+
+  git(clone, "config", "--unset", `url.${url}.pushInsteadOf`);
+  writeFileSync(join(clone, "notes.md"), "Second change\n");
+  const blocked = await home.client.settle("space.sync", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.step, "push");
+  assert.match(blocked.sync.message, /Check the URL rewrite rules/);
+
+  const second = await startHome("records-rewrite-join", {
+    host, project: false, env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: rewrite, GIT_CONFIG_VALUE_0: prefix },
+  });
+  t.after(() => second.stop());
+  await signIn(second, host);
+  const mark = second.client.mark();
+  await second.client.expectOk("space.join", { instance: host.url, hostId: id });
+  const joined = await second.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
+  assert.equal(joined.sync.phase, "stopped");
+  assert.match(joined.sync.message, /Check the URL rewrite rules/);
+  assert.ok(host.script.transportCredentials.every((request) => !request.path.includes("/unlisted/example-spex.git")));
+  assert.equal(existsSync(clonePath(second.dataDir, key)), false);
+});
 
 // An unrelated enrichment is deliberately broken; all catalog pages
 // and target reads are still served by the real stand-in.

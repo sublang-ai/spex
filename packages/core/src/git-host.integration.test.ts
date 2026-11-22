@@ -1396,13 +1396,6 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
     assert.deepEqual(await describe.json(), {
       display_name: "Test Host",
       git_origin: `${host.url}/git`,
-      roles: [
-        { id: "reporter", name: "Reporter", may_push: false },
-        { id: "developer", name: "Developer", may_push: true },
-        { id: "maintainer", name: "Maintainer", may_push: true },
-        { id: "owner", name: "Owner", may_push: true },
-      ],
-      groups: true,
     });
     const unauth = await fetch(`${host.url}/api/v1/host/me`);
     assert.equal(unauth.status, 401);

@@ -627,21 +627,9 @@ describe("Personal Space destinations", () => {
     expect(calls("space.place")).toEqual([]);
   });
 
-  test("a project synced to one Space may add an eligible second Space", async () => {
+  test("a project synced to one Space keeps its sync action with another Space signed in", async () => {
     const project = repo();
     await renderSpace(twoInstances({}, [project]), { open: false });
-    const menu = moreOf(project.key);
-    expect(within(menu).getByRole("menuitem", { name: "Sync records" })).toBeTruthy();
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Sync to a Space…" }));
-    const picker = screen.getByTestId(`space-destination-${project.key}`);
-    const spaces = within(picker).getByRole("combobox", { name: "Space" });
-    expect(within(spaces).getAllByRole("option").map((option) => (option as HTMLOptionElement).value)).toEqual([SECOND]);
-    expect(calls("space.place")).toEqual([]);
-    fireEvent.click(within(picker).getByRole("button", { name: "Sync records" }));
-    await waitFor(() => expect(calls("space.place")).toEqual([{
-      repository: project.key,
-      choice: { kind: "create", name: "academy", instance: SECOND },
-    }]));
-    expect(calls("space.pick")).toEqual([]);
+    expect(moreEntries(project.key)).toEqual(["Sync records", "Explore records"]);
   });
 });

@@ -176,6 +176,63 @@ function attentionOf(
   return map;
 }
 
+/** The live region stays mounted across surfaces (run-view-50). */
+function Announcer({ ledger }: { ledger: LedgerState | undefined }) {
+  const connection = useAppStore((state) => state.connection);
+  const everConnected = useAppStore((state) => state.everConnected);
+  const previousConnection = useRef(connection);
+  const lost = useRef(false);
+  const previousCount = useRef(0);
+  const previousQuestions = useRef(new Set<string>());
+  const [message, setMessage] = useState({ text: "", revision: 0 });
+
+  useEffect(() => {
+    const announcements: string[] = [];
+    if (everConnected && previousConnection.current !== connection) {
+      if (connection === "open" && lost.current) {
+        lost.current = false;
+        announcements.push(i18n._("Connection restored."));
+      } else if (!lost.current && (connection === "closed" ||
+          (previousConnection.current === "open" && connection === "connecting"))) {
+        lost.current = true;
+        announcements.push(i18n._("Connection to the Spex core lost — reconnecting."));
+      }
+    }
+    previousConnection.current = connection;
+
+    if (ledger) {
+      const questions = new Set<string>();
+      for (const entry of ledger.attention) {
+        if (entry.kind !== "question") continue;
+        const key = JSON.stringify([entry.sessionId, entry.turnId, entry.since]);
+        if (questions.has(key)) continue;
+        questions.add(key);
+        if (!previousQuestions.current.has(key)) {
+          announcements.push(i18n._("A player is waiting for your reply: {detail}", { detail: entry.title }));
+        }
+      }
+      previousQuestions.current = questions;
+      if (ledger.badge > previousCount.current) {
+        announcements.push(i18n._(
+          "{count, plural, one {# session needs your attention} other {# sessions need your attention}}",
+          { count: ledger.badge },
+        ));
+      }
+      previousCount.current = ledger.badge;
+    }
+
+    if (announcements.length) {
+      setMessage((previous) => ({ text: announcements.join(" "), revision: previous.revision + 1 }));
+    }
+  }, [connection, everConnected, ledger]);
+
+  return (
+    <div aria-live="polite" role="status" className="sr-only" data-testid="app-live">
+      <span key={message.revision}>{message.text}</span>
+    </div>
+  );
+}
+
 /** How long a first boot may dial before the page raises the alarm:
  * a served core over a slow link, or a desktop core still starting,
  * needs longer than a flap (run-view-50). */
@@ -317,7 +374,6 @@ function WorkspaceSurface({
   onOpenAgentCard,
   onOpenPalette,
   onOpenOwnProject,
-  onOpenFromSpace,
   attentionBySession,
   pendingFocus,
   onFocusHandled,
@@ -339,8 +395,6 @@ function WorkspaceSurface({
   onOpenAgentCard: (adapter: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
-  /** Open the palette on personal Space projects. */
-  onOpenFromSpace: () => void;
   /** Per-project spec view state, held above the workspace so a
    * draft under edit survives every surface (spec-view-51), keyed by
    * place and project (run-view-168). */
@@ -609,7 +663,6 @@ function WorkspaceSurface({
       onOpenAgentCard={onOpenAgentCard}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
-      onOpenFromSpace={onOpenFromSpace}
       // The playbooks are the project's own tab (DR-172): a way there
       // from the start view opens it.
       onNavigate={(surface) => (surface === "Playbooks" ? pickTab("playbooks") : onNavigate(surface))}
@@ -1175,20 +1228,12 @@ export function App() {
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteAddProject, setPaletteAddProject] = useState(false);
-  const [paletteSpaceFirst, setPaletteSpaceFirst] = useState(false);
   const openPalette = () => {
     setPaletteAddProject(false);
-    setPaletteSpaceFirst(false);
     setPaletteOpen(true);
   };
   const openAddProject = () => {
     setPaletteAddProject(true);
-    setPaletteSpaceFirst(false);
-    setPaletteOpen(true);
-  };
-  const openFromSpace = () => {
-    setPaletteAddProject(false);
-    setPaletteSpaceFirst(true);
     setPaletteOpen(true);
   };
   const configState = useAppStore((state) => state.configState);
@@ -1440,7 +1485,6 @@ export function App() {
         if (event.key.toLowerCase() === "p") {
           event.preventDefault();
           setPaletteAddProject(false);
-          setPaletteSpaceFirst(false);
           setPaletteOpen((open) => !open);
           return;
         }
@@ -1621,6 +1665,7 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <Announcer ledger={ledger} />
       <ConnectionBanner store={useAppStore} />
       <ApprovalInbox />
       <ApprovalFeedback />
@@ -1628,7 +1673,6 @@ export function App() {
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
-          spaceFirst={paletteSpaceFirst}
           projects={local.projects}
           sessions={local.sessions}
           attention={attentionBySession}
@@ -1640,13 +1684,11 @@ export function App() {
               : undefined
           }
           onPick={(projectId) => pickProject(projectId)}
-          onOpened={pickProject}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
           onClose={() => {
             setPaletteOpen(false);
             setPaletteAddProject(false);
-            setPaletteSpaceFirst(false);
           }}
         />
       ) : null}
@@ -1714,7 +1756,6 @@ export function App() {
                 }}
                 onOpenPalette={openPalette}
                 onOpenOwnProject={openAddProject}
-                onOpenFromSpace={openFromSpace}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}

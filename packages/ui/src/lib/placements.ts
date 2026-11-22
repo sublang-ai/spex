@@ -8,9 +8,9 @@
 // creation waits at. Pure functions over the state the core sends; the
 // surfaces render them.
 
-import type { SpaceState, InstanceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { SpaceState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
-import { hostNameOf, instanceName, instanceOf, signedInInstances } from "./instances.js";
+import { hostNameOf, instanceName, instanceOf } from "./instances.js";
 
 /** The placements the clone holds (space-87, storage-34): its remotes
  * in the order added, the path placement last. */
@@ -92,9 +92,4 @@ export function canRun(state: SpaceState, line: PlacementState): boolean {
     line.state === "reachable" ||
     line.state === "read-only"
   );
-}
-
-export function placeInstances(state: SpaceState, repo: RepositoryState): InstanceState[] {
-  const attached = new Set(instancePlacements(repo).map((line) => line.instance));
-  return signedInInstances(state).filter((instance) => !attached.has(instance.origin));
 }

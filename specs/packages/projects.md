@@ -86,7 +86,7 @@ While a project is the workspace's current project, the Overview tab shall show 
 | --- | --- |
 | name | the project name |
 | path | the absolute repository path |
-| records | "Records · ⟨group⟩ · ⟨standing⟩": the group holding the project's records — "Personal" for the person's own, left out while they are in none — and their standing [[space-61](space.md#space-61)], naming no spex repository |
+| records | "Records", followed by the Space’s display name when the project has a Space and the current standing when available, separated by " · " [[space-61](space.md#space-61)] |
 | branch | the current branch name, or a detached-HEAD indicator |
 | dirty | an indicator shown while the work tree has uncommitted changes, and hidden while it is clean |
 | ahead/behind | commit counts relative to the upstream branch, hidden while no upstream is configured |

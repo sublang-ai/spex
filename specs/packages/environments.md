@@ -5,10 +5,10 @@
 
 ## Intent
 
-This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md) and [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md): the release layout and manifest the package manager reads and checks, the requests and lock of each project and group, resolution, installing through the content-addressed store, the placements that put skills and specs where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
+This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md) and [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md): the release layout and manifest the package manager reads and checks, the requests and lock of the global and project environments, resolution, installing through the content-addressed store, the placements that put skills and specs where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
 The package manager is one library, hosted by the `spex` command line and by the app's core; where an item says the core, it says what either host does, and where it names a command, the core's protocol command, the command line's verb of the same meaning [[cli-1](cli.md#cli-1)].
 A **spec package** is one GEARS contract with the sources, spec, skills, playbooks and applets made from it, named `<org>/<pkg>`; a **release** is its immutable files at one version; an **artifact** is one `source`, `spec`, `skill`, `playbook` or `applet` of a release.
-An **environment** is what a project or a group installs: `spex.yaml` says which spec packages it wants, `spex.lock` records exactly what it got, and `.spex/` holds what was installed, all at the environment's **root** — a project's working folder, or the local global repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)].
+An **environment** records the packages installed globally or for one project: `spex.yaml` says which spec packages it wants, `spex.lock` records exactly what it got, and `.spex/` holds what was installed, all at the environment's **root** — a project's working folder, or the local global repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)].
 An **instance** is a deployment of Spex Space known by its origin; an environment's instance is the `space` its `spex.yaml` names, else the home's default instance [[storage-2](storage.md#storage-2)], independent of the registry selected by `registry` ([DR-168](../decisions/168-independent-package-registry.md)).
 A **working folder** is where a project's sessions run; the app pairs it with the spex repository holding its records [[storage-6](storage.md#storage-6)], which the environment in it does not need.
 
@@ -186,7 +186,7 @@ When the core starts, once it has installed every environment, it shall collect 
 
 #### environments-8
 
-When an environment is installed or the global lock applied by a sync, the core shall place the skills, playbooks and specs its releases provide [[environments-6](#environments-6)], so that every member of a project gets the same tools ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-115](../decisions/115-a-spec-reaches-the-agents.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
+When an environment is installed or the global lock applied by a sync, the core shall place the skills, playbooks and specs its releases provide [[environments-6](#environments-6)], so that each installation of the same project lock provides the same tools ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-115](../decisions/115-a-spec-reaches-the-agents.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
 
 | Placed | Where |
 | --- | --- |
@@ -303,7 +303,7 @@ When the core resolves or installs from a registry, it shall read the registry's
 
 - the registry answering `invalid_token`, `token_revoked` or `reauth_required` removes only the credential its call presented [[git-host-31](git-host.md#git-host-31)] and fails that call;
 - a release whose `format` the core does not know is refused naming it; a registry answer the core cannot read, or a digest that does not match, installs nothing and is reported;
-- the Git host controls who reads a spex repository and the registry who downloads; neither grants the other, so a member lacking the registry's permission is told which spec package they cannot fetch.
+- the Git host controls who reads a spex repository and the registry who downloads; neither grants the other, so a person lacking the registry's permission is told which spec package they cannot fetch.
 
 #### environments-13
 

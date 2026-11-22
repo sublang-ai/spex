@@ -3142,3 +3142,7 @@ msgstr "Your orgs at {registry} could not be read — check the connection, then
 #: src/space-git.ts
 msgid "Your saved commits remain on this computer. Address the content limit, then Retry."
 msgstr "Your saved commits remain on this computer. Address the content limit, then Retry."
+
+#. A records transfer stopped because Git configuration could change the Space-approved destination
+msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry."
+msgstr "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry."

@@ -3142,3 +3142,7 @@ msgstr "无法读取你在 {registry} 上的 org — 请检查网络连接，然
 #: src/space-git.ts
 msgid "Your saved commits remain on this computer. Address the content limit, then Retry."
 msgstr "已保存的提交仍保留在本机。请先解决内容大小限制问题，然后重试。"
+
+#. A records transfer stopped because Git configuration could change the Space-approved destination
+msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry."
+msgstr "Git 设置导致无法使用此空间提供的记录地址。请检查 URL 重写规则，然后重试。"
