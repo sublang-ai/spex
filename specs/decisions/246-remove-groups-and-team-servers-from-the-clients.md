@@ -20,7 +20,7 @@ Other decisions would receive scoped amendments.
 | Affected scope | Decisions |
 | --- | --- |
 | Group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue. | [DR-103](103-the-home-and-its-groups.md), [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md), [DR-114](114-groups-and-sharing-from-spex.md), [DR-120](120-the-instance-is-the-space.md), [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-150](150-spex-space-product-and-destination.md), [DR-171](171-personal-names-are-space-logins.md) |
-| Which destinations count for sync, project removal and detachment | [DR-122](122-a-sync-reads-its-destination.md), [DR-128](128-a-spex-repository-placed-at-several-instances.md) |
+| Which destinations count for sync | [DR-122](122-a-sync-reads-its-destination.md), [DR-128](128-a-spex-repository-placed-at-several-instances.md) |
 | Each IDE's connection, sidebar and Dashboard return to one core | [DR-002](002-desktop-app-architecture.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-033](033-remote-gui-serving.md) |
 | Group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue. | [DR-159](159-projects-in-groups-opened-where-you-work.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-175](175-projects-shown-where-they-are-open.md), [DR-209](209-a-project-row-with-one-menu.md), [DR-213](213-public-github-code-opens-over-https.md), [DR-215](215-add-to-a-group-and-start-working.md) |
 | The Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name. | [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-198](198-consistent-inline-group-actions.md), [DR-211](211-a-panel-carries-its-own-way-out.md), [DR-212](212-panel-dismissal-as-quiet-chrome.md) |
@@ -53,14 +53,9 @@ On acceptance, replace the workshop-and-personal-groups rule in `AGENTS.md`, `CL
 ### Record sync
 
 Discover, open and sync a Space repository only when that Space identifies it as belonging to the signed-in account's own namespace.
-Each transfer uses that rule, even if a repository has moved since the last sync.
+This rule applies to each sync destination, even if its repository has moved since the last sync.
 An explicitly configured non-Space records remote follows its existing rules [[space-5](../packages/space.md#space-5)].
-Project removal and placement detachment may credit a copy only at a remaining destination eligible for sync.
-Exclude a group destination or a Space destination whose ownership cannot be verified, even if its last sync succeeded.
-Count each record for which the existing whole-record comparison finds no evidence of receipt at an eligible destination.
-If the count is positive, show it and ask whether to proceed.
-Detaching an ineligible destination uses the existing unread-destination confirmation without fetching records from it.
-On acceptance, apply this change to project removal [[projects-9](../packages/projects.md#projects-9)] and detachment [[space-98](../packages/space.md#space-98)] and their verification.
+Project removal and placement detachment keep their existing loss confirmations [[projects-9](../packages/projects.md#projects-9)] [[space-98](../packages/space.md#space-98)].
 
 ### One core per IDE
 
@@ -77,8 +72,13 @@ The standalone single-user browser shell and its validation continue.
 Start with a fresh Spex home if a development installation depends on Groups or team Servers.
 Their records, credentials and pending work have no migration or recovery requirement.
 The separate Space service continues to govern access to personal records.
+If the Space moves a project's repository into a group, records that reached it before the move stay there.
+Removing the project locally gives no separate warning that this client can no longer open that copy.
+
+The published `@sublang/spex` library loses its group and member operations, team-server discovery, ticket requests and seat-specific sign-in support.
+Ship that breaking API change in the next CLI major release [[release-1](../packages/release.md#release-1)].
+Removing the corresponding group, member and server commands and seat messages from the client protocol also requires a protocol version bump [[core-service-12](../packages/core-service.md#core-service-12)].
 
 Acceptance starts with two fresh homes under the same account.
 A person syncs a project from the first and opens it on the second.
-If the Space subsequently moves a project's repository into a group, its cached copy cannot suppress the loss warning on removal or detachment when it is the only other evidence for a record.
 Neither IDE shell exposes group or team-server operations, and registry sign-in stays independent of Space sign-in.
