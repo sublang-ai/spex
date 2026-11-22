@@ -3,7 +3,8 @@
 
 // A YAML-subset parser for SKILL.md frontmatter: `key: value`, quoted
 // strings, `>`/`|` block scalars (with `-`/`+` chomping), inline `[a, b]`
-// and block `- item` lists, and one nested map level (as under `metadata:`).
+// and block `- item` lists, flow mappings `{a: b}`, and one nested map level
+// (as under `metadata:`), in the block and the flow form alike.
 // It never throws: a malformed block yields `error` and whatever parsed.
 
 const DELIMITER = /^---\s*$/;
@@ -74,6 +75,7 @@ function parseValue(lines, i, rest, indent) {
   if (block) return parseBlockScalar(lines, i, block[1], block[2], indent);
   if (rest === '' || rest.startsWith('#')) return parseNested(lines, i, indent);
   if (rest.startsWith('"') || rest.startsWith("'")) return parseQuoted(lines, i, rest, indent);
+  if (rest.startsWith('{')) return parseFlowMapping(lines, i, rest, indent);
   if (rest.startsWith('[')) {
     const list = parseInlineList(rest);
     if (list === null) return { value: rest, next: i + 1, problem: { line: i, message: 'unclosed inline list' } };
@@ -255,6 +257,111 @@ function parseInlineList(src) {
     if (quotedText === null) plain += c;
   }
   return null;
+}
+
+// A flow mapping `{a: b, "c": 'd', e: [f, g]}`, read as the same keys and
+// values written as a block map; it may continue on more-indented lines, each
+// line's comment dropped. As in the block form, one nested map level is read:
+// a map deeper than that is kept opaque (null).
+function parseFlowMapping(lines, i, rest, indent) {
+  let { text: src, quote } = dropFlowComment(rest, null);
+  let j = i + 1;
+  let res = readFlow(src, 0);
+  while (res === null && j < lines.length && (isBlank(lines[j]) || indentOf(lines[j]) > indent)) {
+    const line = dropFlowComment(lines[j].trim(), quote);
+    src += ' ' + line.text;
+    quote = line.quote;
+    j++;
+    res = readFlow(src, 0);
+  }
+  if (res === null || res.error) return { value: rest, next: j, problem: { line: i, message: res?.error ?? 'unclosed flow mapping' } };
+  const after = src.slice(res.end).trim();
+  const problem = after && !after.startsWith('#') ? { line: i, message: `unexpected text after the flow mapping: "${clip(after)}"` } : null;
+  let value = res.value;
+  if (indent > 0) value = null;
+  else for (const [k, v] of Object.entries(value)) if (v && typeof v === 'object' && !Array.isArray(v)) value[k] = null;
+  return { value, next: j, problem };
+}
+
+// One line of a flow collection without its comment: a `#` at the line's
+// start or after a space, outside quotes. `quote` is the quote still open
+// from the line before, if any; returns the one open at the line's end.
+function dropFlowComment(line, quote) {
+  for (let k = 0; k < line.length; k++) {
+    const c = line[k];
+    if (quote === '"') {
+      if (c === '\\') k++;
+      else if (c === '"') quote = null;
+    } else if (quote === "'") {
+      if (c === "'" && line[k + 1] === "'") k++;
+      else if (c === "'") quote = null;
+    } else if ((c === '"' || c === "'") && (k === 0 || /[\s{[,:]/.test(line[k - 1]))) {
+      quote = c;
+    } else if (c === '#' && (k === 0 || /\s/.test(line[k - 1]))) {
+      return { text: line.slice(0, k).trimEnd(), quote };
+    }
+  }
+  return { text: line, quote };
+}
+
+// One flow node of `src` at `k`: `{ value, end }`, `{ error }` where it is
+// malformed, or null where it is not closed before the text ends.
+function readFlow(src, k) {
+  const ws = () => { while (k < src.length && /\s/.test(src[k])) k++; };
+  const node = () => {
+    ws();
+    if (k >= src.length) return null;
+    const c = src[k];
+    if (c === '{' || c === '[') {
+      const map = c === '{';
+      const out = map ? {} : [];
+      k++;
+      for (;;) {
+        ws();
+        if (k >= src.length) return null;
+        if (src[k] === (map ? '}' : ']')) { k++; return { value: out }; }
+        if (!map) {
+          const item = node();
+          if (!item || item.error) return item;
+          out.push(item.value);
+        } else {
+          const key = node();
+          if (!key || key.error) return key;
+          ws();
+          let value = { value: null };
+          if (src[k] === ':') {
+            k++;
+            value = node();
+            if (!value || value.error) return value;
+          }
+          if (Object.prototype.hasOwnProperty.call(out, String(key.value))) return { error: `duplicate key "${key.value}" in a flow mapping` };
+          out[String(key.value)] = value.value;
+        }
+        ws();
+        if (k >= src.length) return null;
+        if (src[k] === ',') { k++; continue; }
+        if (src[k] !== (map ? '}' : ']')) return { error: `expected "," or "${map ? '}' : ']'}" in a flow ${map ? 'mapping' : 'sequence'}` };
+      }
+    }
+    if (c === '"' || c === "'") {
+      const close = findClosingQuote(src.slice(k), c);
+      if (close < 0) return null;
+      const inner = src.slice(k + 1, k + close);
+      k += close + 1;
+      return { value: c === "'" ? inner.replace(/''/g, "'") : unescapeDouble(inner) };
+    }
+    // A plain scalar ends at `,` `]` `}`, or at a `:` before a space or one of those.
+    const start = k;
+    while (k < src.length && !/[,\]}]/.test(src[k]) && !(src[k] === ':' && /[\s,\]}]/.test(src[k + 1] ?? ' '))) k++;
+    if (k >= src.length) return null;
+    const text = src.slice(start, k);
+    if (c === '#' || /\s#/.test(text)) return { error: 'a comment inside a flow collection' };
+    // An empty value reads as null, as `key:` does in the block form.
+    return { value: text.trim() === '' ? null : plainScalar(text) };
+  };
+  const res = node();
+  if (!res || res.error) return res;
+  return { value: res.value, end: k };
 }
 
 function plainScalar(text) {

@@ -1,6 +1,6 @@
 ---
 name: skill-atlas
-description: Maps the agent skills installed for this agent. Scans every skill folder, finds which skills call which, breaks each skill into steps, tags data inputs and outputs, tool use and human interaction, and opens a local web page to explore the map and sort skills into workflow phases. Use when the user wants to see, understand, audit or organize their skills, asks which skills they have or how skills depend on each other, wants one skill's steps illustrated, wants to arrange skills into a workflow such as an SDLC, or wants their skills shown or translated in Chinese.
+description: Maps the agent skills installed for this agent. Scans the folders agents load skills from in the project and the home folder, and others named with `--root`, finds which skills call which, breaks each skill into steps, tags data inputs and outputs, tool use and human interaction, and opens a local web page to explore the map and sort skills into workflow phases. Use when the user wants to see, understand, audit or organize their skills, asks which skills they have or how skills depend on each other, wants one skill's steps illustrated, wants to arrange skills into a workflow such as an SDLC, or wants their skills shown or translated in Chinese.
 license: Apache-2.0
 compatibility: Requires Node.js 18 or later. The interactive view needs a browser on the same machine; elsewhere, export a standalone HTML file.
 metadata:

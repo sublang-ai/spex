@@ -102,19 +102,23 @@ export function listFiles(dir, limits) {
  * folder (`strict` implied).
  * With `hidden`, dot-entries and `__pycache__` are listed too, only `.git`
  * and node_modules passed over.
- * @returns {{ files:string[], links:{ rel:string, target:string }[], complete:boolean }}
+ * With `follow`, a link is followed wherever it leads, each real folder walked
+ * once, its files listed under the link's path; a link that cannot be
+ * followed is listed under `broken` by its relative path.
+ * @returns {{ files:string[], links:{ rel:string, target:string }[], broken:string[], complete:boolean }}
  */
-export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false, strict = every, hidden = false } = {}) {
+export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false, strict = every, hidden = false, follow = false } = {}) {
   const passOver = every ? () => false
     : hidden ? (name) => name === '.git' || name === 'node_modules'
       : (name) => name.startsWith('.') || SKIP.has(name);
   const out = [];
   const links = [];
+  const broken = [];
   const seen = new Set();
   let dirs = 0;
   let complete = true;
   let base;
-  try { base = fs.realpathSync(dir); } catch { return { files: out, links, complete: !strict }; }
+  try { base = fs.realpathSync(dir); } catch { return { files: out, links, broken, complete: !strict }; }
   const inside = (real) => {
     const rel = path.relative(base, real);
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
@@ -137,7 +141,14 @@ export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WAL
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       let stat;
       try {
-        if (!inside(fs.realpathSync(childAbs))) {
+        let childReal;
+        try {
+          childReal = fs.realpathSync(childAbs);
+        } catch (err) {
+          if (follow && e.isSymbolicLink()) { broken.push(childRel); continue; }
+          throw err;
+        }
+        if (!follow && !inside(childReal)) {
           if (every) { complete = false; return; }
           continue;
         }
@@ -159,7 +170,7 @@ export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WAL
     }
   };
   walk(dir, '');
-  return { files: out, links, complete };
+  return { files: out, links, broken, complete };
 }
 
 /** translations/<skill id>/ of the state folder, or null where the id cannot name a folder. */
@@ -198,9 +209,11 @@ function languageAndScript(tag) {
 }
 
 /**
- * The tag of `tags` that stands for `want`: the same tag, else the first in
- * name order of the same language and script (`zh`, `zh-Hans` and `zh-SG` for
- * `zh-CN`, never `zh-TW` or `zh-Hant`); null where none does.
+ * The tag of `tags` read for a reader of `want`: the same tag, else the first
+ * in name order of the same language and script (`zh`, `zh-Hans` and `zh-SG`
+ * for `zh-CN`, never `zh-TW` or `zh-Hant`); null where none does. The scan,
+ * `/api/file` and annotations' words choose a tag through this alone, before
+ * any folder is chosen [chooseTranslation].
  */
 export function matchingTag(want, tags) {
   const exact = tags.find((t) => t.toLowerCase() === String(want).toLowerCase());
@@ -213,25 +226,30 @@ export function matchingTag(want, tags) {
 /**
  * Of a file's translations under one tag, the one the scan reports and the
  * server returns: the skill folder's, except where it is behind its source and
- * the state folder's is not, then the state folder's. Both the scan and the
- * server choose through this alone.
- * @param {{ origin:'skill'|'state', abs:string }[]} candidates the first is taken of each origin
+ * the state folder's records its source's digest and that digest is the
+ * source's, then the state folder's; a state translation recording no digest
+ * never displaces the skill's own. Of several of one origin (names differing
+ * in case alone), the first by name. Both the scan and the server choose
+ * through this alone, within one tag [matchingTag].
+ * @param {{ origin:'skill'|'state', abs:string }[]} candidates
  * @param {string} sourceFile the file they translate
- * @returns {object|null} the chosen candidate with its `stale` and `edited` [translationState]
+ * @returns {object|null} the chosen candidate with its `stale`, `edited` and `current` [translationState]
  */
 export function chooseTranslation(candidates, sourceFile, digestCache) {
+  const firstOf = (origin) => candidates.filter((c) => c.origin === origin)
+    .sort((a, b) => (a.abs < b.abs ? -1 : a.abs > b.abs ? 1 : 0))[0];
   const judged = (c) => (c ? { ...c, ...translationState(c.abs, sourceFile, digestCache) } : null);
-  const own = judged(candidates.find((c) => c.origin === 'skill'));
-  const state = judged(candidates.find((c) => c.origin === 'state'));
-  if (own && !(own.stale && state && !state.stale)) return own;
+  const own = judged(firstOf('skill'));
+  const state = judged(firstOf('state'));
+  if (own && !(own.stale && state?.current)) return own;
   return state;
 }
 
 /**
- * The translation of the skill file `rel` into `lang`: under that tag, else
- * under the tags of the same language and script [matchingTag] together, the
- * skill folder's or the state folder's as chooseTranslation picks; only a
- * regular file inside its folder counts.
+ * The translation of the skill file `rel` into `lang`: under the one tag
+ * matchingTag reads among the file's translations, the skill folder's or the
+ * state folder's as chooseTranslation picks within that tag; only a regular
+ * file inside its folder counts.
  * @returns {{ abs:string, real:string, origin:'skill'|'state', tag:string, stale:boolean, edited:boolean } | null}
  */
 export function findTranslation(skill, rel, lang, stateDir) {
@@ -243,13 +261,13 @@ export function findTranslation(skill, rel, lang, stateDir) {
   const places = [{ base: skill.dir, origin: 'skill' }];
   const stateDirOfSkill = stateDir ? stateTranslationsDir(stateDir, skill.id) : null;
   if (stateDirOfSkill) places.push({ base: stateDirOfSkill, origin: 'state' });
-  const found = []; // every translation of the file, in the order of places, then names
+  const found = []; // every translation of the file
   for (const { base, origin } of places) {
     let baseReal;
     try { baseReal = fs.realpathSync(base); } catch { continue; }
     const folder = dirRel === '.' ? base : path.join(base, ...dirRel.split('/'));
     let entries;
-    try { entries = fs.readdirSync(folder).sort(); } catch { continue; }
+    try { entries = fs.readdirSync(folder); } catch { continue; }
     for (const entry of entries) {
       const parsed = parseTranslationName(entry);
       if (!parsed || parsed.sourceName !== name) continue;
@@ -258,14 +276,10 @@ export function findTranslation(skill, rel, lang, stateDir) {
       if (real) found.push({ abs, real, origin, tag: parsed.tag });
     }
   }
-  // Under the tag asked where any is; else every tag of the same language and
-  // script, each folder's first in name order, chosen between as one tag's.
+  // The tag first, then the folder within it: never compared across tags.
   const tag = matchingTag(want, [...new Set(found.map((t) => t.tag))]);
   if (tag === null) return null;
-  const pool = tag.toLowerCase() === want.toLowerCase()
-    ? found.filter((t) => t.tag === tag)
-    : found.filter((t) => matchingTag(want, [t.tag]) !== null).sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
-  return chooseTranslation(pool, path.join(skill.dir, ...relPosix.split('/')));
+  return chooseTranslation(found.filter((t) => t.tag === tag), path.join(skill.dir, ...relPosix.split('/')));
 }
 
 export function sha256Hex(bytes) {
@@ -335,19 +349,21 @@ export function readTextBounded(file) {
 
 /**
  * Whether a translation is behind its source (the source's digest it records
- * is not the source's) and edited apart from it (the own digest it records is
- * not its own). One recording none is neither.
- * @returns {{ stale:boolean, edited:boolean }}
+ * is not the source's), edited apart from it (the own digest it records is
+ * not its own), and current (the source's digest it records is the source's).
+ * One recording none is none of them.
+ * @returns {{ stale:boolean, edited:boolean, current:boolean }}
  */
 export function translationState(translationFile, sourceFile, digestCache) {
   const text = readTextBounded(translationFile);
-  if (text === null) return { stale: false, edited: false };
+  if (text === null) return { stale: false, edited: false, current: false };
   const ext = path.extname(translationFile).toLowerCase();
   const recorded = recordedDigests(text, ext);
   const current = recorded.source ? digestOf(sourceFile, digestCache) : null;
   return {
     stale: current !== null && recorded.source !== current,
     edited: recorded.own !== null && recorded.own !== ownDigest(text, ext),
+    current: current !== null && recorded.source === current,
   };
 }
 

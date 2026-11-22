@@ -8,11 +8,13 @@
 //             right before it, and a folder-like name only in a sentence
 //             saying skill, command, slash or playbook); `Skill(N)`;
 //             `skill: N` as a key (case-sensitive, at the line start or after
-//             `{` or `,`); `$N` after a verb of use in its clause; N beside a
+//             `{` or `,`); `$N` after a verb of use in its clause, and each
+//             `$N` joined to it by `,`, "and" or "or"; N beside a
 //             verb of use and the word skill or playbook, or the word command
 //             when N is backticked or slashed;
 //   mentions: any of those after words steering away from it in its
-//             sentence, up to a clause opening with a verb of use (or in a
+//             sentence ("instead of", "rather than", a negated verb of use
+//             such as "do not run"), up to a clause opening with a verb of use (or in a
 //             sentence holding a bare "instead"), or `N` in backticks when the
 //             sentence says "skill" or N has a hyphen.
 
@@ -36,7 +38,10 @@ const NOUNS = String.raw`skill|playbook`; // "command" needs a backticked or sla
 // with a verb of use, so "instead of Y, use X" calls X too; "X, not Y" and
 // "X but not Y" steer away from Y. A bare "instead" ("use `/x` instead")
 // points away from the skill itself, so it steers the whole sentence.
-const STEER_AWAY_BEFORE = /\b(?:not for|do not use|don't use|never use|instead of|rather than|see also)\b|(?:,|\bbut)\s+not\b/gi;
+// A verb of use negated ("do not run", "never invoke", "don't call", "can't
+// use", "cannot load", "do not ever run") steers too, every verb of VERBS alike.
+const NEGATION = String.raw`(?:(?:do|does|did|should|must|can|could|would|wo|ca|need)n['\u2019]t|cannot|not|never)\s+(?:(?:ever|always|directly)\s+)?`;
+const STEER_AWAY_BEFORE = new RegExp(String.raw`\b(?:not for|${NEGATION}(?:${VERBS})|instead of|rather than|see also)\b|(?:,|\bbut)\s+not\b`, 'gi');
 const CLAUSE_OF_USE = new RegExp(String.raw`[,:\u2013\u2014]\s*(?:(?:and|but|then|so|instead)\s+)?(?:please\s+)?(?:${VERBS})\b`, 'i');
 const STEER_AWAY_SENTENCE = /\binstead\b(?!\s+of\b)/i;
 const SAYS_SKILL = /\bskills?\b/i;
@@ -80,7 +85,9 @@ export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
     { kind: 'calls', re: new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${ALT})["'\x60]?\s*[,)]`, 'g') },
     { kind: 'calls', re: new RegExp(String.raw`(?:^\s*(?:-\s+)?|[{,]\s*)["']?skill["']?\s*:\s*["'\x60]?(${ALT})${NAME_END}`, 'g') },
     // `$N` after a verb of use in its clause (no `,` between), as Codex writes a skill's name; never inside a path or URL.
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;,\n]{0,40}?(?<![\w$/.~:@-])[\x60"']?\$(${ALT})${NAME_END}`, 'gi') },
+    // Each `$N` joined to it after that one verb ("run $a, $b or $c") is a call too [chain].
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;,\n]{0,40}?(?<![\w$/.~:@-])[\x60"']?\$(${ALT})${NAME_END}`, 'gi'),
+      chain: new RegExp(String.raw`[\x60"']?(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+)[\x60"']?\$(${ALT})${NAME_END}`, 'iy') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])[\x60"']?/?(${ALT})[\x60"']?\s+(?:${NOUNS})s?\b`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?\b(?:${NOUNS})\s+[\x60"']?/?(${ALT})${NAME_END}`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])(?:\x60/?|/)(${ALT})\x60?\s+commands?\b`, 'gi') },
@@ -120,20 +127,30 @@ export function findLinks(matcher, from, lines) {
   const unresolved = new Map();
   for (const { line, text, step } of lines) {
     if (!text.trim()) continue;
+    // The name found at `at` by `form`, kept as a link unless its sentence rules it out.
+    const consider = (form, name, at) => {
+      const to = resolve(matcher, name, from.root);
+      if (!to || to === fromId) return; // case differs (case-insensitive form) or a self-link
+      const span = sentenceSpan(text, at);
+      const sentence = text.slice(span.start, span.end);
+      let kind = form.kind;
+      if (form.needsSkillWord && !SAYS_SKILL.test(sentence) && !name.includes('-')) return;
+      if (form.slash && PATH_LIKE.has(name.toLowerCase()) && !SAYS_COMMAND.test(sentence)) return;
+      if (steeredAway(text.slice(span.start, at)) || STEER_AWAY_SENTENCE.test(sentence)) kind = 'mentions';
+      keepLink(best, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: { line, text: evidence(text, at) } });
+    };
     for (const form of matcher.forms) {
       form.re.lastIndex = 0;
       for (const m of text.matchAll(form.re)) {
-        const name = m[1];
-        const to = resolve(matcher, name, from.root);
-        if (!to || to === fromId) continue; // case differs (case-insensitive form) or a self-link
-        const at = m.index + m[0].lastIndexOf(name);
-        const span = sentenceSpan(text, at);
-        const sentence = text.slice(span.start, span.end);
-        let kind = form.kind;
-        if (form.needsSkillWord && !SAYS_SKILL.test(sentence) && !name.includes('-')) continue;
-        if (form.slash && PATH_LIKE.has(name.toLowerCase()) && !SAYS_COMMAND.test(sentence)) continue;
-        if (steeredAway(text.slice(span.start, at)) || STEER_AWAY_SENTENCE.test(sentence)) kind = 'mentions';
-        keepLink(best, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: { line, text: evidence(text, at) } });
+        consider(form, m[1], m.index + m[0].lastIndexOf(m[1]));
+        if (!form.chain) continue;
+        for (let pos = m.index + m[0].length; ;) {
+          form.chain.lastIndex = pos;
+          const c = form.chain.exec(text);
+          if (!c) break;
+          consider(form, c[1], c.index + c[0].lastIndexOf(c[1]));
+          pos = form.chain.lastIndex;
+        }
       }
     }
     for (const re of matcher.strong) {

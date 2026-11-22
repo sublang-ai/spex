@@ -689,10 +689,14 @@ test("skill-atlas-13: a project's folder above the working folder is a source of
       await card(page, id).locator(".card-main").click();
       await expect(details(page).locator("section.d-sec", { has: page.getByRole("heading", { name: "Source", exact: true }) })).toContainText(title);
     }
-    // In Chinese, the folder above is named in Chinese with its place kept.
+    // Each folder is named by its place in the repository: the root's by its scope alone, the working
+    // folder's with its path from the root; in Chinese, the words in Chinese and the place kept.
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith("Project (sub) · Universal"));
     await page.getByRole("combobox", { name: "Language" }).selectOption("zh-CN");
-    const above = zh("{scope} ({up}) · {where}", { scope: zh("Project"), up: "..", where: zh("Universal") });
-    await expect(groups(page).filter({ has: page.locator('.card[data-skill="above"]') })).toHaveAttribute("aria-label", startsWith(above));
+    const where = zh("Universal");
+    const here = zh("{scope} ({place}) · {where}", { scope: zh("Project"), place: "sub", where });
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith(here));
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="above"]') })).toHaveAttribute("aria-label", startsWith(zh("{scope} · {where}", { scope: zh("Project"), where })));
   } finally {
     await stop(started.child);
     rmSync(repo, { recursive: true, force: true });
@@ -917,30 +921,81 @@ test.describe("in a browser of Chinese", () => {
     await expect.poll(() => shownSkills(page)).toEqual([ZH_ONLY.name]);
   });
 
-  test("skill-atlas-29: of a skill folder's zh behind its source and the state folder's zh-Hans, the zh-CN page shows the state folder's", async ({ page }) => {
+  // A translation of `survey` into `file` giving `words`, recording `source` as its source's digest.
+  const surveyZh = (file: string, source: string, words: string) =>
+    writeFileSync(file, `---\nname: ${ZH_ONLY.name}\ndescription: ${words}\n---\n<!-- skill-atlas:source sha256=${source} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${words}\n`);
+  // After a rescan, on the zh-CN page: the card and the details show `words` with `notes`, and the
+  // file opened from them is `file`, holding `words`, with `fileNotes`.
+  async function expectSurveyShows(page: Page, words: string, file: string, notes: string[], fileNotes: string[]) {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, zh("Links"));
+    await cardMain(page, ZH_ONLY.name).click();
+    await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(words);
+    const panel = page.getByRole("complementary", { name: zh("Details") });
+    await expect(panel.locator(".d-desc")).toHaveText(words);
+    await expect(panel.getByRole("note")).toHaveText(notes);
+    await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading")).toHaveText(`/${ZH_ONLY.name} · ${file}`);
+    await expect(dialog.locator(".file-pre")).toContainText(words);
+    await expect(dialog.getByRole("note")).toHaveText(fileNotes);
+  }
+
+  test("skill-atlas-29: of a skill folder's zh behind its source and the state folder's current zh-Hans, the zh-CN page reads the first tag, zh, and marks it behind", async ({ page }) => {
     skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
     const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
     const theirs = join(state, "translations", ZH_ONLY.name);
-    const fresh = "从状态文件夹汇总结果。";
-    writeFileSync(join(dir, "SKILL.zh.md"), `---\nname: ${ZH_ONLY.name}\ndescription: ${ZH_ONLY.zh}\n---\n<!-- skill-atlas:source sha256=${"0".repeat(64)} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${ZH_ONLY.zh}\n`);
+    surveyZh(join(dir, "SKILL.zh.md"), "0".repeat(64), ZH_ONLY.zh);
     mkdirSync(theirs, { recursive: true });
-    writeFileSync(join(theirs, "SKILL.zh-Hans.md"), `---\nname: ${ZH_ONLY.name}\ndescription: ${fresh}\n---\n<!-- skill-atlas:source sha256=${sha256(join(dir, "SKILL.md"))} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${fresh}\n`);
+    surveyZh(join(theirs, "SKILL.zh-Hans.md"), sha256(join(dir, "SKILL.md")), "从状态文件夹汇总结果。");
+    const behind = zh("The {language} translation may be behind its source.", { language: ZH.name });
+    try {
+      // The tag is chosen before the folder: a current translation under a later tag is passed over.
+      await expectSurveyShows(page, ZH_ONLY.zh, "SKILL.zh.md", [behind], [behind]);
+    } finally {
+      rmSync(theirs, { recursive: true, force: true });
+    }
+  });
+
+  test("skill-atlas-29: of a skill folder's zh behind its source beside a current zh-Hans, and the state folder's current zh, the zh-CN page and its file read the state folder's zh", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    const theirs = join(state, "translations", ZH_ONLY.name);
+    const source = sha256(join(dir, "SKILL.md"));
+    const refreshed = "从状态文件夹汇总结果。";
+    surveyZh(join(dir, "SKILL.zh.md"), "0".repeat(64), ZH_ONLY.zh);
+    surveyZh(join(dir, "SKILL.zh-Hans.md"), source, "以简体汇总各项结果。");
+    mkdirSync(theirs, { recursive: true });
+    surveyZh(join(theirs, "SKILL.zh.md"), source, refreshed);
+    try {
+      // Under zh, the first tag, the state folder's pinned translation stands in for the skill's behind one.
+      await expectSurveyShows(page, refreshed, "SKILL.zh.md", [], []);
+    } finally {
+      rmSync(theirs, { recursive: true, force: true });
+    }
+  });
+
+  test("skill-atlas-29: annotation words under zh-CN over a skill's zh translation are read as one entry, the file's words where the annotation gives none", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    surveyZh(join(dir, "SKILL.zh.md"), sha256(join(dir, "SKILL.md")), ZH_ONLY.zh);
+    const file = join(state, "annotations.json");
+    const step = "收集各项发现";
+    writeFileSync(file, JSON.stringify({ ...ANNOTATIONS, skills: { ...ANNOTATIONS.skills, [ZH_ONLY.name]: { translations: { "zh-CN": { steps: [{ title: step }] } } } } }));
     try {
       await rescan();
       await page.goto(url);
       await groupBy(page, zh("Links"));
       await cardMain(page, ZH_ONLY.name).click();
-      await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(fresh);
+      // The description from the zh file, the step's title from the annotation.
+      await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
+      await expect(card(page, ZH_ONLY.name).locator(".step-title")).toHaveText([new RegExp(esc(step))]);
       const panel = page.getByRole("complementary", { name: zh("Details") });
-      await expect(panel.locator(".d-desc")).toHaveText(fresh);
+      await expect(panel.locator(".d-desc")).toHaveText(ZH_ONLY.zh);
       await expect(panel.getByRole("note")).toHaveCount(0);
-      await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
-      const dialog = page.getByRole("dialog");
-      await expect(dialog.getByRole("heading")).toHaveText(`/${ZH_ONLY.name} · SKILL.zh-Hans.md`);
-      await expect(dialog.locator(".file-pre")).toContainText(fresh);
-      await expect(dialog.getByRole("note")).toHaveCount(0);
     } finally {
-      rmSync(theirs, { recursive: true, force: true });
+      writeFileSync(file, JSON.stringify(ANNOTATIONS));
     }
   });
 });

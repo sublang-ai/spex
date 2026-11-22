@@ -5,15 +5,16 @@
 // Everything added is marked `"source": "annotation"`. A malformed file or
 // entry is reported on stderr and the scan carries on without it. A name holds
 // one entry or a list of them: the one recording its skill's SKILL.md digest
-// applies, else one recording none; an entry recording the digest of another
-// skill of that name applies to that one; where none applies and one records
-// a digest no skill of the name has, that is reported as a `stale-annotation` insight.
+// (and that of each other file it lists under `source.files`) applies, else
+// one recording none; an entry recording the digests of another skill of that
+// name applies to that one; where none applies and one records digests no
+// skill of the name has, that is reported as a `stale-annotation` insight.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { warn } from './log.mjs';
 import { tagInfo, mergeHits } from './tags.mjs';
-import { canonicalTag, matchingTag } from './translations.mjs';
+import { canonicalTag, matchingTag, fileInside, digestOf } from './translations.mjs';
 import { oneLinkEach } from './links.mjs';
 
 export const ANNOTATIONS_FILE = 'annotations.json';
@@ -65,8 +66,7 @@ export function applyAnnotations(doc, atlas) {
     // its digest; a differing skill's own `<name>@<rootId>` key comes first.
     const sameName = key === skill.name ? byName.get(key) : [skill];
     const others = sameName.filter((s) => s !== skill && !Object.hasOwn(doc.skills, s.id));
-    const digests = new Set(sameName.map((s) => s.digest).filter(Boolean));
-    for (const [s, chosen] of entriesFor(skill, others, digests, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, resolveSkill);
+    for (const [s, chosen] of entriesFor(skill, others, sameName, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, resolveSkill);
   }
 }
 
@@ -160,27 +160,36 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
 // The entries a key applies, as [skill, { ann, where }] pairs, `where` being
 // the words its warnings name it by. A key holds one entry or a list of them,
 // each written from another text of its skill (the state folder serves every
-// project). To the key's skill applies the entry recording its digest, else
-// the first recording none; to each other skill of the name (`others`), the
-// entry recording its digest alone. Where none applies to the key's skill and
-// an entry records a digest no skill of the name has (`digests`), its
+// project). An entry recording a source matches a skill whose SKILL.md has
+// that digest and whose every file listed under `source.files` has its digest
+// [filesMatch]. To the key's skill applies the entry matching it, else the
+// first recording none; to each other skill of the name (`others`), the entry
+// matching it alone. Where none applies to the key's skill and an entry
+// recording a source matches no skill of the name (`sameName`), its
 // annotation is stale.
-function entriesFor(skill, others, digests, value, where) {
+function entriesFor(skill, others, sameName, value, where) {
   const many = Array.isArray(value);
   const entries = [];
   for (const [n, ann] of (many ? value : [value]).entries()) {
     const at = many ? `${where} (entry ${n + 1})` : where;
     if (!ann || typeof ann !== 'object' || Array.isArray(ann)) { warn(`${at}: the entry is not an object; ignored`); continue; }
-    if (ann.source === undefined || ann.source === null) { entries.push({ ann, where: at, hex: null }); continue; }
+    if (ann.source === undefined || ann.source === null) { entries.push({ ann, where: at, hex: null, files: null }); continue; }
     const hex = ann.source?.sha256;
+    const files = ann.source?.files;
     if (typeof ann.source !== 'object' || typeof hex !== 'string') { warn(`${at}: "source" is not { "sha256": "<64 hex>" }; entry not applied`); continue; }
-    entries.push({ ann, where: at, hex: hex.toLowerCase() });
+    if (files !== undefined && (!files || typeof files !== 'object' || Array.isArray(files) || !Object.values(files).every((v) => typeof v === 'string'))) {
+      warn(`${at}: "source.files" is not { "<relative path>": "<64 hex>" }; entry not applied`);
+      continue;
+    }
+    entries.push({ ann, where: at, hex: hex.toLowerCase(), files: files ?? null });
   }
-  const recording = (s) => (s.digest ? entries.find((e) => e.hex === s.digest) : undefined);
+  const digestCache = new Map(); // a listed file's real path -> its digest, read once
+  const matches = (e, s) => e.hex !== null && !!s.digest && e.hex === s.digest && filesMatch(e.files, s, digestCache);
+  const recording = (s) => entries.find((e) => matches(e, s));
   const out = [];
   const own = recording(skill) ?? entries.find((e) => e.hex === null);
   if (own) out.push([skill, own]);
-  else if (entries.some((e) => e.hex !== null && !digests.has(e.hex))) skill._staleAnnotation = true;
+  else if (entries.some((e) => e.hex !== null && !sameName.some((s) => matches(e, s)))) skill._staleAnnotation = true;
   for (const s of others) {
     const e = recording(s);
     if (e) out.push([s, e]);
@@ -188,23 +197,43 @@ function entriesFor(skill, others, digests, value, where) {
   return out;
 }
 
-// An entry's words under a tag land in the skill's translation of exactly that
-// tag, else in a translation file's under a tag of the same language and
-// script, else in an entry of their own under the tag, origin "annotation".
-// So words under two tags of one language, given by annotations alone, stay apart.
+// Whether each file an entry lists has the digest it records in the skill's
+// folder: a listed file that is missing, outside the folder or unreadable does
+// not match. Only the listed files are read.
+function filesMatch(files, skill, cache) {
+  if (!files) return true;
+  let base;
+  try { base = fs.realpathSync(skill.dir); } catch { return false; }
+  for (const [rel, hex] of Object.entries(files)) {
+    const real = fileInside(base, path.resolve(skill.dir, ...rel.split('/')));
+    if (!real) return false;
+    if (!cache.has(real)) cache.set(real, digestOf(real));
+    if (cache.get(real) !== hex.toLowerCase()) return false;
+  }
+  return true;
+}
+
+// An entry's words under a tag T are reported under exactly T. They overlay
+// T's own entry where there is one; else a copy of a translation file's entry
+// under the first tag in order of the same language and script [matchingTag],
+// re-keyed to T; else an entry of their own under T, origin "annotation". A
+// file's own entry is never changed by words for another tag, so words under
+// en-US and en-GB over a SKILL.en.md give three entries: en, en-US and en-GB.
 function applyTranslatedWords(skill, value, where) {
   if (value === undefined) return;
   if (!value || typeof value !== 'object' || Array.isArray(value)) { warn(`${where}: "translations" is not a map of language tags; ignored`); return; }
+  // The files' entries as they stood before any words were laid over them.
+  const files = Object.fromEntries(Object.entries(skill.translations).filter(([, tr]) => tr.origin !== 'annotation').map(([t, tr]) => [t, copyEntry(tr)]));
   for (const [rawTag, words] of Object.entries(value)) {
     const wanted = canonicalTag(rawTag);
     if (!wanted) { warn(`${where}: translations key ${JSON.stringify(rawTag)} is not a language tag such as zh-CN; ignored`); continue; }
     if (!words || typeof words !== 'object' || Array.isArray(words)) { warn(`${where}: translations.${rawTag} is not an object; ignored`); continue; }
-    // Words under zh-CN join a SKILL.zh.md translation: the page shows one translation per language and script.
-    const tags = Object.keys(skill.translations);
-    const tag = tags.find((t) => t.toLowerCase() === wanted.toLowerCase())
-      ?? matchingTag(wanted, tags.filter((t) => skill.translations[t].origin !== 'annotation'))
-      ?? wanted;
-    const tr = skill.translations[tag] ?? { origin: 'annotation', file: null, frontmatter: null, description: null, summary: null, steps: null, stale: false, edited: false };
+    const exact = Object.keys(skill.translations).find((t) => t.toLowerCase() === wanted.toLowerCase());
+    const like = exact === undefined ? matchingTag(wanted, Object.keys(files)) : null;
+    const tag = exact ?? wanted;
+    const tr = exact !== undefined ? skill.translations[exact]
+      : like !== null ? copyEntry(files[like])
+        : { origin: 'annotation', file: null, frontmatter: null, description: null, summary: null, steps: null, stale: false, edited: false };
     let changed = false;
     if (typeof words.summary === 'string') { tr.summary = words.summary; changed = true; }
     if (words.steps !== undefined) {
@@ -228,6 +257,11 @@ function applyTranslatedWords(skill, value, where) {
     if (changed) skill.translations[tag] = tr;
   }
   skill.translations = Object.fromEntries(Object.entries(skill.translations).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+// A translation entry's copy, its steps' words apart from the original's.
+function copyEntry(tr) {
+  return { ...tr, frontmatter: tr.frontmatter ? { ...tr.frontmatter } : tr.frontmatter, steps: tr.steps ? tr.steps.map((st) => ({ ...st })) : tr.steps };
 }
 
 function addCall(atlas, skill, step, target, ref, kind, note, where) {

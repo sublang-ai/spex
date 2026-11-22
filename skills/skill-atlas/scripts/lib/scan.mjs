@@ -40,8 +40,11 @@ export function scan(opts) {
   let skills = [];
   const seenRoots = new Set();
   const byReal = new Map(); // real folder -> its record
+  const listed = listRoots(opts);
+  // The order ids are given in: the roots by their depth below the repository's root, else as listed.
+  const idOrder = new Map(listed.map((r, n) => [r, n]).sort(([a, m], [b, n]) => (a.depth ?? 0) - (b.depth ?? 0) || m - n).map(([r], n) => [r.id, n]));
 
-  for (const root of listRoots(opts)) {
+  for (const root of listed) {
     if (!isDir(root.path)) {
       if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
       continue;
@@ -61,12 +64,12 @@ export function scan(opts) {
       skills.push(rec);
     }
     if (root.requireSkills && !present) continue;
-    const { requireSkills, explicit, ...rec } = root;
+    const { requireSkills, explicit, depth, ...rec } = root;
     roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
   }
   skills = mergeIdenticalCopies(skills);
 
-  assignIds(skills);
+  assignIds(skills, idOrder);
   const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
   let edges = [];
   let unresolved = [];
@@ -219,11 +222,22 @@ function sameFolder(a, b) {
 }
 
 // id = name; the 2nd+ differing skill of a name gets `<name>@<rootId>`.
-function assignIds(skills) {
+// Ids are given in idOrder, a skill by the first of its folders, copies
+// included, and in one folder by its path: the folders of the repository's
+// root and those outside the project come before any below the root, the
+// shallower first. The folders
+// two scans from one repository both cover come first in both, so a skill in
+// one of them keeps its id from wherever in the repository the scan runs,
+// while the skills list itself stays in preference order, the nearer first.
+function assignIds(skills, idOrder) {
+  const rank = (root) => idOrder.get(root) ?? Infinity;
+  const first = (s) => [{ root: s.root, dir: s.dir }, ...s.copies].reduce((a, b) => (rank(b.root) < rank(a.root) ? b : a));
+  const naming = skills.map((s) => ({ s, ...first(s) }))
+    .sort((a, b) => rank(a.root) - rank(b.root) || a.dir.localeCompare(b.dir));
   const taken = new Set();
-  for (const s of skills) {
-    let id = taken.has(s.name) ? `${s.name}@${s.root}` : s.name;
-    for (let n = 2; taken.has(id); n++) id = `${s.name}@${s.root}-${n}`;
+  for (const { s, root } of naming) {
+    let id = taken.has(s.name) ? `${s.name}@${root}` : s.name;
+    for (let n = 2; taken.has(id); n++) id = `${s.name}@${root}-${n}`;
     taken.add(id);
     s.id = id;
   }

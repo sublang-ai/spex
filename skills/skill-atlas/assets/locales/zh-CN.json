@@ -67,6 +67,7 @@
     "source": "源码",
     "{scope} · {where}": "{scope} · {where}",
     "{scope} ({up}) · {where}": "{scope}（{up}）· {where}",
+    "{scope} ({place}) · {where}": "{scope}（{place}）· {where}",
     "{folder} · {path}": "{folder} · {path}",
     "Insights": "洞察",
     "Rescanning…": "正在重新扫描…",

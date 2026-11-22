@@ -1,6 +1,6 @@
 ---
 name: skill-atlas
-description: 为当前代理绘制已安装技能的地图。扫描每个技能文件夹，找出哪些技能调用了哪些技能，把每个技能拆分为步骤，标注数据输入与输出、工具使用和人工交互，并打开一个本地网页，用于浏览这张地图、把技能归入工作流的各个阶段。适用于用户想查看、理解、审查或整理自己的技能，询问自己有哪些技能或技能之间如何依赖，想图示某个技能的步骤，想把技能编排成一个工作流（如 SDLC），或想以中文查看或翻译自己的技能。
+description: 为当前代理绘制已安装技能的地图。扫描项目和主目录中代理加载技能的文件夹，以及用 `--root` 指定的其他文件夹，找出哪些技能调用了哪些技能，把每个技能拆分为步骤，标注数据输入与输出、工具使用和人工交互，并打开一个本地网页，用于浏览这张地图、把技能归入工作流的各个阶段。适用于用户想查看、理解、审查或整理自己的技能，询问自己有哪些技能或技能之间如何依赖，想图示某个技能的步骤，想把技能编排成一个工作流（如 SDLC），或想以中文查看或翻译自己的技能。
 license: Apache-2.0
 compatibility: 需要 Node.js 18 或更高版本。交互式视图需要同一台机器上的浏览器；在其他环境中，请导出一个独立的 HTML 文件。
 metadata:
@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=27a9b3020f06292c52639aa3b2a32aa54fbb8c3f592ce45abfb4e33c61f1aef0 own=037e1c0fe027255e397fb39b6f31d5c8aaefb2764d29c143efb356fa2c9146ea -->
+<!-- skill-atlas:source sha256=f741a3d19f6249245224ec8e31129280f620f6379bf7bee1bd6a518e23b8e521 own=602a4c4fbbb69988bc25afbdbb08b1617dc61e660bde08d116e93670c4ba0443 -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 

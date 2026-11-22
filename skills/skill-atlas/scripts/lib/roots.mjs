@@ -4,6 +4,7 @@
 // Where agents load skills from. Adding an agent is one line in AGENT_ROOTS.
 
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { warn } from './log.mjs';
@@ -42,9 +43,9 @@ export const AGENT_ROOTS = [
   { key: 'roo', dir: '.roo/skills', agent: 'roo', label: 'Roo Code', scopes: ['project', 'user'] },
   { key: 'goose', dir: '.goose/skills', agent: 'goose', label: 'Goose', scopes: ['project', 'user'] },
   { key: 'goose-config', dir: '.config/goose/skills', agent: 'goose', label: 'Goose', scopes: ['user'] },
-  // The project's own skill sources, in --cwd's folder alone; listed only when
+  // The project's own skill sources, in each project folder; listed only where
   // it holds skills, and loaded by no agent, so left out under any --agent.
-  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true, cwdOnly: true },
+  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true },
 ];
 
 const SCOPE_LABEL = { project: 'Project', user: 'User', plugin: 'Plugin', extra: 'Extra' };
@@ -61,18 +62,26 @@ export function claudeConfigDir(home = os.homedir()) {
  * --cwd's own included); --cwd's alone where no folder above it holds one.
  */
 export function projectDirs(cwd) {
+  return projectPlaces(cwd).dirs;
+}
+
+// projectDirs, with the repository's root, or null where there is none.
+function projectPlaces(cwd) {
   const dirs = [];
   for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
     dirs.push(dir);
-    if (fs.existsSync(path.join(dir, '.git'))) return dirs;
-    if (path.dirname(dir) === dir) return [dirs[0]];
+    if (fs.existsSync(path.join(dir, '.git'))) return { dirs, repo: dir };
+    if (path.dirname(dir) === dir) return { dirs: [dirs[0]], repo: null };
   }
 }
 
 /**
  * The roots to scan, in preference order (project, nearer folders first,
- * user, plugins, extra). The rows of --cwd's folder keep ids such as
- * `project-agents`; those of the n-th folder above it are `project-agents-up<n>`.
+ * user, plugins, extra). A root's id names its place in the repository, the
+ * same from every working folder in it: the rows of the repository's root
+ * (or, with no repository, of --cwd's folder) keep ids such as
+ * `project-agents`; those of a folder below it add its path from the
+ * repository's root, `project-agents-packages-ui` [placeSlug].
  * @param {{ cwd:string, home:string, user:boolean, plugins:boolean, extra:string[], agents:string[] }} opts
  */
 export function listRoots(opts) {
@@ -80,26 +89,34 @@ export function listRoots(opts) {
   const wanted = (row) => !opts.agents.length
     || !row.noAgent && [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
   const xdg = process.env.XDG_CONFIG_HOME ? path.resolve(process.env.XDG_CONFIG_HOME) : null;
-  const places = projectDirs(opts.cwd).map((base, up) => ({ scope: 'project', base, up }));
-  if (opts.user) places.push({ scope: 'user', base: opts.home, up: 0 });
-  for (const { scope, base, up } of places) {
+  const { dirs, repo } = projectPlaces(opts.cwd);
+  const places = dirs.map((base) => {
+    const rel = repo ? placeIn(repo, base) : '';
+    return { scope: 'project', base, rel };
+  });
+  if (opts.user) places.push({ scope: 'user', base: opts.home, rel: '' });
+  for (const { scope, base, rel } of places) {
+    // How far below the repository's root the folder lies; ids are given in
+    // this order [scan.mjs assignIds], so a folder only some scans cover never
+    // takes a name from one every scan covers.
+    const depth = rel ? rel.split('/').length : 0;
     for (const row of AGENT_ROOTS) {
-      if (!row.scopes.includes(scope) || !wanted(row) || (up && row.cwdOnly)) continue;
+      if (!row.scopes.includes(scope) || !wanted(row)) continue;
       const [configDir, ...rest] = row.dir.split('/');
       let dir;
       if (scope === 'user' && row.env && process.env[row.env]) dir = path.join(path.resolve(process.env[row.env]), ...rest);
       else if (scope === 'user' && configDir === '.config' && xdg) dir = path.join(xdg, ...rest);
       else dir = path.join(base, configDir, ...rest);
-      // A folder above --cwd says which: `..`, `../..`.
-      const where = up ? ` (${Array(up).fill('..').join('/')})` : '';
       roots.push({
-        id: `${scope}-${row.key}${up ? `-up${up}` : ''}`,
+        id: `${scope}-${row.key}${rel ? `-${placeSlug(rel)}` : ''}`,
         path: dir,
         scope,
         agent: row.agent,
-        label: `${SCOPE_LABEL[scope]}${where} \u00B7 ${row.label}`,
+        // A folder below the repository's root says which, by its path from there.
+        label: `${SCOPE_LABEL[scope]}${rel ? ` (${rel})` : ''} \u00B7 ${row.label}`,
         requireSkills: !!row.requireSkills,
         plugin: null,
+        depth,
       });
     }
   }
@@ -108,6 +125,26 @@ export function listRoots(opts) {
     roots.push({ id: `extra-${n + 1}`, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true });
   });
   return roots;
+}
+
+// A folder's path from the repository's root, `/`-separated, read from both
+// real paths so a folder reached through a link inside the repository is
+// named by its own place; one whose real path lies outside keeps the path it
+// was reached by.
+function placeIn(repo, base) {
+  const real = path.relative(realOr(repo), realOr(base));
+  const outside = real === '..' || real.startsWith(`..${path.sep}`) || path.isAbsolute(real);
+  const rel = outside ? path.relative(repo, base) : real;
+  return rel.split(path.sep).join('/');
+}
+
+// A folder's path from the repository's root as an id's words: each segment
+// lowercased, every run of characters other than a-z and 0-9 one hyphen, and
+// a segment holding none of those named by a short digest of itself. No
+// segment slugs to nothing, so of the folders above --cwd, each a prefix of
+// the next, no two share a slug, from whichever folder the scan runs.
+function placeSlug(rel) {
+  return rel.split('/').map((seg) => slug(seg, '') || `x${crypto.createHash('sha256').update(seg).digest('hex').slice(0, 8)}`).join('-');
 }
 
 /** Skill folders of Claude Code plugins that are installed and enabled for this project. */
@@ -228,4 +265,4 @@ export function realOr(p) {
   }
 }
 
-function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'plugin'; }
+function slug(s, empty = 'plugin') { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || empty; }

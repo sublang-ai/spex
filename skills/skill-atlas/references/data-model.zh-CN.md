@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e24e7f8fdccc7d8fd27ffabf3c50e4c3e09b8c172282f80021aa198c6050c0c9 own=36e0cc12212b8b0e6c0d4da3c24d1d6c7a8a108b2fefc7d45924b27268c622bf -->
+<!-- skill-atlas:source sha256=92a4dad146c267d2d1de534971aed4f09c41bbdc247343d4f45d0ad350d339ff own=18f6451ef69cb0e0da6651c77f8fed898e1251928eeac23534e79bb4ac89d08e -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -38,7 +38,7 @@
   "cwd": "/abs/project",
   "roots": [
     {
-      "id": "project-claude",          // 稳定的短名，在本文件中唯一；--cwd 上一级文件夹中的为 "project-claude-up1"
+      "id": "project-claude",          // 稳定的短名，在本文件中唯一，指明该文件夹在仓库中的位置：packages/ui 中的为 "project-claude-packages-ui"
       "path": "/abs/project/.claude/skills",
       "scope": "project",              // project | user | plugin | extra
       "agent": "claude-code",          // 加载此文件夹的代理，或 "universal"
@@ -131,7 +131,8 @@
   "version": 1,
   "skills": {
     "code": {
-      "source": { "sha256": "9b90c1…" },   // 可选；写此条目时所依据的 SKILL.md 的 `digest`
+      "source": { "sha256": "9b90c1…",     // 可选；写此条目时所依据的 SKILL.md 的 `digest`
+                  "files": { "references/phases.md": "5e1f0a…" } },   // 可选；写此条目时所依据的其他每个文件，由 `atlas.mjs digest` 得出
       "summary": "Implements a request as one commit per phase, then has it reviewed once.",
       "steps": [                       // 可选；完全取代检测出的步骤
         { "title": "Classify the request", "summary": "New intent or an existing IR?" },
@@ -154,7 +155,9 @@
 - 不在 `tag-rules.json` 中的标签 id，只要形如 `<category>.<slug>` 就会被接受；其显示名称就是 slug。
 - 指向未安装技能的条目会被忽略，并在 stderr 上报告。
 - 一个技能的值可以是一个条目，也可以是一组条目，每个条目依据该技能的另一版文本写成：`"code": [ { "source": { "sha256": "9b90c1…" }, … }, { "source": { "sha256": "41d07e…" }, … } ]`。
-- 被应用的条目是其 `source` 哈希值等于其技能 `digest` 的那个，否则是第一个没有记录哈希值的；记录了其他哈希值的条目不会被应用，其 `translations` 中的文字也不会。
+- 被应用的条目是其 `source` 哈希值等于其技能 `digest`、且 `source.files` 中每个文件都具有所记录哈希值的那个，否则是第一个没有记录哈希值的；记录了其他哈希值的条目不会被应用，其 `translations` 中的文字也不会。
+  列出的文件缺失、位于技能文件夹之外或无法读取时即不相符；只读取列出的文件，且只为有这种条目的技能读取。
+  `atlas.mjs digest <file>...` 为每个文件打印一行 `<sha256 hex>  <path>`，即其字节的哈希值，与 `source` 和译本记录中所存的完全一致。
   在一个名称下，记录了同名的另一个不同技能（`<name>@<rootId>`）哈希值的条目应用于那个技能，除非文件中有以它自己的 id 为键的条目；没有记录哈希值的条目仍归第一个技能。
   没有任何条目被应用、而其中有条目记录的哈希值不属于任何同名技能时，该技能报告 `stale-annotation` 洞察：状态目录为所有项目共用，这样的条目可能是为另一个同名技能或本技能的早先文本写的。
 
@@ -196,9 +199,11 @@
 
 - 只有当标签以规范形式（大小写除外）命名一种已知语言——两个字母的语言代码，可带子标签（`zh`、`zh-CN`、`en-US`），或至少带一个子标签的三个字母的语言代码（`yue-HK`），因此 `app.dev.yaml`、`data.min.json` 和 `notes.bak.md` 仍是普通文件——扩展名是 `.md`、`.json`、`.txt`、`.yaml` 或 `.yml`，且它所翻译的文件存在时，该文件名才被视为译本。
 - 扫描先在技能自己的文件夹中查找，再到状态目录的 `translations/<skill id>/` 中按相同的相对路径查找：`~/.skill-atlas/translations/pdf/SKILL.zh-CN.md`。
-  采用技能文件夹中的译本，除非它落后于源文件而状态目录中的没有落后；扫描得到的文字、`files[].translations`、过时与修改标记以及 `/api/file` 都依从被选中的那一个。
-  所要的标签下没有译本时，同一语言和文字的各个标签按同样的规则选择——每个文件夹取名称顺序中的第一个——因此对 `zh-CN` 而言，状态目录中未落后的 `SKILL.zh-Hans.md` 优先于落后于源文件的 `SKILL.zh.md`，在页面上和 `/api/file` 中都是如此。
+  在同一个标签下，采用技能文件夹中的译本，除非它落后于源文件、而状态目录中的译本记录了源文件的哈希值且该哈希值与源文件相符；没有记录哈希值的状态目录译本绝不取代技能自己的译本。
+  扫描得到的文字、`files[].translations`、过时与修改标记以及 `/api/file` 都依从被选中的那一个。
   状态目录是代理为他人发布的技能写入译本的地方；见 [translate.md](translate.zh-CN.md)。
+- 对读者的语言，先选标签，再只在该标签内选文件夹：有译本位于所要的标签下时用该标签，否则用同一语言和文字的各标签中名称顺序的第一个（对 `zh-CN` 而言 `zh` 先于 `zh-Hans`，绝不是 `zh-TW`）。
+  因此对 `zh-CN` 而言，落后于源文件的 `SKILL.zh.md` 优先于未落后的 `SKILL.zh-Hans.md` 被读取，并标记为落后，在页面上和 `/api/file` 中都是如此。
 - 译本记录两者最后一致时源文件字节的 SHA-256，Markdown 译本还记录它自己的 SHA-256，由 `atlas.mjs pin` 写入：
   - 在 Markdown 中，是一行 `<!-- skill-atlas:source sha256=<64 hex> own=<64 hex> -->`，位于 frontmatter 及其后的 SPDX 注释行之后；`own` 是该文件去掉字节顺序标记、换行统一为 LF 并略去这一行之后的 UTF-8 文本的 SHA-256；
   - 在文本中，是同样的一行，但没有 `own=`；
@@ -206,7 +211,8 @@
   - 在 JSON 中，是一个顶层的 `"translationOf": { "sha256": "<64 hex>" }`。
 - 所记录的源文件哈希值与源文件不符的译本是*过时的*（落后于源文件）；所记录的自身哈希值与自身不符的 Markdown 译本是*脱离源文件修改过的*（代理遵循的是源文件）；没有记录哈希值的译本两者都不是。
 - `pin` 只改写记录行；只要有一个指定的译本无法写入记录，就不写入任何文件；`pin --check` 列出每个过时、脱离源文件修改过或没有记录哈希值（Markdown 译本则包括没有记录自身哈希值）的译本，以及每个指定的、不含任何译本的文件夹。
-- 指定的文件夹代表其中任意深度的每个译本，`.agents`、`.claude` 等隐藏文件夹也包括在内；只有 `.git` 和 `node_modules` 会被跳过。
+- 指定的文件夹代表其中任意深度的每个译本，`.agents`、`.claude` 等隐藏文件夹和链接进来的文件夹（从别处链接进来的技能）也包括在内，每个实际文件夹只读一次；只有 `.git` 和 `node_modules` 会被跳过。
+  其中无法跟随的链接会被列出，并使 `pin` 和 `pin --check` 都失败。
 - 无法完整读取（超过 5,000 个文件或 2,000 个文件夹，或含有无法读取的条目）的指定文件夹会被列出，并使 `pin` 和 `pin --check` 都失败。
 - 位于 `translations/<skill id>/` 下、其技能未被扫描报告或该技能缺少其源文件的译本，会被列出，并使 `pin` 和 `pin --check` 都失败；扫描选项（`--state`、`--cwd`、`--root`、`--agent`、`--no-user`、`--no-plugins`）决定用来找到这些技能的扫描。
 
@@ -248,7 +254,8 @@
 | `edited-translation` | `lang`、`files`（脱离源文件修改过的相对路径） |
 | `translation-steps` | `lang`、`steps`、`expected` |
 
-在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；它们会进入该技能 `translations` 中恰为该标签的条目，否则进入某个译本文件在语言和书写系统都相同的标签下的条目（`zh-CN` 对应 `zh`，绝不对应 `zh-TW`），否则在该标签下自成一个条目——因此只由标注给出的 `en-US` 和 `en-GB` 下的文字互不合并：
+在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；某个标签下的文字总是报告在恰为该标签之下：有该标签自己的条目时覆盖在它之上，否则覆盖在名称顺序中第一个语言和文字相同的标签下译本文件条目的副本之上（`zh-CN` 对应 `zh`，绝不对应 `zh-TW`），否则自成一个条目（`origin` 为 `"annotation"`）。
+文件自己的条目绝不因另一个标签的文字而改变：`SKILL.en.md` 之上 `en-US` 和 `en-GB` 下的文字得出三个条目，`en`（文件的）、`en-US` 和 `en-GB`（各为文件的字段加上自己的文字）：
 
 ```jsonc
 "code": {
@@ -261,7 +268,7 @@
 
 ### 服务器的应答
 
-- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` 返回 `{ "language", "path", "stale", "edited", "text" }`：有该标签下的译本，否则有同一语言和文字的标签下的译本（对 `zh-CN` 而言为 `zh` 或 `zh-Hans`，绝不是 `zh-TW`），且为其文件夹内的普通文件时，返回译本，并带有其标签作为 `"language"` 和译本自己的相对路径（`SKILL.zh-CN.md`）；否则为文件本身，并带有 `"language": null`、它的相对路径、`"stale": false` 和 `"edited": false`。
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` 返回 `{ "language", "path", "stale", "edited", "text" }`：有该标签下的译本，否则有名称顺序中第一个语言和文字相同的标签下的译本（对 `zh-CN` 而言为 `zh`，否则为 `zh-Hans`，绝不是 `zh-TW`），且为其文件夹内的普通文件时，按上述规则返回技能文件夹或状态目录中的译本，并带有其标签作为 `"language"` 和译本自己的相对路径（`SKILL.zh-CN.md`）；否则为文件本身，并带有 `"language": null`、它的相对路径、`"stale": false` 和 `"edited": false`。
   返回原文件时还带有 `"sourceLanguage"`，即它所用的语言，由它自己的文本判断（见上文）。
   不带 `lang` 时，答复是文件的纯文本。
 - `GET /api/config` 增加：
@@ -298,8 +305,9 @@
 扫描的文件夹：
 
 - 项目是 `--cwd` 所在的文件夹，以及其上直到所在仓库根目录（最近的含有 `.git` 条目的文件夹）的每一级文件夹，近的在前；不在仓库中时只有 `--cwd` 的文件夹。
-  `--cwd` 上第 n 级文件夹中代理文件夹的根 id 带后缀 `-up<n>`，其显示名称带有到它的 `..` 路径。
-- 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及 `--cwd` 中含有技能的 `skills`。
+  根 id 指明其文件夹在仓库中的位置，从仓库中任何工作文件夹扫描都相同：仓库根目录（不在仓库中时为 `--cwd` 的文件夹）中的各项保留 `project-agents` 这样的 id；其下文件夹中的各项再加上该文件夹相对仓库根目录的路径，每一段转为小写，`a-z` 和 `0-9` 以外的每串字符变为一个连字符、两端不留连字符，不含这些字符的段以 `x` 加其 SHA-256 的八位十六进制数字命名（`packages/ui` 对应 `project-agents-packages-ui`）。
+  其显示名称带有该路径：`Project (packages/ui) · Universal`。
+- 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及每个项目文件夹中含有技能的 `skills`。
 - `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills` 和 `.config/agents/skills`（除 Claude Code 外的代理都加载它们），以及 `--root` 指定的文件夹；项目的 `skills` 不保留。
 - Claude Code 插件的 `skills`：`plugins/installed_plugins.json` 记录该插件为用户或本项目安装，且 `enabledPlugins` 没有把它设为 `false`；依次读取用户的 `settings.json`、项目的 `.claude/settings.json` 和项目的 `.claude/settings.local.json`，项目的每个文件夹都读取，较远的先读，对同一插件，后读的文件的值优先于先读的。
 - 在每个文件夹中，含有 `SKILL.md` 的子文件夹或其下一级文件夹是一个技能；名称以点开头的文件夹和 `node_modules` 会被跳过。

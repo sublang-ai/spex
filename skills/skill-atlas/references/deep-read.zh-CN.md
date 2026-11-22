@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=b3dc02e5a443663e87123bc0fd3ba06dd4237057b87bafd4ab5427fc0356c9ab own=fe2c7a2a452d4c0ade5fdeb442d06c63aa395375c899400c250184eec7dbc646 -->
+<!-- skill-atlas:source sha256=ca19706395a5a4dc8d0a75c20e9c77384e081af82dbb34f90d76e259fa66753d own=1fadf83cce2c565322f5de9b70f78828ef10dee5a007c6ec82139e78734300d8 -->
 
 > 本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -33,6 +33,7 @@
 5. **删除**：检测出的错误标签或链接，列在 `removeTags` 或 `removeCalls` 下。
 
 把扫描结果 `atlas.json` 中该技能的 `digest` 复制到它的条目中，写作 `"source": { "sha256": "<digest>" }`，使条目只应用于你读过的那版文本。
+某个步骤的内容来自链接的文件时，把该文件也记录在 `source` 的 `"files": { "<技能中的路径>": "<digest>" }` 下，其哈希值由 `node <skill-dir>/scripts/atlas.mjs digest <file>` 打印。
 该名称已有一个记录了其他哈希值的条目时，保留它，把你的条目加在旁边，使该值成为一组条目；绝不要替换它，因为它可能服务于另一个项目中的同名技能。
 
 ## 判断标签

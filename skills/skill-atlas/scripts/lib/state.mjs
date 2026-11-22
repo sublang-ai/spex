@@ -229,6 +229,9 @@ export function writeWorkflows(stateDir, doc) {
   return { doc, etag: etagOf(bytes) };
 }
 
+// The largest workflows document a save takes, the page's and `workflows --put`'s alike: far above any real one.
+export const WORKFLOWS_MAX_BYTES = 1024 * 1024;
+
 export const WORKFLOWS_LOCK_FILE = `${WORKFLOWS_FILE}.lock`;
 const LOCK_WAIT_MS = 1000; // a save holds the lock for milliseconds
 const LOCK_RETRY_MS = 20;
@@ -319,12 +322,18 @@ function isStale(file) {
  * @param {{ ifMatch?:string, replaceInvalid?:boolean }} conditions
  *   ifMatch: the etag of the version last read; replaceInvalid: set an
  *   invalid stored file aside and replace it
- * @returns {{ status:number, value:object, etag?:string }} the answer, its
- *   `value.error` naming a refusal: invalid-workflows, not-invalid,
- *   precondition-required, changed, invalid-body or write-failed
+ * @returns {{ status:number, value:object, etag?:string }} the answer: status
+ *   200 with the document written, else a refusal whose `value.error` names
+ *   it: too-large, invalid-workflows, not-invalid, precondition-required,
+ *   changed, invalid-body or write-failed. Only `status` tells the two apart:
+ *   a document may hold a field named `error` of its own.
  * @throws {LockBusyError} when another process holds the lock past the wait
  */
 export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false } = {}) {
+  const size = Buffer.byteLength(body, 'utf8');
+  if (size > WORKFLOWS_MAX_BYTES) {
+    return { status: 413, value: { error: 'too-large', message: `the workflows document is ${size} bytes, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` } };
+  }
   return withWorkflowsLock(stateDir, () => {
     const cur = readWorkflowsState(stateDir);
     if (replaceInvalid) {

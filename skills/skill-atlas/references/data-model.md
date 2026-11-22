@@ -35,7 +35,7 @@ Every skill is keyed by its id — its `name`, or `<name>@<rootId>` for a differ
   "cwd": "/abs/project",
   "roots": [
     {
-      "id": "project-claude",          // stable slug, unique in this file; "project-claude-up1" for the folder above --cwd's
+      "id": "project-claude",          // stable slug, unique in this file, naming the folder's place in the repository: "project-claude-packages-ui" for packages/ui's
       "path": "/abs/project/.claude/skills",
       "scope": "project",              // project | user | plugin | extra
       "agent": "claude-code",          // agent that loads this folder, or "universal"
@@ -128,7 +128,8 @@ The scan is pattern matching; this file is where a reader who understood the ski
   "version": 1,
   "skills": {
     "code": {
-      "source": { "sha256": "9b90c1…" },   // optional; the `digest` of the SKILL.md this entry was written from
+      "source": { "sha256": "9b90c1…",     // optional; the `digest` of the SKILL.md this entry was written from
+                  "files": { "references/phases.md": "5e1f0a…" } },   // optional; each other file it was written from, by `atlas.mjs digest`
       "summary": "Implements a request as one commit per phase, then has it reviewed once.",
       "steps": [                       // optional; replaces the detected steps entirely
         { "title": "Classify the request", "summary": "New intent or an existing IR?" },
@@ -151,7 +152,9 @@ The scan is pattern matching; this file is where a reader who understood the ski
 - A tag id absent from `tag-rules.json` is accepted when it has the form `<category>.<slug>`; its label is the slug.
 - An entry naming a skill that is not installed is ignored and reported on stderr.
 - A skill's value may be one entry or a list of entries, each written from another text of the skill: `"code": [ { "source": { "sha256": "9b90c1…" }, … }, { "source": { "sha256": "41d07e…" }, … } ]`.
-- The entry applied is the one whose `source` digest is its skill's `digest`, else the first recording none; an entry recording another digest is not applied, its `translations` words included.
+- The entry applied is the one whose `source` digest is its skill's `digest` and each of whose `source.files` has the digest recorded, else the first recording none; an entry recording another digest is not applied, its `translations` words included.
+  A listed file that is missing, outside the skill's folder or unreadable does not match; only the listed files are read, and only for a skill with such an entry.
+  `atlas.mjs digest <file>...` prints one line per file, `<sha256 hex>  <path>`, the digest of its bytes exactly as `source` and a translation's record hold it.
   Under a name, an entry recording the digest of a differing skill of that name (`<name>@<rootId>`) applies to that skill, unless the file has an entry under its own id; an entry recording none stays with the first.
   Where no entry applies and one records a digest no skill of that name has, the skill reports a `stale-annotation` insight: the state folder serves every project, so the entry may have been written for another skill of that name or an earlier text of this one.
 
@@ -193,9 +196,11 @@ A file's translation is the file beside it with the tag before the extension: `S
 
 - A name is read as a translation only where the tag names a known language in its canonical form but for case — a two-letter language with optional subtags (`zh`, `zh-CN`, `en-US`), or a three-letter one with at least one (`yue-HK`), so `app.dev.yaml`, `data.min.json` and `notes.bak.md` stay files — the extension is `.md`, `.json`, `.txt`, `.yaml` or `.yml`, and the file it translates exists.
 - The scan looks in the skill's own folder first, then in `translations/<skill id>/` of the state directory, where the same relative path is used: `~/.skill-atlas/translations/pdf/SKILL.zh-CN.md`.
-  The skill folder's translation stands, except where it is behind its source and the state directory's is not; the scan's words, `files[].translations`, the stale and edited marks and `/api/file` all follow the one chosen.
-  Where none is under the tag asked, the tags of its language and script are chosen between alike — each folder's first in name order — so a fresh `SKILL.zh-Hans.md` in the state directory stands over a `SKILL.zh.md` behind its source for `zh-CN`, on the page and from `/api/file`.
+  Under one tag, the skill folder's translation stands, except where it is behind its source and the state directory's records its source's digest and that digest is the source's; a state translation recording no digest never displaces the skill's own.
+  The scan's words, `files[].translations`, the stale and edited marks and `/api/file` all follow the one chosen.
   The state directory is where an agent writes translations of skills someone else ships; see [translate.md](translate.md).
+- For a reader's language the tag is chosen first, and the folder within that tag alone: the tag asked where any translation is under it, else the first in name order among the tags of the same language and script (`zh` before `zh-Hans` for `zh-CN`, never `zh-TW`).
+  So a `SKILL.zh.md` behind its source is read for `zh-CN` over a fresh `SKILL.zh-Hans.md`, marked behind, on the page and from `/api/file` alike.
 - A translation records the SHA-256 of the source file's bytes as they stood when the two last matched, and a Markdown translation its own SHA-256 too, written by `atlas.mjs pin`:
   - in Markdown, a line `<!-- skill-atlas:source sha256=<64 hex> own=<64 hex> -->`, after the frontmatter and the SPDX comment lines that follow it; `own` is the SHA-256 of the file's UTF-8 text without a byte order mark, with LF line ends and with this line left out;
   - in text, the same line without `own=`;
@@ -203,7 +208,8 @@ A file's translation is the file beside it with the tag before the extension: `S
   - in JSON, a top-level `"translationOf": { "sha256": "<64 hex>" }`.
 - A translation whose recorded source digest differs from its source's is *stale* (behind its source); a Markdown one whose recorded own digest differs from its own is *edited* (apart from its source, which agents follow); one recording none is neither.
 - `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own), and each folder named that holds no translation.
-- A folder named stands for every translation in it at any depth, hidden folders such as `.agents` and `.claude` included; only `.git` and `node_modules` are passed over.
+- A folder named stands for every translation in it at any depth, hidden folders such as `.agents` and `.claude` and linked ones (a skill linked in from elsewhere) included, each real folder once; only `.git` and `node_modules` are passed over.
+  A link in it that cannot be followed is named and fails both `pin` and `pin --check`.
 - A folder named that cannot be read whole (over 5,000 files or 2,000 folders, or an entry that cannot be read) is named and fails both `pin` and `pin --check`.
 - A translation under `translations/<skill id>/` whose skill the scan does not report, or whose source that skill lacks, is named and fails both `pin` and `pin --check`; the scan options (`--state`, `--cwd`, `--root`, `--agent`, `--no-user`, `--no-plugins`) choose the scan that finds the skills.
 
@@ -245,7 +251,8 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `edited-translation` | `lang`, `files` (relative paths edited apart from their source) |
 | `translation-steps` | `lang`, `steps`, `expected` |
 
-In `annotations.json` a skill's entry may repeat its words per language; they land in the skill's `translations` entry of exactly that tag, else in a translation file's entry under a tag of the same language and script (`zh` for `zh-CN`, never `zh-TW`), else in an entry of their own under that tag — so words under `en-US` and `en-GB` given by annotations alone stay apart:
+In `annotations.json` a skill's entry may repeat its words per language; words under a tag are always reported under exactly that tag, laid over that tag's own entry where there is one, else over a copy of a translation file's entry under the first tag in name order of the same language and script (`zh` for `zh-CN`, never `zh-TW`), else in an entry of their own (`origin` `"annotation"`).
+A file's own entry is never changed by words for another tag: words under `en-US` and `en-GB` over a `SKILL.en.md` give three entries, `en` (the file's), `en-US` and `en-GB` (each the file's fields with its own words):
 
 ```jsonc
 "code": {
@@ -258,7 +265,7 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 
 ### The server's answers
 
-- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns `{ "language", "path", "stale", "edited", "text" }`: the translation under that tag, else under a tag of the same language and script (`zh` or `zh-Hans` for `zh-CN`, never `zh-TW`), where there is one, a regular file inside its folder, with `"language"` its tag and its own relative path (`SKILL.zh-CN.md`); else the file itself with `"language": null`, its relative path, `"stale": false` and `"edited": false`.
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns `{ "language", "path", "stale", "edited", "text" }`: the translation under that tag, else under the first tag in name order of the same language and script (`zh`, else `zh-Hans`, for `zh-CN`, never `zh-TW`), where there is one, the skill folder's or the state directory's by the rule above, a regular file inside its folder, with `"language"` its tag and its own relative path (`SKILL.zh-CN.md`); else the file itself with `"language": null`, its relative path, `"stale": false` and `"edited": false`.
   The original carries `"sourceLanguage"` too, the language it is written in, told from its own text (see above).
   Without `lang` the answer is the file's plain text.
 - `GET /api/config` adds:
@@ -295,8 +302,9 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 Folders scanned:
 
 - The project is `--cwd`'s folder and each folder above it up to the root of its repository (the nearest folder holding a `.git` entry), the nearer first; with no repository, `--cwd`'s alone.
-  An agent's folder in the n-th folder above `--cwd` has its root id suffixed `-up<n>` and its label the path `..` up to it.
-- Each agent's skill folder in each project folder and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills` (loaded as `.agents/skills` is), `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills` (`XDG_CONFIG_HOME`, where set, standing for the home folder's `.config`), each project folder's `.github/skills`, and `--cwd`'s `skills` where it holds a skill.
+  A root's id names its folder's place in the repository, the same from every working folder in it: the rows of the repository's root (or, with no repository, of `--cwd`'s folder) keep ids such as `project-agents`; those of a folder below it add its path from the repository's root, each segment lowercased with every run of other characters than `a-z` and `0-9` one hyphen and none kept at either end, and a segment holding none of those named by `x` and eight hex digits of its SHA-256 (`project-agents-packages-ui` for `packages/ui`).
+  Its label adds that path: `Project (packages/ui) · Universal`.
+- Each agent's skill folder in each project folder and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills` (loaded as `.agents/skills` is), `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills` (`XDG_CONFIG_HOME`, where set, standing for the home folder's `.config`), each project folder's `.github/skills`, and each project folder's `skills` where it holds a skill.
 - `--agent <id>` keeps that agent's folders, `.agents/skills` and `.config/agents/skills` where that agent loads them (every agent but Claude Code does), and `--root`'s; the project's `skills` is left out.
 - A Claude Code plugin's `skills`, where `plugins/installed_plugins.json` records the plugin for the user or for this project and `enabledPlugins` does not set it `false`: the user's `settings.json`, then the project's `.claude/settings.json`, then its `.claude/settings.local.json`, each of the project's folders read the farther first, a later file's value for a plugin over an earlier one's.
 - In each folder, a folder or a folder one below it holding `SKILL.md` is a skill; folders whose name starts with a dot, and `node_modules`, are passed over.

@@ -1264,14 +1264,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const SCOPE_NAMES = { project: () => t('Project'), user: () => t('User'), plugin: () => t('Plugin'), extra: () => t('Extra') };
   const WHERE_NAMES = { Universal: () => t('Universal'), source: () => t('source') };
   // A scanned folder's label, composed in the shown language from its scope and its agent's name
-  // (product names, plugin names and paths stay as they are). A project's folder above the working
-  // folder says which after its scope: `Project (..) \u00B7 Universal`.
+  // (product names, plugin names and paths stay as they are). A project's folder other than its
+  // repository's root says which after its scope, its place kept as the scan's label gives it:
+  // `Project (packages/ui) \u00B7 Universal`.
   function rootName(r) {
     const label = str(r.label) || str(r.id);
-    const m = /^(Project|User|Plugin|Extra)(?: \(([./]+)\))? \u00B7 (.*)$/.exec(label);
+    const m = /^(Project|User|Plugin|Extra)(?: \((.+)\))? \u00B7 (.*)$/.exec(label);
     if (!m || !SCOPE_NAMES[r.scope]) return label;
     const where = own(WHERE_NAMES, m[3]) ? WHERE_NAMES[m[3]]() : m[3];
-    if (m[2]) return t('{scope} ({up}) · {where}', { scope: SCOPE_NAMES[r.scope](), up: m[2], where });
+    if (m[2]) return t('{scope} ({place}) · {where}', { scope: SCOPE_NAMES[r.scope](), place: m[2], where });
     return t('{scope} · {where}', { scope: SCOPE_NAMES[r.scope](), where });
   }
   // A scanned folder's title: its label, and where another folder's label is the same (one agent
@@ -1860,26 +1861,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   // ---------- a skill's words in the shown language ----------
   // A translation supplies words only: steps, links and tags are always those of SKILL.md.
-  // The tag of the skill's translation in the page's language: the page's own tag, else one of the
-  // same language and script (matchLang: `zh` and `zh-Hans` serve zh-CN, `zh-TW` does not), or
-  // null. Every read of a skill's translated words, its search text and its translation insights
-  // goes through this one tag; a file is still asked for under the page's tag (the server matches alike).
-  // Where none is under the page's tag, the tags of its language and script are chosen between
-  // as the server chooses a file's (translations.mjs chooseTranslation): the first in name order
-  // from the skill's folder, unless it is behind its source and the state folder's is not.
+  // The tag of the skill's translation in the page's language [skill-atlas-29]: the page's own tag
+  // where the skill has an entry under it, else the first in code-unit order of the skill's tags of
+  // the same language and script (`zh` and `zh-Hans` serve zh-CN, `zh-TW` does not), or null. The
+  // scan has already chosen between the skill's folder and the state folder within each tag, and the
+  // server chooses a file's tag by this same rule (translations.mjs matchingTag), so the entry under
+  // this one tag is all the page reads: a skill's translated words, its search text and its
+  // translation insights; a file is still asked for under the page's tag.
   function trTag(s) {
     const c = s._trTag;
     if (c && c.lang === i18n.lang) return c.tag;
     const all = Object.keys(s.translations);
-    let tag = matchLang(i18n.lang, all);
-    if (tag && tag.toLowerCase() !== i18n.lang.toLowerCase()) {
-      const pool = all.filter((k) => matchLang(i18n.lang, [k])).sort();
-      const of = (origin) => pool.find((k) => s.translations[k] && s.translations[k].origin === origin);
-      const own = of('skill');
-      const theirs = of('state');
-      const behind = (k) => !!(s.translations[k] && s.translations[k].stale);
-      tag = own && !(behind(own) && theirs && !behind(theirs)) ? own : theirs || own || pool[0] || tag;
-    }
+    const low = i18n.lang.toLowerCase();
+    const tag = all.find((k) => k.toLowerCase() === low) || all.filter((k) => sameLanguage(k, i18n.lang)).sort()[0] || null;
     s._trTag = { lang: i18n.lang, tag };
     return tag;
   }

@@ -7,12 +7,12 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { viewerConfig, readWorkflowsState, saveWorkflows, LockBusyError } from './state.mjs';
+import { viewerConfig, readWorkflowsState, saveWorkflows, LockBusyError, WORKFLOWS_MAX_BYTES } from './state.mjs';
 import { canonicalTag, findTranslation } from './translations.mjs';
 import { fileLanguage } from './language.mjs';
 
 export const HOST = '127.0.0.1';
-export const BODY_MAX_BYTES = 1024 * 1024; // 1 MiB: far above any workflows document
+export const BODY_MAX_BYTES = WORKFLOWS_MAX_BYTES; // the save's own limit, refused here before the body is read whole
 export const FILE_MAX_BYTES = 512 * 1024; // 512 KiB: larger files are not skill text worth showing
 const MUTATION_HEADER = 'x-skill-atlas';
 const REPLACE_INVALID_HEADER = 'x-skill-atlas-replace-invalid';

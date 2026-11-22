@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-21).
+Amended in which of a skill's own and the state folder's translation is read by [DR-246](246-a-refreshed-translation-is-the-one-read.md).
 Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the atlas's scan, page and state folder and in the form of a shipped skill.
 
 ## Context
