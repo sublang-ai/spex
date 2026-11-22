@@ -5,110 +5,95 @@
 
 ## Status
 
-Proposed (2026-11-21), on the owner's direction that Spex become the tool for selective formal verification based on GEARS, easy for ordinary developers and useful to large projects, with GEARS the only language its users see.
-Proposes to extend [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in the `spex` executable's commands: `spex verify` joins them.
-How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.md)'s.
+Proposed (2026-11-21) as an extension to the CLI in [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex verify`.
+[DR-244](244-a-guard-is-checked-on-the-implementation.md) describes how Spex checks a guard.
 
 ## Context
 
-- Agents write changes faster than people review them.
-  A guarantee a person approves once, and every later change must still satisfy, is review effort that compounds; a check a person must decipher again at each change is not.
-- Partial verification has a record: checking a few properties of a few components instead of proving a system [[1]].
-  A storage team blocked sixteen defects with executable models and generated tests kept in the build [[2]]; an authorization language found defects both by proving properties of its model and by testing its code against that model [[3]].
-- Its known failures are three:
-  - a property too weak to fail, which a vendor of derived property tests states of its own product [[4]];
-  - an agent that sees faulty code beside its requirement and writes a specification the fault satisfies [[5]];
-  - a model that passes while the code it describes has moved [[6]].
-- Others already derive property tests from structured requirements [[4]], analyse requirements with a solver and put the scenarios it accepts and rejects to their user as questions [[8]], and attach model-checking evidence to single acceptance criteria, stale after an edit [[7]].
-  Natural-language requirements, approval by examples, traceability and a solver are therefore where a product starts, not what sets it apart.
-- The same product offers that analysis as an optional step before design or code [[8]], leaves its property tests optional, and on a failure may update the implementation itself or offer a change to the test or the requirement [[4]].
-- Spex has what a guard needs before any formula: one requirement per item, stable item IDs, citations between items, test items that cite the behavior they verify, and a linter over all of it.
-  Its toolchain already re-checks agent-produced artifacts by deterministic checks and requires a bounded model's deliberately broken variants to fail.
-- Considered and declined:
-  - a formal language its users read or write: the people who own a behavior's meaning read GEARS, and few will learn another notation;
-  - "verified" as a result: it says neither what was checked nor how far;
-  - a new kind of spec item: nothing yet shows a guard that a behavior item and the test items citing it cannot express;
-  - guards for wording and presentation: their tests already say what a reader sees, and a property adds nothing;
-  - requiring a project's specs to be complete first: one behavior worth protecting is reason enough to start.
+Agents can change code faster than people can review it.
+Teams have caught defects by testing production code against a few important properties [[1]] [[2]].
+A weak property can survive every test, especially when the agent writing it has already seen the faulty code [[3]].
+GEARS gives the person who owns the behavior a way to say what matters and recognize a failure.
 
 ## Decision
 
-- A **guard** is a machine check of one assertion about one behavior item, run on every change.
-  - Each guard is one GEARS test item that states its assertion and cites the behavior item.
-  - Several guards may protect different parts of one item, and a surface names what a guard asserts, never an item as guarded whole.
-- Spex presents the capability as "protect critical behavior on every change".
-  "Selective formal verification" is its technical description and no word of a surface.
-- GEARS is the only language a person reads or writes to own a guard.
-  Whatever Spex derives from an item to check it is never required reading.
-- The item holds the meaning:
-  - a guard is derived from its assertion, its behavior item and every item that one's meaning depends on, through however many citations;
-  - a choice that settles what the item means is written into the item before its guard stands;
-  - an assumption a guard rests on is one of those items.
-- A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item; where independent readings of the item disagree, a sequence that tells them apart is among them.
-  One permitted example shows the behavior happening, so that refusing everything cannot pass.
-- A guard's assertion and its approved examples are test items that cite the behavior item, each example belonging to one guard; the spec of specs gains no item kind.
-- Every run of a guard for a change confirms that what Spex derived admits each permitted example and rejects each forbidden one, and drives each permitted example on the implementation.
-  A driven example is held to the effect it states where the guard's link to the code controls everything that effect depends on, and elsewhere to the effect the item requires of its events.
-  Either way the run must observe the guarded behavior happening in the example that shows it, and a run that does not, and observes nothing the assertion forbids, reports a disagreement with the model where the link controls what the example depends on, and is inconclusive elsewhere.
-- A guard stands only after it has passed on the code without a fault and reported a violation of its assertion on the same code with that fault, planted in the guarded behavior or restored from a recorded past defect.
-  - A faulty run that ends any other way, a timeout or a failed setup included, establishes nothing.
-  - A violation on code carrying a kept fault is evidence that the guard catches that fault, and never a result of the project's code.
-  - The guard keeps each fault it caught and must catch each again, as a violation of its assertion on the code carrying it, after any change to its inputs, the project's code included.
-  - A kept fault that changed code no longer admits is replaced before the guard passes again.
-- A guard's inputs are its behavior item, every item that one's meaning depends on, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, any recorded log or imported result a check reads, and the code that link reaches.
-- Each result of a guard's check says what was established, by which tool, on which revision, within which bounds and under which assumptions, as exactly one of:
+### What a person approves
 
-  | Result | Meaning |
-  | --- | --- |
-  | Violated on the implementation | effects the assertion forbids were observed on the project's code, in a run the check drove or a recorded one |
-  | Disagreement with the model | the code's observed effects differ from what Spex derived, and the assertion permits them |
-  | Conflict in the items | the items the guard is derived from contradict each other or leave a case undecided |
-  | Violated in the model | the sequence was found in what Spex derived and not yet reproduced |
-  | Sampled on the implementation | the cases stated, generated or recorded, ran on the code and none violated the assertion |
-  | Checked within bounds | every sequence within the stated bounds was explored |
-  | Proved under assumptions | a prover established the property for the stated assumptions |
-  | Inconclusive | the check ended, a timeout included, without one of the above |
+A **guard** checks one property on every change that reaches it.
+A GEARS test item states the assertion and cites the behavior item it protects.
+Several guards can cover different properties of the same item.
+Spex presents selective formal verification as “protect critical behavior on every change” and names the assertion each guard checks.
+People own guards entirely in GEARS.
 
-- An observation of what the assertion forbids on the project's code is reported as a violation on the implementation, before any other result it also fits.
-- A project's settings name the checks, and the bounds of each, that a change requires of a guard.
-- `spex verify` passes a guard only where every required check has finished with a current result at no less than the required bounds, one of them on the implementation, and none reports a violation, a conflict, a disagreement or an inconclusive run, and each kept fault is caught.
-  - A result on the model never stands in for one on the implementation.
-  - A later run of the same check on the same inputs replaces its inconclusive result.
-  - A violation keeps its recorded sequence and stands until that sequence is run again after a change to the code or an approved change to another input, where the link controls what the violation depends on, and no longer violates.
-    - A run that merely fails to find it again clears nothing, whatever bounds or settings changed.
-    - In every other case only a person closes it, as where the link lacks that control, or where a corrected derivation, link or checker shows on the same recorded evidence that the assertion was not violated.
-    - A closed violation stays in the guard's record.
-  - A violation observed on the project's code at the revision checked fails the guard whichever check found it; a check that is not required otherwise decides nothing, while it runs or however it ends.
-- A violation names the item's ID, the sequence of events, the effect observed and a command that replays it on the reader's own machine.
-- A result is stale from the moment any input of its guard changes, a replacement run still pending included, and a stale result is never shown as passing.
-- Removing a guard, and every change to a guard's inputs other than the project's code and the fresh evidence an approved source yields, is shown as a change to the guard and waits for a person's approval, never an agent's.
-  - That covers its items, assertion, examples and kept faults, what Spex derived, the checker, the required checks with their bounds and settings, the source of the evidence a check reads and how evidence is selected from it, and its link to the code: what the link observes, the events it can cause and the orders they can occur in.
-  - Fresh evidence from an approved source needs no approval of its own: it makes the earlier result stale, and the check runs on it for its revision.
-  - The item and the code may change in one change, with that approval, where the intended behavior changed.
-- Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
-- `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
-- A guard differs from a requirement analysed before code in three ways Spex states on its surfaces: it is checked on every change that reaches it, it has been seen to fail and must still fail on the faults it keeps, and changing it takes a person.
-- The first use Spex leads with is a rule that decides an outcome from a fixed order of requests through one interface, such as who may approve, what is charged or what an account may use, entered from a past incident or an existing item.
-  Behavior that depends on retries, ownership or background work follows once a project's link to the code controls the timing it depends on.
-- Spex measures itself by what a project's second guard costs: what a first guard built to reach the code serves the ones after it.
+A person approves at least one permitted and one forbidden example per guard.
+Each example is a GEARS test item that belongs to that guard and cites its behavior item.
+One permitted example must show the protected behavior happening.
+If plausible readings disagree, the person decides by example and records the intended meaning and any assumptions in the items.
+
+To qualify, the guard must pass its checks on the project's code and report a violation of its assertion on a copy with a planted fault or a restored past defect.
+The faulted copy supplies evidence only about the guard's ability to detect that fault.
+Spex keeps each fault and must catch it as a violation of the same assertion whenever an input changes, including project code.
+A fault that no longer applies needs an approved replacement.
+
+### What runs on a change
+
+`spex verify` runs locally and in CI for every guard a change reaches, or for all guards if its reach is uncertain.
+The following inputs determine a guard's result.
+
+- its assertion, behavior item, examples, assumptions, kept faults and every item its meaning depends on through citations
+- the derived check, the binding that connects it to the code, and the code it reaches
+- the tools, translations, required checks, bounds and settings
+- the evidence read, its source and its selection rule
+
+Changing any input immediately makes the previous result stale, even while a rerun is pending.
+A person approves guard removal and input changes, except for changes to project code and fresh evidence from an approved source and selection rule.
+
+Each run checks that the derivation accepts every permitted example and rejects every forbidden one.
+It also runs each permitted example on the code, checking the stated effect where the binding controls its conditions and what the assertion requires elsewhere.
+If the example meant to demonstrate the behavior fails to show it, the result is a disagreement under controlled conditions and inconclusive otherwise.
+An observed effect that the assertion forbids on the project's code always takes precedence.
+
+### What a result means
+
+Each result names its tool and version, code revision, bounds and assumptions.
+Model and implementation results are reported separately.
+
+| Result | What it establishes |
+| --- | --- |
+| Violated on the implementation | A live or recorded run of the project's code exhibited a forbidden effect. |
+| Disagreement with the model | The code produced an effect the assertion permits but the model excludes, or missed the required demonstration under controlled conditions. |
+| Conflict in the items | The items contradict each other or leave a required decision open. |
+| Violated in the model | The model allows a forbidden sequence that has yet to be observed on the code. |
+| Sampled on the implementation | The sample covered at least one applicable case on the code. Every case was checked and none violated the assertion. |
+| Checked within bounds | The tool completed the full search within the stated scope and found no violation or rule conflict. |
+| Proved under assumptions | A named prover established the assertion for the stated target and assumptions. |
+| Inconclusive | The evidence cannot settle the check, including when it times out. |
+
+A guard passes only when it meets all three conditions.
+
+- Every required check finishes at its required bounds or wider, with current results of **Sampled on the implementation**, **Checked within bounds** or **Proved under assumptions**.
+- At least one required result covers the implementation, and the guard still catches every kept fault.
+- No blocking violation remains open.
+
+A violation from a required check blocks, as does a violation any check observes on the project's code at the revision being checked.
+All other optional results are advisory.
+
+A rerun can settle an inconclusive check.
+A violation keeps its item ID, initial conditions, actions, observed effect and local replay command.
+After a relevant code or approved guard change, Spex can close it by replaying the original sequence under controlled conditions and observing that the assertion now holds.
+A change to search settings alone or a failure to reproduce under uncontrolled conditions leaves it open.
+A person can close an uncontrolled finding or a misreport demonstrated on the original evidence with a corrected check.
+Closed findings remain in the record.
 
 ## Consequences
 
-- A reviewer who reads no formal notation can own a guarantee and see when a change weakens it.
-- Meaning cannot move into a hidden artifact: what Spex derives can be discarded and derived again from the items.
-- Assurance rests on examples and planted faults, which is weaker than an expert's reading of a formal specification, and on the precision of the item's own text.
-- A result reads longer than a badge; the eight results keep a sampled run from passing as a proof.
-- An item must be exact enough to derive from, so a project that guards a behavior tends to sharpen that item first.
-- Most items of an application's interface stay outside guards and keep their tests.
-- Spec packages carrying guards for behaviors many projects share are left to a later decision.
+A project can start with one approval, billing or entitlement rule through one interface, without complete specs, an IDE, a running Spex app or an account.
+Retries and competing owners follow once the project can control the timing they depend on.
+The adoption measure is the effort to add a second guard through the same interface.
+Examples and kept faults give reviewers evidence of what a guard catches, within the limits of the assertion they approved.
 
 ## References
 
-[1]: https://people.csail.mit.edu/dnj/publications/ieee96-roundtable.html "Jackson and Wing — Lightweight Formal Methods (IEEE Computer, 1996)"
-[2]: https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3 "Bornholt et al. — Using Lightweight Formal Methods to Validate a Key-Value Storage Node in Amazon S3 (SOSP 2021)"
-[3]: https://arxiv.org/abs/2407.01688 "How We Built Cedar: A Verification-Guided Approach"
-[4]: https://kiro.dev/docs/specs/correctness/ "Kiro — correctness properties and property-based tests from requirements"
-[5]: https://arxiv.org/abs/2610.32053 "Wang et al. — Are LLM-Generated Formal Specifications Faithful to Their Requirements?"
-[6]: https://arxiv.org/abs/2006.00915 "Davis et al. — eXtreme Modelling in Practice (PVLDB 2020)"
-[7]: https://karatelabs.io/formal-verification "Karate Labs — formal verification evidence on acceptance criteria"
-[8]: https://kiro.dev/blog/deep-spec-analysis/ "Kiro — requirements analysis by sampled formalizations and a solver (2026)"
+[1]: https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3 "Bornholt et al. — Using Lightweight Formal Methods to Validate a Key-Value Storage Node in Amazon S3"
+[2]: https://arxiv.org/abs/2407.01688 "How We Built Cedar: A Verification-Guided Approach"
+[3]: https://arxiv.org/abs/2610.32053 "Wang et al. — Are LLM-Generated Formal Specifications Faithful to Their Requirements?"
