@@ -57,14 +57,19 @@ export function summarize(atlas) {
 
   const kinds = (k) => atlas.insights.filter((i) => i.kind === k);
   const dups = kinds('duplicate-name');
-  out.push('', `Duplicate names, differing SKILL.md (${dups.length}):`);
+  out.push('', `Duplicate names, differing folders (${dups.length}):`);
   if (!dups.length) out.push('  (none)');
   for (const i of dups) out.push(`  ${i.skills.map((id) => `${id} [${byId.get(id)?.root}]`).join(', ')}`);
 
   const cycles = kinds('cycle');
   out.push('', `Cycles (${cycles.length}):`);
   if (!cycles.length) out.push('  (none)');
-  for (const i of cycles) out.push(`  ${[...i.skills, i.skills[0]].join(' -> ')}`);
+  for (const i of cycles) {
+    const p = i.params.path;
+    out.push(i.skills.length > p.length
+      ? `  ${i.skills.join(', ')}: for example ${[...p, p[0]].join(' -> ')}`
+      : `  ${[...p, p[0]].join(' -> ')}`);
+  }
 
   const none = atlas.skills.filter((s) => s.stepKind === 'none');
   const section = atlas.skills.filter((s) => s.stepKind === 'section');
@@ -78,7 +83,7 @@ export function summarize(atlas) {
     for (const s of shared) out.push(`  ${named(s.id)}: ${[s.root, ...s.copies.map((c) => c.root)].join(', ')}`);
   }
 
-  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch'];
+  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch', 'stale-annotation'];
   const rest = atlas.insights.filter((i) => other.includes(i.kind));
   if (rest.length) {
     out.push('', 'Other issues:');

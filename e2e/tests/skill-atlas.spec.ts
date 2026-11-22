@@ -30,7 +30,7 @@ function skill(project: string, folder: string, name: string, description: strin
 }
 
 // Ten skills: `ship` calls `code`, which calls `review`; `decide` calls
-// `review`; `guide` only mentions `review`; tags of all four categories, a
+// `review`; `guide`'s one step only mentions `review`; tags of all four categories, a
 // human one among them; `notes` has only sections; `lone` links nowhere;
 // the skill in `markup` has markup in its name, description and a step.
 function buildFixture(project: string) {
@@ -46,7 +46,7 @@ function buildFixture(project: string) {
   skill(project, claude, "notes", "Notes on house conventions.",
     "# Notes\n\n## Background\n\nSome context about the house.\n\n## Conventions\n\nSome conventions to keep.\n");
   skill(project, claude, "lone", "Stands alone.", "Just one paragraph of prose with no headings and no links.\n");
-  skill(project, claude, "guide", "Points the way.", "# Guide\n\nSee also the `review` skill for checks.\n");
+  skill(project, claude, "guide", "Points the way.", "# Guide\n\n## Step 1: Point\n\nSee also the `review` skill for checks.\n");
   const markup = join(project, claude, "markup");
   mkdirSync(markup, { recursive: true });
   writeFileSync(join(markup, "SKILL.md"), `---\nname: "${MARKUP}"\ndescription: Shows <script>window.__atlasXss = 2</script> as text.\n---\n# Markup\n\n## Step 1: Echo\n\nPrint it verbatim.\n\n## Step 2: Done\n\nNothing else.\n`);
@@ -106,8 +106,19 @@ test.beforeAll(async () => {
   buildFixture(project);
   mkdirSync(state, { recursive: true });
   writeFileSync(join(state, "annotations.json"), JSON.stringify(ANNOTATIONS));
-  const child = spawn(process.execPath, [CLI, "serve", "--no-open", "--port", "0", "--cwd", project, "--no-user", "--no-plugins", "--state", state], { stdio: ["ignore", "pipe", "pipe"] });
-  server = child;
+  const started = await serve(project, state);
+  server = started.child;
+  url = started.url;
+});
+
+test.afterAll(async () => {
+  await stop(server);
+  if (tmp) rmSync(tmp, { recursive: true, force: true });
+});
+
+// The skill's server over `cwd`'s folders alone, and the URL its first line names.
+async function serve(cwd: string, stateDir: string) {
+  const child = spawn(process.execPath, [CLI, "serve", "--no-open", "--port", "0", "--cwd", cwd, "--no-user", "--no-plugins", "--state", stateDir], { stdio: ["ignore", "pipe", "pipe"] });
   const info = await new Promise<{ url: string }>((resolveInfo, reject) => {
     let buf = "";
     const timer = setTimeout(() => reject(new Error("the Skill Atlas server did not start in time")), SERVER_START_TIMEOUT_MS);
@@ -118,17 +129,14 @@ test.beforeAll(async () => {
     });
     child.on("exit", (code) => { clearTimeout(timer); reject(new Error(`the Skill Atlas server exited with ${code}`)); });
   });
-  url = info.url;
-});
-
-test.afterAll(async () => {
-  if (server && server.exitCode === null) {
-    const exited = new Promise((r) => server!.once("exit", r));
-    server.kill("SIGTERM");
-    await exited;
-  }
-  if (tmp) rmSync(tmp, { recursive: true, force: true });
-});
+  return { child, url: info.url };
+}
+async function stop(child: ChildProcess | undefined) {
+  if (!child || child.exitCode !== null) return;
+  const exited = new Promise((r) => child.once("exit", r));
+  child.kill("SIGTERM");
+  await exited;
+}
 
 // Each journey starts from its own workflows document, or none, and no set-aside copies.
 test.beforeEach(() => {
@@ -216,6 +224,30 @@ test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a lin
   await expect.poll(() => linkEndsOn(page, '.group-card[data-key="links:level-2"]')).toBe(true);
 });
 
+test("skill-atlas-13: with mentions hidden, a step that only mentions a skill shows no chip, no count and no link in the details", async ({ page }) => {
+  await page.goto(url);
+  await groupBy(page, "Links");
+  await cardButton(page, "guide").click();
+  const chips = card(page, "guide").locator(".step[data-step='guide#1'] .call-chip");
+  const panel = details(page);
+  const linksOut = (n: number) => panel.locator("section.d-sec", { has: page.getByRole("heading", { name: `Links out · ${n}` }) });
+  // Shown: the mention is a chip on its step, a count on the card and a link in the details.
+  await expect(chips).toHaveText(["→ review"]);
+  await expect(card(page, "guide").getByLabel("links to 1, linked from 0")).toHaveCount(1);
+  await expect(linksOut(1).getByRole("button", { name: "/review" })).toBeVisible();
+
+  // Hidden: nothing of it shows, on the step, the card, the details or the linked skill's details.
+  await page.getByRole("checkbox", { name: "Mentions" }).uncheck();
+  await expect(chips).toHaveCount(0);
+  await expect(card(page, "guide").locator(".card-meta [aria-label^='links to']")).toHaveCount(0);
+  await expect(linksOut(0)).toContainText("Links to no other skill.");
+  await expect(panel.getByRole("button", { name: "Focus on linked" })).toBeDisabled();
+  await cardButton(page, "review").click();
+  const linksIn = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Links in · 2" }) });
+  await expect(linksIn.getByRole("button")).toHaveCount(2);
+  await expect(linksIn.getByRole("button", { name: "/guide" })).toHaveCount(0);
+});
+
 test("skill-atlas-14: a skill's, a step's and a phase's details with tags and evidence", async ({ page }) => {
   writeWorkflows(FLOW);
   await page.goto(url);
@@ -286,18 +318,21 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
   const all = [MARKUP, "code", "decide", "guide", "lint-docs", "lone", "notes", "research", "review", "ship"];
   await expect.poll(() => shownSkills(page)).toEqual(all);
 
-  // Search matches names, descriptions and step titles.
+  // Search matches names, descriptions, step titles and each step's text.
   const search = page.getByRole("searchbox", { name: /Search skills/ });
+  await search.fill("which");
+  await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+  // `decide` by its step's text "Invoke the `review` skill on the decision.", `guide` by its step's mention.
   await search.fill("review");
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "review"]);
-  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 0 of 3 skills shown");
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "guide", "review"]);
+  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 2 of 3 skills shown");
 
   // A tag filter, together with the search, then alone.
   await page.getByRole("button", { name: "Filter by tags" }).click();
   await page.getByRole("checkbox", { name: /^Asks the user/ }).check();
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
   await page.getByRole("checkbox", { name: /^Asks the user/ }).uncheck();
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "review"]);
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "guide", "review"]);
   await page.keyboard.press("Escape");
   await search.fill("");
   await expect.poll(() => shownSkills(page)).toEqual(all);
@@ -326,6 +361,29 @@ test("skill-atlas-17: an insight's choice selects its skills", async ({ page }) 
   await insights.getByRole("button", { name: /frontmatter name/ }).click();
   await expect(card(page, MARKUP)).toHaveClass(/\bselected\b/);
   await expect(details(page).getByRole("heading", { name: "/" + MARKUP })).toBeVisible();
+});
+
+test("skill-atlas-17: frontmatter in error is said to keep the fields that read, the folder naming the skill only where its name does not", async ({ page }) => {
+  const claude = join(project, ".claude", "skills");
+  const kept = join(claude, "kept");
+  const unnamed = join(claude, "unnamed");
+  mkdirSync(kept, { recursive: true });
+  mkdirSync(unnamed, { recursive: true });
+  writeFileSync(join(kept, "SKILL.md"), "---\nname: kept\ndescription: Keeps its name.\nother: \"unclosed\n---\nText.\n");
+  writeFileSync(join(unnamed, "SKILL.md"), "---\nname: \"unclosed\ndescription: Loses its name.\n---\nText.\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Links");
+    await page.getByRole("button", { name: /^Insights/ }).click();
+    const insights = page.getByRole("group", { name: "Insights" });
+    await expect(insights.getByRole("button", { name: /^\/kept\b/ }).filter({ hasText: "Part of its frontmatter could not be read; the fields that read are used" })).toHaveCount(1);
+    await expect(insights.getByRole("button", { name: /^\/unnamed\b/ }).filter({ hasText: "Its frontmatter could not be read; the folder name is used as its name" })).toHaveCount(1);
+  } finally {
+    rmSync(kept, { recursive: true, force: true });
+    rmSync(unnamed, { recursive: true, force: true });
+    await rescan();
+  }
 });
 
 test("skill-atlas-18: a skill whose name and step hold markup is shown as text", async ({ page }) => {
@@ -389,6 +447,17 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
   await expect(hardening.getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
   await expect(page.locator("#save-status")).toHaveText("Saved");
 
+  // A menu's edit undone by the keyboard after its notice has gone.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
+  await page.getByRole("menuitem", { name: "Hardening", exact: true }).first().click();
+  await expect(hardening.getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
+  await page.locator(".toast").getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.locator(".toast")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(hardening.getByRole("button", { name: /^\/lone\b/ })).toHaveCount(0);
+  await expect(hardening.getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+
   // The workflows file in the state folder holds the change.
   const file = join(state, WORKFLOWS);
   expect(existsSync(file)).toBe(true);
@@ -407,6 +476,76 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
     "Discover, 1 skill", "Decide, 1 skill", "Build, 1 skill", "Verify, 1 skill", "Ship, 1 skill", "Operate, 0 skills", "Hardening, 1 skill", "Unassigned, 4 skills",
   ]);
   await expect(page.getByRole("region", { name: /^Hardening,/ }).getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
+});
+
+test("skill-atlas-19: an edit saved as the page is hidden, then a further edit saved, not refused", async ({ page }) => {
+  writeWorkflows(FLOW);
+  await page.goto(url);
+  await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
+  const make = page.getByRole("region", { name: /^Make,/ });
+  const stored = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows[0].phases[1].skills as string[];
+
+  // The edit and the page being hidden in one task, so the save as the page is hidden writes it.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
+  await page.evaluate(() => {
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) => el.textContent?.trim() === "Make")!;
+    item.click();
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Reflect.deleteProperty(document, "visibilityState");
+  });
+  await expect(make.getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  expect(stored()).toContain("lone");
+
+  // A further edit is saved over it, not refused as a change made elsewhere.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /guide" }).click();
+  await page.getByRole("menuitem", { name: "Make", exact: true }).first().click();
+  await expect(make.getByRole("button", { name: /^\/guide\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  await expect(page.getByRole("alert")).toBeHidden();
+  expect(stored()).toEqual(expect.arrayContaining(["lone", "guide"]));
+});
+
+test("skill-atlas-19: notes typed in two workflows from one preset undo apart, the reader staying on the workflow shown", async ({ page }) => {
+  await page.goto(url);
+  await page.getByRole("button", { name: /^Software delivery/ }).click();
+  const active = page.getByRole("combobox", { name: "Active workflow" });
+  await expect(active).toHaveValue("wf-software-delivery");
+  // A second workflow from the same preset: its phases take the same ids.
+  await active.selectOption("__new");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Second delivery");
+  await dialog.getByRole("radio", { name: /^Software delivery/ }).check();
+  await dialog.getByRole("button", { name: "Create workflow" }).click();
+  await expect(active).toHaveValue("wf-second-delivery");
+
+  const note = details(page).getByRole("textbox", { name: "Note" });
+  const typeNote = async (text: string) => {
+    await page.getByRole("region", { name: /^Discover,/ }).getByRole("button", { name: "Discover", exact: true }).click();
+    await note.click();
+    await note.pressSequentially(text);
+    await note.press("Escape");
+  };
+  // Typed in the first workflow's Discover, then, after a switch, in the second's.
+  await active.selectOption("wf-software-delivery");
+  await typeNote("first");
+  await active.selectOption("wf-second-delivery");
+  await typeNote("second");
+
+  // Undo reverts the latest typing alone and leaves the reader on the workflow shown.
+  await page.keyboard.press("Control+z");
+  await expect(note).toHaveValue("");
+  await expect(active).toHaveValue("wf-second-delivery");
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  const notes = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows.map((w: { phases: { note: string }[] }) => w.phases[0]!.note);
+  expect(notes()).toEqual(["first", ""]);
+  // Nothing more to undo: the first workflow's note stands.
+  await page.keyboard.press("Control+z");
+  await active.selectOption("wf-software-delivery");
+  await page.getByRole("region", { name: /^Discover,/ }).getByRole("button", { name: "Discover", exact: true }).click();
+  await expect(note).toHaveValue("first");
+  expect(notes()).toEqual(["first", ""]);
 });
 
 test("skill-atlas-20: a file changed behind the page refuses the next edit and stands", async ({ page }) => {
@@ -474,6 +613,119 @@ test("skill-atlas-22: an exported file opened from disk keeps a workflow edit af
   await expect(page.getByRole("region", { name: /^Make,/ }).getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
 });
 
+// A skill written in Cyrillic, with a reference written in English.
+const RU = { folder: ".claude/skills", name: "proverka", description: "Проверяет изменения перед слиянием." };
+
+test("skill-atlas-29: a skill in another script than Latin or CJK is marked as in its original on the English page, each file by its own words", async ({ page }) => {
+  skill(project, RU.folder, RU.name, RU.description, "# Проверка\n\n## Шаг 1: Чтение\n\nПрочитать изменения и составить отчёт.\n");
+  const dir = join(project, RU.folder, RU.name);
+  mkdirSync(join(dir, "references"), { recursive: true });
+  writeFileSync(join(dir, "references", "usage.md"), "# Usage\n\nHow the check is run, written in English.\n");
+  writeFileSync(join(dir, "references", "notes.md"), "# Заметки\n\nКак читать отчёт о проверке.\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Links");
+    await card(page, RU.name).locator(".card-main").click();
+    const panel = details(page);
+    await expect(panel.locator(".d-desc")).toHaveText(RU.description);
+    await expect(panel.getByRole("note")).toHaveText("Shown in its original language: there is no English translation.");
+    const dialog = page.getByRole("dialog");
+    await panel.getByRole("button", { name: "View SKILL.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText(RU.description);
+    await expect(dialog.getByRole("note")).toHaveText("Shown in its original language: there is no English translation of this file.");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Its English reference needs no translation on the English page.
+    await panel.getByRole("button", { name: "references/usage.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText("written in English");
+    await expect(dialog.getByRole("note")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Its Russian reference is marked, by the language the server reports for it.
+    await panel.getByRole("button", { name: "references/notes.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText("Как читать");
+    await expect(dialog.getByRole("note")).toHaveText("Shown in its original language: there is no English translation of this file.");
+    await page.keyboard.press("Escape");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
+// A skill described in English whose body, with no steps, is written in Arabic.
+const AR = {
+  folder: ".claude/skills",
+  name: "muraja",
+  description: "Reviews a change before it is merged.",
+  body: "راجع التغييرات في هذا الفرع قبل دمجها، واقرأ كل ملف تغير فيه، ثم اكتب تقريرا قصيرا عما وجدته من أخطاء وما يجب إصلاحه قبل الدمج.\n",
+};
+
+test("skill-atlas-29: a skill described in English and written in Arabic with no steps is marked as in its original alike in its details and its file", async ({ page }) => {
+  skill(project, AR.folder, AR.name, AR.description, AR.body);
+  const dir = join(project, AR.folder, AR.name);
+  try {
+    await rescan();
+    // The scan reports the skill's language, the one its details and its file dialog both read.
+    const atlas = await (await fetch(new URL("/api/atlas", url))).json() as { skills: { name: string; language?: unknown; steps: unknown[] }[] };
+    const reported = atlas.skills.find((s) => s.name === AR.name)!;
+    expect(reported.steps).toHaveLength(0);
+    expect(typeof reported.language).toBe("string");
+    await page.goto(url);
+    await groupBy(page, "Links");
+    await card(page, AR.name).locator(".card-main").click();
+    await expect(card(page, AR.name).locator(".card-desc")).toHaveText(AR.description);
+    const panel = details(page);
+    await expect(panel.locator(".d-desc")).toHaveText(AR.description);
+    await expect(panel.getByRole("note")).toHaveText("Shown in its original language: there is no English translation.");
+    const dialog = page.getByRole("dialog");
+    await panel.getByRole("button", { name: "View SKILL.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText("راجع التغييرات");
+    await expect(dialog.getByRole("note")).toHaveText("Shown in its original language: there is no English translation of this file.");
+    await page.keyboard.press("Escape");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
+test("skill-atlas-13: a project's folder above the working folder is a source of its own, told apart from the working folder's", async ({ page }) => {
+  const repo = join(tmp, "repo");
+  const sub = join(repo, "sub");
+  mkdirSync(sub, { recursive: true });
+  execFileSync("git", ["init", "-q", repo]);
+  skill(repo, ".agents/skills", "above", "Found above the working folder.", "Just prose.\n");
+  skill(sub, ".agents/skills", "here", "Found in the working folder.", "Just prose.\n");
+  const started = await serve(sub, join(tmp, "repo-state"));
+  try {
+    await page.goto(started.url);
+    await groupBy(page, "Source");
+    await expect.poll(() => groupLabels(page)).toHaveLength(2);
+    const labels = (await groupLabels(page)).map((l) => l!.replace(/, \d+ skills?$/, ""));
+    expect(labels[0]).not.toBe(labels[1]);
+    // Each folder's group holds its own skill alone, and the skill's details name that group's folder.
+    for (const id of ["above", "here"]) {
+      const group = groups(page).filter({ has: page.locator(`.card[data-skill="${id}"]`) });
+      await expect(group).toHaveCount(1);
+      await expect(group.locator(".card[data-skill]")).toHaveCount(1);
+      const title = (await group.getAttribute("aria-label"))!.replace(/, \d+ skills?$/, "");
+      await card(page, id).locator(".card-main").click();
+      await expect(details(page).locator("section.d-sec", { has: page.getByRole("heading", { name: "Source", exact: true }) })).toContainText(title);
+    }
+    // Each folder is named by its place in the repository: the root's by its scope alone, the working
+    // folder's with its path from the root; in Chinese, the words in Chinese and the place kept.
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith("Project (sub) · Universal"));
+    await page.getByRole("combobox", { name: "Language" }).selectOption("zh-CN");
+    const where = zh("Universal");
+    const here = zh("{scope} ({place}) · {where}", { scope: zh("Project"), place: "sub", where });
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith(here));
+    await expect(groups(page).filter({ has: page.locator('.card[data-skill="above"]') })).toHaveAttribute("aria-label", startsWith(zh("{scope} · {where}", { scope: zh("Project"), where })));
+  } finally {
+    await stop(started.child);
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 // The page's Chinese, read from the files a reader edits: the catalog for
 // the page's own text, the label files beside the tunable references.
 const ZH = JSON.parse(readFileSync(join(SKILL, "assets", "locales", "zh-CN.json"), "utf8")) as { name: string; messages: Record<string, string> };
@@ -488,10 +740,35 @@ const startsWith = (s: string) => new RegExp(`^${esc(s)}`);
 // A card's own button, whatever language its accessible name is in.
 const cardMain = (page: Page, id: string) => card(page, id).locator(".card-main");
 
+// Ask the running server to scan again, as the page's Rescan does.
+async function rescan() {
+  const res = await fetch(new URL("/api/rescan", url), { method: "POST", headers: { "Content-Type": "application/json", "X-Skill-Atlas": "1" }, body: "{}" });
+  expect(res.ok).toBe(true);
+}
+// A skill written in Japanese with no translation: kana and kanji in its words.
+const JA = { folder: ".claude/skills", name: "kakunin", description: "設計を確認します。" };
+// Skills whose language is read past a single character: English quoting Chinese in a step,
+// Chinese using the katakana middle dot, and one declaring Traditional Chinese.
+const MIXED = [
+  { name: "quoting", description: "Explains how the scan reads step headings.", body: "# Quoting\n\n## Read\n\nA heading such as `步骤 2：扫描` is read as a step.\n", extra: "", marked: true },
+  { name: "dianhao", description: "检查技能・清单并列出结果。", body: "# 检查\n\n## 读取\n\n读取每个技能・文件。\n", extra: "", marked: false },
+  { name: "fanti", description: "檢查技能清單。", body: "# 檢查\n\n## 讀取\n\n讀取每個技能。\n", extra: "metadata:\n  language: zh-Hant\n", marked: true },
+];
+
+// A skill whose one translation is under `zh`, a tag of the page's language and script.
+const ZH_ONLY = { folder: ".claude/skills", name: "survey", description: "Surveys the findings.", zh: "汇总各项调查结果。", step: "汇总" };
+
 test.describe("in a browser of Chinese", () => {
   test.use({ locale: "zh-CN" });
+  test.afterEach(async () => {
+    for (const n of [JA.name, ZH_ONLY.name, ...MIXED.map((m) => m.name)]) rmSync(join(project, JA.folder, n), { recursive: true, force: true });
+    await rescan();
+  });
 
   test("skill-atlas-29: the page, tags, presets and skills shown in Chinese, untranslated, stale and edited skills marked, search in either language", async ({ page }) => {
+    skill(project, JA.folder, JA.name, JA.description, "# 確認\n\n## 読む\n\n仕様のファイルを読みます。\n");
+    for (const m of MIXED) skill(project, JA.folder, m.name, m.description, m.body, m.extra);
+    await rescan();
     await page.goto(url);
     // The page's own text and the presets, in Chinese.
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
@@ -554,6 +831,27 @@ test.describe("in a browser of Chinese", () => {
     await expect(dialog.getByRole("note")).toHaveText(zh("Shown in its original language: there is no {language} translation of this file.", { language: ZH.name }));
     await page.keyboard.press("Escape");
 
+    // A skill written in Japanese is shown in its original and marked, though its kanji are Han script.
+    await cardMain(page, JA.name).click();
+    await expect(panel.locator(".d-desc")).toHaveText(JA.description);
+    await expect(panel.getByRole("note")).toHaveText(original);
+    await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+    await expect(dialog.getByRole("note")).toHaveText(zh("Shown in its original language: there is no {language} translation of this file.", { language: ZH.name }));
+    await page.keyboard.press("Escape");
+
+    // A skill's language is the script most of its words are in, or the one it declares with its script.
+    for (const m of MIXED) {
+      await cardMain(page, m.name).click();
+      await expect(panel.locator(".d-desc")).toHaveText(m.description);
+      if (m.marked) await expect(panel.getByRole("note"), m.name).toHaveText(original);
+      else await expect(panel.getByRole("note"), m.name).toHaveCount(0);
+      await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+      await expect(dialog.locator(".file-pre")).toContainText(m.description);
+      await expect(dialog.getByRole("note"), m.name).toHaveCount(m.marked ? 1 : 0);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
+
     // A translation behind its source: shown, and marked.
     await cardMain(page, "review").click();
     await expect(panel.locator(".d-desc")).toHaveText(REVIEW_ZH);
@@ -568,12 +866,176 @@ test.describe("in a browser of Chinese", () => {
     await expect(dialog.getByRole("note")).toHaveText(zh("The {language} translation was edited apart from its source; agents follow the original, not this text.", { language: ZH.name }));
     await page.keyboard.press("Escape");
 
+    // The insights say where each refresh is written, what may be brought in line instead, and the command pinning it.
+    await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
+    const insights = page.getByRole("group", { name: zh("Insights") });
+    const pinCommand = /^node <skill-dir>\/scripts\/atlas\.mjs pin --state <state> .*SKILL\.zh-CN\.md$/;
+    // The words around each placeholder, as the catalog gives them.
+    const words = (en: string) => new RegExp(zh(en).split(/\{\w+\}/).map((part) => esc(part.trim())).filter(Boolean).join(".*"));
+    const stale = insights.locator(".ins-repair").filter({ has: page.locator("li", { hasText: words("Write {file}, brought up to date, to {target}.") }) }).first();
+    await expect(stale.locator("li").first()).toContainText("<state>/translations/");
+    await expect(stale.locator("p")).toHaveText(words("Then run {command}"));
+    await expect(stale.locator("p code")).toHaveText(pinCommand);
+    const edited = insights.locator(".ins-repair").filter({ has: page.locator("p", { hasText: words("Carry each edit across, then run {command}") }) }).first();
+    await expect(edited.locator("p code")).toHaveText(pinCommand);
+    await page.keyboard.press("Escape");
+
     // A search finds the skill by its Chinese words and by its original ones.
     const search = page.getByRole("searchbox", { name: zh("Search skills by name, description or step") });
     await search.fill("实现");
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
     await search.fill("Implements");
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+    // And by a step's text, in Chinese and in the original.
+    await search.fill("哪个");
+    await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+    await search.fill("which");
+    await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+  });
+
+  test("skill-atlas-29: an annotation written from another text of its skill is reported in Chinese and not applied", async ({ page }) => {
+    const file = join(state, "annotations.json");
+    writeFileSync(file, JSON.stringify({ ...ANNOTATIONS, skills: { ...ANNOTATIONS.skills, lone: { source: { sha256: "0".repeat(64) }, summary: "Written for another text." } } }));
+    try {
+      await rescan();
+      await page.goto(url);
+      await groupBy(page, zh("Links"));
+      await expect(card(page, "lone").locator(".card-desc")).toHaveText("Stands alone.");
+      await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
+      const insights = page.getByRole("group", { name: zh("Insights") });
+      await expect(insights.getByRole("heading", { name: startsWith(zh("Annotations written from another text")) })).toBeVisible();
+      // The insight names the entry to update; the skill's issue line says what is wrong.
+      const message = zh("An annotation was written from another text of this skill; read the skill again and update or remove its entry in annotations.json.");
+      await insights.getByRole("button", { name: startsWith("/lone") }).filter({ hasText: message }).click();
+      await expect(card(page, "lone")).toHaveClass(/\bselected\b/);
+      const issue = zh("An annotation was written from another text of this skill; read the skill again and update or remove it.");
+      await expect(page.getByRole("complementary", { name: zh("Details") }).getByRole("list", { name: zh("Issues") }).getByRole("listitem").filter({ hasText: issue })).toHaveCount(1);
+    } finally {
+      writeFileSync(file, JSON.stringify(ANNOTATIONS));
+      await rescan();
+    }
+  });
+
+  test("skill-atlas-29: an atlas whose scan reported no languages marks no skill and no file as in its original", async ({ page }) => {
+    // As from an older scan: no skill's language and no file's.
+    await page.route((u) => u.pathname === "/api/atlas", async (route) => {
+      const res = await route.fetch();
+      const atlas = await res.json();
+      for (const s of atlas.skills) delete s.language;
+      await route.fulfill({ response: res, json: atlas });
+    });
+    await page.route((u) => u.pathname === "/api/file", async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      delete body.sourceLanguage;
+      await route.fulfill({ response: res, json: body });
+    });
+    await page.goto(url);
+    await groupBy(page, zh("Links"));
+    await cardMain(page, "decide").click();
+    const panel = page.getByRole("complementary", { name: zh("Details") });
+    await expect(panel.locator(".d-desc")).toHaveText("Decides on a design.");
+    await expect(panel.getByRole("note")).toHaveCount(0);
+    await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".file-pre")).toContainText("Read the spec files of the area.");
+    await expect(dialog.getByRole("note")).toHaveCount(0);
+  });
+
+  test("skill-atlas-29: a skill translated only under zh is shown in Chinese on the zh-CN page and found by its Chinese words", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    writeFileSync(join(dir, "SKILL.zh.md"), `---\nname: ${ZH_ONLY.name}\ndescription: ${ZH_ONLY.zh}\n---\n<!-- skill-atlas:source sha256=${sha256(join(dir, "SKILL.md"))} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${ZH_ONLY.zh}\n`);
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, zh("Links"));
+    await cardMain(page, ZH_ONLY.name).click();
+    await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
+    await expect(card(page, ZH_ONLY.name).locator(".step-title")).toHaveText([new RegExp(esc(ZH_ONLY.step))]);
+    const panel = page.getByRole("complementary", { name: zh("Details") });
+    await expect(panel.locator(".d-desc")).toHaveText(ZH_ONLY.zh);
+    await expect(panel.getByRole("note")).toHaveCount(0);
+    const search = page.getByRole("searchbox", { name: zh("Search skills by name, description or step") });
+    await search.fill("调查结果");
+    await expect.poll(() => shownSkills(page)).toEqual([ZH_ONLY.name]);
+  });
+
+  // A translation of `survey` into `file` giving `words`, recording `source` as its source's digest.
+  const surveyZh = (file: string, source: string, words: string) =>
+    writeFileSync(file, `---\nname: ${ZH_ONLY.name}\ndescription: ${words}\n---\n<!-- skill-atlas:source sha256=${source} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${words}\n`);
+  // After a rescan, on the zh-CN page: the card and the details show `words` with `notes`, and the
+  // file opened from them is `file`, holding `words`, with `fileNotes`.
+  async function expectSurveyShows(page: Page, words: string, file: string, notes: string[], fileNotes: string[]) {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, zh("Links"));
+    await cardMain(page, ZH_ONLY.name).click();
+    await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(words);
+    const panel = page.getByRole("complementary", { name: zh("Details") });
+    await expect(panel.locator(".d-desc")).toHaveText(words);
+    await expect(panel.getByRole("note")).toHaveText(notes);
+    await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading")).toHaveText(`/${ZH_ONLY.name} · ${file}`);
+    await expect(dialog.locator(".file-pre")).toContainText(words);
+    await expect(dialog.getByRole("note")).toHaveText(fileNotes);
+  }
+
+  test("skill-atlas-29: of a skill folder's zh behind its source and the state folder's current zh-Hans, the zh-CN page reads the first tag, zh, and marks it behind", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    const theirs = join(state, "translations", ZH_ONLY.name);
+    surveyZh(join(dir, "SKILL.zh.md"), "0".repeat(64), ZH_ONLY.zh);
+    mkdirSync(theirs, { recursive: true });
+    surveyZh(join(theirs, "SKILL.zh-Hans.md"), sha256(join(dir, "SKILL.md")), "从状态文件夹汇总结果。");
+    const behind = zh("The {language} translation may be behind its source.", { language: ZH.name });
+    try {
+      // The tag is chosen before the folder: a current translation under a later tag is passed over.
+      await expectSurveyShows(page, ZH_ONLY.zh, "SKILL.zh.md", [behind], [behind]);
+    } finally {
+      rmSync(theirs, { recursive: true, force: true });
+    }
+  });
+
+  test("skill-atlas-29: of a skill folder's zh behind its source beside a current zh-Hans, and the state folder's current zh, the zh-CN page and its file read the state folder's zh", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    const theirs = join(state, "translations", ZH_ONLY.name);
+    const source = sha256(join(dir, "SKILL.md"));
+    const refreshed = "从状态文件夹汇总结果。";
+    surveyZh(join(dir, "SKILL.zh.md"), "0".repeat(64), ZH_ONLY.zh);
+    surveyZh(join(dir, "SKILL.zh-Hans.md"), source, "以简体汇总各项结果。");
+    mkdirSync(theirs, { recursive: true });
+    surveyZh(join(theirs, "SKILL.zh.md"), source, refreshed);
+    try {
+      // Under zh, the first tag, the state folder's pinned translation stands in for the skill's behind one.
+      await expectSurveyShows(page, refreshed, "SKILL.zh.md", [], []);
+    } finally {
+      rmSync(theirs, { recursive: true, force: true });
+    }
+  });
+
+  test("skill-atlas-29: annotation words under zh-CN over a skill's zh translation are read as one entry, the file's words where the annotation gives none", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    surveyZh(join(dir, "SKILL.zh.md"), sha256(join(dir, "SKILL.md")), ZH_ONLY.zh);
+    const file = join(state, "annotations.json");
+    const step = "收集各项发现";
+    writeFileSync(file, JSON.stringify({ ...ANNOTATIONS, skills: { ...ANNOTATIONS.skills, [ZH_ONLY.name]: { translations: { "zh-CN": { steps: [{ title: step }] } } } } }));
+    try {
+      await rescan();
+      await page.goto(url);
+      await groupBy(page, zh("Links"));
+      await cardMain(page, ZH_ONLY.name).click();
+      // The description from the zh file, the step's title from the annotation.
+      await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
+      await expect(card(page, ZH_ONLY.name).locator(".step-title")).toHaveText([new RegExp(esc(step))]);
+      const panel = page.getByRole("complementary", { name: zh("Details") });
+      await expect(panel.locator(".d-desc")).toHaveText(ZH_ONLY.zh);
+      await expect(panel.getByRole("note")).toHaveCount(0);
+    } finally {
+      writeFileSync(file, JSON.stringify(ANNOTATIONS));
+    }
   });
 });
 

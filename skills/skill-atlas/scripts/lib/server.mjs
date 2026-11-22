@@ -2,16 +2,17 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The local viewer server: 127.0.0.1 only, Host-checked against DNS
-// rebinding, and writing nothing but workflows.json in the state folder.
+// rebinding, and writing nothing but workflows.json (and its lock) in the state folder.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { viewerConfig, readWorkflowsState, validateWorkflows, writeWorkflows, setAsideInvalid } from './state.mjs';
-import { canonicalTag, findTranslation, translationState } from './translations.mjs';
+import { viewerConfig, readWorkflowsState, saveWorkflows, LockBusyError, WORKFLOWS_MAX_BYTES } from './state.mjs';
+import { canonicalTag, findTranslation } from './translations.mjs';
+import { fileLanguage } from './language.mjs';
 
 export const HOST = '127.0.0.1';
-export const BODY_MAX_BYTES = 1024 * 1024; // 1 MiB: far above any workflows document
+export const BODY_MAX_BYTES = WORKFLOWS_MAX_BYTES; // the save's own limit, refused here before the body is read whole
 export const FILE_MAX_BYTES = 512 * 1024; // 512 KiB: larger files are not skill text worth showing
 const MUTATION_HEADER = 'x-skill-atlas';
 const REPLACE_INVALID_HEADER = 'x-skill-atlas-replace-invalid';
@@ -74,31 +75,15 @@ export function startServer(opts) {
       case 'PUT /api/workflows': {
         const body = await readBody(req, res);
         if (body === null) return undefined;
-        const cur = readWorkflowsState(opts.stateDir);
-        const replacing = req.headers[REPLACE_INVALID_HEADER] === '1';
-        if (replacing) {
-          if (cur.valid) return send(res, 409, { error: 'not-invalid', message: 'the stored workflows.json is valid; send If-Match with its ETag instead' }, { headers: { ETag: cur.etag } });
-        } else {
-          if (!cur.valid) return send(res, 409, { error: 'invalid-workflows', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file });
-          const ifMatch = req.headers['if-match'];
-          if (ifMatch === undefined) return send(res, 428, { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/workflows' });
-          if (ifMatch !== cur.etag) return send(res, 412, { error: 'changed', message: 'workflows.json changed since it was read; reload it and apply the change again' }, { headers: { ETag: cur.etag } });
-        }
-        let doc;
+        let answer;
         try {
-          doc = JSON.parse(body);
+          // The check and the write as one step among every process sharing the state folder.
+          answer = saveWorkflows(opts.stateDir, body, { ifMatch: req.headers['if-match'], replaceInvalid: req.headers[REPLACE_INVALID_HEADER] === '1' });
         } catch (err) {
-          return send(res, 400, { error: 'invalid-body', message: `the body is not valid JSON: ${err.message}` });
+          if (err instanceof LockBusyError) return send(res, 503, { error: 'busy', message: err.message }, { headers: { 'Retry-After': '1' } });
+          return send(res, 500, { error: 'write-failed', message: `cannot save workflows.json in ${opts.stateDir}: ${err.message}` });
         }
-        const checked = validateWorkflows(doc);
-        if (!checked.ok) return send(res, 400, { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` });
-        try {
-          if (replacing && cur.exists) setAsideInvalid(opts.stateDir);
-          const written = writeWorkflows(opts.stateDir, checked.doc);
-          return send(res, 200, written.doc, { headers: { ETag: written.etag } });
-        } catch (err) {
-          return send(res, 500, { error: 'write-failed', message: `cannot write workflows.json in ${opts.stateDir}: ${err.message}` });
-        }
+        return send(res, answer.status, answer.value, { headers: answer.etag ? { ETag: answer.etag } : {} });
       }
       case 'GET /api/config':
         try {
@@ -135,7 +120,8 @@ export function startServer(opts) {
 
 // A skill's file as text. Asked in a language (`lang`), the answer is JSON:
 // `{ language, path, stale, edited, text }` with the translation where there is one
-// (data-model.md "Languages"), else the file itself with `language` null.
+// (data-model.md "Languages"), else the file itself with `language` null and
+// `sourceLanguage` the language it is written in.
 function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
   const skill = atlas.skills.find((s) => s.id === skillId);
   if (!skill) return send(res, 404, { error: `no skill "${skillId ?? ''}"` });
@@ -145,6 +131,12 @@ function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
     want = canonicalTag(lang);
     if (!want) return send(res, 400, { error: `lang "${lang}" is not a language tag such as zh-CN` });
   }
+  // The file is named by the path asked (its translations, its language and the
+  // path answered follow that name) and read from where a link there leads,
+  // which must lie inside the skill's real folder too.
+  const leaves = (rel_) => rel_ === '' || rel_.startsWith('..') || path.isAbsolute(rel_);
+  const asked = path.relative(path.resolve(skill.dir), path.resolve(skill.dir, rel));
+  if (leaves(asked)) return send(res, 403, { error: 'the path leaves the skill folder' });
   let base;
   let real;
   try {
@@ -153,27 +145,25 @@ function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
   } catch {
     return send(res, 404, { error: `no file "${rel}" in ${skillId}` });
   }
-  const inside = path.relative(base, real);
-  if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {
-    return send(res, 403, { error: 'the path leaves the skill folder' });
-  }
-  const insidePosix = inside.split(path.sep).join('/');
+  if (leaves(path.relative(base, real))) return send(res, 403, { error: 'the path leaves the skill folder' });
+  const askedPosix = asked.split(path.sep).join('/');
   let isFile = false;
   try { isFile = fs.statSync(real).isFile(); } catch { /* answered below */ }
   if (want && isFile) {
-    const found = findTranslation(skill, inside, want, stateDir);
+    const found = findTranslation(skill, askedPosix, want, stateDir);
     if (found) {
       const translated = readBoundedText(found.real, path.basename(found.abs), skillId);
       if (translated.error) return send(res, translated.status, { error: translated.error });
-      const { stale, edited } = translationState(found.real, real);
+      const { stale, edited } = found;
       // The file shown, by its path in the skill's folder (or under translations/<skill id>/).
-      const shown = path.posix.join(path.posix.dirname(insidePosix), path.basename(found.abs));
+      const shown = path.posix.join(path.posix.dirname(askedPosix), path.basename(found.abs));
       return send(res, 200, { language: found.tag, path: shown, stale, edited, text: translated.text });
     }
   }
   const source = readBoundedText(real, rel, skillId);
   if (source.error) return send(res, source.status, { error: source.error });
-  if (want) return send(res, 200, { language: null, path: insidePosix, stale: false, edited: false, text: source.text });
+  // The original's own language, told from its own text (a SKILL.md's declared one first).
+  if (want) return send(res, 200, { language: null, sourceLanguage: fileLanguage(source.text, { skillFile: askedPosix === 'SKILL.md' }), path: askedPosix, stale: false, edited: false, text: source.text });
   return sendText(res, 200, source.text, 'text/plain; charset=utf-8');
 }
 

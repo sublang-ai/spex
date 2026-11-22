@@ -377,6 +377,10 @@ button.col-name:hover { background: var(--surface-3); }
 .inspop button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 14px; cursor: pointer; font-size: 12px; color: var(--text-2); }
 .inspop button:hover, .inspop button:focus-visible { background: var(--surface-2); }
 .inspop button b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.inspop .ins-repair { padding: 0 14px 6px; font-size: 12px; color: var(--text-2); }
+.inspop .ins-repair ul { margin: 0; padding-left: 16px; }
+.inspop .ins-repair p { margin: 4px 0 0; }
+.inspop .ins-repair code { font-family: var(--mono); overflow-wrap: anywhere; user-select: all; }
 dialog.dlg { border: 0; padding: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
 dialog.dlg.wide { width: min(860px, calc(100vw - 32px)); }
 dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
@@ -516,7 +520,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     human: () => t('Human'),
   };
   // Each insight kind's heading, the issue line a skill shows, and its message built from `params`
-  // (null where the scan sent no params: the page then shows the scan's own English message).
+  // (null where the scan sent no params: the page then shows the scan's own English message);
+  // a kind whose message names what to do carries it whole, a repair's files and command in `repair`.
+  const repairable = (p) => p.lang != null && Array.isArray(p.repairs) && typeof p.command === 'string';
+  const code = (v) => h('code', { text: str(v) });
+  const runLine = (text, p) => h('p', null, withNodes(t(text), { command: code(p.command) }));
   const INSIGHTS = {
     'duplicate-name': {
       title: () => t('Installed more than once'),
@@ -531,7 +539,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     'cycle': {
       title: () => t('Skills that link to each other in a loop'),
       issue: () => t('Is part of a loop of skills that link back to each other.'),
-      message: (p) => (!Array.isArray(p.path) ? null : t('Calls form a cycle: {path}', { path: [...p.path, p.path[0]].map(str).join(' → ') })),
+      // The insight lists every skill of the group; `path` is one loop through them, as an example.
+      message: (p, ins) => (!Array.isArray(p.path) ? null : t('{n} skills call each other in a loop, for example {path}', { n: Math.max(arr(ins.skills).length, p.path.length), path: [...p.path, p.path[0]].map(str).join(' → ') })),
     },
     'oversized': {
       title: () => t('Longer than 500 lines'),
@@ -551,7 +560,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     'invalid-frontmatter': {
       title: () => t('Frontmatter could not be read'),
       issue: () => t('Its frontmatter could not be parsed, so its name, description or settings may be missing or wrong.'),
-      message: () => t('Its frontmatter could not be read; the folder name is used as its name'),
+      message: (p) => (typeof p.named !== 'boolean' ? null : p.named ? t('Part of its frontmatter could not be read; the fields that read are used') : t('Its frontmatter could not be read; the folder name is used as its name')),
     },
     'no-steps': {
       title: () => t('No steps detected'),
@@ -561,12 +570,29 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     'stale-translation': {
       title: () => t('Translations behind their source'),
       issue: () => t('A translation may be behind its source.'),
-      message: (p) => (p.lang == null ? null : t('The {language} translation may be behind its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+      message: (p) => (!repairable(p) ? null : t('The {language} translation may be behind its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+      // Each file's refresh written to the state folder, or the skill folder's own file brought in line.
+      repair: (p) => [
+        h('ul', null, p.repairs.map((r) => h('li', null,
+          r && r.writeTo ? withNodes(t('Write {file}, brought up to date, to {target}.'), { file: code(r.file), target: code(r.writeTo) }) : code(r && r.file),
+          r && r.own ? [' ', withNodes(t('Or, where the skill’s folder is yours to edit, bring {file} in line with its source there and pin it instead.'), { file: code(r.own) })] : null))),
+        runLine('Then run {command}', p),
+      ],
     },
     'edited-translation': {
       title: () => t('Translations edited apart from their source'),
       issue: () => t('A translation was edited apart from its source, which agents follow.'),
-      message: (p) => (p.lang == null ? null : t('The {language} translation was edited apart from its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+      message: (p) => (!repairable(p) ? null : t('The {language} translation was edited apart from its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+      // The edited file, where it lies, and the command pinning it once its edit is carried across.
+      repair: (p) => [
+        h('ul', null, p.repairs.map((r) => h('li', null, code(r && (r.own || r.writeTo || r.file))))),
+        runLine('Carry each edit across, then run {command}', p),
+      ],
+    },
+    'stale-annotation': {
+      title: () => t('Annotations written from another text'),
+      issue: () => t('An annotation was written from another text of this skill; read the skill again and update or remove it.'),
+      message: () => t('An annotation was written from another text of this skill; read the skill again and update or remove its entry in annotations.json.'),
     },
     'translation-steps': {
       title: () => t('Translations whose steps differ'),
@@ -581,6 +607,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = ins.params && typeof ins.params === 'object' ? ins.params : null;
     const m = def ? def.message(p || {}, ins) : null;
     return m != null ? m : str(ins.message);
+  }
+  // What to do, beside the message, where the page phrases a repair the scan sent as data.
+  function insightRepair(ins) {
+    const def = INSIGHTS[ins.kind];
+    const p = ins.params && typeof ins.params === 'object' ? ins.params : null;
+    return def && def.repair && p && def.message(p, ins) != null ? h('div', { class: 'ins-repair' }, def.repair(p, ins)) : null;
   }
   // Trusted, static icon markup only; never interpolate data into these.
   const ICONS = {
@@ -658,7 +690,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   const SOURCE_LANG = 'en-US';
   const LANG_KEY = 'skill-atlas:lang';
-  const i18n = { lang: SOURCE_LANG, messages: null, locales: {}, labels: {}, rules: new Map(), nums: new Map() };
+  const i18n = { lang: SOURCE_LANG, messages: null, locales: {}, labels: {}, labelTags: {}, rules: new Map(), nums: new Map() };
   const pluralRules = (lang) => {
     let r = i18n.rules.get(lang);
     if (!r) { try { r = new Intl.PluralRules(lang); } catch { r = new Intl.PluralRules(SOURCE_LANG); } i18n.rules.set(lang, r); }
@@ -715,12 +747,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const primary = (tag) => str(tag).toLowerCase().split('-')[0];
   // A tag's script, written or likely (`zh-TW` -> Hant, `zh` -> Hans), or '' where unknown.
   const scriptOf = (tag) => { try { return new Intl.Locale(str(tag)).maximize().script || ''; } catch { return ''; } };
-  // The offered tag the given tag names: the same tag, else one sharing its primary subtag and
-  // its script, so `zh` and `zh-SG` name zh-CN while `zh-TW` names none (atlas.mjs matches alike).
-  function matchLang(tag, offered) {
-    if (!tag) return null;
-    const low = str(tag).toLowerCase();
-    return offered.find((o) => o.toLowerCase() === low) || offered.find((o) => primary(o) === primary(low) && scriptOf(o) === scriptOf(tag)) || null;
+  // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
+  const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
+  // The one rule every choice of a tag follows, the catalog's, the label files' and a skill's
+  // translation's, as the scan and the server choose a file's (translations.mjs matchingTag): of
+  // `tags`, the one `want` names, else the first in code-unit order of the tags themselves of the
+  // same language and script, so `zh` and `zh-SG` name zh-CN while `zh-TW` names none; or null.
+  function matchTag(want, tags) {
+    if (!want) return null;
+    const low = str(want).toLowerCase();
+    return tags.find((k) => k.toLowerCase() === low) || tags.filter((k) => sameLanguage(k, want)).sort()[0] || null;
   }
   // The reader's choice kept in the browser, else the command's --lang, else the browser's, else en-US.
   function resolveLang(cmdLang) {
@@ -728,10 +764,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     let stored = null;
     try { stored = localStorage.getItem(LANG_KEY); } catch { stored = null; }
     if (stored && offered.includes(stored)) return stored;
-    const fromCmd = matchLang(cmdLang, offered);
+    const fromCmd = matchTag(cmdLang, offered);
     if (fromCmd) return fromCmd;
     for (const b of arr(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language])) {
-      const m = matchLang(b, offered);
+      const m = matchTag(b, offered);
       if (m) return m;
     }
     return SOURCE_LANG;
@@ -755,10 +791,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function applyLang(tag) {
     i18n.lang = tag;
     i18n.messages = tag === SOURCE_LANG ? null : (i18n.locales[tag] || {}).messages || null;
+    // Each label file read for the shown language on its own: under the tag matchTag reads for it
+    // among the tags that file has, so one file's tag never hides another's.
+    const all = Object.keys(i18n.labels);
+    i18n.labelTags = {};
+    for (const field of LABEL_FIELDS) i18n.labelTags[field] = matchTag(tag, all.filter((k) => own(i18n.labels[k], field)));
     document.documentElement.lang = tag;
   }
-  // The label file entries of the shown language (references/<name>.<tag>.json, served under config.labels).
-  const labels = () => { const l = i18n.labels[i18n.lang]; return l && typeof l === 'object' ? l : {}; };
+  // A label file's entries in the shown language (references/<name>.<tag>.json, served under
+  // config.labels): `title` and `categories` the view settings', `tags` the tag rules', `presets`
+  // the presets'.
+  const LABEL_FIELDS = ['categories', 'tags', 'presets'];
+  const labelsOf = (field) => {
+    const tag = i18n.labelTags[field === 'title' ? 'categories' : field];
+    const l = tag ? i18n.labels[tag] : null;
+    return l && typeof l === 'object' ? l[field] : null;
+  };
   const labelText = (v) => (typeof v === 'string' ? v : v && typeof v === 'object' ? str(v.label || v.name) : '');
 
   // ===================================================================
@@ -856,11 +904,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       for (const tg of tagMap.values()) addTag(tg);
       s._tagIds = new Set(tagMap.keys());
       s._cats = rollupIds(s._tagIds, tagById);
-      // A search matches the skill's original words and those of the language shown.
-      s._search = [s.name, s.description, s.summary, ...steps.map((st) => st.title)].join('\n').toLowerCase();
+      // A search matches the skill's original words and those of the language shown: the name,
+      // description and summary, and each step's title and text.
+      s._search = [s.name, s.description, s.summary, ...steps.flatMap((st) => [st.title, st.excerpt])].join('\n').toLowerCase();
       s._trSearch = {};
       for (const [lang, tr] of Object.entries(translations)) {
-        s._trSearch[lang] = [tr.description, tr.summary, ...arr(tr.steps).map((w) => (w && typeof w === 'object' ? w.title : ''))].map(str).join('\n').toLowerCase();
+        const words = arr(tr.steps).flatMap((w) => (w && typeof w === 'object' ? [w.title, w.excerpt, w.summary] : []));
+        s._trSearch[lang] = [tr.description, tr.summary, ...words].map(str).join('\n').toLowerCase();
       }
       for (const st of steps) stepById.set(st.id, { step: st, skill: s });
       byId.set(s.id, s);
@@ -893,13 +943,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return out;
   }
 
-  // Edges currently shown plus adjacency over them.
+  // Edges currently shown plus adjacency over them, and each step's shown links by kind: the one
+  // set every drawing, count, list, chip, focus and grouping reads [skill-atlas-13].
   function derive(idx, showMentions) {
     const shown = idx.edges.filter((e) => showMentions || e.kind === 'calls');
-    const out = new Map(), inc = new Map();
+    const out = new Map(), inc = new Map(), stepKind = new Map();
     for (const s of idx.skills) { out.set(s.id, new Set()); inc.set(s.id, new Set()); }
-    for (const e of shown) { if (e.from === e.to) continue; out.get(e.from).add(e.to); inc.get(e.to).add(e.from); }
-    return { shown, out, inc, layers: computeLayers(idx.skills, out, inc) };
+    for (const e of shown) {
+      if (e.fromStep) { const k = e.fromStep + '\u0000' + e.to; if (stepKind.get(k) !== 'calls') stepKind.set(k, e.kind); }
+      if (e.from === e.to) continue;
+      out.get(e.from).add(e.to); inc.get(e.to).add(e.from);
+    }
+    return { shown, out, inc, stepKind, layers: computeLayers(idx.skills, out, inc) };
   }
 
   // Link-depth layers over the condensation of the shown links (each cycle collapsed to one node):
@@ -969,7 +1024,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const vis = new Set();
     for (const s of idx.skills) {
       if (focus && !focus.has(s.id)) continue;
-      const hay = own(s._trSearch, i18n.lang) ? s._search + '\n' + s._trSearch[i18n.lang] : s._search;
+      const tr = trTag(s);
+      const hay = tr && own(s._trSearch, tr) ? s._search + '\n' + s._trSearch[tr] : s._search;
       if (words.some((w) => !hay.includes(w))) continue;
       if (tags.some((x) => !s._tagIds.has(x))) continue;
       vis.add(s.id);
@@ -994,25 +1050,36 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   // ---------- workflows (pure helpers) ----------
+  // The document as it is read and kept: a document the server accepts comes back as it was
+  // served, byte for byte once serialized, so a document read can always be saved again; only a
+  // part of no workflows shape (an older page's local copy) is left out or set to its empty value.
+  // What the page shows for what the document leaves unset (the workflow shown while `active` is
+  // null, the label of an empty name, an empty note) is read where it is shown, never written in.
   function normalizeWorkflows(doc) {
-    doc = doc && typeof doc === 'object' ? doc : {};
+    doc = doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
+    const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+    const text = (v) => (typeof v === 'string' ? v : str(v));
     const wfIds = new Set();
-    const workflows = arr(doc.workflows).filter((w) => w && typeof w === 'object').map((w) => {
-      const id = uniqueId(str(w.id) || 'wf-' + slugify(w.name), wfIds); wfIds.add(id);
+    const workflows = arr(doc.workflows).filter(isObj).map((w) => {
+      const id = uniqueId(typeof w.id === 'string' && w.id ? w.id : 'wf-' + slugify(w.name), wfIds); wfIds.add(id);
       const pIds = new Set();
-      const phases = arr(w.phases).filter((p) => p && typeof p === 'object').map((p) => {
-        const pid = uniqueId(str(p.id) || 'p-' + slugify(p.name), pIds); pIds.add(pid);
-        const skills = [];
-        for (const s of arr(p.skills)) { const v = str(s); if (v && !skills.includes(v)) skills.push(v); }
-        return { ...p, id: pid, name: str(p.name) || t('Phase'), note: str(p.note), skills };
+      const phases = arr(w.phases).filter(isObj).map((p) => {
+        const pid = uniqueId(typeof p.id === 'string' && p.id ? p.id : 'p-' + slugify(p.name), pIds); pIds.add(pid);
+        const q = { ...p, id: pid, name: text(p.name), skills: arr(p.skills).filter((s) => typeof s === 'string') };
+        if (q.note !== undefined && typeof q.note !== 'string') q.note = text(q.note);
+        return q;
       });
-      return { ...w, id, name: str(w.name) || t('Workflow'), phases };
+      return { ...w, id, name: text(w.name), phases };
     });
-    let active = doc.active != null ? str(doc.active) : null;
-    if (!workflows.some((w) => w.id === active)) active = workflows.length ? workflows[0].id : null;
-    return { ...doc, version: doc.version || 1, active, workflows };
+    const active = typeof doc.active === 'string' && workflows.some((w) => w.id === doc.active) ? doc.active : null;
+    return { ...doc, version: 1, active, workflows };
   }
-  const activeWorkflow = () => state.workflows.workflows.find((w) => w.id === state.workflows.active) || null;
+  // The workflow shown: the active one, else the first while none is active.
+  const activeWorkflow = () => { const all = state.workflows.workflows; return all.find((w) => w.id === state.workflows.active) || all[0] || null; };
+  const shownWorkflowId = () => { const wf = activeWorkflow(); return wf ? wf.id : null; };
+  // A name as shown: an empty one under the page's word for it.
+  const wfName = (w) => (w && w.name) || t('Workflow');
+  const phaseName = (p) => (p && p.name) || t('Phase');
   const findPhase = (pid) => { const wf = activeWorkflow(); return wf ? wf.phases.find((p) => p.id === pid) || null : null; };
   const phasesOf = (skillId) => { const wf = activeWorkflow(); return wf ? wf.phases.filter((p) => p.skills.includes(skillId)) : []; };
 
@@ -1055,8 +1122,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const inPhase = new Set();
       const groups = wf.phases.map((p, i) => {
         const ids = [], missing = [];
-        for (const e of p.skills) { if (idx.byId.has(e)) { ids.push(e); inPhase.add(e); } else missing.push(e); }
-        return { id: p.id, kind: 'phase', title: p.name, ids, missing, phase: p, phaseIndex: i };
+        for (const e of p.skills) { if (idx.byId.has(e)) { if (!ids.includes(e)) ids.push(e); inPhase.add(e); } else if (!missing.includes(e)) missing.push(e); }
+        return { id: p.id, kind: 'phase', title: phaseName(p), ids, missing, phase: p, phaseIndex: i };
       });
       const un = idx.skills.filter((s) => !inPhase.has(s.id)).map((s) => s.id);
       groups.push({ id: '__unassigned', kind: 'unassigned', title: t('Unassigned'), ids: un, missing: [], wide: un.length > 12 });
@@ -1081,14 +1148,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     // A skill installed in several roots (see `copies`) is listed under each of them.
     const inRoot = (s, rid) => s.root === rid || s.copies.some((c) => c.root === rid);
-    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: rootName(r), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
+    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: rootTitle(r), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
     const other = idx.skills.filter((s) => !idx.rootById.has(s.root)).map((s) => s.id);
     if (other.length) groups.push({ id: 'root:__other', kind: 'root', title: t('Other'), ids: other });
     for (const g of groups) g.wide = g.ids.length > 16;
     return groups;
   }
   // Collapse state is per workflow, so presets that share phase ids don't share it.
-  const groupPrefix = () => state.grouping === 'workflow' ? 'workflow:' + (state.workflows.active || '') + ':' : state.grouping + ':';
+  const groupPrefix = () => state.grouping === 'workflow' ? 'workflow:' + (shownWorkflowId() || '') + ':' : state.grouping + ':';
   const groupKey = (g) => groupPrefix() + g.id;
   const wideCols = (n) => Math.max(1, Math.min(4, Math.ceil(n / 10)));
 
@@ -1143,7 +1210,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         [atlas, wfResult, config] = await Promise.all([getJSON('/api/atlas'), fetchWorkflows(), configP]);
       } catch (err) {
         setupLanguages(await configP);
-        return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
+        return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node <skill-dir>/scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
       }
       workflows = wfResult.doc;
       save.etag = wfResult.etag;
@@ -1234,10 +1301,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   // ---------- labels in the shown language ----------
   // The label file's entry, else the source file's text, else the page's own fallback.
-  const pageTitle = () => labelText(labels().title) || state.view.title || t('Skill Atlas');
-  const catLabel = (c) => labelText((labels().categories || {})[c]) || state.view.categories[c].label || DEFAULT_CATEGORY[c]();
+  const pageTitle = () => labelText(labelsOf('title')) || state.view.title || t('Skill Atlas');
+  const catLabel = (c) => labelText((labelsOf('categories') || {})[c]) || state.view.categories[c].label || DEFAULT_CATEGORY[c]();
   function presetLabels(p) {
-    const all = labels().presets;
+    const all = labelsOf('presets');
     const l = all && typeof all === 'object' && p && p.id != null && all[p.id] && typeof all[p.id] === 'object' ? all[p.id] : {};
     return l;
   }
@@ -1250,13 +1317,30 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const SCOPE_NAMES = { project: () => t('Project'), user: () => t('User'), plugin: () => t('Plugin'), extra: () => t('Extra') };
   const WHERE_NAMES = { Universal: () => t('Universal'), source: () => t('source') };
   // A scanned folder's label, composed in the shown language from its scope and its agent's name
-  // (product names, plugin names and paths stay as they are).
+  // (product names, plugin names and paths stay as they are). A project's folder other than its
+  // repository's root says which after its scope, its place kept as the scan's label gives it:
+  // `Project (packages/ui) \u00B7 Universal`.
   function rootName(r) {
     const label = str(r.label) || str(r.id);
-    const m = /^(Project|User|Plugin|Extra) \u00B7 (.*)$/.exec(label);
+    const m = /^(Project|User|Plugin|Extra)(?: \((.+)\))? \u00B7 (.*)$/.exec(label);
     if (!m || !SCOPE_NAMES[r.scope]) return label;
-    const where = own(WHERE_NAMES, m[2]) ? WHERE_NAMES[m[2]]() : m[2];
+    const where = own(WHERE_NAMES, m[3]) ? WHERE_NAMES[m[3]]() : m[3];
+    if (m[2]) return t('{scope} ({place}) · {where}', { scope: SCOPE_NAMES[r.scope](), place: m[2], where });
     return t('{scope} · {where}', { scope: SCOPE_NAMES[r.scope](), where });
+  }
+  // A scanned folder's title: its label, and where another folder's label is the same (one agent
+  // reading two folders of one scope, such as `.agents/skills` and `.config/agents/skills`), as
+  // many of its path's last parts as tell it from each of them. Folders are told apart by id alone.
+  function rootTitle(r) {
+    const name = rootName(r);
+    const same = state.idx.roots.filter((o) => o.id !== r.id && rootName(o) === name);
+    if (!same.length) return name;
+    const parts = (p) => str(p).split(/[\\/]/);
+    const mine = parts(r.path);
+    const tail = (ps, k) => ps.slice(-k).join('/');
+    let k = 1;
+    while (k < mine.length && same.some((o) => tail(parts(o.path), k) === tail(mine, k))) k++;
+    return t('{folder} · {path}', { folder: name, path: tail(mine, k) });
   }
 
   // The page's own text outside what renders: set again whenever the language changes.
@@ -1340,7 +1424,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   // Saving workflows
   // ===================================================================
-  const save = { version: 0, saved: 0, inFlight: false, timer: 0, status: 'idle', etag: null };
+  const save = { version: 0, saved: 0, inFlight: false, keepalive: false, timer: 0, status: 'idle', etag: null };
   // Editing is off while the stored file is unreadable or was changed elsewhere.
   const canEdit = () => !state.wfBlocked;
   function markDirty() {
@@ -1349,36 +1433,44 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     clearTimeout(save.timer);
     // The exported page saves to localStorage synchronously, so closing it right after an edit loses nothing.
     if (state.mode === 'static') { flushSave(); return; }
-    save.timer = setTimeout(flushSave, 400);
+    save.timer = setTimeout(() => flushSave(), 400);
     if (save.status !== 'saving') setSaveStatus('pending');
   }
+  // A keepalive request outlives the page only under the browser's 64 KiB budget; a larger body
+  // is sent as an ordinary request, which still completes while the page is merely hidden.
+  const KEEPALIVE_MAX_BYTES = 60000;
   function putWorkflows(doc, extraHeaders, keepalive) {
     const headers = { 'Content-Type': 'application/json', 'X-Skill-Atlas': '1', ...(extraHeaders || {}) };
     if (save.etag) headers['If-Match'] = save.etag;
-    return fetch('/api/workflows', { method: 'PUT', headers, body: JSON.stringify(doc), keepalive: !!keepalive });
+    const body = JSON.stringify(doc);
+    return fetch('/api/workflows', { method: 'PUT', headers, body, keepalive: !!keepalive && new TextEncoder().encode(body).length < KEEPALIVE_MAX_BYTES });
   }
-  async function flushSave() {
+  // The one path that writes the workflows: the timed save and the save as the page is hidden
+  // (`keepalive`) both come here, so the ETag, the saved version, a conflict and an unreadable
+  // file are handled alike.
+  async function flushSave(opts) {
     clearTimeout(save.timer);
+    const keepalive = !!(opts && opts.keepalive);
     if (state.mode === 'static') {
       const ok = lsSet(staticKey(), { basedOn: state.staticBase, doc: state.workflows });
       save.saved = save.version;
       setSaveStatus(ok ? 'saved' : 'error');
       return;
     }
-    if (save.inFlight || state.wfBlocked) return;
+    if (state.wfBlocked) return;
+    // A second request would carry the ETag the first is replacing: the follow-up waits for its answer.
+    if (save.inFlight) { if (keepalive) save.keepalive = true; return; }
     if (save.saved === save.version && save.status !== 'error') return;
     save.inFlight = true;
     const v = save.version;
     setSaveStatus('saving');
     try {
-      const res = await putWorkflows(state.workflows);
+      const res = await putWorkflows(state.workflows, null, keepalive);
       if (res.status === 412) {
         // Someone else changed the file: stop, never overwrite, let the reader reload.
         save.inFlight = false;
-        state.wfBlocked = { kind: 'conflict' };
-        dismissUndos();
+        blockWorkflows({ kind: 'conflict' });
         setSaveStatus('conflict');
-        invalidate('chrome', 'canvas', 'details');
         return;
       }
       if (res.status === 409) {
@@ -1387,10 +1479,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         try { body = await res.json(); } catch { body = null; }
         if (body && body.error === 'invalid-workflows') {
           save.inFlight = false;
-          state.wfBlocked = { kind: 'invalid', path: str(body.path), message: str(body.message) };
-          dismissUndos();
+          blockWorkflows({ kind: 'invalid', path: str(body.path), message: str(body.message) });
           setSaveStatus('idle');
-          invalidate('chrome', 'canvas', 'details');
           return;
         }
       }
@@ -1405,16 +1495,27 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (JSON.stringify(norm) !== JSON.stringify(state.workflows)) { state.workflows = norm; invalidate('chrome', 'canvas', 'details'); }
       }
       save.inFlight = false;
-      if (save.version !== v) flushSave(); else setSaveStatus('saved');
+      const followKeepalive = save.keepalive;
+      save.keepalive = false;
+      if (save.version !== v) flushSave({ keepalive: followKeepalive }); else setSaveStatus('saved');
     } catch {
       save.inFlight = false;
+      save.keepalive = false;
       setSaveStatus('error');
     }
+  }
+  // Editing stops while the stored file is unreadable or was changed elsewhere; an undo would
+  // restore over a file the page no longer holds, so the latest edit can no longer be undone.
+  function blockWorkflows(blocked) {
+    state.wfBlocked = blocked;
+    clearLatestEdit();
+    invalidate('chrome', 'canvas', 'details');
   }
   // Re-read the stored document after a conflict, dropping the unsaved edit.
   async function reloadWorkflows() {
     const r = await fetchWorkflows();
     state.wfBlocked = r.blocked;
+    clearLatestEdit();
     if (!r.blocked) {
       save.etag = r.etag;
       state.workflows = normalizeWorkflows(r.doc);
@@ -1436,6 +1537,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       try { stored = await res.json(); } catch { stored = null; }
       state.workflows = normalizeWorkflows(stored || doc);
       state.wfBlocked = null;
+      clearLatestEdit();
       save.saved = save.version;
       setSaveStatus('saved');
       toast(t('Started fresh — the unreadable file was kept as a backup'));
@@ -1460,17 +1562,24 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   window.addEventListener('beforeunload', (e) => {
     if (state.mode === 'live' && (save.version !== save.saved || save.status === 'error')) { e.preventDefault(); e.returnValue = ''; }
   });
-  // Last chance for a pending edit when the page goes away.
+  // Last chance for a pending edit when the page goes away: the same save, kept alive past the page.
   function flushOnHide() {
-    if (state.mode === 'static') { if (save.version !== save.saved) flushSave(); return; }
-    if (save.version !== save.saved && !save.inFlight && !state.wfBlocked) {
-      clearTimeout(save.timer);
-      try { putWorkflows(state.workflows, null, true); } catch { /* the beforeunload prompt already warned */ }
-    }
+    if (save.version !== save.saved) flushSave({ keepalive: true });
   }
   window.addEventListener('pagehide', flushOnHide);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnHide(); });
 
+  // The latest edit alone can be undone, whichever edit it was, until the next: its snapshot is
+  // kept here, apart from any notice, and both Ctrl/Cmd+Z and a notice's Undo restore it.
+  // `key` names a run of edits that undo as one (a phase's note typed in one go); switching the
+  // workflow ends the run. `active` is the workflow shown once the edit was made: switching
+  // workflows is no edit, so an undo after a switch leaves the reader where they are.
+  let latestEdit = null;
+  function recordEdit(before, key) {
+    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null, active: shownWorkflowId() };
+  }
+  function endEditRun() { if (latestEdit) latestEdit.key = null; }
+  function clearLatestEdit() { latestEdit = null; dismissUndos(); }
   // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
     if (!canEdit()) {
@@ -1480,14 +1589,26 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const before = clone(state.workflows);
     fn(state.workflows);
     markDirty();
+    recordEdit(before);
     invalidate('chrome', 'canvas', 'details');
     return before;
   }
-  function restoreWorkflows(snapshot) {
-    state.workflows = normalizeWorkflows(snapshot);
+  // Restore the latest edit's snapshot; undoing clears it (there is no redo). Where the reader
+  // switched workflows since the edit, the one they view stays shown while it still exists.
+  function undoLatest() {
+    if (!latestEdit || !canEdit()) return false;
+    const { before, active } = latestEdit;
+    latestEdit = null;
+    const viewing = shownWorkflowId();
+    const stay = viewing !== active && arr(before.workflows).some((w) => w && str(w.id) === viewing);
+    state.workflows = normalizeWorkflows(stay ? { ...before, active: viewing } : before);
+    if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
     markDirty();
     invalidate('chrome', 'canvas', 'details');
+    return true;
   }
+  // A notice's Undo: the same snapshot Ctrl/Cmd+Z restores.
+  const undoAction = () => ({ label: t('Undo'), run: undoLatest });
 
   // ---------- workflow operations ----------
   function addToPhase(pid, sid) { mutate(() => { const p = findPhase(pid); if (p && !p.skills.includes(sid)) p.skills.push(sid); }); }
@@ -1495,8 +1616,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function moveSkill(sid, fromPid, toPid) {
     if (fromPid === toPid) return;
     const name = skillLabel(sid);
-    const toName = toPid ? findPhase(toPid)?.name : t('Unassigned');
-    const fromName = fromPid ? findPhase(fromPid)?.name : '';
+    const toName = toPid ? phaseName(findPhase(toPid)) : t('Unassigned');
+    const fromName = fromPid ? phaseName(findPhase(fromPid)) : '';
     const before = mutate(() => {
       if (fromPid) { const f = findPhase(fromPid); if (f) f.skills = f.skills.filter((x) => x !== sid); }
       if (toPid) { const to = findPhase(toPid); if (to && !to.skills.includes(sid)) to.skills.push(sid); }
@@ -1504,7 +1625,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!before) return;
     // A skill still in another phase is not unassigned: say what actually happened.
     const msg = !toPid && phasesOf(sid).length ? t('Removed {skill} from {phase}', { skill: name, phase: fromName }) : t('Moved {skill} to {phase}', { skill: name, phase: toName });
-    toast(msg, { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(msg, undoAction());
   }
   function addPhase() {
     const wf = activeWorkflow();
@@ -1534,13 +1655,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = findPhase(pid);
     if (!wf || !p) return;
     if (p.skills.length) {
-      const ok = await confirmDialog({ title: t('Delete phase “{name}”?', { name: p.name }), body: t('Its {n} skill will go back to Unassigned. Nothing is uninstalled.|Its {n} skills will go back to Unassigned. Nothing is uninstalled.', { n: p.skills.length }), confirm: t('Delete phase'), danger: true });
+      const ok = await confirmDialog({ title: t('Delete phase “{name}”?', { name: phaseName(p) }), body: t('Its {n} skill will go back to Unassigned. Nothing is uninstalled.|Its {n} skills will go back to Unassigned. Nothing is uninstalled.', { n: p.skills.length }), confirm: t('Delete phase'), danger: true });
       if (!ok) return;
     }
     const before = mutate(() => { wf.phases = wf.phases.filter((x) => x.id !== pid); });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase' && state.selection.id === pid) state.selection = null;
-    toast(t('Deleted phase {name}', { name: p.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Deleted phase {name}', { name: phaseName(p) }), undoAction());
   }
   function createWorkflow(name, preset, place) {
     const doc = state.workflows;
@@ -1562,7 +1683,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (count) {
         const before = mutate(() => { placed.forEach((ids, i) => { phases[i].skills = ids.slice(); }); });
         if (!before) return;
-        toast(t('Placed {n} skill by keyword|Placed {n} skills by keyword', { n: count }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+        toast(t('Placed {n} skill by keyword|Placed {n} skills by keyword', { n: count }), undoAction());
       } else {
         toast(t('No skill matched this preset’s keywords — drag skills into phases'));
       }
@@ -1578,19 +1699,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const wf = activeWorkflow();
     if (!wf) return;
     const names = new Set(state.workflows.workflows.map((w) => w.name));
-    const name = uniqueId(t('{name} copy', { name: wf.name }), names).replace(/-(\d+)$/, ' $1');
+    const name = uniqueId(t('{name} copy', { name: wfName(wf) }), names).replace(/-(\d+)$/, ' $1');
     const id = uniqueId('wf-' + slugify(name), new Set(state.workflows.workflows.map((w) => w.id)));
     if (mutate((d) => { const c = clone(wf); c.id = id; c.name = name; d.workflows.splice(d.workflows.indexOf(wf) + 1, 0, c); d.active = id; })) toast(t('Duplicated as {name}', { name }));
   }
   async function deleteWorkflow() {
     const wf = activeWorkflow();
     if (!wf) return;
-    const ok = await confirmDialog({ title: t('Delete workflow “{name}”?', { name: wf.name }), body: t('Its {n} phase and its placements are removed. Skills are not affected.|Its {n} phases and their placements are removed. Skills are not affected.', { n: wf.phases.length }), confirm: t('Delete workflow'), danger: true });
+    const ok = await confirmDialog({ title: t('Delete workflow “{name}”?', { name: wfName(wf) }), body: t('Its {n} phase and its placements are removed. Skills are not affected.|Its {n} phases and their placements are removed. Skills are not affected.', { n: wf.phases.length }), confirm: t('Delete workflow'), danger: true });
     if (!ok) return;
     const before = mutate((d) => { d.workflows = d.workflows.filter((w) => w.id !== wf.id); d.active = d.workflows.length ? d.workflows[0].id : null; });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase') state.selection = null;
-    toast(t('Deleted workflow {name}', { name: wf.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Deleted workflow {name}', { name: wfName(wf) }), undoAction());
   }
 
   // ===================================================================
@@ -1634,9 +1755,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     sel.replaceChildren();
     const wfs = state.workflows.workflows;
     if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, t('No workflows yet')));
-    for (const w of wfs) sel.append(h('option', { value: w.id, selected: w.id === state.workflows.active ? true : null }, w.name));
+    const shownId = shownWorkflowId();
+    for (const w of wfs) sel.append(h('option', { value: w.id, selected: w.id === shownId ? true : null }, wfName(w)));
     sel.append(h('option', { value: '__new' }, t('New workflow…')));
-    sel.value = state.workflows.active || '';
+    sel.value = shownId || '';
     const blocked = state.wfBlocked;
     sel.disabled = !!blocked;
     els.wfMenu.disabled = !wfs.length || !!blocked;
@@ -1778,7 +1900,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // A tag's label in the shown language: its label file's, else the rules', else, for a tag the
   // scan made from an MCP server's name, the page's own phrase.
   function tagLabel(id) {
-    const own_ = labelText((labels().tags || {})[id]);
+    const own_ = labelText((labelsOf('tags') || {})[id]);
     if (own_) return own_;
     const tg = state.idx.tagById.get(id);
     // The server's name as the scan wrote it in the label; the id has it lowercased.
@@ -1788,28 +1910,47 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   // A name shared by several installed skills carries its folder's label, so the copies read apart.
   const isShared = (s) => (state.idx.byName.get(s.name) || []).length > 1;
-  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? rootName(r) : str(s.root); };
+  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? rootTitle(r) : str(s.root); };
   const skillLabel = (id) => { const s = state.idx.byId.get(id); return s ? '/' + s.name + (isShared(s) ? ' · ' + rootLabel(s) : '') : '/' + id; };
 
   // ---------- a skill's words in the shown language ----------
   // A translation supplies words only: steps, links and tags are always those of SKILL.md.
+  // The tag of the skill's translation in the page's language [skill-atlas-29]: the page's own tag
+  // where the skill has an entry under it, else the first in code-unit order of the skill's tags of
+  // the same language and script (`zh` and `zh-Hans` serve zh-CN, `zh-TW` does not), or null. The
+  // scan has already chosen between the skill's folder and the state folder within each tag, and the
+  // server chooses a file's tag by this same rule (translations.mjs matchingTag), so the entry under
+  // this one tag is all the page reads: a skill's translated words, its search text and its
+  // translation insights; a file is still asked for under the page's tag.
+  function trTag(s) {
+    const c = s._trTag;
+    if (c && c.lang === i18n.lang) return c.tag;
+    const tag = matchTag(i18n.lang, Object.keys(s.translations));
+    s._trTag = { lang: i18n.lang, tag };
+    return tag;
+  }
   function skillTr(s) {
-    const tr = own(s.translations, i18n.lang) ? s.translations[i18n.lang] : null;
+    const tag = trTag(s);
+    const tr = tag ? s.translations[tag] : null;
     return tr && typeof tr === 'object' ? tr : null;
   }
-  // The language a skill is written in is not recorded; Han script in its own words reads as Chinese.
-  const HAN = /[㐀-䶿一-鿿豈-﫿]/;
-  const originalLang = (s) => (HAN.test([s.name, s.description, ...s.steps.slice(0, 3).map((st) => st.title)].join(' ')) ? 'zh' : 'en');
+  // A language as the scan reports it [skill-atlas-29]: a tag, `und` where it could not be told, or
+  // null where the field is absent (an older scan, an exported page) or holds no tag.
+  const reportedLang = (v) => typeof v === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(v) ? v : null;
+  // Whether a text the scan reports in `lang` is in another language than the page's: `und` is
+  // another in every language; null, unknown, in none, so an older atlas marks nothing.
+  const otherLanguage = (lang) => lang != null && (primary(lang) === 'und' || !sameLanguage(lang, i18n.lang));
   // translated | original (no translation of its words: shown in its original, another language) |
   // same (no translation needed, as far as can be told). Words from annotations alone, with no
-  // translated description, leave the skill in its original.
+  // translated description, leave the skill in its original. The skill's language is the scan's,
+  // the one the file dialog reads for SKILL.md too, so the two never disagree.
   function trState(s) {
     const tr = skillTr(s);
     if (tr && (str(tr.description) || (!str(s.description) && tr.origin !== 'annotation'))) return 'translated';
-    return primary(originalLang(s)) === primary(i18n.lang) ? 'same' : 'original';
+    return otherLanguage(reportedLang(s.language)) ? 'original' : 'same';
   }
   // Whether the scan found the translation's steps numbering otherwise than the skill's.
-  const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && i.params.lang === i18n.lang);
+  const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && trTag(s) != null && i.params.lang === trTag(s));
   const shownDesc = (s) => { const tr = skillTr(s); return (tr && str(tr.description)) || s.description; };
   const shownSummary = (s) => { const tr = skillTr(s); return (tr && str(tr.summary)) || s.summary; };
   function trSteps(s) {
@@ -1870,7 +2011,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     head.append(h('button', { type: 'button', class: 'icon-btn', 'data-act': 'group-toggle', 'data-key': key, 'data-fk': 'gt|' + key, 'aria-expanded': 'true', 'aria-label': t('Collapse {group}', { group: g.title }) }, icon('chevronDown')));
     const title = h('div', { class: 'col-title' });
     if (isPhase && state.renaming === g.id) {
-      title.append(h('input', { type: 'text', class: 'col-rename', value: g.title, 'aria-label': t('Phase name'), 'data-phase': g.id, maxlength: '80' }));
+      title.append(h('input', { type: 'text', class: 'col-rename', value: g.phase.name, 'aria-label': t('Phase name'), 'data-phase': g.id, maxlength: '80' }));
     } else if (isPhase) {
       title.append(h('button', { type: 'button', class: 'col-name', 'data-act': 'phase-select', 'data-phase': g.id, 'data-fk': 'pn|' + g.id, title: t('{phase} — show phase details', { phase: g.title }) }, g.title));
     } else {
@@ -1984,12 +2125,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         h('span', { class: 'step-idx', text: fmtNum(st.index) }),
         h('span', { class: 'step-title', title: words.title, text: words.title }),
         h('span', { class: 'step-tags' }, pillsFor(stepCats, { bare: true }))));
-      if (st.calls.length) {
+      // A link the reader hides (a mention, with Mentions off) shows no chip.
+      const shownCalls = st.calls.filter((to) => { const k = st.id + '\u0000' + to; return state.derived.stepKind.has(k) || !state.idx.stepEdgeKind.has(k); });
+      if (shownCalls.length) {
         const calls = h('span', { class: 'step-calls' });
-        for (const to of st.calls) {
+        for (const to of shownCalls) {
           const target = state.idx.byId.get(to);
           if (target) {
-            const kind = state.idx.stepEdgeKind.get(st.id + '\u0000' + to) || 'calls';
+            const kind = state.derived.stepKind.get(st.id + '\u0000' + to) || 'calls';
             const tip = kind === 'mentions' ? t('Mentions {skill} — go there', { skill: '/' + target.name }) : t('Calls {skill} — go there', { skill: '/' + target.name });
             calls.append(h('button', { type: 'button', class: 'call-chip' + (kind === 'mentions' ? ' mention' : ''), 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: tip }, `→ ${target.name}`));
           } else {
@@ -2309,19 +2452,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const checks = h('div', { class: 'phase-checks' });
       if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: t('This workflow has no phases yet.') }));
       for (const p of wf.phases) {
-        checks.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', 'data-act': 'phase-check', 'data-phase': p.id, 'data-skill': s.id, checked: p.skills.includes(s.id), disabled: !canEdit() }), p.name));
+        checks.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', 'data-act': 'phase-check', 'data-phase': p.id, 'data-skill': s.id, checked: p.skills.includes(s.id), disabled: !canEdit() }), phaseName(p)));
       }
-      body.append(sec(t('Phases in {workflow}', { workflow: wf.name }), checks));
+      body.append(sec(t('Phases in {workflow}', { workflow: wfName(wf) }), checks));
     }
 
-    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootName(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
+    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootTitle(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
     if (s.file) srcKids.push(h('div', { class: 'd-path' }, h('code', { text: str(s.file) }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': str(s.file), 'aria-label': t('Copy file path'), title: t('Copy path') }, icon('copy'))));
     if (s.lines) srcKids.push(h('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px', text: t('{n} line|{n} lines', { n: s.lines }) }));
     body.append(sec(t('Source'), ...srcKids));
     if (s.copies.length) {
       body.append(sec(t('Also installed in · {n}', { n: s.copies.length }), h('ul', { class: 'd-list' }, s.copies.map((c) => {
         const r = idx.rootById.get(c.root);
-        return h('li', null, h('div', { text: r ? rootName(r) : c.root }),
+        return h('li', null, h('div', { text: r ? rootTitle(r) : c.root }),
           c.dir ? h('div', { class: 'd-path' }, h('code', { text: c.dir }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': c.dir, 'aria-label': t('Copy folder path'), title: t('Copy path') }, icon('copy'))) : null);
       }))));
     }
@@ -2333,7 +2476,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (fm.length) {
       const order = ['allowed-tools', 'model', 'license', 'compatibility'];
       fm.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99) || a[0].localeCompare(b[0]));
-      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? i18n.lang : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
+      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? trTag(s) : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
     }
 
     if (s.tags.length || s._tagIds.size) {
@@ -2450,7 +2593,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const others = phaseOf.get(fromIn ? e.to : e.from) || [];
       const otherNames = others.length ? others.map((q) => q.name) : [t('Unassigned')];
       for (const on of otherNames) {
-        const label = fromIn ? `${p.name} → ${on}` : `${on} → ${p.name}`;
+        const label = fromIn ? `${phaseName(p)} → ${on}` : `${on} → ${phaseName(p)}`;
         if (!crossings.has(label)) crossings.set(label, { out: fromIn, pairs: [] });
         const pair = `${skillLabel(e.from).slice(1)} → ${skillLabel(e.to).slice(1)}`;
         const entry = crossings.get(label);
@@ -2463,7 +2606,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       h('span', { class: 'top' }, v.pairs.map((pp, j) => [j ? h('span', { class: 'muted', text: '·' }) : null,
         h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, title: edgeKind(pp.kind), text: pp.text })]))))) :
       h('span', { class: 'muted', text: t('No links cross into other phases.') })));
-    return [detailsHead(t('Phase {i} of {n} · {workflow}', { i: i + 1, n: wf.phases.length, workflow: wf.name }), p.name), body];
+    return [detailsHead(t('Phase {i} of {n} · {workflow}', { i: i + 1, n: wf.phases.length, workflow: wfName(wf) }), phaseName(p)), body];
   }
 
   // ===================================================================
@@ -2621,24 +2764,29 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       // Asked in the page's language: the file's translation in it where there is one, else the file itself.
       const res = await fetch(`/api/file?skill=${encodeURIComponent(skillId)}&path=${encodeURIComponent(path)}&lang=${encodeURIComponent(lang)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
-      let text = '', language = null, stale = false, edited = false;
+      let text = '', language = null, sourceLanguage = null, stale = false, edited = false, shown = null;
       if (/^application\/json\b/i.test(res.headers.get('Content-Type') || '')) {
         const body = await res.json();
         text = str(body && (body.text != null ? body.text : body.content));
         language = body && body.language ? str(body.language) : null;
+        sourceLanguage = body ? reportedLang(body.sourceLanguage) : null;
         stale = !!(body && body.stale);
         edited = !!(body && body.edited);
         // The title names the file shown: its translation's name where one is shown.
-        const shown = body && typeof body.path === 'string' && body.path ? body.path : null;
+        shown = body && typeof body.path === 'string' && body.path ? body.path : null;
         const title = shown && pre.closest('dialog') ? pre.closest('dialog').querySelector('.dlg-head h2') : null;
         if (title) title.textContent = `/${s.name} · ${shown}`;
       } else text = await res.text();
+      // The original's language is the scan's: SKILL.md's is the skill's own, so its details and this
+      // dialog never disagree; another file's is the one the server read from its words.
+      const original = language ? null : (shown || path) === 'SKILL.md' && reportedLang(s.language) ? reportedLang(s.language) : sourceLanguage;
       pre.textContent = text;
       if (language) pre.lang = language;
+      else if (original && primary(original) !== 'und') pre.lang = original;
       const languageShown = languageName(lang);
       if (language && stale) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language: languageShown }) }));
       if (language && edited) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow the original, not this text.', { language: languageShown }) }));
-      if (!language && primary(originalLang(s)) !== primary(lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
+      if (otherLanguage(original)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
     } catch (err) {
       pre.textContent = err && err.message ? t('Couldn’t read {path} ({error}).', { path, error: err.message }) : t('Couldn’t read {path}.', { path });
     }
@@ -2646,16 +2794,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return p;
   }
 
-  // Undo applies only while its edit is the latest: any later edit dismisses every Undo toast.
+  // A notice's Undo stands only while its edit is the latest: any later edit, an undo, or editing
+  // stopping dismisses every Undo notice (the snapshot itself is `latestEdit`, kept apart from them).
   let undoToasts = [];
   let focusBeforeToasts = null;
   function dismissUndos() { for (const u of undoToasts.slice()) u.dismiss(); undoToasts = []; }
-  function runLatestUndo() {
-    const u = undoToasts[undoToasts.length - 1];
-    if (!u) return false;
-    u.run();
-    return true;
-  }
   function toast(msg, action) {
     const el = h('div', { class: 'toast' }, h('span', { text: msg }));
     let timer = 0, gone = false;
@@ -2719,6 +2862,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const message = insightMessage(ins);
         wrap.append(h('button', { type: 'button', onclick: () => { closePopover(false); showInsight(ids); } },
           h('b', { text: names.length ? list(names) : '—' }), message ? h('div', { text: message }) : null));
+        const repair = insightRepair(ins);
+        if (repair) wrap.append(repair);
       }
     }
     openPopover(anchor, wrap, '');
@@ -2747,22 +2892,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const moveTargets = wf.phases.filter((p) => p.id !== fromPid && !(fromPid === null && member.has(p.id)));
         if (moveTargets.length || fromPid) {
           items.push({ sep: true }, { heading: fromPid ? t('Move to…') : t('Add to…') });
-          for (const p of moveTargets) items.push({ label: p.name, run: () => moveSkill(sid, fromPid, p.id) });
+          for (const p of moveTargets) items.push({ label: phaseName(p), run: () => moveSkill(sid, fromPid, p.id) });
           if (fromPid) items.push({ label: t('Unassigned'), run: () => moveSkill(sid, fromPid, null) });
         }
         if (fromPid) {
           const also = wf.phases.filter((p) => !member.has(p.id));
           if (also.length) {
             items.push({ heading: t('Also add to…') });
-            for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: p.name })); } });
+            for (const p of also) items.push({ label: phaseName(p), run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: phaseName(p) })); } });
           }
-          items.push({ sep: true }, { label: t('Remove from {phase}', { phase: findPhase(fromPid)?.name || t('phase') }), danger: true, run: () => removeWithUndo(fromPid, sid) });
+          items.push({ sep: true }, { label: t('Remove from {phase}', { phase: findPhase(fromPid) ? phaseName(findPhase(fromPid)) : t('phase') }), danger: true, run: () => removeWithUndo(fromPid, sid) });
         }
       } else {
         const also = wf.phases.filter((p) => !member.has(p.id));
         if (also.length) {
-          items.push({ sep: true }, { heading: t('Add to {workflow}…', { workflow: wf.name }) });
-          for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: p.name })); } });
+          items.push({ sep: true }, { heading: t('Add to {workflow}…', { workflow: wfName(wf) }) });
+          for (const p of also) items.push({ label: phaseName(p), run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: phaseName(p) })); } });
         }
       }
     }
@@ -2772,7 +2917,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = findPhase(pid);
     const before = mutate(() => { if (p) p.skills = p.skills.filter((x) => x !== sid); });
     if (!before) return;
-    toast(t('Removed {skill} from {phase}', { skill: state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid, phase: p ? p.name : t('phase') }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Removed {skill} from {phase}', { skill: state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid, phase: p ? phaseName(p) : t('phase') }), undoAction());
   }
   function phaseMenu(anchor) {
     const pid = anchor.dataset.phase;
@@ -2927,9 +3072,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     });
     els.wfSelect.addEventListener('change', () => {
       const v = els.wfSelect.value;
-      if (v === '__new') { els.wfSelect.value = state.workflows.active || ''; newWorkflowDialog(); return; }
-      if (v && v !== state.workflows.active && canEdit()) {
+      if (v === '__new') { els.wfSelect.value = shownWorkflowId() || ''; newWorkflowDialog(); return; }
+      if (v && v !== shownWorkflowId() && canEdit()) {
         state.workflows.active = v;
+        endEditRun();
         if (state.selection && state.selection.type === 'phase') state.selection = null;
         markDirty();
         invalidate('chrome', 'canvas', 'details');
@@ -3080,8 +3226,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (tgt.dataset && tgt.dataset.act === 'phase-note') {
       const p = findPhase(tgt.dataset.phase);
       if (!p || !canEdit()) return;
+      // A note typed with no other edit between is one edit to undo; the details are not
+      // re-rendered under the reader's typing, so this is not a mutate(). Phase ids repeat across
+      // workflows made from one preset, so the run is keyed by both.
+      const key = 'note:' + shownWorkflowId() + '\u0000' + p.id;
+      const before = latestEdit && latestEdit.key === key ? null : clone(state.workflows);
       p.note = tgt.value;
       markDirty();
+      if (before) recordEdit(before, key);
       clearTimeout(noteTimer);
       noteTimer = setTimeout(() => invalidate('canvas'), 600);
     }
@@ -3097,7 +3249,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (document.querySelector('dialog[open]')) return;
     const typing = tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]');
     if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !(typing && tgt.matches('input[type="text"], input[type="search"], textarea'))) {
-      if (runLatestUndo()) e.preventDefault();
+      if (undoLatest()) e.preventDefault();
       return;
     }
     if (e.key === 'F6') { e.preventDefault(); toggleDetailsFocus(); return; }

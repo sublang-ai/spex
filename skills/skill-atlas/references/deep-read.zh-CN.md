@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=9b90c178dd6983afbcb08869666bf835206ede82f11798e57a967e7881038b24 own=48d6518da07ce5d6ad876518188ab86e5ed032dfd39871c460f49b2becdad403 -->
+<!-- skill-atlas:source sha256=304d226717a1c7d82a15be02212458a660d1a287e5ba16c51a04655edcc4033e own=f965598db8b0c229913eb9c2c6f792008df02fb173e1016d785038a0d494a88f -->
 
-本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+> 本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # 深读一个技能
 
@@ -31,6 +31,12 @@
 4. **标签**：每个步骤读入什么、留下什么、使用哪些工具、在哪里需要用户参与。
    使用 [tag-rules.json](tag-rules.zh-CN.json) 中的 id；只有在没有合适的 id 时，才自拟 `<category>.<slug>`。
 5. **删除**：检测出的错误标签或链接，列在 `removeTags` 或 `removeCalls` 下。
+
+把扫描结果 `atlas.json` 中该技能的 `digest` 复制到它的条目中，写作 `"source": { "sha256": "<digest>" }`，使条目只应用于你读过的那版文本。
+某个步骤的内容来自链接的文件时，把该文件也记录在 `source` 的 `"files": { "<技能中的路径>": "<digest>" }` 下，其哈希值由 `node <skill-dir>/scripts/atlas.mjs digest <file>` 打印。
+该名称已有一个记录了其他哈希值的条目时，保留它，把你的条目加在旁边，使该值成为一组条目；绝不要替换它，因为它可能服务于另一个项目中的同名技能。
+只为 `SKILL.md` 不同的同名技能保留各自的条目；对 `SKILL.md` 相同而其他文件不同的同名技能，以 `atlas.json` 中该技能自己的 `id`（`<name>@<rootId>`）为条目的键，因为在名称下，最后一个记录该哈希值的条目是每个这类技能的注解。
+要更正注解时（例如读过技能链接的某个文件之后），替换记录该哈希值的条目，或把更正后的条目加在它之后：在记录了某技能哈希值的条目中，最后一个完全取代之前的条目；它列出的某个文件已改动时，该技能被报告为过期，而不会改用之前的条目。
 
 ## 判断标签
 

@@ -21,8 +21,11 @@ export function embed(html, data) {
   }
   // `<` escaped so no value can close the script element; U+2028/9 for old parsers.
   const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(LINE_SEPARATORS, (c) => (c === LS ? '\\u2028' : '\\u2029'));
-  const filled = EMBED_MARKER.replace('></script>', `>${json}</script>`);
-  return html.replace(EMBED_MARKER, () => filled);
+  // Joined, not substituted: a replacement string would rewrite `$&`, `$$` or `$1` in the data.
+  const close = '</script>';
+  const filled = EMBED_MARKER.slice(0, -close.length) + json + close;
+  const at = html.indexOf(EMBED_MARKER);
+  return html.slice(0, at) + filled + html.slice(at + EMBED_MARKER.length);
 }
 
 export function writeExport(viewerFile, outFile, data) {

@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-21).
+Amended in which of a skill's own and the state folder's translation is read by [DR-247](247-a-refreshed-translation-is-the-one-read.md).
 Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the atlas's scan, page and state folder and in the form of a shipped skill.
 
 ## Context
@@ -27,11 +28,11 @@ Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)
 - Two languages are offered, named by their tags: `en-US`, the source of the page's text, and `zh-CN`.
 - A translation of a file is a file beside it named with the language's tag before the extension: `SKILL.zh-CN.md` beside `SKILL.md`, `references/prompts.zh-CN.md` beside `references/prompts.md`.
   - `SKILL.md` stays the one file an agent loads; a translation is for readers and says so.
-  - A translation records the digest of its source and its own as they stood when the two last matched, so a change to either since is known: the translation is behind its source, edited apart from it, or both.
+  - A translation records the digest of its source and, where Markdown, its own as they stood when the two last matched, so a change to either since is known: the translation is behind its source, edited apart from it, or both.
   - A reader may edit either; the agent carries an edit across to the other on request, and the record is renewed only once the two match again.
   - A skill's original language is whatever its `SKILL.md` is written in: a skill written in Chinese is translated by `SKILL.en-US.md`.
-- Every text file of a skill shipped from `skills/` has a `zh-CN` translation whose recorded digests are its source's and its own.
-- A catalog and a label file are data the page reads: an edit to one takes effect as it stands, and a label file records its source's digest alone.
+- Every Markdown file of a skill shipped from `skills/`, and each file of labels under its `references/`, has a `zh-CN` translation: a Markdown one records its source's digest and its own, a label file its source's alone.
+- A catalog and a label file are data the page reads: an edit to one takes effect as it stands.
 - The atlas reads a skill's translations from the skill's own folder, else from `translations/<skill id>/` in the state folder, where the loading agent writes translations of skills others wrote, on the user's request.
   - The scan reports, per language, a skill's description, its steps' titles and text, and whether the translation is behind its source or edited apart from it.
   - Steps, links and tags are read from `SKILL.md` alone; a translation supplies words, never structure.
@@ -44,7 +45,7 @@ Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)
 ## Consequences
 
 - A reader can correct the page's Chinese, or add a language, by editing a file in the installed skill.
-- A change to a shipped skill's text or to its translation fails the repository's tests until the other is brought in line.
+- A change to a shipped skill's text or to its Markdown translation fails the repository's tests until the other is brought in line; a label file's own edit passes, as it takes effect as it stands.
 - An edit to a translation changes nothing an agent does until it is carried into the source; the page says so where the reader would otherwise assume it had.
 - Considered and declined: an agent loading the translation where its user writes Chinese — two loadable texts drift into two skills, and which one ran would depend on the language of a request.
 - A tag's evidence quotes the line it was matched on, in the skill's original language.

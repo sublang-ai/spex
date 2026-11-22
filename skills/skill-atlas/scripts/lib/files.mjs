@@ -5,7 +5,7 @@
 // translations among them, which are no files of the skill's own.
 
 import path from 'node:path';
-import { listFiles, sourceRelOf } from './translations.mjs';
+import { listFiles, sourceRelOf, isOwnSource } from './translations.mjs';
 
 export const FILES_MAX = 200; // data-model.md: at most 200 bundled files per skill
 
@@ -37,8 +37,10 @@ export function bundledFiles(dir, skillText) {
   const translations = [];
   for (const rel of all) {
     const src = sourceRelOf(rel);
-    if (src && present.has(src.sourceRel)) {
-      translations.push({ rel, sourceRel: src.sourceRel, tag: src.tag, abs: path.join(dir, ...rel.split('/')), origin: 'skill' });
+    const abs = path.join(dir, ...rel.split('/'));
+    // A file its source links to is that source itself, no translation of it.
+    if (src && present.has(src.sourceRel) && !isOwnSource(abs, path.join(dir, ...src.sourceRel.split('/')))) {
+      translations.push({ rel, sourceRel: src.sourceRel, tag: src.tag, abs, origin: 'skill' });
       continue;
     }
     if (rel === 'SKILL.md' || files.length >= FILES_MAX) continue;

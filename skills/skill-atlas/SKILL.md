@@ -1,6 +1,6 @@
 ---
 name: skill-atlas
-description: Maps the agent skills installed for this agent. Scans every skill folder, finds which skills call which, breaks each skill into steps, tags data inputs and outputs, tool use and human interaction, and opens a local web page to explore the map and sort skills into workflow phases. Use when the user wants to see, understand, audit or organize their skills, asks which skills they have or how skills depend on each other, wants one skill's steps illustrated, wants to arrange skills into a workflow such as an SDLC, or wants their skills shown or translated in Chinese.
+description: Maps the agent skills installed for this agent. Scans the folders agents load skills from in the project and the home folder, and others named with `--root`, finds which skills call which, breaks each skill into steps, tags data inputs and outputs, tool use and human interaction, and opens a local web page to explore the map and sort skills into workflow phases. Use when the user wants to see, understand, audit or organize their skills, asks which skills they have or how skills depend on each other, wants one skill's steps illustrated, wants to arrange skills into a workflow such as an SDLC, or wants their skills shown or translated in Chinese.
 license: Apache-2.0
 compatibility: Requires Node.js 18 or later. The interactive view needs a browser on the same machine; elsewhere, export a standalone HTML file.
 metadata:
@@ -15,13 +15,14 @@ metadata:
 
 Show the user what their skills are, how they connect, and where each fits in their work.
 
-Paths below are relative to this skill's folder.
+`<skill-dir>` below is this skill's folder, and the paths of its files below are relative to it.
+Run every command from the user's project folder, naming the script by its path `<skill-dir>/scripts/atlas.mjs`: the scan reads the skills of the folder it runs in, and a relative `--out` is written there.
 Run the script; do not read it into context.
 
 ## Quick start
 
 ```bash
-node scripts/atlas.mjs serve
+node <skill-dir>/scripts/atlas.mjs serve
 ```
 
 Run it in the background: it keeps serving until stopped.
@@ -32,7 +33,7 @@ Its first line of output is JSON with the `url` to give the user.
 ### Step 1: Scan
 
 ```bash
-node scripts/atlas.mjs scan --summary
+node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
 Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, duplicate names, and skills whose steps could not be detected.
@@ -40,14 +41,14 @@ If it reports no skills, tell the user which folders were searched and ask where
 
 ### Step 2: Open the view
 
-Start `node scripts/atlas.mjs serve` in the background and give the user the URL it prints.
+Start `node <skill-dir>/scripts/atlas.mjs serve` in the background and give the user the URL it prints.
 Tell them in one or two sentences what they can do there: click a skill to see its steps and what it calls, switch grouping between Workflow, Links and Source, and drag skills into phases.
 The page follows the reader's language, English or Simplified Chinese, with a switcher in its header; add `--lang zh-CN` when the user writes in Chinese.
 
 With no local browser (a remote or sandboxed session), write a standalone page instead and tell the user where it is:
 
 ```bash
-node scripts/atlas.mjs export --out skill-atlas.html
+node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html
 ```
 
 ### Step 3: Deepen the map where it matters
@@ -61,7 +62,9 @@ Do not deep-read every skill unasked; with many skills it is slow and rarely nee
 The user organizes on the page: New workflow, pick a preset or start blank, drag skills into phases.
 The page saves each change to `workflows.json` in the state folder.
 
-When the user asks you to do it for them, write `workflows.json` in the shape given in [references/data-model.md](references/data-model.md).
+When the user asks you to do it for them, never write `workflows.json` yourself, since the user may be editing it on the page.
+Read it with `node <skill-dir>/scripts/atlas.mjs workflows --state <state>`, which prints the document and its `etag`; change the document in the shape given in [references/data-model.md](references/data-model.md), save it to a file, and write it back with `node <skill-dir>/scripts/atlas.mjs workflows --state <state> --put <file> --if-match <etag>`.
+If that is refused because the file changed, read it again and reapply your change.
 Ask the user before replacing a workflow that already exists.
 
 ### Step 5: Answer from the atlas
@@ -69,7 +72,7 @@ Ask the user before replacing a workflow that already exists.
 For questions such as "which skills wait for my approval?" or "what runs before review?", scan to a file and read that instead of re-reading every skill:
 
 ```bash
-node scripts/atlas.mjs scan --out atlas.json
+node <skill-dir>/scripts/atlas.mjs scan --out atlas.json
 ```
 
 Quote the evidence line the atlas gives for a tag or a link, so the user can check it.
@@ -92,10 +95,10 @@ A skill is shown translated where a `SKILL.<tag>.md` sits beside its `SKILL.md` 
 Steps, links and tags always come from `SKILL.md`; a translation supplies words, never structure.
 
 When the user asks to read skills in their language that ship no translation, translate them by [references/translate.md](references/translate.md): only the skills they name, never all of them unasked.
-Then record what each translation was made from, and rescan:
+Then record what each translation was made from, and rescan; `<scan options>` are the `--cwd`, `--root`, `--agent`, `--no-user` and `--no-plugins` the scan was given:
 
 ```bash
-node scripts/atlas.mjs pin <translations or folders>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <translations or folders>
 ```
 
 `pin --check` changes nothing and names each translation behind its source or edited apart from it.
@@ -106,7 +109,7 @@ node scripts/atlas.mjs pin <translations or folders>
 | --- | --- |
 | `--cwd <dir>` | Project whose skills to scan; the current folder by default |
 | `--root <dir>` | An extra skill folder; repeatable |
-| `--agent <id>` | Only one agent's folders, such as `claude-code` or `codex`; repeatable |
+| `--agent <id>` | Only the folders one agent loads, such as `claude-code` or `codex`, with `--root`'s; repeatable |
 | `--no-user`, `--no-plugins` | Skip the home folder's skills, or plugin skills |
 | `--state <dir>` | Where `workflows.json`, `annotations.json` and `translations/` live; `~/.skill-atlas` by default. Use a folder in the repository to share them with a team |
 | `--port <n>`, `--no-open` | For `serve`: the port, and whether to open the browser |
@@ -123,7 +126,7 @@ node scripts/atlas.mjs pin <translations or folders>
 | How you read a skill in depth | [references/deep-read.md](references/deep-read.md) |
 | How you translate a skill, or add a page language | [references/translate.md](references/translate.md) |
 
-Rescan after an edit.
+Rescan after editing tag rules, annotations or a skill's translations; reload the page after editing workflow presets, view settings, label files or catalogs.
 
 ## Safety
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=612f4f94f09c8e25fbc519a60c5938e5845d14eae6e875fba6deebdc03af25b6 own=8383d5f23248f0a1bd8516e7a49bd94abcdb9f0c5f533a76891b810ee0ef233a -->
-本文件是 `coder-phases.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+<!-- skill-atlas:source sha256=612f4f94f09c8e25fbc519a60c5938e5845d14eae6e875fba6deebdc03af25b6 own=a3a13563c631b53373a19319ef26fd1f7ac2cce1c00e6470e413bd28ff090b9c -->
+> 本文件是 `coder-phases.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # Coder 提示词
 
