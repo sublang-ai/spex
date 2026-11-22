@@ -4,11 +4,12 @@
 // annotations.json: corrections a reader layers on the scan (data-model.md).
 // Everything added is marked `"source": "annotation"`. A malformed file or
 // entry is reported on stderr and the scan carries on without it. A name holds
-// one entry or a list of them: the one recording its skill's SKILL.md digest
-// (and that of each other file it lists under `source.files`) applies, else
-// one recording none; an entry recording the digests of another skill of that
-// name applies to that one; where none applies and one records digests no
-// skill of the name has, that is reported as a `stale-annotation` insight.
+// one entry or a list of them: of those recording its skill's SKILL.md digest
+// (and that of each other file they list under `source.files`), the one
+// listing the most files applies, the later on a tie, else one recording
+// none; an entry recording the digests of another skill of that name applies
+// to that one; a skill none applies to, for which an entry was written, is
+// reported as a `stale-annotation` insight [entriesFor].
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -162,11 +163,14 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
 // each written from another text of its skill (the state folder serves every
 // project). An entry recording a source matches a skill whose SKILL.md has
 // that digest and whose every file listed under `source.files` has its digest
-// [filesMatch]. To the key's skill applies the entry matching it, else the
-// first recording none; to each other skill of the name (`others`), the entry
-// matching it alone. Where none applies to the key's skill and an entry
-// recording a source matches no skill of the name (`sameName`), its
-// annotation is stale.
+// [filesMatch]. To a skill applies, of the entries matching it, the one
+// listing the most files, the later on a tie (an entry corrected after reading
+// a file the skill links is added after the one it corrects); else, to the
+// key's skill alone, the first recording none. Each skill of the name
+// (`others` besides the key's) is judged on its own: one that no entry
+// applies to has a stale annotation where an entry recording a source was
+// written for it, its SKILL.md digest being that skill's, or that of no skill
+// of the name (`sameName`), which could be any of them.
 function entriesFor(skill, others, sameName, value, where) {
   const many = Array.isArray(value);
   const entries = [];
@@ -185,14 +189,14 @@ function entriesFor(skill, others, sameName, value, where) {
   }
   const digestCache = new Map(); // a listed file's real path -> its digest, read once
   const matches = (e, s) => e.hex !== null && !!s.digest && e.hex === s.digest && filesMatch(e.files, s, digestCache);
-  const recording = (s) => entries.find((e) => matches(e, s));
+  const listed = (e) => (e.files ? Object.keys(e.files).length : 0);
+  const recording = (s) => entries.reduce((best, e) => (matches(e, s) && (!best || listed(e) >= listed(best)) ? e : best), null);
+  const writtenFor = (e, s) => e.hex !== null && (e.hex === s.digest || !sameName.some((o) => o.digest === e.hex));
   const out = [];
-  const own = recording(skill) ?? entries.find((e) => e.hex === null);
-  if (own) out.push([skill, own]);
-  else if (entries.some((e) => e.hex !== null && !sameName.some((s) => matches(e, s)))) skill._staleAnnotation = true;
-  for (const s of others) {
-    const e = recording(s);
+  for (const s of [skill, ...others]) {
+    const e = recording(s) ?? (s === skill ? entries.find((x) => x.hex === null) : null);
     if (e) out.push([s, e]);
+    else if (entries.some((x) => writtenFor(x, s))) s._staleAnnotation = true;
   }
   return out;
 }

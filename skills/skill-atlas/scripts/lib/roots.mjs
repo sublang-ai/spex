@@ -57,9 +57,12 @@ export function claudeConfigDir(home = os.homedir()) {
 }
 
 /**
- * The project's folders, nearer first: --cwd's, then each folder above it up
- * to the root of its repository (the nearest folder holding a `.git` entry,
- * --cwd's own included); --cwd's alone where no folder above it holds one.
+ * The project's folders, nearer first: --cwd's, then each folder above its
+ * real path up to the root of its repository (the nearest folder holding a
+ * `.git` entry, --cwd's own included); --cwd's alone where no folder above it
+ * holds one. A --cwd reached through a link finds the folders above the one
+ * it leads to; each is spelled as --cwd's own path spells it where one of the
+ * folders on that path is it.
  */
 export function projectDirs(cwd) {
   return projectPlaces(cwd).dirs;
@@ -67,11 +70,19 @@ export function projectDirs(cwd) {
 
 // projectDirs, with the repository's root, or null where there is none.
 function projectPlaces(cwd) {
+  const given = path.resolve(cwd);
+  const spelled = new Map(); // real folder -> the nearest folder of --cwd's path leading to it
+  for (let dir = given; ; dir = path.dirname(dir)) {
+    const real = realOr(dir);
+    if (!spelled.has(real)) spelled.set(real, dir);
+    if (path.dirname(dir) === dir) break;
+  }
   const dirs = [];
-  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+  for (let real = realOr(given); ; real = path.dirname(real)) {
+    const dir = spelled.get(real) ?? real;
     dirs.push(dir);
-    if (fs.existsSync(path.join(dir, '.git'))) return { dirs, repo: dir };
-    if (path.dirname(dir) === dir) return { dirs: [dirs[0]], repo: null };
+    if (fs.existsSync(path.join(real, '.git'))) return { dirs, repo: dir };
+    if (path.dirname(real) === real) return { dirs: [dirs[0]], repo: null };
   }
 }
 
@@ -103,12 +114,14 @@ export function listRoots(opts) {
     for (const row of AGENT_ROOTS) {
       if (!row.scopes.includes(scope) || !wanted(row)) continue;
       const [configDir, ...rest] = row.dir.split('/');
-      let dir;
-      if (scope === 'user' && row.env && process.env[row.env]) dir = path.join(path.resolve(process.env[row.env]), ...rest);
-      else if (scope === 'user' && configDir === '.config' && xdg) dir = path.join(xdg, ...rest);
-      else dir = path.join(base, configDir, ...rest);
+      let from;
+      let segs = rest;
+      if (scope === 'user' && row.env && process.env[row.env]) from = path.resolve(process.env[row.env]);
+      else if (scope === 'user' && configDir === '.config' && xdg) from = xdg;
+      else { from = base; segs = [configDir, ...rest]; }
+      const dir = path.join(from, ...segs);
       roots.push({
-        id: `${scope}-${row.key}${rel ? `-${placeSlug(rel)}` : ''}`,
+        id: `${scope}-${row.key}${rel ? `-${placeSlug(repo, rel)}` : ''}`,
         path: dir,
         scope,
         agent: row.agent,
@@ -117,34 +130,63 @@ export function listRoots(opts) {
         requireSkills: !!row.requireSkills,
         plugin: null,
         depth,
+        linked: linkedBelow(from, segs),
       });
     }
   }
   if (opts.plugins && wanted({ agent: 'claude-code' })) roots.push(...pluginRoots(opts.cwd));
   opts.extra.forEach((dir, n) => {
-    roots.push({ id: `extra-${n + 1}`, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true });
+    roots.push({ id: `extra-${n + 1}`, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, linked: false });
   });
   return roots;
 }
 
-// A folder's path from the repository's root, `/`-separated, read from both
-// real paths so a folder reached through a link inside the repository is
-// named by its own place; one whose real path lies outside keeps the path it
-// was reached by.
-function placeIn(repo, base) {
-  const real = path.relative(realOr(repo), realOr(base));
-  const outside = real === '..' || real.startsWith(`..${path.sep}`) || path.isAbsolute(real);
-  const rel = outside ? path.relative(repo, base) : real;
-  return rel.split(path.sep).join('/');
+// Whether the folder `segs` names below `from` is reached through a link of
+// its own: its real path is not that of `from` with `segs` after it.
+function linkedBelow(from, segs) {
+  const dir = path.join(from, ...segs);
+  return isDir(dir) && realOr(dir) !== path.join(realOr(from), ...segs);
 }
 
-// A folder's path from the repository's root as an id's words: each segment
-// lowercased, every run of characters other than a-z and 0-9 one hyphen, and
-// a segment holding none of those named by a short digest of itself. No
-// segment slugs to nothing, so of the folders above --cwd, each a prefix of
-// the next, no two share a slug, from whichever folder the scan runs.
-function placeSlug(rel) {
-  return rel.split('/').map((seg) => slug(seg, '') || `x${crypto.createHash('sha256').update(seg).digest('hex').slice(0, 8)}`).join('-');
+// A folder's path from the repository's root, `/`-separated, read from both
+// real paths, so a folder is named by its own place, however it was reached
+// (every folder of the project lies at or below the root's real path).
+function placeIn(repo, base) {
+  return path.relative(realOr(repo), realOr(base)).split(path.sep).join('/');
+}
+
+// A folder's path from the repository's root as an id's words [placeWords],
+// the same from whichever folder the scan runs. Where another folder of the
+// repository has the same words (`packages/ui-kit` and `packages/ui/kit`),
+// each adds `.` and a short digest of its own path, so no two folders share
+// an id: the words never hold a `.`.
+function placeSlug(repo, rel) {
+  const words = placeWords(rel);
+  return foldersWithWords(realOr(repo), words) > 1 ? `${words}.${hash8(rel)}` : words;
+}
+
+// Each segment lowercased, every run of characters other than a-z and 0-9
+// one hyphen, and a segment holding none of those named by a short digest of
+// itself. No segment's words are empty, so of the folders above --cwd, each
+// a prefix of the next, no two share words.
+function placeWords(rel) { return rel.split('/').map(segmentWords).join('-'); }
+function segmentWords(seg) { return slug(seg, '') || `x${hash8(seg)}`; }
+function hash8(s) { return crypto.createHash('sha256').update(s).digest('hex').slice(0, 8); }
+
+// How many folders below `dir`, links not followed, have `words` as their
+// path's words, counted up to two: only the entries whose words begin them are opened.
+function foldersWithWords(dir, words) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+  let n = 0;
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const w = segmentWords(e.name);
+    if (w === words) n++;
+    else if (words.startsWith(`${w}-`)) n += foldersWithWords(path.join(dir, e.name), words.slice(w.length + 1));
+    if (n > 1) return n;
+  }
+  return n;
 }
 
 /** Skill folders of Claude Code plugins that are installed and enabled for this project. */
@@ -165,19 +207,21 @@ function pluginRoots(cwd) {
   const roots = [];
   const used = new Set();
   for (const [key, installs] of Object.entries(plugins)) {
-    if (enabled.get(key) === false) continue;
     const name = key.split('@')[0];
     for (const inst of Array.isArray(installs) ? installs : []) {
       if (!inst || typeof inst.installPath !== 'string') continue;
+      // Ids are given over every install the file records, in its order, so
+      // an install keeps its id whichever others this project enables.
+      let id = `plugin-${slug(name)}`;
+      for (let n = 2; used.has(id); n++) id = `plugin-${slug(name)}-${n}`;
+      used.add(id);
+      if (enabled.get(key) === false) continue;
       if (inst.projectPath) {
         const project = realOr(path.resolve(inst.projectPath));
         const rel = path.relative(project, realCwd);
         if (rel.startsWith('..') || path.isAbsolute(rel)) continue; // installed for another project
       }
-      let id = `plugin-${slug(name)}`;
-      for (let n = 2; used.has(id); n++) id = `plugin-${slug(name)}-${n}`;
-      used.add(id);
-      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name });
+      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name, linked: linkedBelow(inst.installPath, ['skills']) });
     }
   }
   return roots;

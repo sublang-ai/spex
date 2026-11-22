@@ -363,6 +363,29 @@ test("skill-atlas-17: an insight's choice selects its skills", async ({ page }) 
   await expect(details(page).getByRole("heading", { name: "/" + MARKUP })).toBeVisible();
 });
 
+test("skill-atlas-17: frontmatter in error is said to keep the fields that read, the folder naming the skill only where its name does not", async ({ page }) => {
+  const claude = join(project, ".claude", "skills");
+  const kept = join(claude, "kept");
+  const unnamed = join(claude, "unnamed");
+  mkdirSync(kept, { recursive: true });
+  mkdirSync(unnamed, { recursive: true });
+  writeFileSync(join(kept, "SKILL.md"), "---\nname: kept\ndescription: Keeps its name.\nother: \"unclosed\n---\nText.\n");
+  writeFileSync(join(unnamed, "SKILL.md"), "---\nname: \"unclosed\ndescription: Loses its name.\n---\nText.\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Links");
+    await page.getByRole("button", { name: /^Insights/ }).click();
+    const insights = page.getByRole("group", { name: "Insights" });
+    await expect(insights.getByRole("button", { name: /^\/kept\b/ }).filter({ hasText: "Part of its frontmatter could not be read; the fields that read are used" })).toHaveCount(1);
+    await expect(insights.getByRole("button", { name: /^\/unnamed\b/ }).filter({ hasText: "Its frontmatter could not be read; the folder name is used as its name" })).toHaveCount(1);
+  } finally {
+    rmSync(kept, { recursive: true, force: true });
+    rmSync(unnamed, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
 test("skill-atlas-18: a skill whose name and step hold markup is shown as text", async ({ page }) => {
   await page.goto(url);
   await groupBy(page, "Links");

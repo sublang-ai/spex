@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=269a2336a1bec972310a0265772bf67117e69ecaa2c7e13e2580bd256a7bcea0 own=102936218ac157eead83a6fe32a1c3f6a3dbd2c034b2df37cce3d2fdee8423ee -->
+<!-- skill-atlas:source sha256=93cfaed015d75dbe6d3d012124f6b5de1db78d030d74c5ceb1d3582a50a60958 own=e66183cdb1a098ff7d64599c4c95ad50915fdd95d8274e8c67a9617eb4684c79 -->
 
 > 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -54,9 +54,11 @@
 ## 记录源文件并重新扫描
 
 ```bash
-node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <state>/translations/<skill id>
-node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <scan options> <state>/translations/<skill id>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <state>/translations/<skill id>/SKILL.<tag>.md <state>/translations/<skill id>/references/forms.<tag>.md
+node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <scan options> <state>/translations/<skill id>/SKILL.<tag>.md <state>/translations/<skill id>/references/forms.<tag>.md
 ```
+
+只列出你写下或更新的那些文件，绝不列出它们所在的文件夹：为文件夹记录哈希值，也会把其中你并未更新的其他语言译本标记为最新。
 
 `<scan options>` 是找到该技能的那次扫描所用的 `--cwd`、`--root`、`--agent`、`--no-user` 和 `--no-plugins`：`pin` 通过扫描找到译本所属的技能，遇到找不到所属技能的译本时会失败。
 译本洞察给出的修复命令已经带上这些选项。

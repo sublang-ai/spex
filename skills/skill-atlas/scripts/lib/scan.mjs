@@ -38,20 +38,32 @@ export function scan(opts) {
   const { rules, catalog } = loadRules(opts.rulesFile);
   const roots = [];
   let skills = [];
-  const seenRoots = new Set();
   const byReal = new Map(); // real folder -> its record
   const listed = listRoots(opts);
   // The order ids are given in: the roots by their depth below the repository's root, else as listed.
-  const idOrder = new Map(listed.map((r, n) => [r, n]).sort(([a, m], [b, n]) => (a.depth ?? 0) - (b.depth ?? 0) || m - n).map(([r], n) => [r.id, n]));
+  const byIdOrder = listed.map((r, n) => [r, n]).sort(([a, m], [b, n]) => (a.depth ?? 0) - (b.depth ?? 0) || m - n).map(([r]) => r);
+  const idOrder = new Map(byIdOrder.map((r, n) => [r.id, n]));
+  // A folder reached by several roots (--cwd the home folder, a --root or
+  // CLAUDE_CONFIG_DIR naming a project's folder, or one folder's skills linked
+  // to another's) is scanned once, as the root reaching it through no link of
+  // its own, of those a project's before the home folder's, the plugins' and
+  // --root's, each then in id order: the project's rows depend on --cwd alone,
+  // so the alias changes no root's or skill's id.
+  const scannedAs = new Map(); // real folder -> the root it is scanned as
+  const before = (a, b) => (a.linked !== b.linked ? !a.linked : (a.scope === 'project') !== (b.scope === 'project') ? a.scope === 'project' : false);
+  for (const root of byIdOrder) {
+    if (!isDir(root.path)) continue;
+    const real = realOr(root.path);
+    const cur = scannedAs.get(real);
+    if (!cur || before(root, cur)) scannedAs.set(real, root);
+  }
 
   for (const root of listed) {
     if (!isDir(root.path)) {
       if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
       continue;
     }
-    const realRoot = realOr(root.path);
-    if (seenRoots.has(realRoot)) continue; // the same folder reached twice (cwd is the home folder)
-    seenRoots.add(realRoot);
+    if (scannedAs.get(realOr(root.path)) !== root) continue;
     let present = 0;
     for (const dir of skillDirs(root.path)) {
       present++;
@@ -64,7 +76,7 @@ export function scan(opts) {
       skills.push(rec);
     }
     if (root.requireSkills && !present) continue;
-    const { requireSkills, explicit, depth, ...rec } = root;
+    const { requireSkills, explicit, depth, linked, ...rec } = root;
     roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
   }
   skills = mergeIdenticalCopies(skills);
@@ -154,13 +166,12 @@ function readSkill(dir, root) {
   s._keyLines = fm.keyLines;
   s._bodyStart = fm.bodyStart;
   s.frontmatter = fm.data;
-  // Frontmatter that did not parse is not trusted: the folder names the
-  // skill and the description stays empty (data-model.md).
-  if (!fm.error) {
-    if (fm.data.name !== undefined && fm.data.name !== null && String(fm.data.name).trim()) s.name = String(fm.data.name).trim();
-    if (typeof fm.data.description === 'string') s.description = fm.data.description.trim();
-    else if (fm.data.description !== undefined && fm.data.description !== null) s.description = String(fm.data.description);
-  }
+  // The frontmatter's data holds only the fields that parsed, so a field in
+  // error leaves the others standing: where `name` did not parse the folder
+  // names the skill, and where `description` did not it stays empty.
+  if (fm.data.name !== undefined && fm.data.name !== null && String(fm.data.name).trim()) s.name = String(fm.data.name).trim();
+  if (typeof fm.data.description === 'string') s.description = fm.data.description.trim();
+  else if (fm.data.description !== undefined && fm.data.description !== null) s.description = String(fm.data.description);
   s._mask = fenceMask(lines);
   for (let i = 0; i < s._bodyStart; i++) s._mask[i] = false;
   try {
@@ -308,13 +319,19 @@ function readTranslations(s, stateDir) {
   for (const t of chosen) {
     if (!tagsBySource.has(t.sourceRel)) tagsBySource.set(t.sourceRel, new Set());
     tagsBySource.get(t.sourceRel).add(t.tag);
-    // A repair command names the translation: its path in the skill's folder, or under the state folder's translations/.
-    const target = t.origin === 'state' ? `<state>/${shellWord(`${TRANSLATIONS_DIR}/${s.id}/${t.rel}`)}` : shellWord(t.abs);
-    for (const [flag, byLang] of [[t.stale, s._staleByLang], [t.edited, s._editedByLang]]) {
-      if (!flag) continue;
+    // A repair command names the file it pins. A translation behind its
+    // source is refreshed into the state folder, as references/translate.md
+    // writes it, and that file is pinned; one in the skill's folder may be
+    // brought in line there instead (`local`), where that folder is the
+    // user's own. An edited one is pinned where it is.
+    const inState = `<state>/${shellWord(`${TRANSLATIONS_DIR}/${s.id}/${t.rel}`)}`;
+    const here = t.origin === 'state' ? inState : shellWord(t.abs);
+    const add = (byLang, entry) => {
       if (!byLang.has(t.tag)) byLang.set(t.tag, []);
-      byLang.get(t.tag).push({ rel: t.rel, target });
-    }
+      byLang.get(t.tag).push(entry);
+    };
+    if (t.stale) add(s._staleByLang, { rel: t.rel, target: inState, local: t.origin === 'state' ? null : here });
+    if (t.edited) add(s._editedByLang, { rel: t.rel, target: here });
   }
   for (const f of s.files) f.translations = [...(tagsBySource.get(f.path) ?? [])].sort();
   const skillTranslations = chosen.filter((t) => t.sourceRel === 'SKILL.md').sort((a, b) => a.tag.localeCompare(b.tag));
@@ -332,9 +349,9 @@ function readSkillTranslation(s, t) {
   const lines = text.split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
   const fm = splitFrontmatter(text);
-  // Frontmatter that did not parse gives no words: each key then reads as the skill's own.
-  if (!fm.error) out.frontmatter = fm.data;
-  if (!fm.error && fm.data.description !== undefined && fm.data.description !== null) out.description = String(fm.data.description).trim();
+  // A field that did not parse gives no words: that key then reads as the skill's own.
+  out.frontmatter = fm.data;
+  if (fm.data.description !== undefined && fm.data.description !== null) out.description = String(fm.data.description).trim();
   const mask = fenceMask(lines);
   for (let i = 0; i < fm.bodyStart; i++) mask[i] = false;
   // A translation's steps are read as a skill's and kept only where they

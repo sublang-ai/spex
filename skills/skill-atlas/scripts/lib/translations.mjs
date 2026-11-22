@@ -71,6 +71,24 @@ export function sourceRelOf(rel) {
   return { ...parsed, sourceRel: dir === '.' ? parsed.sourceName : `${dir}/${parsed.sourceName}` };
 }
 
+/**
+ * Whether `file` is its source `sourceFile` itself, reached through a link
+ * (`SKILL.md` linking to `SKILL.en.md`), symbolic or hard: such a file
+ * translates nothing.
+ */
+export function isOwnSource(file, sourceFile) {
+  try { return fileId(file) === fileId(sourceFile); } catch { return false; }
+}
+
+/**
+ * The identity of the file `p` leads to, its device and inode: the same for
+ * every name of one file, a symbolic link followed and a hard link alike.
+ */
+export function fileId(p) {
+  const st = fs.statSync(p, { bigint: true });
+  return `${st.dev}:${st.ino}`;
+}
+
 /** The real path of `abs` when it is a regular file inside the real folder `baseReal`, else null. */
 export function fileInside(baseReal, abs) {
   let real;
@@ -210,10 +228,12 @@ function languageAndScript(tag) {
 
 /**
  * The tag of `tags` read for a reader of `want`: the same tag, else the first
- * in name order of the same language and script (`zh`, `zh-Hans` and `zh-SG`
- * for `zh-CN`, never `zh-TW` or `zh-Hant`); null where none does. The scan,
- * `/api/file` and annotations' words choose a tag through this alone, before
- * any folder is chosen [chooseTranslation].
+ * in code-unit order of the tags themselves of the same language and script
+ * (`zh`, `zh-Hans` and `zh-SG` for `zh-CN`, never `zh-TW` or `zh-Hant`); null
+ * where none does. The scan, `/api/file`, annotations' words and `--lang`
+ * choose a tag through this alone, before any folder is chosen
+ * [chooseTranslation]; the page's matchTag reads the same rule for its
+ * catalogs, label files and skills' translations.
  */
 export function matchingTag(want, tags) {
   const exact = tags.find((t) => t.toLowerCase() === String(want).toLowerCase());
@@ -229,14 +249,16 @@ export function matchingTag(want, tags) {
  * the state folder's records its source's digest and that digest is the
  * source's, then the state folder's; a state translation recording no digest
  * never displaces the skill's own. Of several of one origin (names differing
- * in case alone), the first by name. Both the scan and the server choose
+ * in case alone), the first by name. A candidate that is its source itself
+ * through a link is none [isOwnSource]. Both the scan and the server choose
  * through this alone, within one tag [matchingTag].
  * @param {{ origin:'skill'|'state', abs:string }[]} candidates
  * @param {string} sourceFile the file they translate
  * @returns {object|null} the chosen candidate with its `stale`, `edited` and `current` [translationState]
  */
 export function chooseTranslation(candidates, sourceFile, digestCache) {
-  const firstOf = (origin) => candidates.filter((c) => c.origin === origin)
+  const real = candidates.filter((c) => !isOwnSource(c.abs, sourceFile));
+  const firstOf = (origin) => real.filter((c) => c.origin === origin)
     .sort((a, b) => (a.abs < b.abs ? -1 : a.abs > b.abs ? 1 : 0))[0];
   const judged = (c) => (c ? { ...c, ...translationState(c.abs, sourceFile, digestCache) } : null);
   const own = judged(firstOf('skill'));
@@ -249,7 +271,9 @@ export function chooseTranslation(candidates, sourceFile, digestCache) {
  * The translation of the skill file `rel` into `lang`: under the one tag
  * matchingTag reads among the file's translations, the skill folder's or the
  * state folder's as chooseTranslation picks within that tag; only a regular
- * file inside its folder counts.
+ * file inside its folder that is not the source itself [isOwnSource] counts.
+ * `rel` is the file's path as asked, never where a link there leads: its
+ * translations are named after it.
  * @returns {{ abs:string, real:string, origin:'skill'|'state', tag:string, stale:boolean, edited:boolean } | null}
  */
 export function findTranslation(skill, rel, lang, stateDir) {
@@ -258,6 +282,7 @@ export function findTranslation(skill, rel, lang, stateDir) {
   const relPosix = rel.split(path.sep).join('/');
   const dirRel = path.posix.dirname(relPosix);
   const name = path.posix.basename(relPosix);
+  const sourceFile = path.join(skill.dir, ...relPosix.split('/'));
   const places = [{ base: skill.dir, origin: 'skill' }];
   const stateDirOfSkill = stateDir ? stateTranslationsDir(stateDir, skill.id) : null;
   if (stateDirOfSkill) places.push({ base: stateDirOfSkill, origin: 'state' });
@@ -273,13 +298,13 @@ export function findTranslation(skill, rel, lang, stateDir) {
       if (!parsed || parsed.sourceName !== name) continue;
       const abs = path.join(folder, entry);
       const real = fileInside(baseReal, abs);
-      if (real) found.push({ abs, real, origin, tag: parsed.tag });
+      if (real && !isOwnSource(real, sourceFile)) found.push({ abs, real, origin, tag: parsed.tag });
     }
   }
   // The tag first, then the folder within it: never compared across tags.
   const tag = matchingTag(want, [...new Set(found.map((t) => t.tag))]);
   if (tag === null) return null;
-  return chooseTranslation(found.filter((t) => t.tag === tag), path.join(skill.dir, ...relPosix.split('/')));
+  return chooseTranslation(found.filter((t) => t.tag === tag), sourceFile);
 }
 
 export function sha256Hex(bytes) {

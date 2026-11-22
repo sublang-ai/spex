@@ -6,13 +6,18 @@
 // behind its source, edited apart from it or recording no digest, changing no
 // file (data-model.md "Languages"). A translation in the state folder whose
 // skill or source the scan does not find, a folder named holding no
-// translation, a folder that cannot be read whole, and a link in a folder
-// named that cannot be followed, are named and fail either command.
+// translation, a folder that cannot be read whole, a link in a folder named
+// that cannot be followed, and one file reached as the translation of two
+// different sources, or that is itself a source (of another translation, a
+// translation beside it, or a skill's SKILL.md), are named and fail either
+// command, before any file is written. A file its source links to, by a
+// symbolic or a hard link, is that source itself: passed over in a folder,
+// refused where named.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { UsageError } from './log.mjs';
-import { TRANSLATIONS_DIR, parseTranslationName, sourceRelOf, listFilesBounded, fileInside, recordedDigests, recordsOwn, ownDigest, withRecordedDigest, sha256Hex } from './translations.mjs';
+import { TRANSLATIONS_DIR, parseTranslationName, sourceRelOf, listFilesBounded, fileInside, fileId, recordedDigests, recordsOwn, ownDigest, withRecordedDigest, sha256Hex } from './translations.mjs';
 
 /**
  * @param {{ targets:string[], check:boolean, stateDir:string, skills:() => { id:string, dir:string }[] }} opts
@@ -42,15 +47,30 @@ export function pin({ targets, check, stateDir, skills }) {
       if (!skill) return { inState: true, why: `it lies under ${TRANSLATIONS_DIR}/${id}/ of the state folder, and no scanned skill has the id "${id}"; pass the --cwd, --root or --state that find it` };
       const src = sourceRelOf(rest.join('/'));
       const source = src ? fileInside(fs.realpathSync(skill.dir), path.join(skill.dir, ...src.sourceRel.split('/'))) : null;
-      return source ? { source, tag: parsed.tag } : { inState: true, why: `${skill.id} has no file ${src?.sourceRel ?? rest.join('/')} for it to translate` };
+      if (!source) return { inState: true, why: `${skill.id} has no file ${src?.sourceRel ?? rest.join('/')} for it to translate` };
+      return fileId(source) === fileId(real) ? { self: source, why: `it is ${source} itself, through a link, so it translates nothing` } : { source, sourceId: fileId(source), tag: parsed.tag };
     }
     const source = path.join(path.dirname(abs), parsed.sourceName);
     let isFile = false;
     try { isFile = fs.statSync(source).isFile(); } catch { /* no source */ }
-    return isFile ? { source, tag: parsed.tag } : { why: `there is no ${parsed.sourceName} beside it for it to translate` };
+    if (!isFile) return { why: `there is no ${parsed.sourceName} beside it for it to translate` };
+    const sourceId = fileId(source);
+    // A source linking to the file (SKILL.md to SKILL.en.md), symbolically or
+    // hard, makes it the source itself: writing a record into it would change its source.
+    if (sourceId === fileId(real)) return { self: source, why: `${parsed.sourceName} beside it is a link to it, so it is that file itself and translates nothing` };
+    return { source, sourceId, tag: parsed.tag };
   };
 
-  const found = new Map(); // real path -> { abs, source }
+  // Each translation once, by its file's identity [fileId], with every source it is reached as translating:
+  // one file reached as the translation of two different sources is refused.
+  const found = new Map(); // file id -> { abs, source, sources: Map(source file id -> source) }
+  const add = (abs, src) => {
+    const id = fileId(abs);
+    const at = found.get(id);
+    if (at) { if (!at.sources.has(src.sourceId)) at.sources.set(src.sourceId, src.source); return; }
+    found.set(id, { abs, source: src.source, sources: new Map([[src.sourceId, src.source]]) });
+  };
+  const notOnes = new Map(); // real path -> { abs, why }: files their source links to, passed over
   const orphans = new Map(); // real path -> { abs, why }: state translations the scan finds no source for
   const empty = []; // { target, why }: folders holding no translation
   const partial = []; // { target, why }: folders that cannot be listed whole
@@ -73,12 +93,13 @@ export function pin({ targets, check, stateDir, skills }) {
         const file = path.join(abs, ...rel.split('/'));
         if (!parseTranslationName(path.basename(file))) continue;
         const src = sourceOf(file);
+        if (src.self) { notOnes.set(fileId(file), { abs: file, why: src.why }); continue; }
         if (!src.source) {
           // Outside the state folder such a name is a file of its own; inside it, a translation of nothing found.
-          if (src.inState) { orphans.set(fs.realpathSync(file), { abs: file, why: src.why }); n++; } else named++;
+          if (src.inState) { orphans.set(fileId(file), { abs: file, why: src.why }); n++; } else named++;
           continue;
         }
-        found.set(fs.realpathSync(file), { abs: file, source: src.source });
+        add(file, src);
         n++;
       }
       if (!n && listing.complete && !listing.broken.length) {
@@ -92,15 +113,31 @@ export function pin({ targets, check, stateDir, skills }) {
     } else {
       const src = sourceOf(abs);
       if (!src.source) throw new UsageError(`${target} is not a translation: ${src.why}`);
-      found.set(fs.realpathSync(abs), { abs, source: src.source });
+      add(abs, src);
     }
   }
+  // Every translation's sources are known before any file is read or written.
+  const shared = [...found.values()].filter((f) => f.sources.size > 1);
+  // A translation that is itself a source, reached through a link, would
+  // change that source when its record is written: refused, and never written.
+  const sourceOfRun = new Map(); // source file id -> a translation of it in this run
+  for (const f of found.values()) for (const id of f.sources.keys()) if (!sourceOfRun.has(id)) sourceOfRun.set(id, f.abs);
+  for (const [id, f] of found) {
+    if (f.sources.size > 1) continue;
+    f.alsoSource = alsoSourceWhy(id, f.abs, sourceOfRun);
+  }
+  const sources = [...found.values()].filter((f) => f.alsoSource);
 
   const shown = (abs) => {
     const rel = path.relative(process.cwd(), abs);
     return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : abs;
   };
   const lines = [];
+  for (const { abs, why } of notOnes.values()) lines.push(`passed over ${shown(abs)} (${why})`);
+  const sharedWhy = (f) => `it is one file translating ${[...f.sources.values()].map(shown).join(' and ')}; give each its own copy`;
+  if (check) for (const f of shared) lines.push(`two sources ${shown(f.abs)} (${sharedWhy(f)})`);
+  const sourceWhy = (f) => `${f.alsoSource(shown)}; writing its record would change that source, so give it a file of its own`;
+  if (check) for (const f of sources) lines.push(`a source    ${shown(f.abs)} (${sourceWhy(f)})`);
   for (const { abs, why } of orphans.values()) {
     if (check) lines.push(`no skill    ${shown(abs)} (${why})`);
   }
@@ -112,7 +149,8 @@ export function pin({ targets, check, stateDir, skills }) {
   let unpinned = 0;
   const writes = [];
   const failures = [];
-  for (const { abs, source } of found.values()) {
+  for (const { abs, source, sources: of, alsoSource } of found.values()) {
+    if (of.size > 1 || alsoSource) continue; // named above, and never written
     const ext = path.extname(abs).toLowerCase();
     let text;
     try { text = fs.readFileSync(abs, 'utf8'); } catch (err) { throw new UsageError(`cannot read ${abs}: ${err.message}`); }
@@ -133,6 +171,8 @@ export function pin({ targets, check, stateDir, skills }) {
       failures.push(`${abs}: ${err.message}`);
     }
   }
+  if (!check) for (const f of shared) failures.push(`${f.abs}: ${sharedWhy(f)}`);
+  if (!check) for (const f of sources) failures.push(`${f.abs}: ${sourceWhy(f)}`);
   if (!check) for (const { abs, why } of orphans.values()) failures.push(`${abs}: ${why}`);
   if (!check) for (const { target, why } of empty) failures.push(`${target}: ${why}`);
   if (!check) for (const { target, why } of partial) failures.push(`${target}: ${why}`);
@@ -152,6 +192,8 @@ export function pin({ targets, check, stateDir, skills }) {
   if (check) {
     const parts = [];
     if (behind || edited || unpinned) parts.push(`${behind} of ${total} translations behind their source, ${edited} edited apart from it, ${unpinned} with no digest; carry the change across, then run pin`);
+    if (shared.length) parts.push(`${shared.length} ${shared.length === 1 ? 'file translates' : 'files translate'} two or more sources; give each source its own translation`);
+    if (sources.length) parts.push(`${sources.length} ${sources.length === 1 ? 'translation is' : 'translations are'} itself a source; give ${sources.length === 1 ? 'it' : 'each'} a file of its own`);
     if (orphans.size) parts.push(`${orphans.size} in the state folder translating no skill or file the scan finds; pass the --cwd, --root or --state that find it, or remove it`);
     if (empty.length) parts.push(`${empty.length} ${empty.length === 1 ? 'folder holds' : 'folders hold'} no translation`);
     if (partial.length) parts.push(`${partial.length} ${partial.length === 1 ? 'folder' : 'folders'} not read whole; name the translations in ${partial.length === 1 ? 'it' : 'them'}, or a smaller folder, or make ${partial.length === 1 ? 'it' : 'them'} readable`);
@@ -160,5 +202,26 @@ export function pin({ targets, check, stateDir, skills }) {
   } else {
     lines.push(`pin: ${pinned} of ${total} translations recorded`);
   }
-  return { lines, failed: check && (behind + edited + unpinned + orphans.size + empty.length + partial.length + broken.length) > 0 };
+  return { lines, failed: check && (behind + edited + unpinned + shared.length + sources.length + orphans.size + empty.length + partial.length + broken.length) > 0 };
+}
+
+// Why the translation `abs` (file id `id`) is itself a source, as a function
+// of how a path is shown, or null: the source of another translation pinned
+// in this run, a skill's SKILL.md, or the file a translation beside its real
+// place translates.
+function alsoSourceWhy(id, abs, sourceOfRun) {
+  if (sourceOfRun.has(id)) return (shown) => `it is the file ${shown(sourceOfRun.get(id))} translates`;
+  const real = fs.realpathSync(abs);
+  const name = path.basename(real);
+  if (name === 'SKILL.md') return (shown) => `it is ${shown(real)}, a skill's SKILL.md`;
+  let entries = [];
+  try { entries = fs.readdirSync(path.dirname(real)); } catch { /* none read */ }
+  for (const entry of entries.sort()) {
+    if (parseTranslationName(entry)?.sourceName !== name) continue;
+    const other = path.join(path.dirname(real), entry);
+    let otherId = null;
+    try { otherId = fileId(other); } catch { continue; }
+    if (otherId !== id) return (shown) => `it is ${shown(real)}, the file ${shown(other)} translates`;
+  }
+  return null;
 }

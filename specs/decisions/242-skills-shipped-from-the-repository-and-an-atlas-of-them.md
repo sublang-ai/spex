@@ -27,7 +27,7 @@ Extended in the atlas's scan, page and state folder and in the form of a shipped
 
 - The repository ships Agent Skills from `skills/`, one folder per skill, each installable on its own with the `skills` CLI.
 - `skill-atlas` is the facility skill.
-  - A scan with no dependency beyond Node reads every skill folder installed for the agents on the machine and reports skills, their steps, the links among them, and tags of four categories — data in, data out, tools, human — each with the line it was read from.
+  - A scan with no dependency beyond Node reads the skill folders the agents on the machine are known to load, and others named with `--root`, and reports skills, their steps, the links among them, and tags of four categories — data in, data out, tools, human — each with the line it was read from.
   - What the scan detects is pattern matching by rules kept in an editable file; a file of annotations, written by an agent that read a skill or by the user, corrects it.
   - A page served on the loopback interface shows one hierarchy — group, skill, step — opened one click at a time, with links drawn between whatever is visible; groups are the phases of a workflow, call depth, or source.
   - A workflow is an ordered list of named phases holding skill names, kept in one file in a state folder outside every skill, edited on the page.

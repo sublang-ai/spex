@@ -61,7 +61,7 @@ export function fileLanguage(text, { skillFile = false } = {}) {
   let bodyStart = 0;
   if (skillFile) {
     const fm = splitFrontmatter(normalized);
-    const declared = fm.error ? null : declaredLanguage(fm.data);
+    const declared = declaredLanguage(fm.data); // a field in error leaves `metadata.language` standing [frontmatter.mjs]
     if (declared) return declared;
     bodyStart = fm.bodyStart;
   }

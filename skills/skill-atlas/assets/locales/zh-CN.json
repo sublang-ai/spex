@@ -27,6 +27,7 @@
     "Frontmatter could not be read": "无法读取 frontmatter",
     "Its frontmatter could not be parsed, so its name, description or settings may be missing or wrong.": "无法解析其 frontmatter，名称、描述或设置可能缺失或有误。",
     "Its frontmatter could not be read; the folder name is used as its name": "无法读取其 frontmatter；已用文件夹名称作为技能名称",
+    "Part of its frontmatter could not be read; the fields that read are used": "其 frontmatter 有部分无法读取；已使用能读取的字段",
     "No steps detected": "未检测到步骤",
     "No steps or sections were found in SKILL.md.": "在 SKILL.md 中未找到步骤或小节。",
     "No steps detected; read it to annotate its steps if it matters": "未检测到步骤；如有需要，请阅读后为其标注步骤",

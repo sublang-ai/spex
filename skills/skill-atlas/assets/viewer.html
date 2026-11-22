@@ -552,7 +552,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     'invalid-frontmatter': {
       title: () => t('Frontmatter could not be read'),
       issue: () => t('Its frontmatter could not be parsed, so its name, description or settings may be missing or wrong.'),
-      message: () => t('Its frontmatter could not be read; the folder name is used as its name'),
+      message: (p) => (typeof p.named !== 'boolean' ? null : p.named ? t('Part of its frontmatter could not be read; the fields that read are used') : t('Its frontmatter could not be read; the folder name is used as its name')),
     },
     'no-steps': {
       title: () => t('No steps detected'),
@@ -664,7 +664,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   const SOURCE_LANG = 'en-US';
   const LANG_KEY = 'skill-atlas:lang';
-  const i18n = { lang: SOURCE_LANG, messages: null, locales: {}, labels: {}, rules: new Map(), nums: new Map() };
+  const i18n = { lang: SOURCE_LANG, messages: null, locales: {}, labels: {}, labelTag: null, rules: new Map(), nums: new Map() };
   const pluralRules = (lang) => {
     let r = i18n.rules.get(lang);
     if (!r) { try { r = new Intl.PluralRules(lang); } catch { r = new Intl.PluralRules(SOURCE_LANG); } i18n.rules.set(lang, r); }
@@ -721,12 +721,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const primary = (tag) => str(tag).toLowerCase().split('-')[0];
   // A tag's script, written or likely (`zh-TW` -> Hant, `zh` -> Hans), or '' where unknown.
   const scriptOf = (tag) => { try { return new Intl.Locale(str(tag)).maximize().script || ''; } catch { return ''; } };
-  // The offered tag the given tag names: the same tag, else one sharing its primary subtag and
-  // its script, so `zh` and `zh-SG` name zh-CN while `zh-TW` names none (atlas.mjs matches alike).
-  function matchLang(tag, offered) {
-    if (!tag) return null;
-    const low = str(tag).toLowerCase();
-    return offered.find((o) => o.toLowerCase() === low) || offered.find((o) => primary(o) === primary(low) && scriptOf(o) === scriptOf(tag)) || null;
+  // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
+  const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
+  // The one rule every choice of a tag follows, the catalog's, the label files' and a skill's
+  // translation's, as the scan and the server choose a file's (translations.mjs matchingTag): of
+  // `tags`, the one `want` names, else the first in code-unit order of the tags themselves of the
+  // same language and script, so `zh` and `zh-SG` name zh-CN while `zh-TW` names none; or null.
+  function matchTag(want, tags) {
+    if (!want) return null;
+    const low = str(want).toLowerCase();
+    return tags.find((k) => k.toLowerCase() === low) || tags.filter((k) => sameLanguage(k, want)).sort()[0] || null;
   }
   // The reader's choice kept in the browser, else the command's --lang, else the browser's, else en-US.
   function resolveLang(cmdLang) {
@@ -734,10 +738,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     let stored = null;
     try { stored = localStorage.getItem(LANG_KEY); } catch { stored = null; }
     if (stored && offered.includes(stored)) return stored;
-    const fromCmd = matchLang(cmdLang, offered);
+    const fromCmd = matchTag(cmdLang, offered);
     if (fromCmd) return fromCmd;
     for (const b of arr(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language])) {
-      const m = matchLang(b, offered);
+      const m = matchTag(b, offered);
       if (m) return m;
     }
     return SOURCE_LANG;
@@ -761,10 +765,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function applyLang(tag) {
     i18n.lang = tag;
     i18n.messages = tag === SOURCE_LANG ? null : (i18n.locales[tag] || {}).messages || null;
+    // The label files read for the shown language: under the tag matchTag reads for it.
+    i18n.labelTag = matchTag(tag, Object.keys(i18n.labels));
     document.documentElement.lang = tag;
   }
   // The label file entries of the shown language (references/<name>.<tag>.json, served under config.labels).
-  const labels = () => { const l = i18n.labels[i18n.lang]; return l && typeof l === 'object' ? l : {}; };
+  const labels = () => { const l = i18n.labelTag ? i18n.labels[i18n.labelTag] : null; return l && typeof l === 'object' ? l : {}; };
   const labelText = (v) => (typeof v === 'string' ? v : v && typeof v === 'object' ? str(v.label || v.name) : '');
 
   // ===================================================================
@@ -1871,9 +1877,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function trTag(s) {
     const c = s._trTag;
     if (c && c.lang === i18n.lang) return c.tag;
-    const all = Object.keys(s.translations);
-    const low = i18n.lang.toLowerCase();
-    const tag = all.find((k) => k.toLowerCase() === low) || all.filter((k) => sameLanguage(k, i18n.lang)).sort()[0] || null;
+    const tag = matchTag(i18n.lang, Object.keys(s.translations));
     s._trTag = { lang: i18n.lang, tag };
     return tag;
   }
@@ -1885,8 +1889,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // A language as the scan reports it [skill-atlas-29]: a tag, `und` where it could not be told, or
   // null where the field is absent (an older scan, an exported page) or holds no tag.
   const reportedLang = (v) => typeof v === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(v) ? v : null;
-  // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
-  const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
   // Whether a text the scan reports in `lang` is in another language than the page's: `und` is
   // another in every language; null, unknown, in none, so an older atlas marks nothing.
   const otherLanguage = (lang) => lang != null && (primary(lang) === 'und' || !sameLanguage(lang, i18n.lang));

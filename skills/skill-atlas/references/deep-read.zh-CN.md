@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=ca19706395a5a4dc8d0a75c20e9c77384e081af82dbb34f90d76e259fa66753d own=1fadf83cce2c565322f5de9b70f78828ef10dee5a007c6ec82139e78734300d8 -->
+<!-- skill-atlas:source sha256=a17c6b9007f5480cba70babdfa895aac326cae2faf19e5f0a9a4a77dd3f24790 own=af75af41dd95a599ed2f3184d6d2f304a20b6da1e213404a24057c84263afa3b -->
 
 > 本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -35,6 +35,7 @@
 把扫描结果 `atlas.json` 中该技能的 `digest` 复制到它的条目中，写作 `"source": { "sha256": "<digest>" }`，使条目只应用于你读过的那版文本。
 某个步骤的内容来自链接的文件时，把该文件也记录在 `source` 的 `"files": { "<技能中的路径>": "<digest>" }` 下，其哈希值由 `node <skill-dir>/scripts/atlas.mjs digest <file>` 打印。
 该名称已有一个记录了其他哈希值的条目时，保留它，把你的条目加在旁边，使该值成为一组条目；绝不要替换它，因为它可能服务于另一个项目中的同名技能。
+读过技能链接的某个文件后要更正你的条目时，把更正后的条目加在它之后，并把该文件也记录进去：在与某个技能相符的条目中，记录文件最多的那个被应用，数目相同时取靠后的。
 
 ## 判断标签
 

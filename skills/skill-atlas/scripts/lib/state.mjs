@@ -59,10 +59,12 @@ const isStr = (v) => typeof v === 'string';
 export function readLocales(dir) {
   const out = {};
   let names;
-  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return out; }
+  // In order of the tags themselves, as every choice of a tag reads them [matchingTag].
+  const tagOf = (n) => n.slice(0, -'.json'.length);
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort((a, b) => (tagOf(a) < tagOf(b) ? -1 : tagOf(a) > tagOf(b) ? 1 : 0)); } catch { return out; }
   for (const n of names) {
     const file = path.join(dir, n);
-    const tag = canonicalTag(n.slice(0, -'.json'.length));
+    const tag = canonicalTag(tagOf(n));
     if (!tag) { warn(`catalog ${file} is not named <language tag>.json; skipped`); continue; }
     let doc;
     try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) { warn(`cannot read catalog ${file} (${err.message}); skipped`); continue; }
@@ -162,6 +164,9 @@ export function readWorkflowsState(stateDir) {
   }
   const checked = validateWorkflows(doc);
   if (!checked.ok) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is not a workflows document: ${checked.error}` };
+  // One no save could write again is reported, never shown as a document the page cannot save.
+  const size = workflowsBytes(checked.doc).length;
+  if (size > WORKFLOWS_MAX_BYTES) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is ${size} bytes as a save stores it, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` };
   return { file, exists: true, valid: true, doc, etag: etagOf(bytes), error: null };
 }
 
@@ -218,7 +223,7 @@ export function writeWorkflows(stateDir, doc) {
   fs.mkdirSync(stateDir, { recursive: true, mode: STATE_DIR_MODE });
   const file = path.join(stateDir, WORKFLOWS_FILE);
   const tmp = path.join(stateDir, `.${WORKFLOWS_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
-  const bytes = Buffer.from(JSON.stringify(doc, null, 2) + '\n', 'utf8');
+  const bytes = workflowsBytes(doc);
   try {
     fs.writeFileSync(tmp, bytes, { mode: 0o600 });
     fs.renameSync(tmp, file);
@@ -230,7 +235,14 @@ export function writeWorkflows(stateDir, doc) {
 }
 
 // The largest workflows document a save takes, the page's and `workflows --put`'s alike: far above any real one.
+// It bounds the body sent and the document as stored, which is never smaller than the
+// compact form the server returns, so a document read can always be saved again.
 export const WORKFLOWS_MAX_BYTES = 1024 * 1024;
+
+/** A validated workflows document as workflows.json stores it. */
+export function workflowsBytes(doc) {
+  return Buffer.from(JSON.stringify(doc, null, 2) + '\n', 'utf8');
+}
 
 export const WORKFLOWS_LOCK_FILE = `${WORKFLOWS_FILE}.lock`;
 const LOCK_WAIT_MS = 1000; // a save holds the lock for milliseconds
@@ -330,10 +342,10 @@ function isStale(file) {
  * @throws {LockBusyError} when another process holds the lock past the wait
  */
 export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false } = {}) {
+  // The body as sent, and the document as it would be stored, under the one limit.
+  const tooLarge = (size, as) => ({ status: 413, value: { error: 'too-large', message: `the workflows document is ${size} bytes${as}, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` } });
   const size = Buffer.byteLength(body, 'utf8');
-  if (size > WORKFLOWS_MAX_BYTES) {
-    return { status: 413, value: { error: 'too-large', message: `the workflows document is ${size} bytes, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` } };
-  }
+  if (size > WORKFLOWS_MAX_BYTES) return tooLarge(size, '');
   return withWorkflowsLock(stateDir, () => {
     const cur = readWorkflowsState(stateDir);
     if (replaceInvalid) {
@@ -351,6 +363,8 @@ export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false 
     }
     const checked = validateWorkflows(doc);
     if (!checked.ok) return { status: 400, value: { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` } };
+    const stored = workflowsBytes(checked.doc).length;
+    if (stored > WORKFLOWS_MAX_BYTES) return tooLarge(stored, ' as stored');
     try {
       if (replaceInvalid && cur.exists) setAsideInvalid(stateDir);
       const written = writeWorkflows(stateDir, checked.doc);

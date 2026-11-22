@@ -9,14 +9,19 @@
 //             saying skill, command, slash or playbook); `Skill(N)`;
 //             `skill: N` as a key (case-sensitive, at the line start or after
 //             `{` or `,`); `$N` after a verb of use in its clause, and each
-//             `$N` joined to it by `,`, "and" or "or"; N beside a
+//             `$N` joined to it by `,`, "and", "or", or "not" or "never"
+//             after `,`, "and" or "but"; N beside a
 //             verb of use and the word skill or playbook, or the word command
 //             when N is backticked or slashed;
 //   mentions: any of those after words steering away from it in its
 //             sentence ("instead of", "rather than", a negated verb of use
-//             such as "do not run"), up to a clause opening with a verb of use (or in a
-//             sentence holding a bare "instead"), or `N` in backticks when the
-//             sentence says "skill" or N has a hyphen.
+//             such as "do not run"), up to a clause opening with a verb of use,
+//             after punctuation or "but" (or in a sentence holding a bare
+//             "instead" opening no clause of use), or `N` in backticks when
+//             the sentence says "skill" or N has a hyphen.
+// A sentence is read over every name in it, installed or not, and only then
+// is each name kept where it names a skill: whether a name is installed never
+// changes how the names around it read.
 
 import { clipText } from './markdown.mjs';
 
@@ -35,15 +40,18 @@ const VERBS = String.raw`invoke[sd]?|invoking|call(?:s|ed|ing)?|run(?:s|ning)?|r
 const NOUNS = String.raw`skill|playbook`; // "command" needs a backticked or slashed name
 // Words steering away from the names after them in their sentence: "use X
 // instead of Y" calls X and mentions Y. Their reach ends at a clause opening
-// with a verb of use, so "instead of Y, use X" calls X too; "X, not Y" and
-// "X but not Y" steer away from Y. A bare "instead" ("use `/x` instead")
-// points away from the skill itself, so it steers the whole sentence.
+// with a verb of use, so "instead of Y, use X" calls X too; "X, not Y",
+// "X but not Y", "X and not Y" and "X and never Y" steer away from Y; "but"
+// opens a clause of its own, so "never run X but run Y" and "never run X but
+// instead run Y" call Y. A bare "instead" ("use `/x` instead") points away
+// from the skill itself, so it steers the whole sentence, unless it opens a
+// clause of use ("instead run Y"), which then calls Y.
 // A verb of use negated ("do not run", "never invoke", "don't call", "can't
 // use", "cannot load", "do not ever run") steers too, every verb of VERBS alike.
 const NEGATION = String.raw`(?:(?:do|does|did|should|must|can|could|would|wo|ca|need)n['\u2019]t|cannot|not|never)\s+(?:(?:ever|always|directly)\s+)?`;
-const STEER_AWAY_BEFORE = new RegExp(String.raw`\b(?:not for|${NEGATION}(?:${VERBS})|instead of|rather than|see also)\b|(?:,|\bbut)\s+not\b`, 'gi');
-const CLAUSE_OF_USE = new RegExp(String.raw`[,:\u2013\u2014]\s*(?:(?:and|but|then|so|instead)\s+)?(?:please\s+)?(?:${VERBS})\b`, 'i');
-const STEER_AWAY_SENTENCE = /\binstead\b(?!\s+of\b)/i;
+const STEER_AWAY_BEFORE = new RegExp(String.raw`\b(?:not for|${NEGATION}(?:${VERBS})|instead of|rather than|see also)\b|(?:,|\bbut|\band)\s+(?:not|never)\b`, 'gi');
+const CLAUSE_OF_USE = new RegExp(String.raw`(?:[,:\u2013\u2014]\s*(?:(?:and|but|then|so|instead)\s+)?|\bbut\s+(?:instead\s+)?)(?:please\s+)?(?:${VERBS})\b`, 'i');
+const STEER_AWAY_SENTENCE = new RegExp(String.raw`\binstead\b(?!\s+of\b)(?!\s+(?:please\s+)?(?:${VERBS})\b)`, 'i');
 const SAYS_SKILL = /\bskills?\b/i;
 const SAYS_COMMAND = /\b(skills?|commands?|slash|playbooks?)\b/i;
 const CONTEXT_FOR_UNRESOLVED = /\b(skills?|commands?|slash|type[sd]?|typing)\b/i;
@@ -85,9 +93,10 @@ export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
     { kind: 'calls', re: new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${ALT})["'\x60]?\s*[,)]`, 'g') },
     { kind: 'calls', re: new RegExp(String.raw`(?:^\s*(?:-\s+)?|[{,]\s*)["']?skill["']?\s*:\s*["'\x60]?(${ALT})${NAME_END}`, 'g') },
     // `$N` after a verb of use in its clause (no `,` between), as Codex writes a skill's name; never inside a path or URL.
-    // Each `$N` joined to it after that one verb ("run $a, $b or $c") is a call too [chain].
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;,\n]{0,40}?(?<![\w$/.~:@-])[\x60"']?\$(${ALT})${NAME_END}`, 'gi'),
-      chain: new RegExp(String.raw`[\x60"']?(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+)[\x60"']?\$(${ALT})${NAME_END}`, 'iy') },
+    // Each `$N` joined to it after that one verb ("run $a, $b or $c", "run $a, not $b", "run $a and never $b") is a call too [chain], steered where its joining words steer.
+    // Both read every `$N`, a skill's or not, so a name no skill has neither hides nor joins the names after it [findLinks].
+    { kind: 'calls', re: new RegExp(String.raw`(?<![\w$/.~:@-])[\x60"']?(?=\$)(?<=\b(?:${VERBS})\b[^.!?;,\n]{0,41})\$(${ALT}|${NAME_CHARS})${NAME_END}`, 'gi'),
+      chain: new RegExp(String.raw`[\x60"']?(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s*,\s*(?:not|never)\s+|\s*,?\s+(?:and|but)\s+(?:not|never)\s+)[\x60"']?\$(${ALT}|${NAME_CHARS})${NAME_END}`, 'iy') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])[\x60"']?/?(${ALT})[\x60"']?\s+(?:${NOUNS})s?\b`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?\b(?:${NOUNS})\s+[\x60"']?/?(${ALT})${NAME_END}`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])(?:\x60/?|/)(${ALT})\x60?\s+commands?\b`, 'gi') },
@@ -130,7 +139,7 @@ export function findLinks(matcher, from, lines) {
     // The name found at `at` by `form`, kept as a link unless its sentence rules it out.
     const consider = (form, name, at) => {
       const to = resolve(matcher, name, from.root);
-      if (!to || to === fromId) return; // case differs (case-insensitive form) or a self-link
+      if (!to || to === fromId) return; // no skill's (or case differs, in a case-insensitive form), or a self-link
       const span = sentenceSpan(text, at);
       const sentence = text.slice(span.start, span.end);
       let kind = form.kind;

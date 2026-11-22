@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=92a4dad146c267d2d1de534971aed4f09c41bbdc247343d4f45d0ad350d339ff own=18f6451ef69cb0e0da6651c77f8fed898e1251928eeac23534e79bb4ac89d08e -->
+<!-- skill-atlas:source sha256=aa8ed5cb0a46f064d27d207ce61a65fff02b6d7dbc6b7d5de7f8d22a0cd725bc own=59c1b7056663897590e7fd99c416da7cc38b8f574f39671f6ceecd77e9e28ac3 -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -115,7 +115,7 @@
 }
 ```
 
-洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
+洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
 为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
 大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
@@ -155,11 +155,11 @@
 - 不在 `tag-rules.json` 中的标签 id，只要形如 `<category>.<slug>` 就会被接受；其显示名称就是 slug。
 - 指向未安装技能的条目会被忽略，并在 stderr 上报告。
 - 一个技能的值可以是一个条目，也可以是一组条目，每个条目依据该技能的另一版文本写成：`"code": [ { "source": { "sha256": "9b90c1…" }, … }, { "source": { "sha256": "41d07e…" }, … } ]`。
-- 被应用的条目是其 `source` 哈希值等于其技能 `digest`、且 `source.files` 中每个文件都具有所记录哈希值的那个，否则是第一个没有记录哈希值的；记录了其他哈希值的条目不会被应用，其 `translations` 中的文字也不会。
+- 在其 `source` 哈希值等于其技能 `digest`、且 `source.files` 中每个文件都具有所记录哈希值的条目中，列出文件最多的那个被应用，数目相同时取靠后的，否则是第一个没有记录哈希值的；记录了其他哈希值的条目不会被应用，其 `translations` 中的文字也不会。
   列出的文件缺失、位于技能文件夹之外或无法读取时即不相符；只读取列出的文件，且只为有这种条目的技能读取。
   `atlas.mjs digest <file>...` 为每个文件打印一行 `<sha256 hex>  <path>`，即其字节的哈希值，与 `source` 和译本记录中所存的完全一致。
   在一个名称下，记录了同名的另一个不同技能（`<name>@<rootId>`）哈希值的条目应用于那个技能，除非文件中有以它自己的 id 为键的条目；没有记录哈希值的条目仍归第一个技能。
-  没有任何条目被应用、而其中有条目记录的哈希值不属于任何同名技能时，该技能报告 `stale-annotation` 洞察：状态目录为所有项目共用，这样的条目可能是为另一个同名技能或本技能的早先文本写的。
+  同名的每个技能各自判断：没有任何条目应用于它、而有条目记录了它的 `digest`（某个列出的文件已改动）或记录了不属于任何同名技能的哈希值时，它报告 `stale-annotation` 洞察，因为状态目录为所有项目共用，这样的条目可能是为其中任何一个技能的早先文本写的。
 
 ## workflows.json — 用户如何整理技能
 
@@ -213,6 +213,8 @@
 - `pin` 只改写记录行；只要有一个指定的译本无法写入记录，就不写入任何文件；`pin --check` 列出每个过时、脱离源文件修改过或没有记录哈希值（Markdown 译本则包括没有记录自身哈希值）的译本，以及每个指定的、不含任何译本的文件夹。
 - 指定的文件夹代表其中任意深度的每个译本，`.agents`、`.claude` 等隐藏文件夹和链接进来的文件夹（从别处链接进来的技能）也包括在内，每个实际文件夹只读一次；只有 `.git` 和 `node_modules` 会被跳过。
   其中无法跟随的链接会被列出，并使 `pin` 和 `pin --check` 都失败。
+- 通过链接（符号链接或硬链接）即为其源文件本身的文件不是译本：在文件夹中被跳过，被点名时被拒绝，绝不会被写入。
+  被当作两个源文件之译本的同一文件，或本身就是某个源文件的译本（另一译本的源文件、某个技能的 `SKILL.md`，或其实际位置旁某个译本所翻译的文件），会被列出，并使 `pin` 和 `pin --check` 都失败，且不写入任何文件。
 - 无法完整读取（超过 5,000 个文件或 2,000 个文件夹，或含有无法读取的条目）的指定文件夹会被列出，并使 `pin` 和 `pin --check` 都失败。
 - 位于 `translations/<skill id>/` 下、其技能未被扫描报告或该技能缺少其源文件的译本，会被列出，并使 `pin` 和 `pin --check` 都失败；扫描选项（`--state`、`--cwd`、`--root`、`--agent`、`--no-user`、`--no-plugins`）决定用来找到这些技能的扫描。
 
@@ -239,6 +241,7 @@
 一个文件的语言，是其 frontmatter 在 `metadata.language` 中指明的语言（仅限 `SKILL.md`），否则由它在围栏代码和 HTML 注释之外的全部文本判断：汉字、假名和谚文字母各按三个计，多于拉丁字母时，假名至少占汉字与假名的十分之一则为 `ja`，谚文占多数则为 `ko`，否则为 `zh`；拉丁字母占多数为 `en`；其他任何文字的字母占多数为 `und`。
 `atlas.json` 中每个技能的 `language` 是其 `SKILL.md` 的语言。
 有三种洞察类型报告译本的情况：`stale-translation`、`edited-translation` 和 `translation-steps`（译本的步骤数与技能的不同）。
+`stale-translation` 的消息指明更新后的译本要写入的、状态目录 `translations/<skill id>/` 下的文件，以及为该文件执行的 `pin` 命令；对于位于技能文件夹中的译本，消息还指明该文件：技能文件夹归用户本人编辑时，可以改为就地更新并固定它。
 
 每条洞察都带有 `params`，即构成其消息的值，以便页面用任何语言表述它：
 
@@ -248,7 +251,8 @@
 | `unresolved-link` | `name`、`from` |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
-| `missing-description`、`invalid-frontmatter`、`no-steps`、`stale-annotation` | —（`{}`） |
+| `missing-description`、`no-steps`、`stale-annotation` | —（`{}`） |
+| `invalid-frontmatter` | `named`（其 `name` 是否可读，即技能是否不以文件夹命名） |
 | `name-mismatch` | `name`、`folder` |
 | `stale-translation` | `lang`、`files`（落后于源文件的相对路径） |
 | `edited-translation` | `lang`、`files`（脱离源文件修改过的相对路径） |
@@ -304,8 +308,12 @@
 
 扫描的文件夹：
 
-- 项目是 `--cwd` 所在的文件夹，以及其上直到所在仓库根目录（最近的含有 `.git` 条目的文件夹）的每一级文件夹，近的在前；不在仓库中时只有 `--cwd` 的文件夹。
+- 项目是 `--cwd` 所在的文件夹，以及其真实路径之上直到所在仓库根目录（最近的含有 `.git` 条目的文件夹）的每一级文件夹，近的在前；不在仓库中时只有 `--cwd` 的文件夹。
+  经由链接到达的 `--cwd` 因此找到的文件夹与链接所指的文件夹相同。
   根 id 指明其文件夹在仓库中的位置，从仓库中任何工作文件夹扫描都相同：仓库根目录（不在仓库中时为 `--cwd` 的文件夹）中的各项保留 `project-agents` 这样的 id；其下文件夹中的各项再加上该文件夹相对仓库根目录的路径，每一段转为小写，`a-z` 和 `0-9` 以外的每串字符变为一个连字符、两端不留连字符，不含这些字符的段以 `x` 加其 SHA-256 的八位十六进制数字命名（`packages/ui` 对应 `project-agents-packages-ui`）。
+  仓库中另有文件夹得到相同的词时（`packages/ui-kit` 与 `packages/ui/kit`），每个都再加上 `.` 和其相对根目录路径的 SHA-256 的八位十六进制数字，因此不会有两个文件夹共用一个 id。
+  插件的根为 `plugin-<name>`，`installed_plugins.json` 中同名的后续安装依次加 `-2`、`-3`……，按该文件记录的全部安装计数，无论在此是否启用。
+  被多行到达的同一文件夹（`--cwd` 即主文件夹，`--root` 或 `CLAUDE_CONFIG_DIR` 指向项目的某个文件夹，或一个文件夹的技能链接到另一个的）只扫描一次，取不经自身链接到达它的那一行，其中项目的行先于主文件夹的、插件的和 `--root` 的行，各自再取 id 顺序中的第一行，因此另一行不会改变任何 id。
   其显示名称带有该路径：`Project (packages/ui) · Universal`。
 - 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及每个项目文件夹中含有技能的 `skills`。
 - `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills` 和 `.config/agents/skills`（除 Claude Code 外的代理都加载它们），以及 `--root` 指定的文件夹；项目的 `skills` 不保留。
@@ -325,9 +333,9 @@
 | 作为命令的 `/N`：斜杠前紧邻的不是单词字符、`/`、`.`、`-`、`~`、`:` 或 `@`，斜杠前紧邻的也不是路径用词（`under`、`in`、`into`、`at`、`to`、`from`、`of`）或 HTTP 方法，名称之后不是单词字符、`/` 或 `-`（`.` 或 `:` 只能作为标点）；类似文件夹的名称（`docs`、`src`、`api`、`tmp`……）只在提到 skill、command、slash 或 playbook 的句子中算数 | `calls` |
 | `Skill(N)` | `calls` |
 | 作为键的 `skill: N`：小写，位于行首（或 `- ` 列表项开头），或在 `{` 或 `,` 之后 | `calls` |
-| `$N`（带或不带反引号）在某个表示使用的动词之后几个词以内，且两者之间没有 `,`；前面没有这样的动词的 `$N`、路径或 URL 中的 `$N`（`bin/$N`），以及 `$` 之后跟着没有技能叫这个名字的名称，都不算链接 | `calls` |
+| `$N`（带或不带反引号）在某个表示使用的动词之后几个词以内，且两者之间没有 `,`，以及以 `,`、`and`、`or`，或位于 `,`、`and` 或 `but` 之后的 `not` 或 `never` 与这样的 `$N` 相连的每个 `$N`，无论其间的名称是否为某个技能的名称；前面没有这样的动词的 `$N`、路径或 URL 中的 `$N`（`bin/$N`），以及 `$` 之后跟着没有技能叫这个名字的名称，都不算链接 | `calls` |
 | `N` 在某个表示使用的动词（invoke、call、run、use、load、delegate to、hand off to、follow、start、trigger、launch）之后几个词以内，且紧挨 skill 或 playbook 一词，或者在 `N` 带反引号或斜杠前缀时紧挨 command 一词 | `calls` |
-| 以上任一形式，在其句子中位于引向别处的用词（`not for`、`do not use`、`don't use`、`never use`、`instead of`、`rather than`、`see also`、`, not`、`but not`）之后，且两者之间没有以使用类动词开头的分句（位于 `,`、`:` 或破折号之后），或出现在含有后面不跟 `of` 的 `instead` 的句子中——因此 ``use `/review` instead of `/publish` `` 和 ``instead of `/publish`, use `/review` `` 都调用 `review`、提及 `publish` | `mentions` |
+| 以上任一形式，在其句子中位于引向别处的用词（`not for`、`do not use`、`don't use`、`never use`、`instead of`、`rather than`、`see also`、位于 `,`、`and` 或 `but` 之后的 `not` 或 `never`）之后，且两者之间没有以使用类动词开头的分句（位于 `,`、`:`、破折号或 `but` 之后，动词前可有 `instead`），或出现在含有后面既不跟 `of` 也不跟使用类动词的 `instead` 的句子中——因此 ``use `/review` instead of `/publish` `` 和 ``instead of `/publish`, use `/review` `` 都调用 `review`、提及 `publish` | `mentions` |
 | 单独的 `` `N` ``，当句子提到 skill 或名称中带连字符时 | `mentions` |
 
 - 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。

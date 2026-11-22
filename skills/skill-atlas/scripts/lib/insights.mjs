@@ -15,7 +15,9 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
   const rootLabel = new Map(roots.map((r) => [r.id, r.label]));
 
   for (const s of skills) {
-    if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: {}, message: `${s.id}: ${s._fmError}; the folder name is used as its name` });
+    // The fields that parsed stand [frontmatter.mjs]; the folder names the skill only where its name did not.
+    const named = s.frontmatter?.name !== undefined && s.frontmatter.name !== null && String(s.frontmatter.name).trim() !== '';
+    if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: { named }, message: `${s.id}: ${s._fmError}; ${named ? 'the fields that read are used' : 'the folder name is used as its name'}` });
   }
 
   const byName = new Map();
@@ -60,7 +62,7 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
   for (const s of skills) {
     const declared = s.frontmatter?.name;
     const folder = path.basename(s.dir);
-    if (!s._fmError && declared !== undefined && declared !== null && String(declared).trim() && String(declared).trim() !== folder) {
+    if (declared !== undefined && declared !== null && String(declared).trim() && String(declared).trim() !== folder) {
       out.push({ kind: 'name-mismatch', skills: [s.id], params: { name: String(declared).trim(), folder }, message: `${s.id}: frontmatter name "${String(declared).trim()}" differs from its folder "${folder}"` });
     }
   }
@@ -74,7 +76,9 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
     for (const lang of [...(s._staleByLang?.keys() ?? [])].sort()) {
       const found = [...s._staleByLang.get(lang)].sort((a, b) => a.rel.localeCompare(b.rel));
       const files = found.map((f) => f.rel);
-      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run ${pinCommand(found)}` });
+      const local = found.map((f) => f.local).filter(Boolean);
+      const instead = local.length ? `, or, where the skill's folder is the user's own to edit, bring ${local.join(', ')} in line with ${local.length > 1 ? 'their sources' : 'its source'} there and pin ${local.length > 1 ? 'them' : 'it'} instead` : '';
+      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; write ${files.length > 1 ? 'each' : 'it'}, brought up to date, to ${found.map((f) => f.target).join(', ')} and run ${pinCommand(found)}${instead}` });
     }
   }
   for (const s of skills) {

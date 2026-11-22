@@ -54,7 +54,8 @@ Commands:
                        one that cannot be read whole, and exit 1 where there is one
   digest <file>...     Print one line per file, <sha256 hex>  <path>: the SHA-256 of the
                        file's bytes, as an annotation's "source" and a translation's record
-                       hold it; exit 1 naming each file that cannot be read
+                       hold it; every file read is printed, and the command exits 1
+                       naming on stderr each file that cannot be read
   workflows [--state <dir>]
                        Print the stored workflows.json as one JSON object
                        { "etag": "<version>", "doc": { ... } }: an empty document and the
@@ -292,17 +293,20 @@ async function main(argv) {
   const url = `http://127.0.0.1:${started.port}/`;
   process.stdout.write(JSON.stringify({ url, state: sopts.stateDir, skills: atlas.skills.length }) + '\n');
   if (!opts['no-open']) openBrowser(url);
+  // The process ends once the server has closed, after its output has drained; a second signal ends it at once.
   const stop = () => {
+    process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
     started.server.close();
     started.server.closeAllConnections?.();
-    process.exit(0);
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 }
 
+// Never process.exit: it would cut off output still draining into a pipe.
 main(process.argv.slice(2)).catch((err) => {
   const message = err instanceof UsageError ? err.message : `${err.message}`;
   process.stderr.write(`skill-atlas: error: ${message}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });

@@ -131,6 +131,12 @@ function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
     want = canonicalTag(lang);
     if (!want) return send(res, 400, { error: `lang "${lang}" is not a language tag such as zh-CN` });
   }
+  // The file is named by the path asked (its translations, its language and the
+  // path answered follow that name) and read from where a link there leads,
+  // which must lie inside the skill's real folder too.
+  const leaves = (rel_) => rel_ === '' || rel_.startsWith('..') || path.isAbsolute(rel_);
+  const asked = path.relative(path.resolve(skill.dir), path.resolve(skill.dir, rel));
+  if (leaves(asked)) return send(res, 403, { error: 'the path leaves the skill folder' });
   let base;
   let real;
   try {
@@ -139,28 +145,25 @@ function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
   } catch {
     return send(res, 404, { error: `no file "${rel}" in ${skillId}` });
   }
-  const inside = path.relative(base, real);
-  if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {
-    return send(res, 403, { error: 'the path leaves the skill folder' });
-  }
-  const insidePosix = inside.split(path.sep).join('/');
+  if (leaves(path.relative(base, real))) return send(res, 403, { error: 'the path leaves the skill folder' });
+  const askedPosix = asked.split(path.sep).join('/');
   let isFile = false;
   try { isFile = fs.statSync(real).isFile(); } catch { /* answered below */ }
   if (want && isFile) {
-    const found = findTranslation(skill, inside, want, stateDir);
+    const found = findTranslation(skill, askedPosix, want, stateDir);
     if (found) {
       const translated = readBoundedText(found.real, path.basename(found.abs), skillId);
       if (translated.error) return send(res, translated.status, { error: translated.error });
       const { stale, edited } = found;
       // The file shown, by its path in the skill's folder (or under translations/<skill id>/).
-      const shown = path.posix.join(path.posix.dirname(insidePosix), path.basename(found.abs));
+      const shown = path.posix.join(path.posix.dirname(askedPosix), path.basename(found.abs));
       return send(res, 200, { language: found.tag, path: shown, stale, edited, text: translated.text });
     }
   }
   const source = readBoundedText(real, rel, skillId);
   if (source.error) return send(res, source.status, { error: source.error });
   // The original's own language, told from its own text (a SKILL.md's declared one first).
-  if (want) return send(res, 200, { language: null, sourceLanguage: fileLanguage(source.text, { skillFile: insidePosix === 'SKILL.md' }), path: insidePosix, stale: false, edited: false, text: source.text });
+  if (want) return send(res, 200, { language: null, sourceLanguage: fileLanguage(source.text, { skillFile: askedPosix === 'SKILL.md' }), path: askedPosix, stale: false, edited: false, text: source.text });
   return sendText(res, 200, source.text, 'text/plain; charset=utf-8');
 }
 

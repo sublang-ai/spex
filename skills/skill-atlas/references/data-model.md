@@ -112,7 +112,7 @@ A `TagHit`:
 }
 ```
 
-Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter`, `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
+Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
 
 One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
 A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
@@ -152,11 +152,11 @@ The scan is pattern matching; this file is where a reader who understood the ski
 - A tag id absent from `tag-rules.json` is accepted when it has the form `<category>.<slug>`; its label is the slug.
 - An entry naming a skill that is not installed is ignored and reported on stderr.
 - A skill's value may be one entry or a list of entries, each written from another text of the skill: `"code": [ { "source": { "sha256": "9b90c1…" }, … }, { "source": { "sha256": "41d07e…" }, … } ]`.
-- The entry applied is the one whose `source` digest is its skill's `digest` and each of whose `source.files` has the digest recorded, else the first recording none; an entry recording another digest is not applied, its `translations` words included.
+- Of the entries whose `source` digest is its skill's `digest` and each of whose `source.files` has the digest recorded, the one listing the most files applies, the later on a tie, else the first recording none; an entry recording another digest is not applied, its `translations` words included.
   A listed file that is missing, outside the skill's folder or unreadable does not match; only the listed files are read, and only for a skill with such an entry.
   `atlas.mjs digest <file>...` prints one line per file, `<sha256 hex>  <path>`, the digest of its bytes exactly as `source` and a translation's record hold it.
   Under a name, an entry recording the digest of a differing skill of that name (`<name>@<rootId>`) applies to that skill, unless the file has an entry under its own id; an entry recording none stays with the first.
-  Where no entry applies and one records a digest no skill of that name has, the skill reports a `stale-annotation` insight: the state folder serves every project, so the entry may have been written for another skill of that name or an earlier text of this one.
+  Each skill of the name is judged on its own: one that no entry applies to reports a `stale-annotation` insight where an entry records its `digest` (a listed file has changed) or a digest no skill of that name has, since the state folder serves every project and such an entry may have been written for an earlier text of any of them.
 
 ## workflows.json — how the user organizes skills
 
@@ -210,6 +210,8 @@ A file's translation is the file beside it with the tag before the extension: `S
 - `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own), and each folder named that holds no translation.
 - A folder named stands for every translation in it at any depth, hidden folders such as `.agents` and `.claude` and linked ones (a skill linked in from elsewhere) included, each real folder once; only `.git` and `node_modules` are passed over.
   A link in it that cannot be followed is named and fails both `pin` and `pin --check`.
+- A file that is its source itself through a link, symbolic or hard, is no translation: passed over in a folder, refused where named, never written.
+  One file reached as the translation of two sources, or a translation that is itself a source (of another translation, a skill's `SKILL.md`, or the file a translation beside its real place translates), is named and fails both `pin` and `pin --check`, and no file is written.
 - A folder named that cannot be read whole (over 5,000 files or 2,000 folders, or an entry that cannot be read) is named and fails both `pin` and `pin --check`.
 - A translation under `translations/<skill id>/` whose skill the scan does not report, or whose source that skill lacks, is named and fails both `pin` and `pin --check`; the scan options (`--state`, `--cwd`, `--root`, `--agent`, `--no-user`, `--no-plugins`) choose the scan that finds the skills.
 
@@ -236,6 +238,7 @@ Steps, links and tags always come from `SKILL.md`; a translation supplies words 
 A file's language is the one its frontmatter names in `metadata.language`, for `SKILL.md` alone, else told from its whole text outside fenced code and HTML comments: Han, kana and hangul letters, each counting as three, outweighing the Latin ones make it `ja` where kana are at least a tenth of the Han and kana, `ko` where hangul are most, else `zh`; Latin letters most make it `en`; letters of any other script most make it `und`.
 Each skill's `language` in `atlas.json` is its `SKILL.md`'s.
 Three insight kinds report on translations: `stale-translation`, `edited-translation` and `translation-steps` (the translation's steps number otherwise than the skill's).
+A `stale-translation` message names the file under `translations/<skill id>/` of the state folder its refresh is written to and the `pin` command for that file; for a translation in the skill's folder it adds that file, to bring in line and pin instead where the folder is the user's own to edit.
 
 Every insight carries `params`, the values its message is built from, so the page can phrase it in any language:
 
@@ -245,7 +248,8 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `unresolved-link` | `name`, `from` |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
-| `missing-description`, `invalid-frontmatter`, `no-steps`, `stale-annotation` | — (`{}`) |
+| `missing-description`, `no-steps`, `stale-annotation` | — (`{}`) |
+| `invalid-frontmatter` | `named` (whether its `name` reads, so the folder does not name the skill) |
 | `name-mismatch` | `name`, `folder` |
 | `stale-translation` | `lang`, `files` (relative paths behind their source) |
 | `edited-translation` | `lang`, `files` (relative paths edited apart from their source) |
@@ -301,8 +305,12 @@ A file's own entry is never changed by words for another tag: words under `en-US
 
 Folders scanned:
 
-- The project is `--cwd`'s folder and each folder above it up to the root of its repository (the nearest folder holding a `.git` entry), the nearer first; with no repository, `--cwd`'s alone.
+- The project is `--cwd`'s folder and each folder above its real path up to the root of its repository (the nearest folder holding a `.git` entry), the nearer first; with no repository, `--cwd`'s alone.
+  A `--cwd` reached through a link so finds the same folders as the folder it leads to.
   A root's id names its folder's place in the repository, the same from every working folder in it: the rows of the repository's root (or, with no repository, of `--cwd`'s folder) keep ids such as `project-agents`; those of a folder below it add its path from the repository's root, each segment lowercased with every run of other characters than `a-z` and `0-9` one hyphen and none kept at either end, and a segment holding none of those named by `x` and eight hex digits of its SHA-256 (`project-agents-packages-ui` for `packages/ui`).
+  Where another folder of the repository has the same words (`packages/ui-kit` and `packages/ui/kit`), each adds `.` and eight hex digits of the SHA-256 of its path from the root, so no two folders share an id.
+  A plugin's root is `plugin-<name>`, a later install of that name in `installed_plugins.json` adding `-2`, `-3`, … over every install the file records, enabled here or not.
+  A folder reached by several rows (`--cwd` the home folder, a `--root` or `CLAUDE_CONFIG_DIR` naming a project's folder, or one folder's skills linked to another's) is scanned once, as the row reaching it through no link of its own, of those a project's before the home folder's, the plugins' and `--root`'s, each then first in id order, so the other row changes no id.
   Its label adds that path: `Project (packages/ui) · Universal`.
 - Each agent's skill folder in each project folder and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills` (loaded as `.agents/skills` is), `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills` (`XDG_CONFIG_HOME`, where set, standing for the home folder's `.config`), each project folder's `.github/skills`, and each project folder's `skills` where it holds a skill.
 - `--agent <id>` keeps that agent's folders, `.agents/skills` and `.config/agents/skills` where that agent loads them (every agent but Claude Code does), and `--root`'s; the project's `skills` is left out.
@@ -322,9 +330,9 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 | `/N` as a command: no word character, `/`, `.`, `-`, `~`, `:` or `@` right before the slash, no path word (`under`, `in`, `into`, `at`, `to`, `from`, `of`) or HTTP method right before it, and no word character, `/` or `-` after the name (a `.` or `:` only as punctuation); a folder-like name (`docs`, `src`, `api`, `tmp`, ...) only in a sentence saying skill, command, slash or playbook | `calls` |
 | `Skill(N)` | `calls` |
 | `skill: N` as a key: lowercase, at the start of a line (or a `- ` list item) or after `{` or `,` | `calls` |
-| `$N` (backticked or not) within a few words after a verb of use, with no `,` between them; `$N` with no such verb, inside a path or URL (`bin/$N`), and `$` before a name no skill has, are nothing | `calls` |
+| `$N` (backticked or not) within a few words after a verb of use, with no `,` between them, and each `$N` joined to such a one by `,`, `and`, `or`, or `not` or `never` after `,`, `and` or `but`, whether or not the names between name a skill; `$N` with no such verb, inside a path or URL (`bin/$N`), and `$` before a name no skill has, are nothing | `calls` |
 | `N` within a few words after a verb of use (invoke, call, run, use, load, delegate to, hand off to, follow, start, trigger, launch) and next to the word skill or playbook, or next to the word command when `N` is backticked or slash-prefixed | `calls` |
-| Any of the above after words steering away from it in its sentence (`not for`, `do not use`, `don't use`, `never use`, `instead of`, `rather than`, `see also`, `, not`, `but not`) with no clause opening with a verb of use (after `,`, `:` or a dash) between them, or in a sentence holding `instead` not followed by `of` — so ``use `/review` instead of `/publish` `` and ``instead of `/publish`, use `/review` `` call `review` and mention `publish` | `mentions` |
+| Any of the above after words steering away from it in its sentence (`not for`, `do not use`, `don't use`, `never use`, `instead of`, `rather than`, `see also`, `not` or `never` after `,`, `and` or `but`) with no clause opening with a verb of use (after `,`, `:`, a dash or `but`, `instead` allowed before the verb) between them, or in a sentence holding `instead` followed neither by `of` nor by a verb of use — so ``use `/review` instead of `/publish` `` and ``instead of `/publish`, use `/review` `` call `review` and mention `publish` | `mentions` |
 | `` `N` `` alone, when the sentence says skill or the name has a hyphen | `mentions` |
 
 - A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
