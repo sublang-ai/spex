@@ -4,11 +4,13 @@
 // `atlas.mjs pin`: record in each translation the SHA-256 of the file it
 // translates and, in Markdown, its own, or with --check name each translation
 // behind its source, edited apart from it or recording no digest, changing no
-// file (data-model.md "Languages").
+// file (data-model.md "Languages"). A translation in the state folder whose
+// skill or source the scan does not find, and a folder named holding no
+// translation, are named and fail either command.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { UsageError, warn } from './log.mjs';
+import { UsageError } from './log.mjs';
 import { TRANSLATIONS_DIR, parseTranslationName, sourceRelOf, listFiles, fileInside, recordedDigests, recordsOwn, ownDigest, withRecordedDigest, sha256Hex } from './translations.mjs';
 
 /**
@@ -32,7 +34,8 @@ export function pin({ targets, check, stateDir, skills }) {
     if (!parsed) return { why: 'its name has no language tag before the extension (such as SKILL.zh-CN.md)' };
     const real = fs.realpathSync(abs);
     const inState = stateRoot ? path.relative(stateRoot, real) : '..';
-    if (!inState.startsWith('..') && !path.isAbsolute(inState) && inState.includes(path.sep)) {
+    if (inState && !inState.startsWith('..') && !path.isAbsolute(inState)) {
+      if (!inState.includes(path.sep)) return { inState: true, why: `it lies directly under ${TRANSLATIONS_DIR}/ of the state folder and names no skill id folder; move it into ${TRANSLATIONS_DIR}/<skill id>/` };
       const [id, ...rest] = inState.split(path.sep);
       const skill = skillById(id);
       if (!skill) return { inState: true, why: `it lies under ${TRANSLATIONS_DIR}/${id}/ of the state folder, and no scanned skill has the id "${id}"; pass the --cwd, --root or --state that find it` };
@@ -47,24 +50,35 @@ export function pin({ targets, check, stateDir, skills }) {
   };
 
   const found = new Map(); // real path -> { abs, source }
+  const orphans = new Map(); // real path -> { abs, why }: state translations the scan finds no source for
+  const empty = []; // { target, why }: folders holding no translation
   for (const target of targets) {
     const abs = path.resolve(target);
     let stat;
     try { stat = fs.statSync(abs); } catch { throw new UsageError(`${target} does not exist; name a translation or a folder holding them`); }
     if (stat.isDirectory()) {
       let n = 0;
+      let named = 0; // files named like a translation with no source beside them
       for (const rel of listFiles(abs)) {
         const file = path.join(abs, ...rel.split('/'));
         if (!parseTranslationName(path.basename(file))) continue;
         const src = sourceOf(file);
         if (!src.source) {
-          if (src.inState) warn(`${file} is skipped: ${src.why}`);
+          // Outside the state folder such a name is a file of its own; inside it, a translation of nothing found.
+          if (src.inState) { orphans.set(fs.realpathSync(file), { abs: file, why: src.why }); n++; } else named++;
           continue;
         }
         found.set(fs.realpathSync(file), { abs: file, source: src.source });
         n++;
       }
-      if (!n) warn(`${target} holds no translation`);
+      if (!n) {
+        empty.push({
+          target,
+          why: named
+            ? `it holds no translation: ${named} ${named === 1 ? 'file is' : 'files are'} named like one, with no source beside ${named === 1 ? 'it' : 'them'} and outside the state folder ${stateDir}; for translations under translations/<skill id>/ of another state folder, pass its --state`
+            : 'it holds no translation',
+        });
+      }
     } else {
       const src = sourceOf(abs);
       if (!src.source) throw new UsageError(`${target} is not a translation: ${src.why}`);
@@ -77,6 +91,10 @@ export function pin({ targets, check, stateDir, skills }) {
     return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : abs;
   };
   const lines = [];
+  for (const { abs, why } of orphans.values()) {
+    if (check) lines.push(`no skill    ${shown(abs)} (${why})`);
+  }
+  if (check) for (const { target, why } of empty) lines.push(`none        ${target} (${why})`);
   let behind = 0;
   let edited = 0;
   let unpinned = 0;
@@ -103,6 +121,8 @@ export function pin({ targets, check, stateDir, skills }) {
       failures.push(`${abs}: ${err.message}`);
     }
   }
+  if (!check) for (const { abs, why } of orphans.values()) failures.push(`${abs}: ${why}`);
+  if (!check) for (const { target, why } of empty) failures.push(`${target}: ${why}`);
   // Every record is made before any is written, so a refusal changes no file.
   if (failures.length) throw new UsageError(`cannot record the digest in ${failures.join('; ')}; no translation was changed`);
   let pinned = 0;
@@ -114,13 +134,15 @@ export function pin({ targets, check, stateDir, skills }) {
     pinned++;
     lines.push(`pinned      ${shown(abs)}`);
   }
-  const total = found.size;
+  const total = found.size + orphans.size;
   if (check) {
-    lines.push(behind || edited || unpinned
-      ? `pin --check: ${behind} of ${total} translations behind their source, ${edited} edited apart from it, ${unpinned} with no digest; carry the change across, then run pin`
-      : `pin --check: ${total} translations up to date`);
+    const parts = [];
+    if (behind || edited || unpinned) parts.push(`${behind} of ${total} translations behind their source, ${edited} edited apart from it, ${unpinned} with no digest; carry the change across, then run pin`);
+    if (orphans.size) parts.push(`${orphans.size} in the state folder translating no skill or file the scan finds; pass the --cwd, --root or --state that find it, or remove it`);
+    if (empty.length) parts.push(`${empty.length} ${empty.length === 1 ? 'folder holds' : 'folders hold'} no translation`);
+    lines.push(parts.length ? `pin --check: ${parts.join('; ')}` : `pin --check: ${total} translations up to date`);
   } else {
     lines.push(`pin: ${pinned} of ${total} translations recorded`);
   }
-  return { lines, failed: check && (behind + edited + unpinned) > 0 };
+  return { lines, failed: check && (behind + edited + unpinned + orphans.size + empty.length) > 0 };
 }

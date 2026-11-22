@@ -10,21 +10,22 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e4556eaf13d99d7195bc5fbf69f5e2af1c118e169776370392492bad4ffd765e own=2b4488fad3d21f714d5c198fd2ce4997712505a9d96de258f7f86ff32a860e48 -->
+<!-- skill-atlas:source sha256=da071fbc0d93a99807a524d4415575e9c36f9ed347a06437a74c217926336d54 own=651dfc7ddafc1664cfcf9d45033b85975f5b116131cd36d28160d784f031e8e8 -->
 
-本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
+> 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
 # 技能图谱
 
 向用户展示他们有哪些技能、技能之间如何关联，以及每个技能在工作中处于什么位置。
 
-下文路径均相对于本技能的文件夹。
+下文的 `<skill-dir>` 指本技能的文件夹，下文中本技能文件的路径均相对于它。
+每条命令都在用户的项目文件夹中运行，并以 `<skill-dir>/scripts/atlas.mjs` 这一路径指明脚本：扫描读取的是它运行所在文件夹的技能，相对路径的 `--out` 也写在那里。
 运行脚本即可，不要把脚本读入上下文。
 
 ## 快速开始
 
 ```bash
-node scripts/atlas.mjs serve
+node <skill-dir>/scripts/atlas.mjs serve
 ```
 
 请在后台运行：它会一直提供服务，直到被停止。
@@ -35,7 +36,7 @@ node scripts/atlas.mjs serve
 ### 步骤 1：扫描
 
 ```bash
-node scripts/atlas.mjs scan --summary
+node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
 阅读摘要：每个位置有多少技能、被链接最多的技能、指向未安装技能的链接、重复的名称，以及未能识别出步骤的技能。
@@ -43,14 +44,14 @@ node scripts/atlas.mjs scan --summary
 
 ### 步骤 2：打开视图
 
-在后台启动 `node scripts/atlas.mjs serve`，把它打印的 URL 交给用户。
+在后台启动 `node <skill-dir>/scripts/atlas.mjs serve`，把它打印的 URL 交给用户。
 用一两句话告诉用户可以在页面上做什么：点击一个技能查看其步骤和它调用的技能，在“工作流”“链接”和“来源”之间切换分组，以及把技能拖入各个阶段。
 页面跟随读者的语言（英语或简体中文），页头有语言切换器；用户用中文交流时，加上 `--lang zh-CN`。
 
 如果没有本地浏览器（远程或沙箱会话），改为写出一个独立页面，并告诉用户它在哪里：
 
 ```bash
-node scripts/atlas.mjs export --out skill-atlas.html
+node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html
 ```
 
 ### 步骤 3：在重要之处加深地图
@@ -72,7 +73,7 @@ node scripts/atlas.mjs export --out skill-atlas.html
 对于“哪些技能要等我批准？”或“审查之前运行什么？”这类问题，把扫描结果写入文件并读取它，而不是重新阅读每个技能：
 
 ```bash
-node scripts/atlas.mjs scan --out atlas.json
+node <skill-dir>/scripts/atlas.mjs scan --out atlas.json
 ```
 
 引用图谱为某个标签或链接给出的证据行，以便用户核对。
@@ -95,10 +96,10 @@ node scripts/atlas.mjs scan --out atlas.json
 步骤、链接和标签始终取自 `SKILL.md`；译本只提供文字，从不提供结构。
 
 当用户要求以自己的语言阅读没有附带译本的技能时，按照 [references/translate.md](references/translate.zh-CN.md) 翻译它们：只翻译用户点名的技能，未经要求绝不全部翻译。
-然后记录每个译本所依据的源文件，并重新扫描：
+然后记录每个译本所依据的源文件（给 `pin` 传入扫描时所用的 `--state`、`--cwd` 和 `--root`），并重新扫描：
 
 ```bash
-node scripts/atlas.mjs pin <translations or folders>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
 ```
 
 `pin --check` 不修改任何文件，并列出每个落后于源文件或脱离源文件修改过的译本。
@@ -109,7 +110,7 @@ node scripts/atlas.mjs pin <translations or folders>
 | --- | --- |
 | `--cwd <dir>` | 要扫描其技能的项目；默认为当前文件夹 |
 | `--root <dir>` | 额外的技能文件夹；可重复 |
-| `--agent <id>` | 只扫描某一个代理的文件夹，例如 `claude-code` 或 `codex`；可重复 |
+| `--agent <id>` | 只扫描某一个代理加载的文件夹，例如 `claude-code` 或 `codex`，以及 `--root` 指定的文件夹；可重复 |
 | `--no-user`、`--no-plugins` | 跳过主目录中的技能，或插件技能 |
 | `--state <dir>` | `workflows.json`、`annotations.json` 和 `translations/` 所在的位置；默认为 `~/.skill-atlas`。使用仓库中的文件夹，即可与团队共享 |
 | `--port <n>`、`--no-open` | 用于 `serve`：端口，以及是否打开浏览器 |

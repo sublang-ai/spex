@@ -14,13 +14,14 @@ import { detectSteps } from './steps.mjs';
 import { buildLinkMatcher, findLinks } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
-import { stateTranslations, readTextBounded, translationState } from './translations.mjs';
+import { stateTranslations, readTextBounded, translationState, listFilesBounded } from './translations.mjs';
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { findInsights } from './insights.mjs';
 import { warn } from './log.mjs';
 
 export const ATLAS_VERSION = 1;
 const SKILL_FILE_MAX_BYTES = 4 * 1024 * 1024; // a SKILL.md this large is not a skill an agent could load; skip its content
+const COPY_COMPARE_MAX_BYTES = 64 * 1024 * 1024; // folders holding more are not read to tell copies apart
 // Frontmatter keys whose lines are matched by tag rules: the description,
 // and Claude Code's `context`/`agent` (a `context: fork` skill runs as a subagent).
 // Link and tag detection read at most this many characters of a line: evidence
@@ -65,7 +66,7 @@ export function scan(opts) {
   skills = mergeIdenticalCopies(skills);
 
   assignIds(skills);
-  const matcher = buildLinkMatcher(skills);
+  const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
   let edges = [];
   let unresolved = [];
   for (const s of skills) {
@@ -122,7 +123,7 @@ function readSkill(dir, root) {
     id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
     dir, file, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
     _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
-    _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(),
+    _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(), _listing: null,
   };
   let text;
   try {
@@ -165,13 +166,14 @@ function readSkill(dir, root) {
   return s;
 }
 
-// A skill copied into several roots with a byte-identical SKILL.md under one
-// name is one record; the later folders join the first one's `copies`.
+// A skill copied into several roots under one name, every file of its folder
+// byte for byte the same, is one record; the later folders join the first
+// one's `copies`. The rest of a folder is compared only once SKILL.md matches.
 function mergeIdenticalCopies(skills) {
   const kept = [];
   const byName = new Map();
   for (const s of skills) {
-    const same = s._readOk ? (byName.get(s.name) ?? []).find((k) => k._readOk && k._raw === s._raw) : null;
+    const same = s._readOk ? (byName.get(s.name) ?? []).find((k) => k._readOk && k._raw === s._raw && sameFolder(k, s)) : null;
     if (same) {
       same.copies.push({ root: s.root, dir: s.dir }, ...s.copies);
       continue;
@@ -181,6 +183,33 @@ function mergeIdenticalCopies(skills) {
     kept.push(s);
   }
   return kept;
+}
+
+// Whether two skill folders hold the same files (same relative paths, same
+// bytes), dot-files and node_modules included: a folder too large to list
+// whole, holding a link that leads out of it or a file that cannot be read,
+// or whose files together exceed COPY_COMPARE_MAX_BYTES, differs.
+function sameFolder(a, b) {
+  const listing = (s) => (s._listing ??= listFilesBounded(s.dir, { every: true }));
+  const la = listing(a);
+  const lb = listing(b);
+  if (!la.complete || !lb.complete || la.files.length !== lb.files.length) return false;
+  if (la.files.some((rel, n) => rel !== lb.files[n])) return false;
+  let total = 0;
+  for (const rel of la.files) {
+    const fa = path.join(a.dir, ...rel.split('/'));
+    const fb = path.join(b.dir, ...rel.split('/'));
+    try {
+      const size = fs.statSync(fa).size;
+      if (size !== fs.statSync(fb).size) return false;
+      total += size;
+      if (total > COPY_COMPARE_MAX_BYTES) return false;
+      if (!fs.readFileSync(fa).equals(fs.readFileSync(fb))) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 // id = name; the 2nd+ differing skill of a name gets `<name>@<rootId>`.

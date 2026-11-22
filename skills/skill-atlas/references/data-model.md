@@ -112,8 +112,9 @@ A `TagHit`:
 
 Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter`, `no-steps`.
 
-One skill installed for several agents — a folder linked into several roots, or copied with an identical `SKILL.md` — is one record listing the others under `copies`.
-Only skills of one name whose `SKILL.md` differ are a `duplicate-name`.
+One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) — is one record listing the others under `copies`.
+A folder too large to list whole (over 5,000 files or 2,000 folders), or holding over 64 MiB, counts as differing.
+Only skills of one name whose folders differ are a `duplicate-name`.
 
 ## annotations.json — corrections layered on the scan
 
@@ -187,7 +188,8 @@ A file's translation is the file beside it with the tag before the extension: `S
   - in YAML, a line `# skill-atlas:source sha256=<64 hex>`;
   - in JSON, a top-level `"translationOf": { "sha256": "<64 hex>" }`.
 - A translation whose recorded source digest differs from its source's is *stale* (behind its source); a Markdown one whose recorded own digest differs from its own is *edited* (apart from its source, which agents follow); one recording none is neither.
-- `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own).
+- `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own), and each folder named that holds no translation.
+- A translation under `translations/<skill id>/` whose skill the scan does not report, or whose source that skill lacks, is named and fails both `pin` and `pin --check`; `--state`, `--cwd` and `--root` choose the scan that finds the skills.
 
 In `atlas.json` every skill carries `translations`, an object keyed by tag (empty when there is none), and each entry of `files` lists the tags it is translated into:
 
@@ -216,7 +218,7 @@ Every insight carries `params`, the values its message is built from, so the pag
 | --- | --- |
 | `duplicate-name` | `name` |
 | `unresolved-link` | `name`, `from` |
-| `cycle` | `path` (skill ids in order) |
+| `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
 | `missing-description`, `invalid-frontmatter`, `no-steps` | — |
 | `name-mismatch` | `name`, `folder` |
@@ -270,10 +272,17 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 
 ## Detection rules
 
+Folders scanned:
+
+- Each agent's skill folder in the project and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the project's `.github/skills`, and the project's `skills` where it holds a skill.
+- `--agent <id>` keeps that agent's folders, `.agents/skills` where that agent loads it (every agent but Claude Code does), the project's `skills`, and `--root`'s.
+- A Claude Code plugin's `skills`, where `plugins/installed_plugins.json` records the plugin for the user or for this project and `enabledPlugins` does not set it `false`: the user's `settings.json`, then the project's `.claude/settings.json`, then its `.claude/settings.local.json`, a later file's value for a plugin over an earlier one's.
+- In each folder, a folder or a folder one below it holding `SKILL.md` is a skill; folders whose name starts with a dot, and `node_modules`, are passed over.
+
 Steps, in order of preference, with fenced code ignored for structure:
 
 1. Headings titled `Step N`, `Phase N`, `Stage N`, `Part N`, `步骤 N`, `阶段 N`, `第 N 步`, `第 N 阶段`, `第 N 部分` or `N. Title`, when two or more share a level.
-2. The ordered list under a heading that names a procedure (`Workflow`, `Steps`, `Process`, `Procedure`, `Instructions`, `How to`, `Usage`, `Quick start`, `工作流`, `流程`, `步骤`, `过程`, `规程`, `说明`, `指令`, `如何`, `用法`, `使用方法`, `快速开始`, `快速入门`), or the ordered list that opens the body.
+2. The ordered list under a heading that names a procedure (`Workflow`, `Steps`, `Process`, `Procedure`, `Instructions`, `How to`, `Usage`, `Quick start`, `工作流`, `流程`, `步骤`, `过程`, `规程`, `说明`, `指令`, `如何`, `用法`, `使用方法`, `快速开始`, `快速入门`), or the ordered list that opens the body: after an optional `#` title and at most one introductory paragraph ending in a colon (`:` or `：`), with blank lines, HTML comments and quoted notes (`>` lines, such as a translation's reader notice) passed over before it.
 3. Otherwise the `##` sections, reported with `stepKind: "section"`.
 
 Links from a skill to another installed skill named `N` (or `<plugin>:N`), read from the description and from the body outside fenced code:
@@ -284,12 +293,12 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 | `Skill(N)` | `calls` |
 | `skill: N` as a key: lowercase, at the start of a line (or a `- ` list item) or after `{` or `,` | `calls` |
 | `N` within a few words after a verb of use (invoke, call, run, use, load, delegate to, hand off to, follow, start, trigger, launch) and next to the word skill or playbook, or next to the word command when `N` is backticked or slash-prefixed | `calls` |
-| Any of the above in a sentence that steers away (`not for`, `do not use`, `don't use`, `never use`, `instead` not followed by `of`, `rather than`, `see also`) | `mentions` |
+| Any of the above after words steering away from it in its sentence (`not for`, `do not use`, `don't use`, `never use`, `instead of`, `rather than`, `see also`, `, not`, `but not`) with no clause opening with a verb of use (after `,`, `:` or a dash) between them, or in a sentence holding `instead` not followed by `of` — so ``use `/review` instead of `/publish` `` and ``instead of `/publish`, use `/review` `` call `review` and mention `publish` | `mentions` |
 | `` `N` `` alone, when the sentence says skill or the name has a hyphen | `mentions` |
 
-- A name held by several skills resolves to the one in the linking skill's own folder, else the first found.
+- A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
 - One link is kept per (skill, step, target), `calls` before `mentions`; a skill's link to itself is dropped.
-- A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name); ``the `x` skill``; and `Skill(x)`. A host built-in command (`/help`, `/clear`, `/compact`, ...) is never unresolved.
+- A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); ``the `x` skill``; and `Skill(x)`, whatever `x` is.
 
 Tags come from `tag-rules.json`: each rule's patterns are tried against every line of the frontmatter description (and the `context` and `agent` keys), the preamble (every body line outside every step) and each step, fenced code included.
 A match negated earlier in its own clause is not evidence: a never, not, no, nor, without, avoid, don't, doesn't, won't, cannot or can't within the 60 characters before it in the same sentence drops it, unless the rule sets `"negatable": false`.

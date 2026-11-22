@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=7a69caf7ba98ff45728af15328c7a159a9254560107b0b89777f1513585b21e3 own=d349d1d5673b1088dea2dfe02ea7c408a3e419416f772e184f7ab80919d41240 -->
-本文件是 `reviewer-round.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+<!-- skill-atlas:source sha256=7a69caf7ba98ff45728af15328c7a159a9254560107b0b89777f1513585b21e3 own=1864356f3ecdd3847cead628b786b538c7517b22de4e2263d616731e24663e3e -->
+> 本文件是 `reviewer-round.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # Reviewer 提示词
 

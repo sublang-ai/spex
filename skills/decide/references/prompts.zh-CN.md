@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=fb9dfa1d2170578b4d12ec135e681f252523edc319684a142b9ba74db92290b5 own=38bd467d2c53bca0447131b6eb9908da09f0c1394e221afbe57d439f566f2521 -->
-本文件是 `prompts.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+<!-- skill-atlas:source sha256=fb9dfa1d2170578b4d12ec135e681f252523edc319684a142b9ba74db92290b5 own=3cfb409b77a99a0e1185084eb9061692be4b660e5a1bf53b5b88d51108136ec5 -->
+> 本文件是 `prompts.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # Decide 提示词
 

@@ -86,42 +86,64 @@ export function fileInside(baseReal, abs) {
  * relative paths in name order; dot-entries, node_modules and links leading
  * out are left out.
  */
-export function listFiles(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS } = {}) {
+export function listFiles(dir, limits) {
+  return listFilesBounded(dir, limits).files;
+}
+
+/**
+ * listFiles, saying whether the listing is whole: `complete` is false where
+ * the folder holds more files or folders than the limits let it list.
+ * With `every`, dot-entries and node_modules are listed too, and a link
+ * leading out of the folder makes the listing incomplete rather than being
+ * left out, so a listing that is complete holds every file of the folder.
+ * @returns {{ files:string[], complete:boolean }}
+ */
+export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false } = {}) {
   const out = [];
   const seen = new Set();
   let dirs = 0;
+  let complete = true;
   let base;
-  try { base = fs.realpathSync(dir); } catch { return out; }
+  try { base = fs.realpathSync(dir); } catch { return { files: out, complete }; }
   const inside = (real) => {
     const rel = path.relative(base, real);
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
   };
   const walk = (abs, rel) => {
-    if (out.length >= maxFiles || dirs >= maxDirs) return;
+    if (!complete) return;
+    if (dirs >= maxDirs) { complete = false; return; }
     dirs++;
     let real;
-    try { real = fs.realpathSync(abs); } catch { return; }
+    try { real = fs.realpathSync(abs); } catch { if (every) complete = false; return; }
     if (seen.has(real)) return; // a symlink loop
     seen.add(real);
     let entries;
-    try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return; }
+    try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { if (every) complete = false; return; }
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const e of entries) {
-      if (out.length >= maxFiles) return;
-      if (e.name.startsWith('.') || SKIP.has(e.name)) continue;
+      if (!complete) return;
+      if (!every && (e.name.startsWith('.') || SKIP.has(e.name))) continue;
       const childAbs = path.join(abs, e.name);
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       let stat;
       try {
-        if (!inside(fs.realpathSync(childAbs))) continue;
+        if (!inside(fs.realpathSync(childAbs))) {
+          if (every) { complete = false; return; }
+          continue;
+        }
         stat = fs.statSync(childAbs);
-      } catch { continue; }
+      } catch {
+        if (every) { complete = false; return; }
+        continue;
+      }
       if (stat.isDirectory()) { walk(childAbs, childRel); continue; }
-      if (stat.isFile()) out.push(childRel);
+      if (!stat.isFile()) continue;
+      if (out.length >= maxFiles) { complete = false; return; }
+      out.push(childRel);
     }
   };
   walk(dir, '');
-  return out;
+  return { files: out, complete };
 }
 
 /** translations/<skill id>/ of the state folder, or null where the id cannot name a folder. */

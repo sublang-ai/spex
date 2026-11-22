@@ -15,13 +15,14 @@ metadata:
 
 Show the user what their skills are, how they connect, and where each fits in their work.
 
-Paths below are relative to this skill's folder.
+`<skill-dir>` below is this skill's folder, and the paths of its files below are relative to it.
+Run every command from the user's project folder, naming the script by its path `<skill-dir>/scripts/atlas.mjs`: the scan reads the skills of the folder it runs in, and a relative `--out` is written there.
 Run the script; do not read it into context.
 
 ## Quick start
 
 ```bash
-node scripts/atlas.mjs serve
+node <skill-dir>/scripts/atlas.mjs serve
 ```
 
 Run it in the background: it keeps serving until stopped.
@@ -32,7 +33,7 @@ Its first line of output is JSON with the `url` to give the user.
 ### Step 1: Scan
 
 ```bash
-node scripts/atlas.mjs scan --summary
+node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
 Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, duplicate names, and skills whose steps could not be detected.
@@ -40,14 +41,14 @@ If it reports no skills, tell the user which folders were searched and ask where
 
 ### Step 2: Open the view
 
-Start `node scripts/atlas.mjs serve` in the background and give the user the URL it prints.
+Start `node <skill-dir>/scripts/atlas.mjs serve` in the background and give the user the URL it prints.
 Tell them in one or two sentences what they can do there: click a skill to see its steps and what it calls, switch grouping between Workflow, Links and Source, and drag skills into phases.
 The page follows the reader's language, English or Simplified Chinese, with a switcher in its header; add `--lang zh-CN` when the user writes in Chinese.
 
 With no local browser (a remote or sandboxed session), write a standalone page instead and tell the user where it is:
 
 ```bash
-node scripts/atlas.mjs export --out skill-atlas.html
+node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html
 ```
 
 ### Step 3: Deepen the map where it matters
@@ -69,7 +70,7 @@ Ask the user before replacing a workflow that already exists.
 For questions such as "which skills wait for my approval?" or "what runs before review?", scan to a file and read that instead of re-reading every skill:
 
 ```bash
-node scripts/atlas.mjs scan --out atlas.json
+node <skill-dir>/scripts/atlas.mjs scan --out atlas.json
 ```
 
 Quote the evidence line the atlas gives for a tag or a link, so the user can check it.
@@ -92,10 +93,10 @@ A skill is shown translated where a `SKILL.<tag>.md` sits beside its `SKILL.md` 
 Steps, links and tags always come from `SKILL.md`; a translation supplies words, never structure.
 
 When the user asks to read skills in their language that ship no translation, translate them by [references/translate.md](references/translate.md): only the skills they name, never all of them unasked.
-Then record what each translation was made from, and rescan:
+Then record what each translation was made from, giving `pin` the `--state`, `--cwd` and `--root` the scan was given, and rescan:
 
 ```bash
-node scripts/atlas.mjs pin <translations or folders>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
 ```
 
 `pin --check` changes nothing and names each translation behind its source or edited apart from it.
@@ -106,7 +107,7 @@ node scripts/atlas.mjs pin <translations or folders>
 | --- | --- |
 | `--cwd <dir>` | Project whose skills to scan; the current folder by default |
 | `--root <dir>` | An extra skill folder; repeatable |
-| `--agent <id>` | Only one agent's folders, such as `claude-code` or `codex`; repeatable |
+| `--agent <id>` | Only the folders one agent loads, such as `claude-code` or `codex`, with `--root`'s; repeatable |
 | `--no-user`, `--no-plugins` | Skip the home folder's skills, or plugin skills |
 | `--state <dir>` | Where `workflows.json`, `annotations.json` and `translations/` live; `~/.skill-atlas` by default. Use a folder in the repository to share them with a team |
 | `--port <n>`, `--no-open` | For `serve`: the port, and whether to open the browser |

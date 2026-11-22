@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { scan } from './lib/scan.mjs';
 import { summarize } from './lib/summary.mjs';
 import { startServer } from './lib/server.mjs';
@@ -32,28 +33,39 @@ function offeredFor(tag, offered) {
 const DEFAULT_PORT = 4173;
 const MAX_PORT = 65535;
 
-const HELP = `Usage: node scripts/atlas.mjs <command> [options]
+// This script's own path, so the usage line runs from any folder, the user's project included.
+const SCRIPT = fileURLToPath(import.meta.url);
+
+const HELP = `Usage: node ${SCRIPT} <command> [options]
 
 Commands:
   scan                 Print atlas.json (or --out <file>); --summary prints a digest instead
   serve                Scan and serve the viewer on 127.0.0.1; prints one JSON line with the URL
   export --out <file>  Write a standalone viewer with the data inlined
-  pin <path>...        Record in each translation (a file such as SKILL.zh-CN.md beside its
+  pin <path>... [--state <dir>] [--cwd <dir>] [--root <dir>]
+                       Record in each translation (a file such as SKILL.zh-CN.md beside its
                        source, or under <state>/translations/<skill id>/) the SHA-256 of the
                        file it translates and, in Markdown, its own; a folder stands for
                        every translation in it. Markdown gets a line
                        <!-- skill-atlas:source sha256=<hex> own=<hex> -->, text the same
                        line without own=, YAML a line # skill-atlas:source sha256=<hex>,
                        JSON a top-level "translationOf": { "sha256": "<hex>" }; an existing
-                       record is rewritten, and nothing is written where one cannot be
-  pin --check <path>...
+                       record is rewritten, and nothing is written where one cannot be.
+                       --state, --cwd and --root (and --no-user, --no-plugins, --agent)
+                       find the skills that translations under <state>/translations/
+                       belong to; one whose skill or source is not found, and a folder
+                       holding no translation, fail the command
+  pin --check <path>... [--state <dir>] [--cwd <dir>] [--root <dir>]
                        Change no file; name each translation behind its source, edited
-                       apart from it or recording no digest, and exit 1 where there is one
+                       apart from it, recording no digest, or in the state folder with no
+                       skill or source found, and each folder holding no translation, and
+                       exit 1 where there is one
 
 Options:
   --cwd <dir>          Project to scan (default: the current folder)
   --root <dir>         An extra skill folder; repeatable
-  --agent <id>         Only folders of this agent (claude-code, codex, universal, ...); repeatable
+  --agent <id>         Only folders this agent loads (claude-code, codex, universal, ...)
+                       and --root's; repeatable
   --no-user            Skip skill folders in the home folder
   --no-plugins         Skip Claude Code plugin skills
   --state <dir>        Folder of workflows.json, annotations.json and translations/

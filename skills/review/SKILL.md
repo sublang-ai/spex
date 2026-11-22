@@ -36,20 +36,26 @@ The caller supplies:
 - the review scope, in the caller's own words;
 - optional context and run results.
 
-If the scope is missing or names nothing committed, ask the user what to review before starting.
+If the scope is missing, names nothing committed, or does not end at the checked-out revision, ask the user what to review before starting.
 
 ## Workflow
 
 ### Step 1: Fix the scope
 
-Record the caller's input verbatim and the current revision (`git rev-parse HEAD`).
+Record the caller's input verbatim and the checked-out revision (`git rev-parse HEAD`).
+Resolve the scope to the revisions it names; it must end at the checked-out revision, since the Coder fixes what is checked out.
+A scope naming another branch or revision is asked of the user first: check it out, or review what is checked out instead.
+Never review one history and fix another.
 The caller's scope is the baseline for every round.
 Each review-fix commit joins the scope as it lands, so a later round reviews the cumulative committed state.
+
+After every role's turn, read `git rev-parse HEAD` again.
+A Reviewer's turn leaves it unchanged, and a Coder's adds at most one review-fix commit on top of the revision last recorded; any other move ends the run as a failed review.
 
 ### Step 2: Run a Reviewer round
 
 Build the Reviewer's prompt from [references/reviewer-round.md](references/reviewer-round.md): the opener that matches this round, the quoted context it lists, then the every-round instruction.
-Send it to the Reviewer and wait for the reply.
+Send it to the Reviewer and wait for the reply, then check the revision is unchanged.
 
 ### Step 3: Judge the Reviewer's reply
 
@@ -67,18 +73,18 @@ Decide from what the reply establishes, never from its format or numbering.
 Send the Coder the prompt in [references/coder-disposition.md](references/coder-disposition.md) with the quoted context it lists.
 When the Coder returns, read the repository rather than the reply to learn what happened: compare `git rev-parse HEAD` and `git log` with the revision you last recorded.
 
-- One new commit: record it as this round's review-fix commit and return to Step 2 with the *after a review-fix commit* opener.
+- One new commit whose parent is the revision you last recorded: record it as this round's review-fix commit and return to Step 2 with the *after a review-fix commit* opener.
 - No new commit and every finding rejected: return to Step 2 with the *every finding rejected* opener.
-- Anything else (several commits, or a rewritten commit): stop and report it to the caller as a failed review.
+- Anything else (several commits, a rewritten commit, or another revision checked out): stop and report it to the caller as a failed review.
 
 There are at most three Reviewer rounds: the first, and one more after each of at most two Coder dispositions.
 
 ### Step 5: Return the result
 
-Take the evaluated revision from `git rev-parse HEAD`, not from either role's prose.
+The evaluated revision is the one last recorded before the final Reviewer round, which `git rev-parse HEAD` must still read; take it from the repository, not from either role's prose.
 
 - **Passed**: return that exact revision and the fact that no unsettled findings remain within the scope.
-- **Unsettled**: return the Reviewer's remaining findings and the fact that unsettled findings remain within the scope. The Coder makes no further disposition.
+- **Unsettled**: return that exact revision, the Reviewer's remaining findings, and the fact that unsettled findings remain within the scope. The Coder makes no further disposition.
 
 ## Customizing
 

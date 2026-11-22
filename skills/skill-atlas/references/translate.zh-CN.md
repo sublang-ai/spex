@@ -1,14 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=77af555dd3acdf6ea3fc3091c70cc4f489b48f32dd6a5166103dcbef6f06b759 own=3b78d649b07a0d82e3f2600bc71d826dcf7370067d58710328d3dddf607af13e -->
+<!-- skill-atlas:source sha256=e2b76db54a3f4d89671db14a1043e96af5a9afb372733e9a68f9043cc99cd341 own=c9820ca606c70f88925ddd916c09e3fea033bd42b3fda3f94cd339172d22112c -->
 
-本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+> 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # 翻译技能
 
 当某个技能没有附带用户所用语言的译本时，如何为用户提供该语言的版本，以及如何为页面新增一种语言。
 译本供人阅读：代理仍然加载 `SKILL.md`，图谱也仍然从中读取步骤、链接和标签。
 扫描如何找到译本，见 [data-model.md](data-model.zh-CN.md#语言)。
+下面的每条命令都按 [SKILL.md](../SKILL.zh-CN.md) 所说，在用户的项目文件夹中运行；`<skill-dir>` 指本技能的文件夹。
 
 ## 翻译哪些文件
 
@@ -44,7 +45,7 @@
 
 - 保持结构：相同级别的相同标题、相同数量的步骤，每个步骤标题沿用源文件的形式、换用该语言的词（`Step 2: Scan` 译为 `步骤 2：扫描`），有序列表仍然编号。
   只有当译本的步骤数与技能的步骤数相同时，图谱才显示译本的步骤。
-- 紧接 frontmatter 之后，用目标语言加一行，说明本文件是供人阅读的译本，代理加载的是 `SKILL.md`。
+- 紧接 frontmatter 及其后的注释行（`pin` 写入的记录行也在其中）之后，用目标语言加一行引用，其后空一行，说明本文件是供人阅读的译本，代理加载的是 `SKILL.md`，例如 `` > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。 ``；图谱读取步骤时会跳过引用的说明。
 - 如果你同时翻译了被链接的文件，就让相对链接指向该文件的译本；否则保持原样。
 - 像该语言的母语技术写作者那样写作：简洁，使用该语言自己的标点，同一事物自始至终使用同一个术语。
 - 如果用户还希望以自己的语言查看你在深读中记录的概要和步骤标题，把它们加到 `annotations.json` 的 `translations` 下，形式见 [data-model.md](data-model.zh-CN.md#语言)。
@@ -52,9 +53,11 @@
 ## 记录源文件并重新扫描
 
 ```bash
-node scripts/atlas.mjs pin <state>/translations/<skill id>
-node scripts/atlas.mjs pin --check <state>/translations/<skill id>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <state>/translations/<skill id>
+node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <state>/translations/<skill id>
 ```
+
+两条命令都传入扫描时所用的 `--state`，如果技能是通过 `--cwd` 或 `--root` 找到的，也传入该选项：`pin` 通过扫描找到译本所属的技能，遇到找不到所属技能的译本时会失败。
 
 `pin` 会在每个译本中写入其所翻译文件的 SHA-256，并在 Markdown 译本中写入它自己的 SHA-256：在 Markdown 中是一行注释，在 JSON 中是一个 `translationOf` 键。
 只在译本完成后再记录哈希值，因为记录过哈希值的译本会被视为最新。
@@ -71,6 +74,6 @@ node scripts/atlas.mjs pin --check <state>/translations/<skill id>
 1. 把 `assets/locales/zh-CN.json` 复制为 `assets/locales/fr-FR.json`；设置 `language` 和 `name`（该语言自己的名称），翻译 `messages` 的每个值，保留每个键（英文原文）和每个 `{placeholder}`。
    写作 `one|other` 的英文文本，译文给出一种形式，或按 `Intl.PluralRules` 列出的顺序，为该语言的每个复数类别各给一种形式。
 2. 把 `references/tag-rules.zh-CN.json`、`references/workflow-presets.zh-CN.json` 和 `references/view-settings.zh-CN.json` 复制为以 `fr-FR` 命名的同名文件，翻译其中 `about`、`title`、`label`、`name` 和 `description` 的值；保留每个 id、每个键，以及每个预设中各阶段的顺序。
-3. 按文件名为这三个名称文件记录哈希值：`node scripts/atlas.mjs pin references/*.fr-FR.json`，然后重新加载页面，该语言就会出现在页面的语言切换器中。
+3. 按文件名为这三个名称文件记录哈希值：`node <skill-dir>/scripts/atlas.mjs pin <skill-dir>/references/*.fr-FR.json`，然后重新加载页面，该语言就会出现在页面的语言切换器中。
 
 技能更新时会替换这些文件；请保留一份副本，或把该语言回馈给技能的作者。

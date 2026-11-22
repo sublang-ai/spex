@@ -4,7 +4,8 @@
 // Step detection, per data-model.md "Detection rules":
 //   1. numbered headings (Step/Phase/Stage/Part N, their Chinese forms, or "N. Title")
 //      when two or more share a level;
-//   2. the ordered list under a procedure heading (English or Chinese), or the list opening the body;
+//   2. the ordered list under a procedure heading (English or Chinese), or the list opening the body
+//      after any comments and quoted notes;
 //   3. otherwise the `##` sections (stepKind "section").
 
 import { headings, sectionEnd, orderedItem, collectOrderedList, plainText, stripInline, clipText } from './markdown.mjs';
@@ -129,15 +130,31 @@ function listSteps(body, mask, heads) {
     }
   }
   // The ordered list that opens the body: after an optional `#` title and at
-  // most one introductory paragraph ending in a colon.
+  // most one introductory paragraph ending in a colon (ASCII or full-width),
+  // with blank lines, HTML comments and quoted notes (`>` lines, such as a
+  // translation's reader notice) passed over before it.
   let i = 0;
-  const skipBlank = () => { while (i < body.length && (body[i].trim() === '' || /^\s*<!--.*-->\s*$/.test(body[i]))) i++; };
+  const skipBlank = () => {
+    while (i < body.length && !mask[i]) {
+      const line = body[i];
+      if (line.trim() === '' || /^ {0,3}>/.test(line)) { i++; continue; }
+      if (/^ {0,3}<!--/.test(line)) {
+        // A comment, on one line or until the line that closes it.
+        let j = i;
+        while (j < body.length && !body[j].includes('-->', j === i ? line.indexOf('<!--') + 4 : 0)) j++;
+        if (j >= body.length || !/-->\s*$/.test(body[j])) return;
+        i = j + 1;
+        continue;
+      }
+      return;
+    }
+  };
   skipBlank();
   if (i < body.length && !mask[i] && /^ {0,3}#\s/.test(body[i])) { i++; skipBlank(); }
   if (i < body.length && !mask[i] && !orderedItem(body[i])) {
     let j = i;
     while (j < body.length && body[j].trim() !== '' && !mask[j]) j++;
-    if (!/:\s*$/.test(body[j - 1] ?? '')) return [];
+    if (!/[:\uFF1A]\s*$/.test(body[j - 1] ?? '')) return [];
     i = j;
     skipBlank();
   }

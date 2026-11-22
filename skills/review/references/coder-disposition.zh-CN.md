@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=a60b085dee909f994f68a35ac9326148263c66aefc2ec8929db25e199270c7f9 own=3739d2f8d64c1d5ad34280e027b4edda54ffafe74c431e4389b75026564fa9f2 -->
-本文件是 `coder-disposition.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+<!-- skill-atlas:source sha256=a60b085dee909f994f68a35ac9326148263c66aefc2ec8929db25e199270c7f9 own=ef95cd9022525c0e1e3e874ccaa3747612a87779cc367b591eb1d9697387203e -->
+> 本文件是 `coder-disposition.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # Coder 处置提示词
 

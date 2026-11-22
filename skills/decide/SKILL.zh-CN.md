@@ -10,8 +10,8 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=757112f63490112cbe2a61d7fd8f7b2c666acb52f71e2a7b58c03c07484bf2fa own=822cab848dcc20ac9421ce2de17898d0059678e70d9dff748884be5f17fc2579 -->
-本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
+<!-- skill-atlas:source sha256=757112f63490112cbe2a61d7fd8f7b2c666acb52f71e2a7b58c03c07484bf2fa own=9b9bf9401a35f3ef8ed08180d24753869b3140ca468c4284f446a75af363ae7a -->
+> 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
 # Decide
 

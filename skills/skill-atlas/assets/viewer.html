@@ -531,7 +531,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     'cycle': {
       title: () => t('Skills that link to each other in a loop'),
       issue: () => t('Is part of a loop of skills that link back to each other.'),
-      message: (p) => (!Array.isArray(p.path) ? null : t('Calls form a cycle: {path}', { path: [...p.path, p.path[0]].map(str).join(' → ') })),
+      // The insight lists every skill of the group; `path` is one loop through them, as an example.
+      message: (p, ins) => (!Array.isArray(p.path) ? null : t('{n} skills call each other in a loop, for example {path}', { n: Math.max(arr(ins.skills).length, p.path.length), path: [...p.path, p.path[0]].map(str).join(' → ') })),
     },
     'oversized': {
       title: () => t('Longer than 500 lines'),
@@ -856,11 +857,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       for (const tg of tagMap.values()) addTag(tg);
       s._tagIds = new Set(tagMap.keys());
       s._cats = rollupIds(s._tagIds, tagById);
-      // A search matches the skill's original words and those of the language shown.
-      s._search = [s.name, s.description, s.summary, ...steps.map((st) => st.title)].join('\n').toLowerCase();
+      // A search matches the skill's original words and those of the language shown: the name,
+      // description and summary, and each step's title and text.
+      s._search = [s.name, s.description, s.summary, ...steps.flatMap((st) => [st.title, st.excerpt])].join('\n').toLowerCase();
       s._trSearch = {};
       for (const [lang, tr] of Object.entries(translations)) {
-        s._trSearch[lang] = [tr.description, tr.summary, ...arr(tr.steps).map((w) => (w && typeof w === 'object' ? w.title : ''))].map(str).join('\n').toLowerCase();
+        const words = arr(tr.steps).flatMap((w) => (w && typeof w === 'object' ? [w.title, w.excerpt, w.summary] : []));
+        s._trSearch[lang] = [tr.description, tr.summary, ...words].map(str).join('\n').toLowerCase();
       }
       for (const st of steps) stepById.set(st.id, { step: st, skill: s });
       byId.set(s.id, s);
@@ -1143,7 +1146,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         [atlas, wfResult, config] = await Promise.all([getJSON('/api/atlas'), fetchWorkflows(), configP]);
       } catch (err) {
         setupLanguages(await configP);
-        return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
+        return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node <skill-dir>/scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
       }
       workflows = wfResult.doc;
       save.etag = wfResult.etag;
@@ -1340,7 +1343,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   // Saving workflows
   // ===================================================================
-  const save = { version: 0, saved: 0, inFlight: false, timer: 0, status: 'idle', etag: null };
+  const save = { version: 0, saved: 0, inFlight: false, keepalive: false, timer: 0, status: 'idle', etag: null };
   // Editing is off while the stored file is unreadable or was changed elsewhere.
   const canEdit = () => !state.wfBlocked;
   function markDirty() {
@@ -1349,36 +1352,44 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     clearTimeout(save.timer);
     // The exported page saves to localStorage synchronously, so closing it right after an edit loses nothing.
     if (state.mode === 'static') { flushSave(); return; }
-    save.timer = setTimeout(flushSave, 400);
+    save.timer = setTimeout(() => flushSave(), 400);
     if (save.status !== 'saving') setSaveStatus('pending');
   }
+  // A keepalive request outlives the page only under the browser's 64 KiB budget; a larger body
+  // is sent as an ordinary request, which still completes while the page is merely hidden.
+  const KEEPALIVE_MAX_BYTES = 60000;
   function putWorkflows(doc, extraHeaders, keepalive) {
     const headers = { 'Content-Type': 'application/json', 'X-Skill-Atlas': '1', ...(extraHeaders || {}) };
     if (save.etag) headers['If-Match'] = save.etag;
-    return fetch('/api/workflows', { method: 'PUT', headers, body: JSON.stringify(doc), keepalive: !!keepalive });
+    const body = JSON.stringify(doc);
+    return fetch('/api/workflows', { method: 'PUT', headers, body, keepalive: !!keepalive && new TextEncoder().encode(body).length < KEEPALIVE_MAX_BYTES });
   }
-  async function flushSave() {
+  // The one path that writes the workflows: the timed save and the save as the page is hidden
+  // (`keepalive`) both come here, so the ETag, the saved version, a conflict and an unreadable
+  // file are handled alike.
+  async function flushSave(opts) {
     clearTimeout(save.timer);
+    const keepalive = !!(opts && opts.keepalive);
     if (state.mode === 'static') {
       const ok = lsSet(staticKey(), { basedOn: state.staticBase, doc: state.workflows });
       save.saved = save.version;
       setSaveStatus(ok ? 'saved' : 'error');
       return;
     }
-    if (save.inFlight || state.wfBlocked) return;
+    if (state.wfBlocked) return;
+    // A second request would carry the ETag the first is replacing: the follow-up waits for its answer.
+    if (save.inFlight) { if (keepalive) save.keepalive = true; return; }
     if (save.saved === save.version && save.status !== 'error') return;
     save.inFlight = true;
     const v = save.version;
     setSaveStatus('saving');
     try {
-      const res = await putWorkflows(state.workflows);
+      const res = await putWorkflows(state.workflows, null, keepalive);
       if (res.status === 412) {
         // Someone else changed the file: stop, never overwrite, let the reader reload.
         save.inFlight = false;
-        state.wfBlocked = { kind: 'conflict' };
-        dismissUndos();
+        blockWorkflows({ kind: 'conflict' });
         setSaveStatus('conflict');
-        invalidate('chrome', 'canvas', 'details');
         return;
       }
       if (res.status === 409) {
@@ -1387,10 +1398,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         try { body = await res.json(); } catch { body = null; }
         if (body && body.error === 'invalid-workflows') {
           save.inFlight = false;
-          state.wfBlocked = { kind: 'invalid', path: str(body.path), message: str(body.message) };
-          dismissUndos();
+          blockWorkflows({ kind: 'invalid', path: str(body.path), message: str(body.message) });
           setSaveStatus('idle');
-          invalidate('chrome', 'canvas', 'details');
           return;
         }
       }
@@ -1405,16 +1414,27 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (JSON.stringify(norm) !== JSON.stringify(state.workflows)) { state.workflows = norm; invalidate('chrome', 'canvas', 'details'); }
       }
       save.inFlight = false;
-      if (save.version !== v) flushSave(); else setSaveStatus('saved');
+      const followKeepalive = save.keepalive;
+      save.keepalive = false;
+      if (save.version !== v) flushSave({ keepalive: followKeepalive }); else setSaveStatus('saved');
     } catch {
       save.inFlight = false;
+      save.keepalive = false;
       setSaveStatus('error');
     }
+  }
+  // Editing stops while the stored file is unreadable or was changed elsewhere; an undo would
+  // restore over a file the page no longer holds, so the latest edit can no longer be undone.
+  function blockWorkflows(blocked) {
+    state.wfBlocked = blocked;
+    clearLatestEdit();
+    invalidate('chrome', 'canvas', 'details');
   }
   // Re-read the stored document after a conflict, dropping the unsaved edit.
   async function reloadWorkflows() {
     const r = await fetchWorkflows();
     state.wfBlocked = r.blocked;
+    clearLatestEdit();
     if (!r.blocked) {
       save.etag = r.etag;
       state.workflows = normalizeWorkflows(r.doc);
@@ -1436,6 +1456,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       try { stored = await res.json(); } catch { stored = null; }
       state.workflows = normalizeWorkflows(stored || doc);
       state.wfBlocked = null;
+      clearLatestEdit();
       save.saved = save.version;
       setSaveStatus('saved');
       toast(t('Started fresh — the unreadable file was kept as a backup'));
@@ -1460,17 +1481,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   window.addEventListener('beforeunload', (e) => {
     if (state.mode === 'live' && (save.version !== save.saved || save.status === 'error')) { e.preventDefault(); e.returnValue = ''; }
   });
-  // Last chance for a pending edit when the page goes away.
+  // Last chance for a pending edit when the page goes away: the same save, kept alive past the page.
   function flushOnHide() {
-    if (state.mode === 'static') { if (save.version !== save.saved) flushSave(); return; }
-    if (save.version !== save.saved && !save.inFlight && !state.wfBlocked) {
-      clearTimeout(save.timer);
-      try { putWorkflows(state.workflows, null, true); } catch { /* the beforeunload prompt already warned */ }
-    }
+    if (save.version !== save.saved) flushSave({ keepalive: true });
   }
   window.addEventListener('pagehide', flushOnHide);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnHide(); });
 
+  // The latest edit alone can be undone, whichever edit it was, until the next: its snapshot is
+  // kept here, apart from any notice, and both Ctrl/Cmd+Z and a notice's Undo restore it.
+  // `key` names a run of edits that undo as one (a phase's note typed in one go).
+  let latestEdit = null;
+  function recordEdit(before, key) {
+    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null };
+  }
+  function clearLatestEdit() { latestEdit = null; dismissUndos(); }
   // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
     if (!canEdit()) {
@@ -1480,14 +1505,23 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const before = clone(state.workflows);
     fn(state.workflows);
     markDirty();
+    recordEdit(before);
     invalidate('chrome', 'canvas', 'details');
     return before;
   }
-  function restoreWorkflows(snapshot) {
-    state.workflows = normalizeWorkflows(snapshot);
+  // Restore the latest edit's snapshot; undoing clears it (there is no redo).
+  function undoLatest() {
+    if (!latestEdit || !canEdit()) return false;
+    const { before } = latestEdit;
+    latestEdit = null;
+    state.workflows = normalizeWorkflows(before);
+    if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
     markDirty();
     invalidate('chrome', 'canvas', 'details');
+    return true;
   }
+  // A notice's Undo: the same snapshot Ctrl/Cmd+Z restores.
+  const undoAction = () => ({ label: t('Undo'), run: undoLatest });
 
   // ---------- workflow operations ----------
   function addToPhase(pid, sid) { mutate(() => { const p = findPhase(pid); if (p && !p.skills.includes(sid)) p.skills.push(sid); }); }
@@ -1504,7 +1538,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!before) return;
     // A skill still in another phase is not unassigned: say what actually happened.
     const msg = !toPid && phasesOf(sid).length ? t('Removed {skill} from {phase}', { skill: name, phase: fromName }) : t('Moved {skill} to {phase}', { skill: name, phase: toName });
-    toast(msg, { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(msg, undoAction());
   }
   function addPhase() {
     const wf = activeWorkflow();
@@ -1540,7 +1574,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const before = mutate(() => { wf.phases = wf.phases.filter((x) => x.id !== pid); });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase' && state.selection.id === pid) state.selection = null;
-    toast(t('Deleted phase {name}', { name: p.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Deleted phase {name}', { name: p.name }), undoAction());
   }
   function createWorkflow(name, preset, place) {
     const doc = state.workflows;
@@ -1562,7 +1596,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (count) {
         const before = mutate(() => { placed.forEach((ids, i) => { phases[i].skills = ids.slice(); }); });
         if (!before) return;
-        toast(t('Placed {n} skill by keyword|Placed {n} skills by keyword', { n: count }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+        toast(t('Placed {n} skill by keyword|Placed {n} skills by keyword', { n: count }), undoAction());
       } else {
         toast(t('No skill matched this preset’s keywords — drag skills into phases'));
       }
@@ -1590,7 +1624,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const before = mutate((d) => { d.workflows = d.workflows.filter((w) => w.id !== wf.id); d.active = d.workflows.length ? d.workflows[0].id : null; });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase') state.selection = null;
-    toast(t('Deleted workflow {name}', { name: wf.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Deleted workflow {name}', { name: wf.name }), undoAction());
   }
 
   // ===================================================================
@@ -1797,16 +1831,39 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const tr = own(s.translations, i18n.lang) ? s.translations[i18n.lang] : null;
     return tr && typeof tr === 'object' ? tr : null;
   }
-  // The language a skill is written in is not recorded; Han script in its own words reads as Chinese.
-  const HAN = /[㐀-䶿一-鿿豈-﫿]/;
-  const originalLang = (s) => (HAN.test([s.name, s.description, ...s.steps.slice(0, 3).map((st) => st.title)].join(' ')) ? 'zh' : 'en');
+  // The language a skill is written in: its frontmatter's `metadata.language` where it names one,
+  // else read from the script most of its words are in. Han, kana and hangul letters, each weighing
+  // as much as three Latin letters, outweighing the Latin ones make it Japanese where kana are at
+  // least a tenth of the Han and kana, Korean where hangul are most, else Chinese; else English. So
+  // an English skill quoting a Chinese or Japanese example stays English. The skill's details and its
+  // file dialog both ask this one function.
+  const HAN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
+  const KANA = /[\u3041-\u3096\u30A1-\u30FA\u31F0-\u31FF\uFF66-\uFF9D]/g; // letters only: no '・' or 'ー'
+  const HANGUL = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/g;
+  const LATIN = /[A-Za-z\u00C0-\u024F]/g;
+  const CJK_WEIGHT = 3;
+  const count = (text, re) => (text.match(re) || []).length;
+  function originalLang(s) {
+    const meta = s.frontmatter && s.frontmatter.metadata;
+    const declared = meta && typeof meta === 'object' ? str(meta.language).trim() : '';
+    if (/^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(declared)) return declared;
+    const words = [s.name, s.description, s.summary, ...s.steps.map((st) => st.title + '\n' + st.excerpt)].join('\n');
+    const han = count(words, HAN);
+    const kana = count(words, KANA);
+    const hangul = count(words, HANGUL);
+    if (CJK_WEIGHT * (han + kana + hangul) <= count(words, LATIN)) return 'en';
+    if (hangul > han + kana) return 'ko';
+    return kana * 10 >= han + kana ? 'ja' : 'zh';
+  }
+  // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
+  const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
   // translated | original (no translation of its words: shown in its original, another language) |
   // same (no translation needed, as far as can be told). Words from annotations alone, with no
   // translated description, leave the skill in its original.
   function trState(s) {
     const tr = skillTr(s);
     if (tr && (str(tr.description) || (!str(s.description) && tr.origin !== 'annotation'))) return 'translated';
-    return primary(originalLang(s)) === primary(i18n.lang) ? 'same' : 'original';
+    return sameLanguage(originalLang(s), i18n.lang) ? 'same' : 'original';
   }
   // Whether the scan found the translation's steps numbering otherwise than the skill's.
   const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && i.params.lang === i18n.lang);
@@ -2638,7 +2695,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const languageShown = languageName(lang);
       if (language && stale) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language: languageShown }) }));
       if (language && edited) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow the original, not this text.', { language: languageShown }) }));
-      if (!language && primary(originalLang(s)) !== primary(lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
+      if (!language && !sameLanguage(originalLang(s), lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
     } catch (err) {
       pre.textContent = err && err.message ? t('Couldn’t read {path} ({error}).', { path, error: err.message }) : t('Couldn’t read {path}.', { path });
     }
@@ -2646,16 +2703,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return p;
   }
 
-  // Undo applies only while its edit is the latest: any later edit dismisses every Undo toast.
+  // A notice's Undo stands only while its edit is the latest: any later edit, an undo, or editing
+  // stopping dismisses every Undo notice (the snapshot itself is `latestEdit`, kept apart from them).
   let undoToasts = [];
   let focusBeforeToasts = null;
   function dismissUndos() { for (const u of undoToasts.slice()) u.dismiss(); undoToasts = []; }
-  function runLatestUndo() {
-    const u = undoToasts[undoToasts.length - 1];
-    if (!u) return false;
-    u.run();
-    return true;
-  }
   function toast(msg, action) {
     const el = h('div', { class: 'toast' }, h('span', { text: msg }));
     let timer = 0, gone = false;
@@ -2772,7 +2824,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = findPhase(pid);
     const before = mutate(() => { if (p) p.skills = p.skills.filter((x) => x !== sid); });
     if (!before) return;
-    toast(t('Removed {skill} from {phase}', { skill: state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid, phase: p ? p.name : t('phase') }), { label: t('Undo'), run: () => restoreWorkflows(before) });
+    toast(t('Removed {skill} from {phase}', { skill: state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid, phase: p ? p.name : t('phase') }), undoAction());
   }
   function phaseMenu(anchor) {
     const pid = anchor.dataset.phase;
@@ -3080,8 +3132,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (tgt.dataset && tgt.dataset.act === 'phase-note') {
       const p = findPhase(tgt.dataset.phase);
       if (!p || !canEdit()) return;
+      // A note typed with no other edit between is one edit to undo; the details are not
+      // re-rendered under the reader's typing, so this is not a mutate().
+      const key = 'note:' + p.id;
+      const before = latestEdit && latestEdit.key === key ? null : clone(state.workflows);
       p.note = tgt.value;
       markDirty();
+      if (before) recordEdit(before, key);
       clearTimeout(noteTimer);
       noteTimer = setTimeout(() => invalidate('canvas'), 600);
     }
@@ -3097,7 +3154,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (document.querySelector('dialog[open]')) return;
     const typing = tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]');
     if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !(typing && tgt.matches('input[type="text"], input[type="search"], textarea'))) {
-      if (runLatestUndo()) e.preventDefault();
+      if (undoLatest()) e.preventDefault();
       return;
     }
     if (e.key === 'F6') { e.preventDefault(); toggleDetailsFocus(); return; }

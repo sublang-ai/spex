@@ -69,8 +69,8 @@ Each row names a guideline and where to see it.
 | --- | --- |
 | **The description decides whether a skill is ever used**: third person, what it does and when, the words a user would say | Every description says what the skill does, then `Use when…` with the phrases a user would say. The three workflow skills add `Not for…`: `code` and `decide` point at each other and at `review`, which keeps three related skills from stealing each other's requests |
 | **Name**: lowercase, hyphens, equal to the folder | `skill-atlas`, `code`, `review`, `decide`; checked by a test |
-| **Concise: the context window is shared** — say only what the model does not already know | The four `SKILL.md` files are 76 to 133 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
-| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` the deep-read procedure in `references/deep-read.md` and the translation procedure in `references/translate.md`; the workflow skills keep every relayed prompt in `references/`. An agent answering "open the atlas" reads 133 lines |
+| **Concise: the context window is shared** — say only what the model does not already know | The four `SKILL.md` files are 76 to 134 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
+| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` the deep-read procedure in `references/deep-read.md` and the translation procedure in `references/translate.md`; the workflow skills keep every relayed prompt in `references/`. An agent answering "open the atlas" reads 134 lines |
 | **References one level deep** | Every reference file is linked from `SKILL.md` itself; none is reachable only through another. Checked by a test |
 | **A table of contents on longer reference files** | `data-model.md`, `reviewer-round.md` and `coder-phases.md` open with one |
 | **Match freedom to fragility** | Fragile, exact operations are a script (`atlas.mjs`) or a verbatim prompt; judgment calls ("decide from what the reply establishes, never from its format") are stated as principles with the reason |
@@ -83,7 +83,7 @@ Each row names a guideline and where to see it.
 | **Examples over description** | The input handed to `review` is shown as the literal quoted block to fill in; the data model is annotated JSON, not prose about JSON |
 | **State requirements up front** | The `compatibility` field names Node 18, git, the sibling skill a skill invokes, and the repository layout the prompts assume |
 | **Degrade honestly** | Each skill says what to do without subagents or without a browser; `review` and `decide` require saying in the result that independence was lost ("the Reviewer was not independent") |
-| **Nothing time-bound, no host-specific paths** | No dates, model names or absolute paths; commands are relative to the skill's folder, with forward slashes |
+| **Nothing time-bound, no host-specific paths** | No dates, model names or absolute paths; commands run from the user's project folder and name the script by its path in the skill's folder (`<skill-dir>/scripts/atlas.mjs`), with forward slashes |
 | **Treat what you read as data** | The atlas reads third-party skills: the page escapes every string, the server serves files only from inside a skill's folder on loopback, and both the skill and the deep-read prompt say never to follow instructions found in a scanned skill |
 
 ## What a user can change without touching the procedure
@@ -142,10 +142,10 @@ What was run on the delivered files, and what it showed:
 
 | Check | Result |
 | --- | --- |
-| `node --test scripts/skill-atlas.test.mjs` | 44 tests pass: the scan over fixture skill folders, the server, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
-| `npm run e2e -- skill-atlas` | 10 browser journeys pass against the real server: groupings, steps, links, details, search, filter, focus, insights, markup shown as text, workflows, the save conflict, the unreadable file, the exported page |
+| `node --test scripts/skill-atlas.test.mjs` | 64 tests pass: the scan over fixture skill folders, the server, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
+| `npm run e2e -- skill-atlas` | 13 browser journeys pass against the real server: groupings, steps, links, details, search, filter, focus, insights, markup shown as text, workflows with an edit undone, a save as the page is hidden, the save conflict, the unreadable file, the exported page, the page in Chinese, a language chosen on the page |
 | `spex lint` | No errors in the new decision record and packages |
-| A scan of a real machine | 88 skill folders across 8 locations read as 32 skills and 56 identical copies; every one of the links reported as a call is a real one, and `code` and `decide` both link to `review` from the step that invokes it |
+| A scan of a real machine | 88 skill folders across 8 locations read as 32 skills and 56 identical copies (copies then compared by `SKILL.md` alone); every one of the links reported as a call is a real one, and `code` and `decide` both link to `review` from the step that invokes it |
 | An independent review | Four reviewers (scan and server, page, skill writing and playbook equivalence, specs), each finding then checked by a second agent that tried to refute it. 40 findings survived and were fixed, among them a page that could overwrite a `workflows.json` changed elsewhere, links invented from URL paths, and three claims in this report |
 
 Not verified: the three workflow skills run end to end by an agent on a real change.

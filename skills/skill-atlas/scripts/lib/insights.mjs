@@ -42,8 +42,13 @@ export function findInsights({ skills, edges, unresolved, roots }) {
     out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from }, message: `${u.from} links to "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
   }
 
-  for (const cycle of callCycles(skills, edges)) {
-    out.push({ kind: 'cycle', skills: [...cycle], params: { path: [...cycle] }, message: `calls form a cycle: ${[...cycle, cycle[0]].join(' \u2192 ')}` });
+  for (const { members, path: cycle } of callCycles(skills, edges)) {
+    out.push({
+      kind: 'cycle',
+      skills: [...members],
+      params: { path: [...cycle] },
+      message: `${members.join(', ')} call one another in a cycle, for example ${[...cycle, cycle[0]].join(' \u2192 ')}`,
+    });
   }
 
   for (const s of skills) {
@@ -65,13 +70,13 @@ export function findInsights({ skills, edges, unresolved, roots }) {
   for (const s of skills) {
     for (const lang of [...(s._staleByLang?.keys() ?? [])].sort()) {
       const files = [...s._staleByLang.get(lang)].sort();
-      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run atlas.mjs pin` });
+      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run node <skill-dir>/scripts/atlas.mjs pin --state <state>` });
     }
   }
   for (const s of skills) {
     for (const lang of [...(s._editedByLang?.keys() ?? [])].sort()) {
       const files = [...s._editedByLang.get(lang)].sort();
-      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run atlas.mjs pin` });
+      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run node <skill-dir>/scripts/atlas.mjs pin --state <state>` });
     }
   }
   for (const s of skills) {
@@ -84,9 +89,10 @@ export function findInsights({ skills, edges, unresolved, roots }) {
 }
 
 /**
- * One representative cycle per strongly connected component of `calls`
- * edges (Tarjan's algorithm, iterative so deep graphs cannot overflow).
- * @returns {string[][]} each cycle as skill ids in call order
+ * Each strongly connected group of skills joined by `calls` edges (Tarjan's
+ * algorithm, iterative so deep graphs cannot overflow), with one shortest
+ * cycle through it as an example.
+ * @returns {{ members:string[], path:string[] }[]} members in scan order; path as skill ids in call order
  */
 export function callCycles(skills, edges) {
   const adj = new Map(skills.map((s) => [s.id, []]));
@@ -132,7 +138,8 @@ export function callCycles(skills, edges) {
       }
     }
   }
-  return components.map((comp) => cycleIn(comp, adj));
+  const order = new Map(skills.map((s, n) => [s.id, n]));
+  return components.map((comp) => ({ members: [...comp].sort((a, b) => order.get(a) - order.get(b)), path: cycleIn(comp, adj) }));
 }
 
 // A shortest cycle through the component's first skill (breadth-first).

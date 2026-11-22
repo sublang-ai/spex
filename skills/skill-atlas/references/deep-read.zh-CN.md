@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=9b90c178dd6983afbcb08869666bf835206ede82f11798e57a967e7881038b24 own=48d6518da07ce5d6ad876518188ab86e5ed032dfd39871c460f49b2becdad403 -->
+<!-- skill-atlas:source sha256=9b90c178dd6983afbcb08869666bf835206ede82f11798e57a967e7881038b24 own=f3ae5439723187901240ac91cce343cf5e9a14ff7e6c7f62d18795ba7b249a7c -->
 
-本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+> 本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # 深读一个技能
 

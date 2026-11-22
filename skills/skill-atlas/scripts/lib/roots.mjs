@@ -14,12 +14,18 @@ import { warn } from './log.mjs';
  * - dir: path relative to the project (cwd) or the home folder, `/`-separated
  * - scopes: where the folder is looked for
  * - env: an environment variable that replaces the home-relative config folder
- *   (its value stands for `dir` minus the trailing `/skills`)
+ *   (its value stands for the first segment of `dir`, such as `.codex`)
+ * - loadedBy: the other agents that load this folder too, kept by `--agent`
+ *   for any of them
  */
 export const AGENT_ROOTS = [
   { key: 'claude', dir: '.claude/skills', agent: 'claude-code', label: 'Claude Code', scopes: ['project', 'user'], env: 'CLAUDE_CONFIG_DIR' },
-  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'] },
+  // Every agent but Claude Code loads the shared folder.
+  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'],
+    loadedBy: ['codex', 'gemini-cli', 'kimi-code', 'opencode', 'cursor', 'windsurf', 'roo', 'goose', 'copilot'] },
   { key: 'codex', dir: '.codex/skills', agent: 'codex', label: 'Codex', scopes: ['project', 'user'], env: 'CODEX_HOME' },
+  // The skills Codex ships with itself.
+  { key: 'codex-system', dir: '.codex/skills/.system', agent: 'codex', label: 'Codex (bundled)', scopes: ['user'], env: 'CODEX_HOME' },
   { key: 'cursor', dir: '.cursor/skills', agent: 'cursor', label: 'Cursor', scopes: ['project', 'user'] },
   { key: 'gemini', dir: '.gemini/skills', agent: 'gemini-cli', label: 'Gemini CLI', scopes: ['project', 'user'] },
   { key: 'opencode', dir: '.opencode/skills', agent: 'opencode', label: 'OpenCode', scopes: ['project', 'user'] },
@@ -47,14 +53,16 @@ export function claudeConfigDir(home = os.homedir()) {
  */
 export function listRoots(opts) {
   const roots = [];
-  const wanted = (agent, scope) => scope === 'extra' || !opts.agents.length || opts.agents.includes(agent);
+  const wanted = (row) => !opts.agents.length
+    || [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
   for (const scope of ['project', 'user']) {
     if (scope === 'user' && !opts.user) continue;
     for (const row of AGENT_ROOTS) {
-      if (!row.scopes.includes(scope) || !wanted(row.agent, scope)) continue;
+      if (!row.scopes.includes(scope) || !wanted(row)) continue;
+      const [configDir, ...rest] = row.dir.split('/');
       let dir;
-      if (scope === 'user' && row.env && process.env[row.env]) dir = path.join(path.resolve(process.env[row.env]), 'skills');
-      else dir = path.join(scope === 'project' ? opts.cwd : opts.home, ...row.dir.split('/'));
+      if (scope === 'user' && row.env && process.env[row.env]) dir = path.join(path.resolve(process.env[row.env]), ...rest);
+      else dir = path.join(scope === 'project' ? opts.cwd : opts.home, configDir, ...rest);
       roots.push({
         id: `${scope}-${row.key}`,
         path: dir,
@@ -66,14 +74,14 @@ export function listRoots(opts) {
       });
     }
   }
-  if (opts.plugins && wanted('claude-code', 'plugin')) roots.push(...pluginRoots(opts.cwd));
+  if (opts.plugins && wanted({ agent: 'claude-code' })) roots.push(...pluginRoots(opts.cwd));
   opts.extra.forEach((dir, n) => {
     roots.push({ id: `extra-${n + 1}`, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true });
   });
   return roots;
 }
 
-/** Skill folders of Claude Code plugins that are installed (and not disabled) for this project. */
+/** Skill folders of Claude Code plugins that are installed and enabled for this project. */
 function pluginRoots(cwd) {
   const config = claudeConfigDir();
   const file = path.join(config, 'plugins', 'installed_plugins.json');
@@ -86,12 +94,12 @@ function pluginRoots(cwd) {
   }
   const plugins = doc && typeof doc.plugins === 'object' && doc.plugins ? doc.plugins : null;
   if (!plugins) { warn(`${file} has no "plugins" map; plugin skills skipped`); return []; }
-  const disabled = disabledPlugins(config);
+  const enabled = enabledPlugins(config, cwd);
   const realCwd = realOr(cwd);
   const roots = [];
   const used = new Set();
   for (const [key, installs] of Object.entries(plugins)) {
-    if (disabled.has(key)) continue;
+    if (enabled.get(key) === false) continue;
     const name = key.split('@')[0];
     for (const inst of Array.isArray(installs) ? installs : []) {
       if (!inst || typeof inst.installPath !== 'string') continue;
@@ -109,14 +117,24 @@ function pluginRoots(cwd) {
   return roots;
 }
 
-// `enabledPlugins: { "name@marketplace": false }` in the user settings disables a plugin.
-function disabledPlugins(config) {
-  const out = new Set();
-  try {
-    const settings = JSON.parse(fs.readFileSync(path.join(config, 'settings.json'), 'utf8'));
-    for (const [k, v] of Object.entries(settings?.enabledPlugins ?? {})) if (v === false) out.add(k);
-  } catch {
-    // No readable settings: every installed plugin counts as enabled.
+// `enabledPlugins: { "name@marketplace": false }` disables a plugin and `true`
+// enables it, read from the user's settings, then the project's and the
+// project's local ones, a later file's value for a key over an earlier one's.
+// A plugin no file names counts as enabled.
+function enabledPlugins(config, cwd) {
+  const out = new Map();
+  const files = [path.join(config, 'settings.json'), path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')];
+  for (const file of files) {
+    let settings;
+    try {
+      settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (err) {
+      if (err.code !== 'ENOENT') warn(`cannot read ${file} (${err.message}); its enabledPlugins are not applied`);
+      continue;
+    }
+    const map = settings?.enabledPlugins;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const [k, v] of Object.entries(map)) if (typeof v === 'boolean') out.set(k, v);
   }
   return out;
 }

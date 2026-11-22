@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e6ef1d8860412cf4e9b12e6be282d2437e596e8b67382b79a8f2bc9e9d2b80d2 own=cd42c9ec8ed452fd0960d23d2f9703e33cbad15992070afdf8b25f592ed65fb3 -->
+<!-- skill-atlas:source sha256=171be56f87ab49f2ddeb8672d105b7f8e8d6d1dd8cfadecb8af2e62a4db062e2 own=fa21fc5936dd477dd32b40730ec6ba51f846e36e54f437384dafac644b0cfc97 -->
 
-本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
+> 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # 技能图谱数据模型
 
@@ -115,8 +115,9 @@
 
 洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`、`no-steps`。
 
-为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且 `SKILL.md` 完全相同）是一条记录，其他位置列在 `copies` 下。
-只有同名而 `SKILL.md` 不同的技能才是 `duplicate-name`。
+为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内）是一条记录，其他位置列在 `copies` 下。
+大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）或总大小超过 64 MiB 的文件夹，算作不同。
+只有同名而文件夹不同的技能才是 `duplicate-name`。
 
 ## annotations.json — 叠加在扫描之上的修正
 
@@ -190,7 +191,8 @@
   - 在 YAML 中，是一行 `# skill-atlas:source sha256=<64 hex>`；
   - 在 JSON 中，是一个顶层的 `"translationOf": { "sha256": "<64 hex>" }`。
 - 所记录的源文件哈希值与源文件不符的译本是*过时的*（落后于源文件）；所记录的自身哈希值与自身不符的 Markdown 译本是*脱离源文件修改过的*（代理遵循的是源文件）；没有记录哈希值的译本两者都不是。
-- `pin` 只改写记录行；只要有一个指定的译本无法写入记录，就不写入任何文件；`pin --check` 列出每个过时、脱离源文件修改过或没有记录哈希值（Markdown 译本则包括没有记录自身哈希值）的译本。
+- `pin` 只改写记录行；只要有一个指定的译本无法写入记录，就不写入任何文件；`pin --check` 列出每个过时、脱离源文件修改过或没有记录哈希值（Markdown 译本则包括没有记录自身哈希值）的译本，以及每个指定的、不含任何译本的文件夹。
+- 位于 `translations/<skill id>/` 下、其技能未被扫描报告或该技能缺少其源文件的译本，会被列出，并使 `pin` 和 `pin --check` 都失败；`--state`、`--cwd` 和 `--root` 决定用来找到这些技能的扫描。
 
 在 `atlas.json` 中，每个技能都带有 `translations`，一个以标签为键的对象（没有译本时为空），`files` 的每一项都列出它被翻译成的标签：
 
@@ -219,7 +221,7 @@
 | --- | --- |
 | `duplicate-name` | `name` |
 | `unresolved-link` | `name`、`from` |
-| `cycle` | `path`（按顺序排列的技能 id） |
+| `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
 | `missing-description`、`invalid-frontmatter`、`no-steps` | — |
 | `name-mismatch` | `name`、`folder` |
@@ -273,10 +275,17 @@
 
 ## 检测规则
 
+扫描的文件夹：
+
+- 项目和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，项目的 `.github/skills`，以及项目中含有技能的 `skills`。
+- `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills`（除 Claude Code 外的代理都加载它）、项目的 `skills`，以及 `--root` 指定的文件夹。
+- Claude Code 插件的 `skills`：`plugins/installed_plugins.json` 记录该插件为用户或本项目安装，且 `enabledPlugins` 没有把它设为 `false`；依次读取用户的 `settings.json`、项目的 `.claude/settings.json` 和项目的 `.claude/settings.local.json`，对同一插件，后读的文件的值优先于先读的。
+- 在每个文件夹中，含有 `SKILL.md` 的子文件夹或其下一级文件夹是一个技能；名称以点开头的文件夹和 `node_modules` 会被跳过。
+
 步骤按以下优先顺序识别，结构识别时忽略围栏代码：
 
 1. 标题为 `Step N`、`Phase N`、`Stage N`、`Part N`、`步骤 N`、`阶段 N`、`第 N 步`、`第 N 阶段`、`第 N 部分` 或 `N. Title` 的标题，且有两个或更多处于同一级别。
-2. 位于指明某种流程的标题（`Workflow`、`Steps`、`Process`、`Procedure`、`Instructions`、`How to`、`Usage`、`Quick start`、`工作流`、`流程`、`步骤`、`过程`、`规程`、`说明`、`指令`、`如何`、`用法`、`使用方法`、`快速开始`、`快速入门`）之下的有序列表，或正文开头的有序列表。
+2. 位于指明某种流程的标题（`Workflow`、`Steps`、`Process`、`Procedure`、`Instructions`、`How to`、`Usage`、`Quick start`、`工作流`、`流程`、`步骤`、`过程`、`规程`、`说明`、`指令`、`如何`、`用法`、`使用方法`、`快速开始`、`快速入门`）之下的有序列表，或正文开头的有序列表：位于可选的 `#` 标题和至多一段以冒号（`:` 或 `：`）结尾的引导段落之后，列表之前的空行、HTML 注释和引用说明（`>` 开头的行，例如译本给读者的说明）都会被跳过。
 3. 否则取 `##` 章节，以 `stepKind: "section"` 报告。
 
 从一个技能指向另一个名为 `N`（或 `<plugin>:N`）的已安装技能的链接，从描述和围栏代码之外的正文中读取：
@@ -287,12 +296,12 @@
 | `Skill(N)` | `calls` |
 | 作为键的 `skill: N`：小写，位于行首（或 `- ` 列表项开头），或在 `{` 或 `,` 之后 | `calls` |
 | `N` 在某个表示使用的动词（invoke、call、run、use、load、delegate to、hand off to、follow、start、trigger、launch）之后几个词以内，且紧挨 skill 或 playbook 一词，或者在 `N` 带反引号或斜杠前缀时紧挨 command 一词 | `calls` |
-| 以上任一形式出现在一个引向别处的句子中（`not for`、`do not use`、`don't use`、`never use`、后面不跟 `of` 的 `instead`、`rather than`、`see also`） | `mentions` |
+| 以上任一形式，在其句子中位于引向别处的用词（`not for`、`do not use`、`don't use`、`never use`、`instead of`、`rather than`、`see also`、`, not`、`but not`）之后，且两者之间没有以使用类动词开头的分句（位于 `,`、`:` 或破折号之后），或出现在含有后面不跟 `of` 的 `instead` 的句子中——因此 ``use `/review` instead of `/publish` `` 和 ``instead of `/publish`, use `/review` `` 都调用 `review`、提及 `publish` | `mentions` |
 | 单独的 `` `N` ``，当句子提到 skill 或名称中带连字符时 | `mentions` |
 
-- 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个，否则为最先找到的那个。
+- 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。
 - 每个（技能、步骤、目标）只保留一条链接，`calls` 优先于 `mentions`；技能指向自身的链接被丢弃。
-- 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称）；``the `x` skill``；以及 `Skill(x)`。宿主的内置命令（`/help`、`/clear`、`/compact`……）永远不会是 unresolved。
+- 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；``the `x` skill``；以及 `Skill(x)`，无论 `x` 是什么。
 
 标签来自 `tag-rules.json`：每条规则的模式会与 frontmatter 描述（以及 `context` 和 `agent` 键）、前言（所有步骤之外的每一行正文）和每个步骤的每一行逐一匹配，围栏代码也包括在内。
 在其所在子句中先前被否定的匹配不算证据：同一句中它之前 60 个字符以内出现 never、not、no、nor、without、avoid、don't、doesn't、won't、cannot 或 can't 时，该匹配被丢弃，除非规则设置了 `"negatable": false`。

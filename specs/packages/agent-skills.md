@@ -28,7 +28,7 @@ Where a skill relays a prompt to a role or applies a rule a user may tune, the s
 
 Each Markdown file of a skill under `skills/`, and each file under its `references/` holding labels a reader sees, shall have beside it a `zh-CN` translation, named with the tag before the extension, recording its source's digest and, where Markdown, its own:
 
-- a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens by saying that agents load `SKILL.md`;
+- a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens with a quoted note saying that agents load `SKILL.md`;
 - a translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
 
 ### Workflow skills
@@ -53,14 +53,15 @@ When the `code` skill is given a coding request, the loading agent shall have a 
 
 When the `review` skill is given an intent and a scope of committed work, the loading agent shall run at most three Reviewer rounds, each further round following a Coder's disposition of the round's findings in at most one new commit, and return the evaluated revision with whether a finding is left unsettled:
 
-- a scope that is missing or names nothing committed is asked of the user first;
+- a scope that is missing, names nothing committed, or does not end at the checked-out revision is asked of the user first;
+- the checked-out revision is recorded at the start and read again after each role's turn, and one moved other than by a Coder's one commit ends the run as failed;
 - a Reviewer edits nothing;
 - a Coder accepts or rejects each finding, and commits nothing where it rejects all;
 - findings raised or kept in the third round are returned unsettled.
 
 #### agent-skills-5
 
-When the `decide` skill is given a topic, the loading agent shall take a proposal from a Coder and a Reviewer at the same time, neither seeing the other's, have the Coder commit their synthesis as decision records or spec items in one commit, and invoke the `review` skill over that commit.
+When the `decide` skill is given a topic, the loading agent shall take a proposal from a Coder and a Reviewer, at the same time and neither seeing the other's where the roles run as subagents, else in turn with that said in its result, have the Coder commit their synthesis as decision records or spec items in one commit, and invoke the `review` skill over that commit.
 
 #### agent-skills-6
 
@@ -74,11 +75,11 @@ When every folder under `skills/` is checked, the test shall assert its name, de
 
 #### agent-skills-8
 
-When the repository's `skills/` is scanned by the atlas, the test shall assert what the scan reads from the three workflow skills:
+When the repository's `skills/` alone is scanned by the atlas, the test shall assert the three workflow skills reported and what the scan reads from them:
 
 - each of the three naming the Captain, the Coder and the fallback without subagents [[agent-skills-9](#agent-skills-9)];
 - `code`'s steps in order, its review step calling `review`, and a step tagged as asking the user [[agent-skills-3](#agent-skills-3)];
-- `review`'s steps in order with no call to another skill, and its three-round bound stated [[agent-skills-4](#agent-skills-4)];
+- `review`'s steps in order with no call to another skill, its three-round bound stated, and each of its outcomes returning the evaluated revision [[agent-skills-4](#agent-skills-4)];
 - `decide`'s steps in order, its review step calling `review` [[agent-skills-5](#agent-skills-5)];
 - each of the three stating that commits are read from the repository [[agent-skills-6](#agent-skills-6)].
 

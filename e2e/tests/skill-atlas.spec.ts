@@ -286,18 +286,21 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
   const all = [MARKUP, "code", "decide", "guide", "lint-docs", "lone", "notes", "research", "review", "ship"];
   await expect.poll(() => shownSkills(page)).toEqual(all);
 
-  // Search matches names, descriptions and step titles.
+  // Search matches names, descriptions, step titles and each step's text.
   const search = page.getByRole("searchbox", { name: /Search skills/ });
+  await search.fill("which");
+  await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+  // `decide` by its step's text "Invoke the `review` skill on the decision."
   await search.fill("review");
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "review"]);
-  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 0 of 3 skills shown");
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "review"]);
+  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 1 of 3 skills shown");
 
   // A tag filter, together with the search, then alone.
   await page.getByRole("button", { name: "Filter by tags" }).click();
   await page.getByRole("checkbox", { name: /^Asks the user/ }).check();
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
   await page.getByRole("checkbox", { name: /^Asks the user/ }).uncheck();
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "review"]);
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "review"]);
   await page.keyboard.press("Escape");
   await search.fill("");
   await expect.poll(() => shownSkills(page)).toEqual(all);
@@ -389,6 +392,17 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
   await expect(hardening.getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
   await expect(page.locator("#save-status")).toHaveText("Saved");
 
+  // A menu's edit undone by the keyboard after its notice has gone.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
+  await page.getByRole("menuitem", { name: "Hardening", exact: true }).first().click();
+  await expect(hardening.getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
+  await page.locator(".toast").getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.locator(".toast")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(hardening.getByRole("button", { name: /^\/lone\b/ })).toHaveCount(0);
+  await expect(hardening.getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+
   // The workflows file in the state folder holds the change.
   const file = join(state, WORKFLOWS);
   expect(existsSync(file)).toBe(true);
@@ -407,6 +421,35 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
     "Discover, 1 skill", "Decide, 1 skill", "Build, 1 skill", "Verify, 1 skill", "Ship, 1 skill", "Operate, 0 skills", "Hardening, 1 skill", "Unassigned, 4 skills",
   ]);
   await expect(page.getByRole("region", { name: /^Hardening,/ }).getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
+});
+
+test("skill-atlas-19: an edit saved as the page is hidden, then a further edit saved, not refused", async ({ page }) => {
+  writeWorkflows(FLOW);
+  await page.goto(url);
+  await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
+  const make = page.getByRole("region", { name: /^Make,/ });
+  const stored = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows[0].phases[1].skills as string[];
+
+  // The edit and the page being hidden in one task, so the save as the page is hidden writes it.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
+  await page.evaluate(() => {
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) => el.textContent?.trim() === "Make")!;
+    item.click();
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Reflect.deleteProperty(document, "visibilityState");
+  });
+  await expect(make.getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  expect(stored()).toContain("lone");
+
+  // A further edit is saved over it, not refused as a change made elsewhere.
+  await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /guide" }).click();
+  await page.getByRole("menuitem", { name: "Make", exact: true }).first().click();
+  await expect(make.getByRole("button", { name: /^\/guide\b/ })).toBeVisible();
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  await expect(page.getByRole("alert")).toBeHidden();
+  expect(stored()).toEqual(expect.arrayContaining(["lone", "guide"]));
 });
 
 test("skill-atlas-20: a file changed behind the page refuses the next edit and stands", async ({ page }) => {
@@ -488,10 +531,32 @@ const startsWith = (s: string) => new RegExp(`^${esc(s)}`);
 // A card's own button, whatever language its accessible name is in.
 const cardMain = (page: Page, id: string) => card(page, id).locator(".card-main");
 
+// Ask the running server to scan again, as the page's Rescan does.
+async function rescan() {
+  const res = await fetch(new URL("/api/rescan", url), { method: "POST", headers: { "Content-Type": "application/json", "X-Skill-Atlas": "1" }, body: "{}" });
+  expect(res.ok).toBe(true);
+}
+// A skill written in Japanese with no translation: kana and kanji in its words.
+const JA = { folder: ".claude/skills", name: "kakunin", description: "設計を確認します。" };
+// Skills whose language is read past a single character: English quoting Chinese in a step,
+// Chinese using the katakana middle dot, and one declaring Traditional Chinese.
+const MIXED = [
+  { name: "quoting", description: "Explains how the scan reads step headings.", body: "# Quoting\n\n## Read\n\nA heading such as `步骤 2：扫描` is read as a step.\n", extra: "", marked: true },
+  { name: "dianhao", description: "检查技能・清单并列出结果。", body: "# 检查\n\n## 读取\n\n读取每个技能・文件。\n", extra: "", marked: false },
+  { name: "fanti", description: "檢查技能清單。", body: "# 檢查\n\n## 讀取\n\n讀取每個技能。\n", extra: "metadata:\n  language: zh-Hant\n", marked: true },
+];
+
 test.describe("in a browser of Chinese", () => {
   test.use({ locale: "zh-CN" });
+  test.afterEach(async () => {
+    for (const n of [JA.name, ...MIXED.map((m) => m.name)]) rmSync(join(project, JA.folder, n), { recursive: true, force: true });
+    await rescan();
+  });
 
   test("skill-atlas-29: the page, tags, presets and skills shown in Chinese, untranslated, stale and edited skills marked, search in either language", async ({ page }) => {
+    skill(project, JA.folder, JA.name, JA.description, "# 確認\n\n## 読む\n\n仕様のファイルを読みます。\n");
+    for (const m of MIXED) skill(project, JA.folder, m.name, m.description, m.body, m.extra);
+    await rescan();
     await page.goto(url);
     // The page's own text and the presets, in Chinese.
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
@@ -554,6 +619,27 @@ test.describe("in a browser of Chinese", () => {
     await expect(dialog.getByRole("note")).toHaveText(zh("Shown in its original language: there is no {language} translation of this file.", { language: ZH.name }));
     await page.keyboard.press("Escape");
 
+    // A skill written in Japanese is shown in its original and marked, though its kanji are Han script.
+    await cardMain(page, JA.name).click();
+    await expect(panel.locator(".d-desc")).toHaveText(JA.description);
+    await expect(panel.getByRole("note")).toHaveText(original);
+    await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+    await expect(dialog.getByRole("note")).toHaveText(zh("Shown in its original language: there is no {language} translation of this file.", { language: ZH.name }));
+    await page.keyboard.press("Escape");
+
+    // A skill's language is the script most of its words are in, or the one it declares with its script.
+    for (const m of MIXED) {
+      await cardMain(page, m.name).click();
+      await expect(panel.locator(".d-desc")).toHaveText(m.description);
+      if (m.marked) await expect(panel.getByRole("note"), m.name).toHaveText(original);
+      else await expect(panel.getByRole("note"), m.name).toHaveCount(0);
+      await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
+      await expect(dialog.locator(".file-pre")).toContainText(m.description);
+      await expect(dialog.getByRole("note"), m.name).toHaveCount(m.marked ? 1 : 0);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
+
     // A translation behind its source: shown, and marked.
     await cardMain(page, "review").click();
     await expect(panel.locator(".d-desc")).toHaveText(REVIEW_ZH);
@@ -573,6 +659,11 @@ test.describe("in a browser of Chinese", () => {
     await search.fill("实现");
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
     await search.fill("Implements");
+    await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+    // And by a step's text, in Chinese and in the original.
+    await search.fill("哪个");
+    await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+    await search.fill("which");
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
   });
 });
