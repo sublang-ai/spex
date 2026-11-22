@@ -19,8 +19,9 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - a property too weak to fail, which a vendor of derived property tests states of its own product [[4]];
   - an agent that sees faulty code beside its requirement and writes a specification the fault satisfies [[5]];
   - a model that passes while the code it describes has moved [[6]].
-- Others already derive property tests from structured requirements [[4]] and attach model-checking evidence to single acceptance criteria, stale after an edit [[7]].
-  Natural-language requirements, traceability and a solver are therefore where a product starts, not what sets it apart.
+- Others already derive property tests from structured requirements [[4]], analyse requirements with a solver and put the scenarios it accepts and rejects to their user as questions [[8]], and attach model-checking evidence to single acceptance criteria, stale after an edit [[7]].
+  Natural-language requirements, approval by examples, traceability and a solver are therefore where a product starts, not what sets it apart.
+- The same product offers that analysis as an optional step before design or code [[8]], leaves its property tests optional, and on a failure may update the implementation itself or offer a change to the test or the requirement [[4]].
 - Spex has what a guard needs before any formula: one requirement per item, stable item IDs, citations between items, test items that cite the behavior they verify, and a linter over all of it.
   Its toolchain already re-checks agent-produced artifacts by deterministic checks and requires a bounded model's deliberately broken variants to fail.
 - Considered and declined:
@@ -43,7 +44,7 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - a guard is derived from its assertion, its behavior item and the items that item cites;
   - a choice that settles what the item means is written into the item before its guard stands;
   - an assumption a guard rests on is an item the behavior item cites.
-- A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item, chosen where plausible readings of the item disagree.
+- A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item; where independent readings of the item disagree, the sequences they disagree on are among them.
   One permitted example shows the behavior happening, so that refusing everything cannot pass.
 - A guard's assertion and its approved examples are test items that cite the behavior item, each example belonging to one guard; the spec of specs gains no item kind.
 - Every run of a guard for a change confirms that what Spex derived admits each permitted example and rejects each forbidden one, and drives each permitted example on the implementation.
@@ -55,7 +56,7 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - The guard keeps each fault it caught and must catch each the same way again after any change to its inputs other than the project's code.
   - A kept fault that changed code no longer admits is replaced before the guard passes again.
 - A guard's inputs are its behavior item, the items that one cites, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, any recorded log or imported result a check reads, and the code that link reaches.
-- Each result of a guard's check says what was established, on which revision, within which bounds and under which assumptions, as exactly one of:
+- Each result of a guard's check says what was established, by which tool, on which revision, within which bounds and under which assumptions, as exactly one of:
 
   | Result | Meaning |
   | --- | --- |
@@ -86,7 +87,9 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - The item and the code may change in one change, with that approval, where the intended behavior changed.
 - Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
 - `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
-- The first use Spex leads with is a service whose behavior depends on retries, ownership, approvals or background work, entered from a past incident or an existing item.
+- A guard differs from a requirement analysed before code in three ways Spex states on its surfaces: it is checked on every change that reaches it, it has been seen to fail, and no agent can weaken it.
+- The first use Spex leads with is a rule that decides an outcome from a fixed order of requests through one interface, such as who may approve, what is charged or what an account may use, entered from a past incident or an existing item.
+  Behavior that depends on retries, ownership or background work follows once a project's link to the code controls the timing it depends on.
 - Spex measures itself by what a project's second guard costs: what a first guard built to reach the code serves the ones after it.
 
 ## Consequences
@@ -108,3 +111,4 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 [5]: https://arxiv.org/abs/2610.32053 "Wang et al. — Are LLM-Generated Formal Specifications Faithful to Their Requirements?"
 [6]: https://arxiv.org/abs/2006.00915 "Davis et al. — eXtreme Modelling in Practice (PVLDB 2020)"
 [7]: https://karatelabs.io/formal-verification "Karate Labs — formal verification evidence on acceptance criteria"
+[8]: https://kiro.dev/blog/deep-spec-analysis/ "Kiro — requirements analysis by sampled formalizations and a solver (2026)"
