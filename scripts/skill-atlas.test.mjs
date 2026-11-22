@@ -912,7 +912,7 @@ test('--agent keeps .agents/skills for an agent that loads it and Codex\'s bundl
   writeSkill(path.join(project, '.claude', 'skills', 'claude-project'), `${fm('claude-project', 'Claude, project.')}\nText.\n`);
   writeSkill(path.join(project, 'skills', 'source-one'), `${fm('source-one', 'A source.')}\nText.\n`);
   writeSkill(path.join(project, '.codex', 'skills', '.system', 'not-system'), `${fm('not-system', 'Codex ships nothing in a project.')}\nText.\n`);
-  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '' };
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
   const scanWith = (...extra) => {
     const r = run(['scan', '--cwd', project, '--no-plugins', '--state', path.join(project, 'state'), ...extra], { env });
     assert.equal(r.status, 0, r.stderr);
@@ -943,7 +943,7 @@ test('the home folder\'s .config/agents, .config/goose, .copilot and .codeium/wi
     writeSkill(path.join(project, ...dir.split('/'), `${name}-in-project`), `${fm(`${name}-in-project`, 'A home-only folder in a project.')}\nText.\n`);
   }
   fs.mkdirSync(path.join(project, 'state'), { recursive: true });
-  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '' };
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
   const scanWith = (...extra) => {
     const r = run(['scan', '--cwd', project, '--no-plugins', '--state', path.join(project, 'state'), ...extra], { env });
     assert.equal(r.status, 0, r.stderr);
@@ -957,6 +957,236 @@ test('the home folder\'s .config/agents, .config/goose, .copilot and .codeium/wi
   assert.deepEqual(names(scanWith('--agent', 'copilot')), ['copilot-one', 'u-one']);
   assert.deepEqual(names(scanWith('--agent', 'windsurf')), ['u-one', 'windsurf-one']);
   assert.deepEqual(names(scanWith('--agent', 'claude-code')), [], 'Claude Code loads none of them');
+  const xdg = path.join(tmp, 'more-roots-xdg');
+  for (const [dir, name] of [['opencode/skills', 'xdg-opencode'], ['agents/skills', 'xdg-agents'], ['goose/skills', 'xdg-goose']]) {
+    writeSkill(path.join(xdg, ...dir.split('/'), name), `${fm(name, `${name}.`)}\nText.\n`);
+  }
+  const r = run(['scan', '--cwd', project, '--no-plugins', '--state', path.join(project, 'state')], { env: { ...env, XDG_CONFIG_HOME: xdg } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(names(JSON.parse(r.stdout)), ['copilot-one', 'windsurf-one', 'xdg-agents', 'xdg-goose', 'xdg-opencode'], 'the home folder\'s .config is XDG_CONFIG_HOME where it is set');
+});
+
+test('the project is --cwd\'s folder and each folder above it up to its repository\'s root, the nearer first (skill-atlas-1)', () => {
+  const outer = path.join(tmp, 'up-outer');
+  const repo = path.join(outer, 'repo');
+  const cwd = path.join(repo, 'sub', 'deep');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  writeSkill(path.join(outer, '.agents', 'skills', 'above-repo'), `${fm('above-repo', 'Outside the repository.')}\nText.\n`);
+  writeSkill(path.join(repo, '.agents', 'skills', 'at-root'), `${fm('at-root', 'At the root.')}\nText.\n`);
+  writeSkill(path.join(repo, '.agents', 'skills', 'shared'), `${fm('shared', 'The root\'s.')}\nText.\n`);
+  writeSkill(path.join(repo, 'skills', 'root-source'), `${fm('root-source', 'A source at the root.')}\nText.\n`);
+  writeSkill(path.join(repo, 'sub', '.claude', 'skills', 'in-sub'), `${fm('in-sub', 'In sub.')}\nText.\n`);
+  writeSkill(path.join(cwd, '.agents', 'skills', 'near'), `${fm('near', 'Near.')}\nText.\n`);
+  writeSkill(path.join(cwd, '.agents', 'skills', 'shared'), `${fm('shared', 'The near one\'s.')}\nText.\n`);
+  const { atlas } = scanJson(cwd, [], path.join(tmp, 'up-state'));
+  assert.deepEqual(atlas.skills.map((s) => s.id), ['near', 'shared', 'in-sub', 'at-root', 'shared@project-agents-up2'], 'the nearer folder first, up to the root; not above it, and the root\'s skills folder not a source');
+  const roots = Object.fromEntries(atlas.roots.map((r) => [r.id, r]));
+  assert.deepEqual(Object.keys(roots), ['project-agents', 'project-claude-up1', 'project-agents-up2']);
+  assert.equal(roots['project-agents-up2'].path, path.join(repo, '.agents', 'skills'));
+  assert.equal(new Set(atlas.roots.map((r) => r.label)).size, 3, 'each folder told apart by its label');
+  const alone = path.join(tmp, 'up-no-repo', 'inner');
+  writeSkill(path.join(tmp, 'up-no-repo', '.agents', 'skills', 'parent-one'), `${fm('parent-one', 'Above, with no repository.')}\nText.\n`);
+  writeSkill(path.join(alone, '.agents', 'skills', 'inner-one'), `${fm('inner-one', 'In --cwd.')}\nText.\n`);
+  assert.deepEqual(scanJson(alone, [], path.join(tmp, 'up-state')).atlas.skills.map((s) => s.id), ['inner-one'], 'with no repository, --cwd alone');
+});
+
+test('annotations: a name holding several entries applies the one recording its digest, else one recording none (skill-atlas-6, skill-atlas-5)', () => {
+  const project = path.join(tmp, 'annotation-list');
+  const dir = path.join(project, '.claude', 'skills');
+  for (const n of ['matched', 'undated', 'none-apply']) writeSkill(path.join(dir, n), `${fm(n, `${n}.`)}\n## Step 1: One\n\nDo it.\n`);
+  const state = path.join(project, 'state');
+  fs.mkdirSync(state, { recursive: true });
+  const other = { sha256: 'a'.repeat(64) };
+  fs.writeFileSync(path.join(state, 'annotations.json'), JSON.stringify({ version: 1, skills: {
+    matched: [{ source: other, summary: 'Another text.' }, { summary: 'Records none.' }, { source: { sha256: sha(path.join(dir, 'matched', 'SKILL.md')) }, summary: 'This text.' }],
+    undated: [{ source: other, summary: 'Another text.' }, { summary: 'Records none.' }],
+    'none-apply': [{ source: other, summary: 'One text.' }, { source: { sha256: 'b'.repeat(64) }, summary: 'Another.' }],
+  } }));
+  const { atlas } = scanJson(project, [], state);
+  assert.equal(skillOf(atlas, 'matched').summary, 'This text.', 'the entry recording the skill\'s digest');
+  assert.equal(skillOf(atlas, 'undated').summary, 'Records none.', 'else the one recording none');
+  assert.equal(skillOf(atlas, 'none-apply').summary, null);
+  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'stale-annotation').map((i) => i.skills), [['none-apply']], 'stale only where no entry applies');
+});
+
+test('annotations: a name\'s entries apply to each differing skill of that name by the digest it records (skill-atlas-6, skill-atlas-5)', () => {
+  const project = path.join(tmp, 'annotation-same-name');
+  const first = path.join(project, '.claude', 'skills');
+  const second = path.join(project, '.agents', 'skills');
+  for (const [dir, text] of [[first, 'First.'], [second, 'Second.']]) {
+    for (const n of ['foo', 'bar', 'baz', 'own', 'qux']) writeSkill(path.join(dir, n), `${fm(n, text)}\n## One\n\n${text}\n`);
+  }
+  const digest = (dir, n) => sha(path.join(dir, n, 'SKILL.md'));
+  const state = path.join(project, 'state');
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, 'annotations.json'), JSON.stringify({ version: 1, skills: {
+    foo: [{ source: { sha256: digest(second, 'foo') }, summary: 'B.' }, { source: { sha256: digest(first, 'foo') }, summary: 'A.' }],
+    bar: [{ source: { sha256: digest(second, 'bar') }, summary: 'B.' }],
+    baz: [{ source: { sha256: '0'.repeat(64) }, summary: 'Neither.' }, { summary: 'Undated.' }],
+    own: [{ source: { sha256: digest(second, 'own') }, summary: 'By name.' }],
+    'own@project-agents': { summary: 'By its own key.' },
+    qux: [{ source: { sha256: '0'.repeat(64) }, summary: 'Neither.' }],
+  } }));
+  const { atlas } = scanJson(project, [], state);
+  const summary = (id) => skillOf(atlas, id).summary;
+  assert.deepEqual([summary('foo'), summary('foo@project-agents')], ['A.', 'B.'], 'each skill of the name the entry recording its digest');
+  assert.deepEqual([summary('bar'), summary('bar@project-agents')], [null, 'B.'], 'an entry for the second applies to it alone');
+  assert.deepEqual([summary('baz'), summary('baz@project-agents')], ['Undated.', null], 'an entry recording none stays with the first');
+  assert.deepEqual([summary('own'), summary('own@project-agents')], [null, 'By its own key.'], 'a differing skill\'s own key over its name\'s entries');
+  assert.equal(summary('qux'), null);
+  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'stale-annotation').map((i) => i.skills), [['qux']],
+    'stale only where none applies and an entry records a digest no skill of the name has');
+});
+
+test('annotations: words under a tag join that tag\'s entry, else a file\'s of the same language and script, else stand apart (skill-atlas-6)', () => {
+  const project = path.join(tmp, 'annotation-words');
+  const dir = path.join(project, '.claude', 'skills', 'words');
+  writeSkill(dir, `${fm('words', 'Words.')}\n## One\nDo it.\n`);
+  fs.writeFileSync(path.join(dir, 'SKILL.zh-TW.md'), `${fm('words', '\u7E41\u9AD4\u3002')}\n## \u4E00\n\u505A\u3002\n`);
+  fs.mkdirSync(path.join(project, 'state'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'state', 'annotations.json'), JSON.stringify({ version: 1, skills: { words: { translations: {
+    'en-US': { summary: 'US.' }, 'en-GB': { summary: 'GB.' }, 'zh-Hant': { summary: '\u6982\u8981\u3002' },
+  } } } }));
+  const { translations } = skillOf(scanJson(project).atlas, 'words');
+  assert.deepEqual(Object.keys(translations), ['en-GB', 'en-US', 'zh-TW'], 'two annotation-only tags of one language never merge');
+  assert.deepEqual([translations['en-US'].summary, translations['en-GB'].summary], ['US.', 'GB.']);
+  assert.deepEqual([translations['zh-TW'].origin, translations['zh-TW'].summary], ['skill', '\u6982\u8981\u3002'], 'zh-Hant words join the zh-TW file');
+});
+
+test('annotations: replaced steps leave one link per target at the skill, calls before mentions (skill-atlas-6)', () => {
+  const project = path.join(tmp, 'annotation-links');
+  const dir = path.join(project, '.claude', 'skills');
+  writeSkill(path.join(dir, 'review'), `${fm('review', 'Reviews.')}\nText.\n`);
+  writeSkill(path.join(dir, 'twice'), `${fm('twice', 'Links twice.')}
+## Step 1: First
+
+See the \`review\` skill. Call Skill(gone) here.
+
+## Step 2: Second
+
+Run \`/review\` now. Call Skill(gone) again.
+`);
+  fs.mkdirSync(path.join(project, 'state'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'state', 'annotations.json'), JSON.stringify({ version: 1, skills: { twice: { steps: [{ title: 'Only', summary: 'One step.' }] } } }));
+  const { atlas } = scanJson(project);
+  assert.deepEqual(edge(atlas, 'twice', 'review').map((e) => [e.fromStep, e.kind]), [[null, 'calls']], 'one link, the call');
+  assert.deepEqual(atlas.unresolved.filter((u) => u.from === 'twice').map((u) => [u.fromStep, u.name]), [[null, 'gone']], 'one unresolved link per name');
+});
+
+test('links: `$name` after a verb of use in its clause calls the skill; with no verb, or naming no skill, it is nothing (skill-atlas-3)', () => {
+  const project = path.join(tmp, 'dollar-project');
+  const dir = path.join(project, '.agents', 'skills');
+  for (const n of ['review', 'lint-fix']) writeSkill(path.join(dir, n), `${fm(n, `${n}.`)}\nText.\n`);
+  const cases = {
+    plain: 'Run $review before returning.',
+    ticked: 'Then use `$review` on the change.',
+    hyphen: 'Invoke $lint-fix first.',
+    noverb: 'The $review output is long.',
+    clause: 'Run the tests, then $review the diff.',
+    unknown: 'Run $nosuch next. Use $HOME as the folder.',
+    steered: 'Do not use $review here.',
+    path: 'Run the script at bin/$review today. Open https://host/$review now. Use ~/$review or a.$review.',
+  };
+  for (const [n, text] of Object.entries(cases)) writeSkill(path.join(dir, n), `${fm(n, `${n}.`)}\n${text}\n`);
+  const { atlas } = scanJson(project);
+  const kinds = (from) => Object.fromEntries(atlas.edges.filter((e) => e.from === from).map((e) => [e.to, e.kind]));
+  assert.deepEqual(kinds('plain'), { review: 'calls' });
+  assert.deepEqual(kinds('ticked'), { review: 'calls' });
+  assert.deepEqual(kinds('hyphen'), { 'lint-fix': 'calls' });
+  assert.deepEqual(kinds('noverb'), {}, 'no verb of use before it');
+  assert.deepEqual(kinds('clause'), {}, 'the verb in another clause');
+  assert.deepEqual(kinds('unknown'), {});
+  assert.ok(!atlas.unresolved.some((u) => u.from === 'unknown'), 'a $ before a name no skill has is no unresolved link');
+  assert.deepEqual(kinds('steered'), { review: 'mentions' }, 'steered as the other forms are');
+  assert.deepEqual(kinds('path'), {}, 'a $name inside a path or URL is no link');
+});
+
+test('scan: each skill\'s language, its declared one else its text\'s outside fenced code (skill-atlas-29)', () => {
+  const project = path.join(tmp, 'language-project');
+  const dir = path.join(project, '.claude', 'skills');
+  const fence = '```\n' + '\u4E2D\u6587\u4EE3\u7801\u793A\u4F8B'.repeat(20) + '\n```\n';
+  const skills = {
+    english: `${fm('english', 'Writes things.')}\nWrite the report.\n${fence}`,
+    chinese: `${fm('chinese', '\u5199\u62A5\u544A\u3002')}\n\u5199\u4E00\u4EFD\u62A5\u544A\uFF0C\u7136\u540E\u505C\u4E0B\u3002\n`,
+    japanese: `${fm('japanese', '\u5831\u544A\u3092\u66F8\u304F\u3002')}\n\u5831\u544A\u66F8\u3092\u66F8\u3044\u3066\u304F\u3060\u3055\u3044\u3002\n`,
+    korean: `${fm('korean', '\uBCF4\uACE0\uC11C\uB97C \uC4F4\uB2E4.')}\n\uBCF4\uACE0\uC11C\uB97C \uC791\uC131\uD558\uC138\uC694.\n`,
+    russian: `${fm('russian', '\u041F\u0438\u0448\u0435\u0442 \u043E\u0442\u0447\u0451\u0442.')}\n${'\u041D\u0430\u043F\u0438\u0448\u0438\u0442\u0435 \u043E\u0442\u0447\u0451\u0442. '.repeat(3)}\n`,
+    declared: `${fm('declared', 'Writes things.', 'metadata:\n  language: zh-hant\n')}\nWrite the report.\n`,
+  };
+  for (const [n, text] of Object.entries(skills)) writeSkill(path.join(dir, n), text);
+  const { atlas } = scanJson(project);
+  assert.deepEqual(Object.fromEntries(atlas.skills.map((s) => [s.id, s.language])), {
+    chinese: 'zh', declared: 'zh-Hant', english: 'en', japanese: 'ja', korean: 'ko', russian: 'und',
+  });
+});
+
+test('translations: the skill folder\'s first, the state folder\'s where only the skill\'s is behind its source (skill-atlas-27)', () => {
+  const project = path.join(tmp, 'precedence-project');
+  const state = path.join(project, 'state');
+  const names = ['own-fresh', 'own-behind', 'both-behind'];
+  for (const n of names) {
+    const dir = path.join(project, '.claude', 'skills', n);
+    writeSkill(dir, `${fm(n, 'English.')}\n## One\nDo it.\n`);
+    fs.mkdirSync(path.join(dir, 'references'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'references', 'a.md'), '# A\n');
+    const stateDir = path.join(state, 'translations', n);
+    fs.mkdirSync(path.join(stateDir, 'references'), { recursive: true });
+    for (const [rel, src] of [['SKILL.zh-CN.md', 'SKILL.md'], ['references/a.zh-CN.md', 'references/a.md']]) {
+      const hex = sha(path.join(dir, ...src.split('/')));
+      const ownHex = n === 'own-fresh' ? hex : '0'.repeat(64);
+      const stateHex = n === 'both-behind' ? '1'.repeat(64) : hex;
+      fs.writeFileSync(path.join(dir, ...rel.split('/')), `${fm(n, '\u81EA\u5DF1\u7684\u3002')}${record(ownHex)}\n`);
+      fs.writeFileSync(path.join(stateDir, ...rel.split('/')), `${fm(n, '\u72B6\u6001\u7684\u3002')}${record(stateHex)}\n`);
+    }
+  }
+  const { atlas } = scanJson(project, [], state);
+  const got = (n) => { const t = skillOf(atlas, n).translations['zh-CN']; return [t.origin, t.description, t.stale]; };
+  assert.deepEqual(got('own-fresh'), ['skill', '\u81EA\u5DF1\u7684\u3002', false], 'the skill folder\'s first');
+  assert.deepEqual(got('own-behind'), ['state', '\u72B6\u6001\u7684\u3002', false], 'the state folder\'s where only the skill\'s is behind');
+  assert.deepEqual(got('both-behind'), ['skill', '\u81EA\u5DF1\u7684\u3002', true], 'the skill folder\'s where both are behind');
+  const staleFiles = (n) => atlas.insights.filter((i) => i.kind === 'stale-translation' && i.skills.includes(n)).flatMap((i) => i.params.files);
+  assert.deepEqual(staleFiles('own-behind'), [], 'no mark for the translation not chosen');
+  assert.deepEqual(staleFiles('both-behind').sort(), ['SKILL.zh-CN.md', 'references/a.zh-CN.md']);
+});
+
+test('workflows reads the stored document with its version and --put writes it as the server\'s save does (skill-atlas-31)', () => {
+  const state = path.join(tmp, 'cli-workflows-state');
+  const wf = (name) => JSON.stringify({ version: 1, active: null, workflows: [{ id: 'w', name, phases: [{ id: 'p', name: 'P', skills: ['alpha'] }] }] });
+  const file = path.join(tmp, 'cli-workflows.json');
+  const read = () => {
+    const r = run(['workflows', '--state', state]);
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout);
+  };
+  const empty = read();
+  assert.deepEqual(empty, { etag: '"none"', doc: { version: 1, active: null, workflows: [] } }, 'an empty document where there is no file');
+  fs.writeFileSync(file, wf('First'));
+  const put = run(['workflows', '--put', file, '--if-match', empty.etag, '--state', state]);
+  assert.equal(put.status, 0, put.stderr);
+  const stored = fs.readFileSync(path.join(state, 'workflows.json'));
+  assert.equal(put.stdout.trim(), `"${crypto.createHash('sha256').update(stored).digest('hex')}"`, 'the new etag');
+  assert.deepEqual(read(), { etag: put.stdout.trim(), doc: JSON.parse(stored.toString('utf8')) });
+  const stale = spawnSync(process.execPath, [CLI, 'workflows', '--put', '-', '--if-match', empty.etag, '--state', state], { input: wf('Stale'), encoding: 'utf8', timeout: CLI_TIMEOUT_MS });
+  assert.notEqual(stale.status, 0);
+  assert.match(stale.stderr, /changed since it was read; read it again/);
+  fs.writeFileSync(file, JSON.stringify({ version: 1, active: 'nope', workflows: [] }));
+  const invalid = run(['workflows', '--put', file, '--if-match', put.stdout.trim(), '--state', state]);
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /invalid workflows document/);
+  assert.deepEqual(fs.readFileSync(path.join(state, 'workflows.json')), stored, 'a refused put leaves the stored file');
+  fs.writeFileSync(path.join(state, 'workflows.json.lock'), '{}');
+  try {
+    fs.writeFileSync(file, wf('Locked'));
+    const locked = run(['workflows', '--put', file, '--if-match', put.stdout.trim().slice(1, -1), '--state', state]);
+    assert.notEqual(locked.status, 0, 'a held lock refuses the put, as it does a server\'s save');
+    assert.match(locked.stderr, /is held/);
+  } finally {
+    fs.rmSync(path.join(state, 'workflows.json.lock'));
+  }
+  fs.writeFileSync(path.join(state, 'workflows.json'), '{ broken');
+  const broken = run(['workflows', '--state', state]);
+  assert.notEqual(broken.status, 0);
+  assert.ok(broken.stderr.includes(path.join(state, 'workflows.json')), 'names the file');
 });
 
 test('a very long line is scanned in bounded time', () => {
@@ -1033,6 +1263,34 @@ test('plugin skills: installed for this project, enabled, and linkable as plugin
   const tools = atlas2.skills.filter((s) => s.name === 'tools-skill');
   assert.deepEqual(tools.map((s) => [s.root, s.plugin, s.copies.map((c) => c.root)]), [['project-agents', null, ['plugin-tools']]], 'the copy in the plugin joins the project\'s');
   assert.ok(atlas2.edges.some((e) => e.from === 'caller' && e.to === 'tools-skill' && e.kind === 'calls'), '<plugin>:<name> resolves to a copy in the plugin');
+});
+
+test('plugin skills: enabled by the settings of each of the project\'s folders, the nearer over the farther and local over shared (skill-atlas-1)', () => {
+  const config = path.join(tmp, 'claude-config-up');
+  const repo = path.join(tmp, 'plugin-up-repo');
+  const cwd = path.join(repo, 'a', 'b');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  fs.mkdirSync(cwd, { recursive: true });
+  const names = ['rootoff', 'nearon', 'localoff', 'useroff', 'plain'];
+  const plugins = {};
+  for (const name of names) {
+    const dir = path.join(config, 'plugins', 'cache', 'm', name);
+    writeSkill(path.join(dir, 'skills', `${name}-skill`), `${fm(`${name}-skill`, `${name} skill.`)}\nText.\n`);
+    plugins[`${name}@m`] = [{ scope: 'project', installPath: dir, projectPath: repo }];
+  }
+  fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }));
+  const settings = (dir, file, map) => {
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', file), JSON.stringify({ enabledPlugins: map }));
+  };
+  fs.writeFileSync(path.join(config, 'settings.json'), JSON.stringify({ enabledPlugins: { 'useroff@m': false } }));
+  settings(repo, 'settings.json', { 'rootoff@m': false, 'nearon@m': false, 'localoff@m': true });
+  settings(repo, 'settings.local.json', { 'localoff@m': false });
+  settings(cwd, 'settings.json', { 'nearon@m': true });
+  const r = run(['scan', '--cwd', cwd, '--no-user', '--state', path.join(tmp, 'plugin-up-state')], { env: { CLAUDE_CONFIG_DIR: config } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).roots.filter((x) => x.scope === 'plugin').map((x) => x.plugin).sort(), ['nearon', 'plain'],
+    'the repository root\'s settings disable a plugin for a subfolder; a nearer folder\'s value wins; local over shared');
 });
 
 // Every file under the folders with its content, to prove a command changes none.
@@ -1242,6 +1500,27 @@ test('pin and pin --check fail, named, on a folder that cannot be read whole (sk
   assert.equal(run(['pin', skill, ...scope], { cwd: project }).status, 0, 'read whole, it pins');
 });
 
+test('pin walks a folder at every depth, hidden folders included, passing over .git and node_modules alone (skill-atlas-28)', () => {
+  const project = path.join(tmp, 'pin-hidden');
+  const placed = (base) => {
+    const dir = path.join(project, ...base.split('/'));
+    writeSkill(dir, `${fm('h', 'Hidden.')}\nText.\n`);
+    fs.writeFileSync(path.join(dir, 'SKILL.zh-CN.md'), `${fm('h', 'Hidden zh.')}\nText zh.\n`);
+    return path.join(dir, 'SKILL.zh-CN.md');
+  };
+  const walked = ['.agents/skills/h', '.claude/skills/deep/er/h', '.codex/skills/h', '__pycache__/h'].map(placed);
+  const passed = ['.git/skills/h', 'node_modules/pkg/skills/h'].map(placed);
+  const before = passed.map((f) => fs.readFileSync(f));
+  const scope = ['--cwd', project, '--no-user', '--no-plugins', '--state', path.join(project, 'state')];
+  const check = run(['pin', '--check', project, ...scope], { cwd: project });
+  assert.equal(check.status, 1);
+  assert.equal(check.stdout.split('\n').filter((l) => l.startsWith('no digest')).length, walked.length, check.stdout);
+  const r = run(['pin', project, ...scope], { cwd: project });
+  assert.equal(r.status, 0, r.stderr);
+  for (const f of walked) assert.ok(/skill-atlas:source sha256=/.test(fs.readFileSync(f, 'utf8')), `${f} pinned`);
+  assert.deepEqual(passed.map((f) => fs.readFileSync(f)), before, '.git and node_modules passed over');
+});
+
 test('the repair command a translation insight gives runs as given, from another folder, for a skill found through --root (skill-atlas-5, skill-atlas-28)', (t) => {
   if (process.platform === 'win32') return t.skip('the command is a POSIX shell command');
   const home = path.join(tmp, 'repair-home');
@@ -1254,7 +1533,7 @@ test('the repair command a translation insight gives runs as given, from another
   fs.mkdirSync(path.join(skill, 'references'), { recursive: true });
   fs.writeFileSync(path.join(skill, 'references', 'a.md'), '# A\n');
   fs.writeFileSync(path.join(skill, 'references', 'my file.md'), '# B\n');
-  fs.writeFileSync(path.join(skill, 'SKILL.zh-CN.md'), `${fm('fixme', '修。')}${record('0'.repeat(64))}\n文。\n`);
+  fs.writeFileSync(path.join(skill, 'SKILL.zh-CN.md'), `${fm('fixme', '\u4FEE\u3002')}${record('0'.repeat(64))}\n\u6587\u3002\n`);
   fs.writeFileSync(path.join(skill, 'references', 'a.zh-CN.md'), `${mdRecord(sha(path.join(skill, 'references', 'a.md')), '1'.repeat(64))}\n# A\n`);
   const inState = path.join(state, 'translations', 'fixme', 'references', 'my file.ja.md');
   fs.mkdirSync(path.dirname(inState), { recursive: true });
@@ -1544,6 +1823,59 @@ describe('serve (skill-atlas-25)', () => {
       assert.deepEqual([(await lang('notes.md', 'zh-CN')).language, (await lang('notes.md', 'zh-SG')).language], ['zh-CN', 'zh'], 'the tag asked first, then the first compatible in name order');
     } finally {
       for (const f of made) fs.rmSync(f, { force: true });
+    }
+  });
+
+  test('returns the state folder\'s translation where only the skill folder\'s is behind its source (skill-atlas-10, skill-atlas-27)', async () => {
+    const ask = async (rel) => JSON.parse((await request({ pathname: `/api/file?skill=gamma&path=${encodeURIComponent(rel)}&lang=zh-CN` })).text);
+    const dir = path.join(CLAUDE, 'gamma');
+    const stateDir = path.join(state, 'translations', 'gamma');
+    const own = path.join(dir, 'SKILL.zh-CN.md');
+    const theirs = path.join(stateDir, 'SKILL.zh-CN.md');
+    const ownZh = path.join(dir, 'SKILL.zh.md');
+    const theirsHans = path.join(stateDir, 'SKILL.zh-Hans.md');
+    fs.mkdirSync(stateDir, { recursive: true });
+    const hex = sha(path.join(dir, 'SKILL.md'));
+    try {
+      fs.writeFileSync(own, `${record('0'.repeat(64))}\n# own\n`);
+      fs.writeFileSync(theirs, `${record(hex)}\n# state\n`);
+      const got = await ask('SKILL.md');
+      assert.deepEqual([got.text.endsWith('# state\n'), got.stale], [true, false], 'the state folder\'s, not behind');
+      fs.writeFileSync(theirs, `${record('1'.repeat(64))}\n# state\n`);
+      const both = await ask('SKILL.md');
+      assert.deepEqual([both.text.endsWith('# own\n'), both.stale], [true, true], 'the skill folder\'s where both are behind');
+      fs.writeFileSync(own, `${record(hex)}\n# own\n`);
+      fs.writeFileSync(theirs, `${record(hex)}\n# state\n`);
+      assert.ok((await ask('SKILL.md')).text.endsWith('# own\n'), 'the skill folder\'s first');
+      // Under two tags of the language and script, none the one asked: chosen between alike.
+      fs.rmSync(own);
+      fs.rmSync(theirs);
+      fs.writeFileSync(ownZh, `${record('0'.repeat(64))}\n# own zh\n`);
+      fs.writeFileSync(theirsHans, `${record(hex)}\n# state zh-Hans\n`);
+      const across = await ask('SKILL.md');
+      assert.deepEqual([across.path, across.language, across.stale, across.text.endsWith('# state zh-Hans\n')], ['SKILL.zh-Hans.md', 'zh-Hans', false, true],
+        'the state folder\'s under another tag where only the skill folder\'s is behind');
+      fs.writeFileSync(ownZh, `${record(hex)}\n# own zh\n`);
+      assert.equal((await ask('SKILL.md')).path, 'SKILL.zh.md', 'the skill folder\'s where it is not behind');
+    } finally {
+      fs.rmSync(ownZh, { force: true });
+      fs.rmSync(own, { force: true });
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  test('says the language of the original it returns, a file judged by its own text (skill-atlas-29)', async () => {
+    const dir = path.join(CLAUDE, 'alpha');
+    const zh = path.join(dir, 'notes-zh.md');
+    fs.writeFileSync(zh, '# \u7B14\u8BB0\n\n\u8FD9\u662F\u4E00\u4EFD\u4E2D\u6587\u7B14\u8BB0\u3002\n');
+    try {
+      const ask = async (rel, tag) => JSON.parse((await request({ pathname: `/api/file?skill=alpha&path=${encodeURIComponent(rel)}&lang=${tag}` })).text);
+      assert.deepEqual([(await ask('SKILL.md', 'zh-CN')).sourceLanguage, (await ask('notes-zh.md', 'en-US')).sourceLanguage], ['en', 'zh']);
+      const atlasNow = JSON.parse((await request({ pathname: '/api/atlas' })).text);
+      assert.ok(atlasNow.skills.every((s) => typeof s.language === 'string'), 'every skill carries its language');
+      assert.equal(skillOf(atlasNow, 'alpha').language, 'en');
+    } finally {
+      fs.rmSync(zh, { force: true });
     }
   });
 

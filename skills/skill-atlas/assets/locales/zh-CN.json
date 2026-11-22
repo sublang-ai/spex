@@ -66,6 +66,8 @@
     "Universal": "通用",
     "source": "源码",
     "{scope} · {where}": "{scope} · {where}",
+    "{scope} ({up}) · {where}": "{scope}（{up}）· {where}",
+    "{folder} · {path}": "{folder} · {path}",
     "Insights": "洞察",
     "Rescanning…": "正在重新扫描…",
     "Rescan": "重新扫描",

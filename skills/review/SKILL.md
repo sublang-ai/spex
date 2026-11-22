@@ -43,8 +43,8 @@ If the scope is missing, names nothing committed, or does not end at the checked
 ### Step 1: Fix the scope
 
 Record the caller's input verbatim, the checked-out branch (`git symbolic-ref --short -q HEAD`, empty when detached) and the checked-out revision (`git rev-parse HEAD`).
-Resolve the scope to the revisions it names; it must end at the checked-out revision, and a branch it names must be the checked-out branch, since the Coder fixes and commits on what is checked out.
-A scope naming another branch or revision is asked of the user first: check it out, or review what is checked out instead.
+Resolve the scope to the revisions it names; it must end at the checked-out revision of the checked-out branch, since the Coder fixes and commits on what is checked out, though it may start from another, as `main..feature` does on `feature`.
+A scope ending at another branch or revision is asked of the user first: check it out, or review what is checked out instead.
 Never review one history and fix another.
 The caller's scope is the baseline for every round.
 Each review-fix commit joins the scope as it lands, so a later round reviews the cumulative committed state.

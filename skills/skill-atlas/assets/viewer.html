@@ -1095,7 +1095,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     // A skill installed in several roots (see `copies`) is listed under each of them.
     const inRoot = (s, rid) => s.root === rid || s.copies.some((c) => c.root === rid);
-    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: rootName(r), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
+    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: rootTitle(r), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
     const other = idx.skills.filter((s) => !idx.rootById.has(s.root)).map((s) => s.id);
     if (other.length) groups.push({ id: 'root:__other', kind: 'root', title: t('Other'), ids: other });
     for (const g of groups) g.wide = g.ids.length > 16;
@@ -1264,13 +1264,29 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const SCOPE_NAMES = { project: () => t('Project'), user: () => t('User'), plugin: () => t('Plugin'), extra: () => t('Extra') };
   const WHERE_NAMES = { Universal: () => t('Universal'), source: () => t('source') };
   // A scanned folder's label, composed in the shown language from its scope and its agent's name
-  // (product names, plugin names and paths stay as they are).
+  // (product names, plugin names and paths stay as they are). A project's folder above the working
+  // folder says which after its scope: `Project (..) \u00B7 Universal`.
   function rootName(r) {
     const label = str(r.label) || str(r.id);
-    const m = /^(Project|User|Plugin|Extra) \u00B7 (.*)$/.exec(label);
+    const m = /^(Project|User|Plugin|Extra)(?: \(([./]+)\))? \u00B7 (.*)$/.exec(label);
     if (!m || !SCOPE_NAMES[r.scope]) return label;
-    const where = own(WHERE_NAMES, m[2]) ? WHERE_NAMES[m[2]]() : m[2];
+    const where = own(WHERE_NAMES, m[3]) ? WHERE_NAMES[m[3]]() : m[3];
+    if (m[2]) return t('{scope} ({up}) · {where}', { scope: SCOPE_NAMES[r.scope](), up: m[2], where });
     return t('{scope} · {where}', { scope: SCOPE_NAMES[r.scope](), where });
+  }
+  // A scanned folder's title: its label, and where another folder's label is the same (one agent
+  // reading two folders of one scope, such as `.agents/skills` and `.config/agents/skills`), as
+  // many of its path's last parts as tell it from each of them. Folders are told apart by id alone.
+  function rootTitle(r) {
+    const name = rootName(r);
+    const same = state.idx.roots.filter((o) => o.id !== r.id && rootName(o) === name);
+    if (!same.length) return name;
+    const parts = (p) => str(p).split(/[\\/]/);
+    const mine = parts(r.path);
+    const tail = (ps, k) => ps.slice(-k).join('/');
+    let k = 1;
+    while (k < mine.length && same.some((o) => tail(parts(o.path), k) === tail(mine, k))) k++;
+    return t('{folder} · {path}', { folder: name, path: tail(mine, k) });
   }
 
   // The page's own text outside what renders: set again whenever the language changes.
@@ -1839,7 +1855,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   // A name shared by several installed skills carries its folder's label, so the copies read apart.
   const isShared = (s) => (state.idx.byName.get(s.name) || []).length > 1;
-  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? rootName(r) : str(s.root); };
+  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? rootTitle(r) : str(s.root); };
   const skillLabel = (id) => { const s = state.idx.byId.get(id); return s ? '/' + s.name + (isShared(s) ? ' · ' + rootLabel(s) : '') : '/' + id; };
 
   // ---------- a skill's words in the shown language ----------
@@ -1848,10 +1864,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // same language and script (matchLang: `zh` and `zh-Hans` serve zh-CN, `zh-TW` does not), or
   // null. Every read of a skill's translated words, its search text and its translation insights
   // goes through this one tag; a file is still asked for under the page's tag (the server matches alike).
+  // Where none is under the page's tag, the tags of its language and script are chosen between
+  // as the server chooses a file's (translations.mjs chooseTranslation): the first in name order
+  // from the skill's folder, unless it is behind its source and the state folder's is not.
   function trTag(s) {
     const c = s._trTag;
     if (c && c.lang === i18n.lang) return c.tag;
-    const tag = matchLang(i18n.lang, Object.keys(s.translations));
+    const all = Object.keys(s.translations);
+    let tag = matchLang(i18n.lang, all);
+    if (tag && tag.toLowerCase() !== i18n.lang.toLowerCase()) {
+      const pool = all.filter((k) => matchLang(i18n.lang, [k])).sort();
+      const of = (origin) => pool.find((k) => s.translations[k] && s.translations[k].origin === origin);
+      const own = of('skill');
+      const theirs = of('state');
+      const behind = (k) => !!(s.translations[k] && s.translations[k].stale);
+      tag = own && !(behind(own) && theirs && !behind(theirs)) ? own : theirs || own || pool[0] || tag;
+    }
     s._trTag = { lang: i18n.lang, tag };
     return tag;
   }
@@ -1860,49 +1888,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const tr = tag ? s.translations[tag] : null;
     return tr && typeof tr === 'object' ? tr : null;
   }
-  // The language a text is written in, read from the script most of its letters are in. Han, kana
-  // and hangul letters, each weighing as much as three letters of another script, outweighing the
-  // Latin ones make it Japanese where kana are at least a tenth of the Han and kana, Korean where
-  // hangul are most, else Chinese; Latin letters most make it English; letters of any other script
-  // (Cyrillic, Arabic, Greek, Devanagari...) most make it unknown, `und`, which no page's language
-  // is. So an English skill quoting a Chinese or Japanese example stays English.
-  const HAN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
-  const KANA = /[\u3041-\u3096\u30A1-\u30FA\u31F0-\u31FF\uFF66-\uFF9D]/g; // letters only: no '・' or 'ー'
-  const HANGUL = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/g;
-  const LATIN = /\p{Script=Latin}/gu;
-  const OTHER = /[^\P{L}\p{Script=Latin}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Common}\p{Script=Inherited}]/gu;
-  const CJK_WEIGHT = 3;
-  const count = (text, re) => (text.match(re) || []).length;
-  function textLang(text) {
-    const han = count(text, HAN);
-    const kana = count(text, KANA);
-    const hangul = count(text, HANGUL);
-    const cjk = CJK_WEIGHT * (han + kana + hangul), latin = count(text, LATIN), other = count(text, OTHER);
-    if (other > latin && other > cjk) return 'und';
-    if (cjk <= latin) return 'en';
-    if (hangul > han + kana) return 'ko';
-    return kana * 10 >= han + kana ? 'ja' : 'zh';
-  }
-  // The language SKILL.md names in its frontmatter's `metadata.language`, or ''.
-  function declaredLang(s) {
-    const meta = s.frontmatter && s.frontmatter.metadata;
-    const declared = meta && typeof meta === 'object' ? str(meta.language).trim() : '';
-    return /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(declared) ? declared : '';
-  }
-  // The language a skill is written in: the one its SKILL.md declares, else its words'. The skill's
-  // details ask this; the file dialog asks textLang of the file it shows [skill-atlas-29].
-  function originalLang(s) {
-    return declaredLang(s) || textLang([s.name, s.description, s.summary, ...s.steps.map((st) => st.title + '\n' + st.excerpt)].join('\n'));
-  }
+  // A language as the scan reports it [skill-atlas-29]: a tag, `und` where it could not be told, or
+  // null where the field is absent (an older scan, an exported page) or holds no tag.
+  const reportedLang = (v) => typeof v === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(v) ? v : null;
   // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
   const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
+  // Whether a text the scan reports in `lang` is in another language than the page's: `und` is
+  // another in every language; null, unknown, in none, so an older atlas marks nothing.
+  const otherLanguage = (lang) => lang != null && (primary(lang) === 'und' || !sameLanguage(lang, i18n.lang));
   // translated | original (no translation of its words: shown in its original, another language) |
   // same (no translation needed, as far as can be told). Words from annotations alone, with no
-  // translated description, leave the skill in its original.
+  // translated description, leave the skill in its original. The skill's language is the scan's,
+  // the one the file dialog reads for SKILL.md too, so the two never disagree.
   function trState(s) {
     const tr = skillTr(s);
     if (tr && (str(tr.description) || (!str(s.description) && tr.origin !== 'annotation'))) return 'translated';
-    return sameLanguage(originalLang(s), i18n.lang) ? 'same' : 'original';
+    return otherLanguage(reportedLang(s.language)) ? 'original' : 'same';
   }
   // Whether the scan found the translation's steps numbering otherwise than the skill's.
   const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && trTag(s) != null && i.params.lang === trTag(s));
@@ -2412,14 +2413,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       body.append(sec(t('Phases in {workflow}', { workflow: wf.name }), checks));
     }
 
-    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootName(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
+    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootTitle(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
     if (s.file) srcKids.push(h('div', { class: 'd-path' }, h('code', { text: str(s.file) }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': str(s.file), 'aria-label': t('Copy file path'), title: t('Copy path') }, icon('copy'))));
     if (s.lines) srcKids.push(h('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px', text: t('{n} line|{n} lines', { n: s.lines }) }));
     body.append(sec(t('Source'), ...srcKids));
     if (s.copies.length) {
       body.append(sec(t('Also installed in · {n}', { n: s.copies.length }), h('ul', { class: 'd-list' }, s.copies.map((c) => {
         const r = idx.rootById.get(c.root);
-        return h('li', null, h('div', { text: r ? rootName(r) : c.root }),
+        return h('li', null, h('div', { text: r ? rootTitle(r) : c.root }),
           c.dir ? h('div', { class: 'd-path' }, h('code', { text: c.dir }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': c.dir, 'aria-label': t('Copy folder path'), title: t('Copy path') }, icon('copy'))) : null);
       }))));
     }
@@ -2719,11 +2720,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       // Asked in the page's language: the file's translation in it where there is one, else the file itself.
       const res = await fetch(`/api/file?skill=${encodeURIComponent(skillId)}&path=${encodeURIComponent(path)}&lang=${encodeURIComponent(lang)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
-      let text = '', language = null, stale = false, edited = false, shown = null;
+      let text = '', language = null, sourceLanguage = null, stale = false, edited = false, shown = null;
       if (/^application\/json\b/i.test(res.headers.get('Content-Type') || '')) {
         const body = await res.json();
         text = str(body && (body.text != null ? body.text : body.content));
         language = body && body.language ? str(body.language) : null;
+        sourceLanguage = body ? reportedLang(body.sourceLanguage) : null;
         stale = !!(body && body.stale);
         edited = !!(body && body.edited);
         // The title names the file shown: its translation's name where one is shown.
@@ -2731,14 +2733,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const title = shown && pre.closest('dialog') ? pre.closest('dialog').querySelector('.dlg-head h2') : null;
         if (title) title.textContent = `/${s.name} · ${shown}`;
       } else text = await res.text();
+      // The original's language is the scan's: SKILL.md's is the skill's own, so its details and this
+      // dialog never disagree; another file's is the one the server read from its words.
+      const original = language ? null : (shown || path) === 'SKILL.md' && reportedLang(s.language) ? reportedLang(s.language) : sourceLanguage;
       pre.textContent = text;
       if (language) pre.lang = language;
+      else if (original && primary(original) !== 'und') pre.lang = original;
       const languageShown = languageName(lang);
       if (language && stale) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language: languageShown }) }));
       if (language && edited) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow the original, not this text.', { language: languageShown }) }));
-      // The original's language is told from its own words; SKILL.md's frontmatter declares SKILL.md's alone.
-      const original = language ? null : ((shown || path) === 'SKILL.md' && declaredLang(s)) || textLang(text);
-      if (original && !sameLanguage(original, lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
+      if (otherLanguage(original)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
     } catch (err) {
       pre.textContent = err && err.message ? t('Couldn’t read {path} ({error}).', { path, error: err.message }) : t('Couldn’t read {path}.', { path });
     }

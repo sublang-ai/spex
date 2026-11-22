@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=aaec85388e6d7f76b103a2000552ea155e5f436a9ec272f0a06e28c5c96f38e9 own=9720f868e3b29d3b90208d9598d632a10c125d705ce2554a29f9b7f41c4a87c3 -->
+<!-- skill-atlas:source sha256=27a9b3020f06292c52639aa3b2a32aa54fbb8c3f592ce45abfb4e33c61f1aef0 own=037e1c0fe027255e397fb39b6f31d5c8aaefb2764d29c143efb356fa2c9146ea -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
@@ -65,7 +65,9 @@ node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html
 用户在页面上整理：新建工作流，选择一个预设或从空白开始，把技能拖入各个阶段。
 页面会把每次更改保存到状态目录中的 `workflows.json`。
 
-当用户请你代为整理时，按照 [references/data-model.md](references/data-model.zh-CN.md) 给出的结构写入 `workflows.json`。
+当用户请你代为整理时，绝不直接写入 `workflows.json`，因为用户可能正在页面上编辑它。
+用 `node <skill-dir>/scripts/atlas.mjs workflows --state <state>` 读取它，该命令会打印文档及其 `etag`；按照 [references/data-model.md](references/data-model.zh-CN.md) 给出的结构修改文档，保存到一个文件，再用 `node <skill-dir>/scripts/atlas.mjs workflows --state <state> --put <file> --if-match <etag>` 写回。
+如果写回因文件已被更改而遭拒绝，重新读取并再次应用你的更改。
 替换一个已存在的工作流之前，先征得用户同意。
 
 ### 步骤 5：依据图谱回答

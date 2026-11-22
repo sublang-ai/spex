@@ -8,8 +8,9 @@
 //             right before it, and a folder-like name only in a sentence
 //             saying skill, command, slash or playbook); `Skill(N)`;
 //             `skill: N` as a key (case-sensitive, at the line start or after
-//             `{` or `,`); N beside a verb of use and the word skill or
-//             playbook, or the word command when N is backticked or slashed;
+//             `{` or `,`); `$N` after a verb of use in its clause; N beside a
+//             verb of use and the word skill or playbook, or the word command
+//             when N is backticked or slashed;
 //   mentions: any of those after words steering away from it in its
 //             sentence, up to a clause opening with a verb of use (or in a
 //             sentence holding a bare "instead"), or `N` in backticks when the
@@ -78,6 +79,8 @@ export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
     { kind: 'calls', re: new RegExp(String.raw`${before}${PATH_LEAD}/(${ALT})${NAME_END}`, 'g'), slash: true },
     { kind: 'calls', re: new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${ALT})["'\x60]?\s*[,)]`, 'g') },
     { kind: 'calls', re: new RegExp(String.raw`(?:^\s*(?:-\s+)?|[{,]\s*)["']?skill["']?\s*:\s*["'\x60]?(${ALT})${NAME_END}`, 'g') },
+    // `$N` after a verb of use in its clause (no `,` between), as Codex writes a skill's name; never inside a path or URL.
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;,\n]{0,40}?(?<![\w$/.~:@-])[\x60"']?\$(${ALT})${NAME_END}`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])[\x60"']?/?(${ALT})[\x60"']?\s+(?:${NOUNS})s?\b`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?\b(?:${NOUNS})\s+[\x60"']?/?(${ALT})${NAME_END}`, 'gi') },
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])(?:\x60/?|/)(${ALT})\x60?\s+commands?\b`, 'gi') },
@@ -113,7 +116,7 @@ function strongForms() {
  */
 export function findLinks(matcher, from, lines) {
   const fromId = from.id;
-  const best = new Map(); // `${fromStep}\0${to}` -> edge
+  const best = new Map(); // keepLink's key -> edge
   const unresolved = new Map();
   for (const { line, text, step } of lines) {
     if (!text.trim()) continue;
@@ -130,10 +133,7 @@ export function findLinks(matcher, from, lines) {
         if (form.needsSkillWord && !SAYS_SKILL.test(sentence) && !name.includes('-')) continue;
         if (form.slash && PATH_LIKE.has(name.toLowerCase()) && !SAYS_COMMAND.test(sentence)) continue;
         if (steeredAway(text.slice(span.start, at)) || STEER_AWAY_SENTENCE.test(sentence)) kind = 'mentions';
-        const key = `${step}\0${to}`;
-        const prev = best.get(key);
-        if (prev && (prev.kind === 'calls' || kind === 'mentions')) continue;
-        best.set(key, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: { line, text: evidence(text, at) } });
+        keepLink(best, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: { line, text: evidence(text, at) } });
       }
     }
     for (const re of matcher.strong) {
@@ -154,6 +154,27 @@ export function findLinks(matcher, from, lines) {
     }
   }
   return { edges: [...best.values()], unresolved: [...unresolved.values()] };
+}
+
+/**
+ * Keep one link per (skill, step, target) in `best`: the first found, unless
+ * it mentions and this one calls. Every place the scan or an annotation
+ * gathers links keeps them by this rule.
+ * @param {Map<string, object>} best
+ * @param {{ from:string, fromStep:string|null, to:string, kind:string }} edge
+ */
+export function keepLink(best, edge) {
+  const key = `${edge.from}\0${edge.fromStep}\0${edge.to}`;
+  const prev = best.get(key);
+  if (prev && (prev.kind === 'calls' || edge.kind === 'mentions')) return;
+  best.set(key, edge);
+}
+
+/** `edges` with one link per (skill, step, target) by keepLink, in the order first found. */
+export function oneLinkEach(edges) {
+  const best = new Map();
+  for (const e of edges) keepLink(best, e);
+  return [...best.values()];
 }
 
 // Whether the last steering words before a name still reach it: no clause

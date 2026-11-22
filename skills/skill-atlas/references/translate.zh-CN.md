@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=865f9239aa24234491889be66c392668d255778c92b162db57e48138d30c01ec own=3edc699aa21b5bead10bd88b9656902f08850974b96196582d0dcde25bd9ded2 -->
+<!-- skill-atlas:source sha256=269a2336a1bec972310a0265772bf67117e69ecaa2c7e13e2580bd256a7bcea0 own=102936218ac157eead83a6fe32a1c3f6a3dbd2c034b2df37cce3d2fdee8423ee -->
 
 > 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -29,6 +29,7 @@
 
 - `<state>` 为 `~/.skill-atlas`，除非扫描时给了 `--state`；`<skill id>` 是图谱报告的 id，同名的第二个技能为 `<name>@<rootId>`。
 - 绝不写入已安装技能的文件夹：它属于发布该技能的人，下一次更新就会将其替换。
+  如果这样的技能自带的译本落后于其源文件，显示的就是你在这里写的译本，前提是你的译本没有同样落后。
   用户自己编写的技能，若用户要求，可以把译本放在源文件旁边。
 
 ## 如何翻译

@@ -27,7 +27,7 @@ Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)
 - Two languages are offered, named by their tags: `en-US`, the source of the page's text, and `zh-CN`.
 - A translation of a file is a file beside it named with the language's tag before the extension: `SKILL.zh-CN.md` beside `SKILL.md`, `references/prompts.zh-CN.md` beside `references/prompts.md`.
   - `SKILL.md` stays the one file an agent loads; a translation is for readers and says so.
-  - A translation records the digest of its source and its own as they stood when the two last matched, so a change to either since is known: the translation is behind its source, edited apart from it, or both.
+  - A translation records the digest of its source and, where Markdown, its own as they stood when the two last matched, so a change to either since is known: the translation is behind its source, edited apart from it, or both.
   - A reader may edit either; the agent carries an edit across to the other on request, and the record is renewed only once the two match again.
   - A skill's original language is whatever its `SKILL.md` is written in: a skill written in Chinese is translated by `SKILL.en-US.md`.
 - Every Markdown file of a skill shipped from `skills/`, and each file of labels under its `references/`, has a `zh-CN` translation: a Markdown one records its source's digest and its own, a label file its source's alone.

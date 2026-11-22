@@ -100,9 +100,14 @@ export function listFiles(dir, limits) {
  * a link leading out of the folder or one that cannot be read makes the
  * listing incomplete, so a listing that is complete holds every entry of the
  * folder (`strict` implied).
+ * With `hidden`, dot-entries and `__pycache__` are listed too, only `.git`
+ * and node_modules passed over.
  * @returns {{ files:string[], links:{ rel:string, target:string }[], complete:boolean }}
  */
-export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false, strict = every } = {}) {
+export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false, strict = every, hidden = false } = {}) {
+  const passOver = every ? () => false
+    : hidden ? (name) => name === '.git' || name === 'node_modules'
+      : (name) => name.startsWith('.') || SKIP.has(name);
   const out = [];
   const links = [];
   const seen = new Set();
@@ -127,7 +132,7 @@ export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WAL
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const e of entries) {
       if (!complete) return;
-      if (!every && (e.name.startsWith('.') || SKIP.has(e.name))) continue;
+      if (passOver(e.name)) continue;
       const childAbs = path.join(abs, e.name);
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       let stat;
@@ -206,11 +211,28 @@ export function matchingTag(want, tags) {
 }
 
 /**
+ * Of a file's translations under one tag, the one the scan reports and the
+ * server returns: the skill folder's, except where it is behind its source and
+ * the state folder's is not, then the state folder's. Both the scan and the
+ * server choose through this alone.
+ * @param {{ origin:'skill'|'state', abs:string }[]} candidates the first is taken of each origin
+ * @param {string} sourceFile the file they translate
+ * @returns {object|null} the chosen candidate with its `stale` and `edited` [translationState]
+ */
+export function chooseTranslation(candidates, sourceFile, digestCache) {
+  const judged = (c) => (c ? { ...c, ...translationState(c.abs, sourceFile, digestCache) } : null);
+  const own = judged(candidates.find((c) => c.origin === 'skill'));
+  const state = judged(candidates.find((c) => c.origin === 'state'));
+  if (own && !(own.stale && state && !state.stale)) return own;
+  return state;
+}
+
+/**
  * The translation of the skill file `rel` into `lang`: under that tag, else
- * under a tag of the same language and script [matchingTag], the skill
- * folder's before the state folder's at either; only a regular file inside
- * its folder counts.
- * @returns {{ abs:string, real:string, origin:'skill'|'state', tag:string } | null}
+ * under the tags of the same language and script [matchingTag] together, the
+ * skill folder's or the state folder's as chooseTranslation picks; only a
+ * regular file inside its folder counts.
+ * @returns {{ abs:string, real:string, origin:'skill'|'state', tag:string, stale:boolean, edited:boolean } | null}
  */
 export function findTranslation(skill, rel, lang, stateDir) {
   const want = canonicalTag(lang);
@@ -236,8 +258,14 @@ export function findTranslation(skill, rel, lang, stateDir) {
       if (real) found.push({ abs, real, origin, tag: parsed.tag });
     }
   }
+  // Under the tag asked where any is; else every tag of the same language and
+  // script, each folder's first in name order, chosen between as one tag's.
   const tag = matchingTag(want, [...new Set(found.map((t) => t.tag))]);
-  return tag === null ? null : found.find((t) => t.tag === tag);
+  if (tag === null) return null;
+  const pool = tag.toLowerCase() === want.toLowerCase()
+    ? found.filter((t) => t.tag === tag)
+    : found.filter((t) => matchingTag(want, [t.tag]) !== null).sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
+  return chooseTranslation(pool, path.join(skill.dir, ...relPosix.split('/')));
 }
 
 export function sha256Hex(bytes) {

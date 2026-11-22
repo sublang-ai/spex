@@ -30,6 +30,7 @@ Record, for each skill:
 5. **Removals** — a detected tag or link that is wrong, listed under `removeTags` or `removeCalls`.
 
 Copy the skill's `digest` from the scan's `atlas.json` into its entry as `"source": { "sha256": "<digest>" }`, so the entry applies only to the text you read.
+Where the name already has an entry recording another digest, keep it and add yours beside it, making the value a list of entries; never replace it, since it may serve another project's skill of that name.
 
 ## Judging tags
 

@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=b30517842a45f4d41ac30a98341057bf80b320396c9af7cb76a1007239923365 own=29deb7a4c31aa8539b318dea3780cbd2eda6900516c40f5d022f3c021224b4a9 -->
+<!-- skill-atlas:source sha256=762f58b72a54177c7035fb24d49a42b142dc7e3714de341735e852b0a2f74b4a own=655a9cdf03fb05c11cb842fdc7b64500aa57b5f4cf7666a191caec2f705bcaed -->
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
 # Review
@@ -45,8 +45,8 @@ metadata:
 ### 步骤 1：确定范围
 
 原样记录调用方的输入、当前检出的分支（`git symbolic-ref --short -q HEAD`，处于分离头指针状态时为空）和当前检出的修订（`git rev-parse HEAD`）。
-把范围解析为它所指的修订；范围必须以当前检出的修订结尾，且它指明的分支必须是当前检出的分支，因为 Coder 是在检出的内容上修复和提交的。
-如果范围指向另一个分支或修订，先询问用户：检出它，还是改为审查当前检出的内容。
+把范围解析为它所指的修订；范围必须以当前检出分支上当前检出的修订结尾，因为 Coder 是在检出的内容上修复和提交的，但它可以从另一个分支开始，例如在 `feature` 上审查 `main..feature`。
+如果范围结束于另一个分支或修订，先询问用户：检出它，还是改为审查当前检出的内容。
 绝不审查一段历史却修复另一段历史。
 调用方的范围是每一轮的基线。
 每个审查修复提交一落地就并入范围，因此后面的轮次审查的是累积的已提交状态。

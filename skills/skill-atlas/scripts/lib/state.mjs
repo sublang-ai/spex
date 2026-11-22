@@ -310,6 +310,48 @@ function isStale(file) {
   }
 }
 
+/**
+ * Save a workflows document as the server's PUT and `atlas.mjs workflows
+ * --put` do, one step among every process sharing the state folder: under
+ * workflows.json.lock, check the stored version, then validate and write.
+ * @param {string} stateDir
+ * @param {string} body the document's JSON text
+ * @param {{ ifMatch?:string, replaceInvalid?:boolean }} conditions
+ *   ifMatch: the etag of the version last read; replaceInvalid: set an
+ *   invalid stored file aside and replace it
+ * @returns {{ status:number, value:object, etag?:string }} the answer, its
+ *   `value.error` naming a refusal: invalid-workflows, not-invalid,
+ *   precondition-required, changed, invalid-body or write-failed
+ * @throws {LockBusyError} when another process holds the lock past the wait
+ */
+export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false } = {}) {
+  return withWorkflowsLock(stateDir, () => {
+    const cur = readWorkflowsState(stateDir);
+    if (replaceInvalid) {
+      if (cur.valid) return { status: 409, value: { error: 'not-invalid', message: 'the stored workflows.json is valid; send If-Match with its ETag instead' }, etag: cur.etag };
+    } else {
+      if (!cur.valid) return { status: 409, value: { error: 'invalid-workflows', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file } };
+      if (ifMatch === undefined) return { status: 428, value: { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/workflows' } };
+      if (ifMatch !== cur.etag) return { status: 412, value: { error: 'changed', message: 'workflows.json changed since it was read; reload it and apply the change again' }, etag: cur.etag };
+    }
+    let doc;
+    try {
+      doc = JSON.parse(body);
+    } catch (err) {
+      return { status: 400, value: { error: 'invalid-body', message: `the body is not valid JSON: ${err.message}` } };
+    }
+    const checked = validateWorkflows(doc);
+    if (!checked.ok) return { status: 400, value: { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` } };
+    try {
+      if (replaceInvalid && cur.exists) setAsideInvalid(stateDir);
+      const written = writeWorkflows(stateDir, checked.doc);
+      return { status: 200, value: written.doc, etag: written.etag };
+    } catch (err) {
+      return { status: 500, value: { error: 'write-failed', message: `cannot write workflows.json in ${stateDir}: ${err.message}` } };
+    }
+  });
+}
+
 /** Move an invalid workflows.json aside as workflows.invalid-<n>.json (first free n). */
 export function setAsideInvalid(stateDir) {
   const file = path.join(stateDir, WORKFLOWS_FILE);

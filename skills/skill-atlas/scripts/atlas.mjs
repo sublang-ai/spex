@@ -3,7 +3,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Skill Atlas command line: scan installed agent skills, serve the viewer,
-// export a standalone copy, or pin translations to their sources.
+// export a standalone copy, pin translations to their sources, or read and
+// write the stored workflows.
 // See ../SKILL.md and ../references/data-model.md.
 
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ import { scan } from './lib/scan.mjs';
 import { summarize } from './lib/summary.mjs';
 import { startServer } from './lib/server.mjs';
 import { writeExport } from './lib/export.mjs';
-import { BUNDLED, viewerConfig, readWorkflowsState, readLocales } from './lib/state.mjs';
+import { BUNDLED, viewerConfig, readWorkflowsState, readLocales, saveWorkflows, LockBusyError } from './lib/state.mjs';
 import { canonicalTag, matchingTag } from './lib/translations.mjs';
 import { pin } from './lib/pin.mjs';
 import { UsageError, warn } from './lib/log.mjs';
@@ -51,6 +52,19 @@ Commands:
                        apart from it, recording no digest, or in the state folder with no
                        skill or source found, each folder holding no translation and each
                        one that cannot be read whole, and exit 1 where there is one
+  workflows [--state <dir>]
+                       Print the stored workflows.json as one JSON object
+                       { "etag": "<version>", "doc": { ... } }: an empty document and the
+                       etag "none" where there is no file; exit 1 naming the file where
+                       it cannot be read as a workflows document
+  workflows --put <file|-> --if-match <etag> [--state <dir>]
+                       Write the workflows document in <file> (- reads stdin) where it
+                       has the workflows shape and the stored file is still the version
+                       <etag> names (as \`workflows\` printed it), under the lock the
+                       server's save holds; print the new etag. Exit 1, the stored file
+                       standing, where it changed since it was read (read it again,
+                       apply the change, put again), the document is invalid, or the
+                       stored file cannot be read as a workflows document
 
 Options:
   --cwd <dir>          Project to scan (default: the current folder)
@@ -70,11 +84,13 @@ Options:
   --lang <tag>         serve, export: the language the page opens in until the reader picks
                        one, such as en-US or zh-CN (default: the browser's)
   --check              pin: check the recorded digests instead of writing them
+  --put <file|->       workflows: the document to write
+  --if-match <etag>    workflows: the version --put writes over
   --help               Show this help
 `;
 
-const COMMANDS = new Set(['scan', 'serve', 'export', 'pin']);
-const VALUE_OPTIONS = new Set(['--cwd', '--root', '--agent', '--state', '--rules', '--out', '--port', '--viewer', '--lang']);
+const COMMANDS = new Set(['scan', 'serve', 'export', 'pin', 'workflows']);
+const VALUE_OPTIONS = new Set(['--cwd', '--root', '--agent', '--state', '--rules', '--out', '--port', '--viewer', '--lang', '--put', '--if-match']);
 const FLAG_OPTIONS = new Set(['--no-user', '--no-plugins', '--summary', '--no-open', '--check', '--help', '-h']);
 const REPEATABLE = new Set(['--root', '--agent']);
 
@@ -100,7 +116,7 @@ function parseArgs(argv) {
     } else if (arg.startsWith('-')) {
       throw new UsageError(`unknown option ${arg}; see --help`);
     } else if (!opts.command) {
-      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve, export or pin (see --help)`);
+      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve, export, pin or workflows (see --help)`);
       opts.command = arg;
     } else if (opts.command === 'pin') {
       opts.paths.push(arg);
@@ -151,6 +167,40 @@ function openBrowser(url) {
   }
 }
 
+// `workflows`: print the stored document with its version, or with --put write
+// one under the conditions of the server's save (saveWorkflows).
+function workflows(opts) {
+  const stateDir = path.resolve(opts.state ?? path.join(os.homedir(), '.skill-atlas'));
+  if (opts.put === undefined) {
+    if (opts['if-match'] !== undefined) throw new UsageError('--if-match goes with --put <file|->; see --help');
+    const cur = readWorkflowsState(stateDir);
+    if (!cur.valid) throw new UsageError(`${cur.error}; fix the file, or move it aside to start fresh`);
+    process.stdout.write(JSON.stringify({ etag: cur.etag, doc: cur.doc }, null, 2) + '\n');
+    return;
+  }
+  if (opts['if-match'] === undefined) throw new UsageError('--put needs --if-match <etag>, the etag `workflows` printed when you read the document');
+  // The etag as printed, its quotes included; one given without them is quoted.
+  const ifMatch = /^".*"$/.test(opts['if-match']) ? opts['if-match'] : `"${opts['if-match']}"`;
+  let body;
+  try {
+    body = fs.readFileSync(opts.put === '-' ? 0 : path.resolve(opts.put), 'utf8');
+  } catch (err) {
+    throw new UsageError(`cannot read ${opts.put === '-' ? 'stdin' : opts.put}: ${err.message}`);
+  }
+  let answer;
+  try {
+    answer = saveWorkflows(stateDir, body, { ifMatch });
+  } catch (err) {
+    if (err instanceof LockBusyError) throw new UsageError(err.message);
+    throw new UsageError(`cannot save workflows.json in ${stateDir}: ${err.message}`);
+  }
+  const { error, message, path: file } = answer.value;
+  if (error === 'changed') throw new UsageError(`${path.join(stateDir, 'workflows.json')} changed since it was read; read it again with \`workflows\`, apply the change and put it again`);
+  if (error === 'invalid-workflows') throw new UsageError(`${message.replace(/; send X-Skill-Atlas-Replace-Invalid.*$/, '')}; fix ${file}, or move it aside to start fresh`);
+  if (error) throw new UsageError(message);
+  process.stdout.write(`${answer.etag}\n`);
+}
+
 async function main(argv) {
   const opts = parseArgs(argv);
   if (opts.help || !opts.command) {
@@ -159,6 +209,8 @@ async function main(argv) {
     return;
   }
   if (opts.check && opts.command !== 'pin') throw new UsageError('--check is an option of pin; see --help');
+  for (const o of ['put', 'if-match']) if (opts[o] !== undefined && opts.command !== 'workflows') throw new UsageError(`--${o} is an option of workflows; see --help`);
+  if (opts.command === 'workflows') return workflows(opts);
   const sopts = scanOptions(opts);
   const viewerFile = opts.viewer ? path.resolve(opts.viewer) : BUNDLED.viewer;
   let lang = null;

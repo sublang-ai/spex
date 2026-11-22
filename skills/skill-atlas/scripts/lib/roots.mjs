@@ -14,10 +14,11 @@ const UNIVERSAL_LOADERS = ['codex', 'gemini-cli', 'kimi-code', 'opencode', 'curs
 /**
  * One row per skill folder an agent loads.
  * - key: slug used in root ids (`<scope>-<key>`)
- * - dir: path relative to the project (cwd) or the home folder, `/`-separated
+ * - dir: path relative to a project folder or the home folder, `/`-separated
  * - scopes: where the folder is looked for
  * - env: an environment variable that replaces the home-relative config folder
- *   (its value stands for the first segment of `dir`, such as `.codex`)
+ *   (its value stands for the first segment of `dir`, such as `.codex`); a
+ *   home folder's `.config` is XDG_CONFIG_HOME where that is set
  * - loadedBy: the other agents that load this folder too, kept by `--agent`
  *   for any of them
  * - noAgent: no `--agent` keeps this folder
@@ -41,9 +42,9 @@ export const AGENT_ROOTS = [
   { key: 'roo', dir: '.roo/skills', agent: 'roo', label: 'Roo Code', scopes: ['project', 'user'] },
   { key: 'goose', dir: '.goose/skills', agent: 'goose', label: 'Goose', scopes: ['project', 'user'] },
   { key: 'goose-config', dir: '.config/goose/skills', agent: 'goose', label: 'Goose', scopes: ['user'] },
-  // The project's own skill sources; listed only when it holds skills, and
-  // loaded by no agent, so left out under any --agent.
-  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true },
+  // The project's own skill sources, in --cwd's folder alone; listed only when
+  // it holds skills, and loaded by no agent, so left out under any --agent.
+  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true, cwdOnly: true },
 ];
 
 const SCOPE_LABEL = { project: 'Project', user: 'User', plugin: 'Plugin', extra: 'Extra' };
@@ -55,27 +56,48 @@ export function claudeConfigDir(home = os.homedir()) {
 }
 
 /**
- * The roots to scan, in preference order (project, user, plugins, extra).
+ * The project's folders, nearer first: --cwd's, then each folder above it up
+ * to the root of its repository (the nearest folder holding a `.git` entry,
+ * --cwd's own included); --cwd's alone where no folder above it holds one.
+ */
+export function projectDirs(cwd) {
+  const dirs = [];
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    dirs.push(dir);
+    if (fs.existsSync(path.join(dir, '.git'))) return dirs;
+    if (path.dirname(dir) === dir) return [dirs[0]];
+  }
+}
+
+/**
+ * The roots to scan, in preference order (project, nearer folders first,
+ * user, plugins, extra). The rows of --cwd's folder keep ids such as
+ * `project-agents`; those of the n-th folder above it are `project-agents-up<n>`.
  * @param {{ cwd:string, home:string, user:boolean, plugins:boolean, extra:string[], agents:string[] }} opts
  */
 export function listRoots(opts) {
   const roots = [];
   const wanted = (row) => !opts.agents.length
     || !row.noAgent && [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
-  for (const scope of ['project', 'user']) {
-    if (scope === 'user' && !opts.user) continue;
+  const xdg = process.env.XDG_CONFIG_HOME ? path.resolve(process.env.XDG_CONFIG_HOME) : null;
+  const places = projectDirs(opts.cwd).map((base, up) => ({ scope: 'project', base, up }));
+  if (opts.user) places.push({ scope: 'user', base: opts.home, up: 0 });
+  for (const { scope, base, up } of places) {
     for (const row of AGENT_ROOTS) {
-      if (!row.scopes.includes(scope) || !wanted(row)) continue;
+      if (!row.scopes.includes(scope) || !wanted(row) || (up && row.cwdOnly)) continue;
       const [configDir, ...rest] = row.dir.split('/');
       let dir;
       if (scope === 'user' && row.env && process.env[row.env]) dir = path.join(path.resolve(process.env[row.env]), ...rest);
-      else dir = path.join(scope === 'project' ? opts.cwd : opts.home, configDir, ...rest);
+      else if (scope === 'user' && configDir === '.config' && xdg) dir = path.join(xdg, ...rest);
+      else dir = path.join(base, configDir, ...rest);
+      // A folder above --cwd says which: `..`, `../..`.
+      const where = up ? ` (${Array(up).fill('..').join('/')})` : '';
       roots.push({
-        id: `${scope}-${row.key}`,
+        id: `${scope}-${row.key}${up ? `-up${up}` : ''}`,
         path: dir,
         scope,
         agent: row.agent,
-        label: `${SCOPE_LABEL[scope]} \u00B7 ${row.label}`,
+        label: `${SCOPE_LABEL[scope]}${where} \u00B7 ${row.label}`,
         requireSkills: !!row.requireSkills,
         plugin: null,
       });
@@ -127,10 +149,16 @@ function pluginRoots(cwd) {
 // `enabledPlugins: { "name@marketplace": false }` disables a plugin and `true`
 // enables it, read from the user's settings, then the project's and the
 // project's local ones, a later file's value for a key over an earlier one's.
+// The project's are those of each of its folders [projectDirs], the farther first.
 // A plugin no file names counts as enabled.
 function enabledPlugins(config, cwd) {
   const out = new Map();
-  const files = [path.join(config, 'settings.json'), path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')];
+  const farFirst = projectDirs(cwd).reverse();
+  const files = [
+    path.join(config, 'settings.json'),
+    ...farFirst.map((dir) => path.join(dir, '.claude', 'settings.json')),
+    ...farFirst.map((dir) => path.join(dir, '.claude', 'settings.local.json')),
+  ];
   for (const file of files) {
     let settings;
     try {

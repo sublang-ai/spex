@@ -62,7 +62,8 @@ export function pin({ targets, check, stateDir, skills }) {
       let n = 0;
       let named = 0; // files named like a translation with no source beside them
       // A partial listing would pass over translations: the folder is named and fails the command.
-      const listing = listFilesBounded(abs, { strict: true });
+      // Every depth is walked, hidden folders such as .agents and .claude included; only .git and node_modules are passed over.
+      const listing = listFilesBounded(abs, { strict: true, hidden: true });
       if (!listing.complete) partial.push({ target, why: 'it cannot be read whole: it holds more files or folders than pin lists, or an entry that cannot be read' });
       for (const rel of listing.files) {
         const file = path.join(abs, ...rel.split('/'));

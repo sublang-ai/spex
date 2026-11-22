@@ -62,7 +62,9 @@ Do not deep-read every skill unasked; with many skills it is slow and rarely nee
 The user organizes on the page: New workflow, pick a preset or start blank, drag skills into phases.
 The page saves each change to `workflows.json` in the state folder.
 
-When the user asks you to do it for them, write `workflows.json` in the shape given in [references/data-model.md](references/data-model.md).
+When the user asks you to do it for them, never write `workflows.json` yourself, since the user may be editing it on the page.
+Read it with `node <skill-dir>/scripts/atlas.mjs workflows --state <state>`, which prints the document and its `etag`; change the document in the shape given in [references/data-model.md](references/data-model.md), save it to a file, and write it back with `node <skill-dir>/scripts/atlas.mjs workflows --state <state> --put <file> --if-match <etag>`.
+If that is refused because the file changed, read it again and reapply your change.
 Ask the user before replacing a workflow that already exists.
 
 ### Step 5: Answer from the atlas

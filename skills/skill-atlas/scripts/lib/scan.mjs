@@ -14,8 +14,9 @@ import { detectSteps } from './steps.mjs';
 import { buildLinkMatcher, findLinks } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
-import { stateTranslations, readTextBounded, translationState, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
+import { stateTranslations, readTextBounded, chooseTranslation, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
+import { fileLanguage } from './language.mjs';
 import { findInsights } from './insights.mjs';
 import { warn } from './log.mjs';
 
@@ -121,7 +122,7 @@ function readSkill(dir, root) {
   const file = path.join(dir, 'SKILL.md');
   const s = {
     id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
-    dir, file, digest: null, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
+    dir, file, digest: null, language: 'und', copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
     _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
     _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(), _listing: null,
   };
@@ -137,6 +138,7 @@ function readSkill(dir, root) {
     return s;
   }
   s._raw = text; // compared byte for byte to find identical copies
+  s.language = fileLanguage(text, { skillFile: true });
   text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   const lines = text.split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
@@ -263,13 +265,14 @@ function analyze(s, rules, catalog) {
 }
 
 /**
- * A skill's translations (data-model.md "Languages"): those in its folder,
- * then those under translations/<skill id>/ of the state folder. Each
+ * A skill's translations (data-model.md "Languages"): of those in its folder
+ * and those under translations/<skill id>/ of the state folder, one per file
+ * and tag as chooseTranslation picks. Each
  * translation of SKILL.md gives words per language; every translation is
  * checked against its source's digest and its own. Steps, links and tags stay SKILL.md's.
  */
 function readTranslations(s, stateDir) {
-  const chosen = new Map(); // "<source rel>\0<tag>" -> the first translation found
+  const byKey = new Map(); // "<source rel>\0<tag>" -> every translation found, the skill folder's first
   let fromState = [];
   try {
     fromState = stateTranslations(stateDir, s.id, s.dir);
@@ -278,14 +281,19 @@ function readTranslations(s, stateDir) {
   }
   for (const t of [...s._localTranslations, ...fromState]) {
     const key = `${t.sourceRel}\0${t.tag}`;
-    if (!chosen.has(key)) chosen.set(key, t);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(t);
   }
   const digests = new Map();
+  const chosen = [];
+  for (const candidates of byKey.values()) {
+    const t = chooseTranslation(candidates, path.join(s.dir, ...candidates[0].sourceRel.split('/')), digests);
+    if (t) chosen.push(t);
+  }
   const tagsBySource = new Map();
-  for (const t of chosen.values()) {
+  for (const t of chosen) {
     if (!tagsBySource.has(t.sourceRel)) tagsBySource.set(t.sourceRel, new Set());
     tagsBySource.get(t.sourceRel).add(t.tag);
-    Object.assign(t, translationState(t.abs, path.join(s.dir, ...t.sourceRel.split('/')), digests));
     // A repair command names the translation: its path in the skill's folder, or under the state folder's translations/.
     const target = t.origin === 'state' ? `<state>/${shellWord(`${TRANSLATIONS_DIR}/${s.id}/${t.rel}`)}` : shellWord(t.abs);
     for (const [flag, byLang] of [[t.stale, s._staleByLang], [t.edited, s._editedByLang]]) {
@@ -295,7 +303,7 @@ function readTranslations(s, stateDir) {
     }
   }
   for (const f of s.files) f.translations = [...(tagsBySource.get(f.path) ?? [])].sort();
-  const skillTranslations = [...chosen.values()].filter((t) => t.sourceRel === 'SKILL.md').sort((a, b) => a.tag.localeCompare(b.tag));
+  const skillTranslations = chosen.filter((t) => t.sourceRel === 'SKILL.md').sort((a, b) => a.tag.localeCompare(b.tag));
   for (const t of skillTranslations) s.translations[t.tag] = readSkillTranslation(s, t);
 }
 

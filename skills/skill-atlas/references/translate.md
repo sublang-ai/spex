@@ -26,6 +26,7 @@ Write each translation under the state folder, at the source's path relative to 
 
 - `<state>` is `~/.skill-atlas` unless the scan is given `--state`; `<skill id>` is the id the atlas reports, `<name>@<rootId>` for a second skill of one name.
 - Never write into an installed skill's folder: it belongs to whoever ships the skill, and the next update replaces it.
+  Where such a skill ships its own translation that is behind its source, the one you write here is shown in its place, as long as yours is not behind too.
   A skill the user wrote may hold its translations beside its sources, where the user asks for that.
 
 ## How to translate
