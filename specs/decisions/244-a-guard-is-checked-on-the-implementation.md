@@ -31,17 +31,19 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
 
 ## Decision
 
-- A project holds one **binding** for each interface its guards reach: how each event the items its guards cite name is caused, and how each effect they name is observed, through the application's own API, command line or test harness.
+- A project holds one **binding** for each interface its guards reach: how each event the items its guards depend on name is caused, and how each effect they name is observed, through the application's own API, command line or test harness.
   - An agent may draft a binding; a person approves it, what counts as the observation above all, and every change to it.
   - One binding serves every guard on its interface.
   - A binding observes effects and never computes an expected outcome by calling the application's own logic.
   - A binding declares what it controls beyond the order of requests: the clock, a crash and restart, a timeout, a duplicate or reordered delivery.
     Where a guard's assertion concerns an event or a timing its binding cannot cause, a run a check drives without observing that event is inconclusive, and a sampled result names what the binding did not control.
-- What Spex derives from an item is drafted from the item and the items it cites before the drafting agent reads the implementation, which it reads only to write the binding.
+- What Spex derives from an item is drafted from the item and every item its meaning depends on ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) before the drafting agent reads the implementation, which it reads only to write the binding.
 - Spex derives several readings of an item independently and compares them.
-  - Each sequence that two readings judge differently is put to a person as an example to mark permitted or forbidden.
-  - A reading that an approved example contradicts is dropped.
-  - A guard is refused while the readings left disagree, within the stated bounds, on any sequence.
+  - One sequence that readings judge differently is put to a person as an example to mark permitted or forbidden.
+  - A reading that an approved example contradicts is dropped, and the comparison repeats while a disagreement remains.
+  - A guard is refused while the readings left disagree, within the bounds compared, on any sequence.
+  - The readings left are kept with the guard, and a result counts only where they agree on every sequence it rests on: each judges a single sequence a run or a log supplies, and their comparison within a search's bounds precedes that search.
+  - A sequence they judge differently establishes no result, a violation included, until a person marks it; found by a check that is not required, it is reported and decides nothing until then.
 - Each action of a derivation carries the name of the item's event, or of the fault its binding declares, that it stands for, so a sequence a tool reports is printed in those words by that naming and by no agent.
 - A derivation is stored with the project, recorded against the versions of the items and the binding it was derived from, and derived again only when one of them changes or a person approves its correction.
 - No agent takes part in a check's run, and what a run generates is fixed by its recorded seed.
@@ -72,12 +74,14 @@ Proposed (2026-11-21), with [DR-243](243-guards-protect-critical-behavior-on-eve
   - It is derived, never authoritative, and no surface asks a person to read it; a specialist may audit it and what is generated from it.
   - The model checker's input, the solver's question and the check of a generated sequence are generated from it by fixed rules and no agent.
   - Spex itself evaluates one given sequence against it: an approved example, a run a check drove, a recorded log.
+- Where Spex generates a tool's input, that tool's result other than a violation or a conflict counts for a guard only where the input, run by that tool, admits each permitted example, reaching the behavior it shows, and rejects each forbidden one.
 - Another established tool may replace one named above behind the same stored form; the replacement is a change to every guard it serves ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) and joins by the rule a technique joins by.
 - A violation found in the model and not reproduced through the binding is reported as such and never as a defect of the code.
 - Observed effects are a violation on the implementation only where they are what the assertion forbids; effects that differ from the model and that the assertion permits are a disagreement with the model, to be settled in the code, the derivation or the binding.
 - A recorded log supports a result only for the events it identifies, orders and holds completely: a violation that depends on an event's absence needs a log complete for that event, and a log short of that is inconclusive.
 - A result drawn from a recorded log or an external prover names the exact events or artifact it read and the revision of the code that produced them, and is a result for that revision alone, deciding nothing for another.
 - An external prover's result counts for a guard only where the property it states, its assumptions and its target match the guard's assertion, the assumptions the guard rests on and the code its binding reaches; a proof about a model is a result on the model, and one that matches less is inconclusive.
+  A person approves that match with the proof's source, since no example can be run against a proof.
 - A change runs every guard one of whose inputs ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)) it changes.
   Where Spex cannot tell what a change reaches, it runs every guard.
 - A run made for a change keeps to bounds that fit a review; a deeper search runs apart from it and reports the same results.

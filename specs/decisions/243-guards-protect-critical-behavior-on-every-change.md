@@ -41,10 +41,10 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 - GEARS is the only language a person reads or writes to own a guard.
   Whatever Spex derives from an item to check it is never required reading.
 - The item holds the meaning:
-  - a guard is derived from its assertion, its behavior item and the items that item cites;
+  - a guard is derived from its assertion, its behavior item and every item that one's meaning depends on, through however many citations;
   - a choice that settles what the item means is written into the item before its guard stands;
-  - an assumption a guard rests on is an item the behavior item cites.
-- A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item; where independent readings of the item disagree, the sequences they disagree on are among them.
+  - an assumption a guard rests on is one of those items.
+- A person approves a guard by examples, never by its derived form: at least one permitted and one forbidden sequence of events, each as a GEARS test item; where independent readings of the item disagree, a sequence that tells them apart is among them.
   One permitted example shows the behavior happening, so that refusing everything cannot pass.
 - A guard's assertion and its approved examples are test items that cite the behavior item, each example belonging to one guard; the spec of specs gains no item kind.
 - Every run of a guard for a change confirms that what Spex derived admits each permitted example and rejects each forbidden one, and drives each permitted example on the implementation.
@@ -53,9 +53,9 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 - A guard stands only after it has passed on the code without a fault and reported a violation of its assertion on the same code with that fault, planted in the guarded behavior or restored from a recorded past defect.
   - A faulty run that ends any other way, a timeout or a failed setup included, establishes nothing.
   - A violation on code carrying a kept fault is evidence that the guard catches that fault, and never a result of the project's code.
-  - The guard keeps each fault it caught and must catch each the same way again after any change to its inputs other than the project's code.
+  - The guard keeps each fault it caught and must catch each again, as a violation of its assertion on the code carrying it, after any change to its inputs, the project's code included.
   - A kept fault that changed code no longer admits is replaced before the guard passes again.
-- A guard's inputs are its behavior item, the items that one cites, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, any recorded log or imported result a check reads, and the code that link reaches.
+- A guard's inputs are its behavior item, every item that one's meaning depends on, its assertion, its approved examples, its kept faults, what Spex derived from them, its link to the code, the checker, the bounds and settings its checks run with, any recorded log or imported result a check reads, and the code that link reaches.
 - Each result of a guard's check says what was established, by which tool, on which revision, within which bounds and under which assumptions, as exactly one of:
 
   | Result | Meaning |
@@ -71,7 +71,7 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
 
 - An observation of what the assertion forbids on the project's code is reported as a violation on the implementation, before any other result it also fits.
 - A project's settings name the checks, and the bounds of each, that a change requires of a guard.
-- `spex verify` passes a guard only where every required check has finished with a current result at no less than the required bounds, one of them on the implementation, and none reports a violation, a conflict, a disagreement or an inconclusive run.
+- `spex verify` passes a guard only where every required check has finished with a current result at no less than the required bounds, one of them on the implementation, and none reports a violation, a conflict, a disagreement or an inconclusive run, and each kept fault is caught.
   - A result on the model never stands in for one on the implementation.
   - A later run of the same check on the same inputs replaces its inconclusive result.
   - A violation keeps its recorded sequence and stands until that sequence is run again after a change to the code or an approved change to another input, where the link controls what the violation depends on, and no longer violates.
@@ -87,7 +87,7 @@ How a guard is checked is [DR-244](244-a-guard-is-checked-on-the-implementation.
   - The item and the code may change in one change, with that approval, where the intended behavior changed.
 - Adoption is one item at a time: a first guard in an existing project needs no other spec, no IDE, no running app and no account.
 - `spex verify` runs a project's guards, on a developer's machine and in a change's checks alike, whichever agent or person wrote the change.
-- A guard differs from a requirement analysed before code in three ways Spex states on its surfaces: it is checked on every change that reaches it, it has been seen to fail, and no agent can weaken it.
+- A guard differs from a requirement analysed before code in three ways Spex states on its surfaces: it is checked on every change that reaches it, it has been seen to fail and must still fail on the faults it keeps, and changing it takes a person.
 - The first use Spex leads with is a rule that decides an outcome from a fixed order of requests through one interface, such as who may approve, what is charged or what an account may use, entered from a past incident or an existing item.
   Behavior that depends on retries, ownership or background work follows once a project's link to the code controls the timing it depends on.
 - Spex measures itself by what a project's second guard costs: what a first guard built to reach the code serves the ones after it.
