@@ -467,7 +467,7 @@ While a session's tab is shown, the run view shall read each agent's settings on
 
 When a session that is not live is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, render it as a conversation a message continues, or — where the core lists it as history it cannot continue ([DR-042](../decisions/042-sessions-continue.md)) — a history notice carrying the core's reason and, while its project has a working folder, a "New session" control that starts a new session for the same project, in the composer's place — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md)):
 
-- without a registered working folder, opening saved history [[space-46](space.md#space-46)] shows its transcript and title at the conversation's own place even while that place holds no registered project, with Back to Space, no project setup, composer, recovery or new-session controls, and a first-load failure remains in that reader with Retry; its guidance names Space → Files & history, and Back to Space opens that conversation's own place on Space with review open and focus on the Files & history control, retained as its closing return target [[space-55](space.md#space-55)], and dismissed folder tasks revealed [[space-124](space.md#space-124)]; locating project files remains a separate Space action [[space-47](space.md#space-47)] ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md), [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md));
+- without a registered working folder, opening saved history [[space-46](space.md#space-46)] shows its transcript and title even while the home holds no registered project, with Back to Space, no project setup, composer, recovery or new-session controls, and a first-load failure remains in that reader with Retry; its guidance names Space → Files & history, and Back to Space opens Space with review open and focus on the Files & history control, retained as its closing return target [[space-55](space.md#space-55)], and dismissed folder tasks revealed [[space-124](space.md#space-124)]; locating project files remains a separate Space action [[space-47](space.md#space-47)] ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md), [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md));
 - an uncertain session with a working folder shows recovery controls [[run-view-110](#run-view-110)];
 - a continuable session shows no notice at all: its composer is an ordinary composer, and nothing names it ended;
 - the notice wraps its control under its words when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
@@ -801,7 +801,7 @@ Wherever the run view says where a run, a step, a lane or a call stands — a ma
 While the app is connected, the sidebar shall present navigation as surface entries around a Projects section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
 - Dashboard stands first, then the Projects section then Playbooks, Space and Settings ([DR-150](../decisions/150-spex-space-product-and-destination.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-175](../decisions/175-projects-shown-where-they-are-open.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md));
-- saved-record folder tasks add no entry or place heading in expanded or collapsed navigation, keeping the project tree to projects and their sessions [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md);
+- saved-record folder tasks add no entry in expanded or collapsed navigation, keeping the project tree to projects and their sessions [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md);
 - each project node discloses its sessions on a control of its own, an axis independent of which project is current ([DR-027](../decisions/027-linked-views-contract.md)) — the current project starts disclosed, and thereafter the reader's arrangement stands;
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));
@@ -871,6 +871,14 @@ The run view shall divide the Captain column from the player panes at a divider 
 
 While a session's tab is shown, the run view shall lay the Captain column and the player grid by the split's own container width — layout, never chrome moving by itself ([DR-041](../decisions/041-chrome-that-fits.md)): side by side with the divider [[run-view-81](#run-view-81)] between them from 42rem, and below that stacked, the Captain column above the player grid with the divider hidden and the split's setting kept for the wider form.
 
+#### run-view-200
+
+While a personal Space project is opening here [[space-63](space.md#space-63)] and has yet to appear in the core's project list, the sidebar shall show a selectable row with the project's name and "Opening…", and its project page shall show the name and current opening step.
+
+#### run-view-201
+
+While a selected personal Space project's opening has stopped [[space-63](space.md#space-63)], its project page shall show the failed step and its cause with an action to open Space.
+
 ### Keyboard and Guardrails (DR-010 §4/§6)
 
 #### run-view-42
@@ -932,7 +940,7 @@ The app shall fail loudly and stay accessible:
 
 - when the app is connected but its initial state failed to load, a banner says so and offers retry — never a silently empty app;
 - when the page has never reached its core, a banner names the endpoint it keeps dialing with a Retry once eight seconds have passed since the page opened — a first connect is "Connecting", never "Reconnecting", and a slow core gets that long before the alarm;
-- one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology;
+- one persistent polite live region announces a player waiting for a reply, connection loss and restoration, and attention-count increases to assistive technology. The first attention snapshot establishes the baseline silently, and a new question takes precedence over a count increase in the same snapshot;
 - icon-only controls carry accessible names and at-least-24px hit targets, and the navigation exposes the current surface and badge meaning to assistive technology;
 - one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;
 - color is never the only channel: a player pane's running mark says "running" in text, a tool card's outcome is a mark with its word — ✓ ok, ✗ failed, ✗ denied — and a failure count and a tab's attention dot each carry their meaning in text;
@@ -1237,7 +1245,7 @@ Where a fixture machine holds a neighbour edge, a same-rank pair, a rank-skippin
 When the integration suite exercises sidebar navigation, it shall assert:
 
 - with a fixture store holding two projects — the current one with a titled session awaiting a Boss reply, more idle sessions than the recent window holds (one of them with a failure still standing), and a session with no turns; the other with a session awaiting a reply and an idle session — Dashboard stands first carrying the attention count [[run-view-34](#run-view-34)], the current project's rows carry their titles, compact ages spanning `now`, minutes, hours, days and weeks with exact-moment tooltips, and attention-first marks, while their accessible descriptions carry `just now` or the same rounded unit followed by `ago`, their turn counts, and the standing failure as history rather than attention while an idle session with none reads idle [[run-view-73](#run-view-73)], and the other project's row carries its own attention signal [[run-view-67](#run-view-67)]; disclosing that project leaves the current project unchanged [[run-view-67](#run-view-67)]; activating its session shows that project and opens the session as a read-only tab, and activating it again focuses rather than duplicates [[run-view-68](#run-view-68)]; a turn settling keeps its transcript on screen with the composer ready and no ended word on its tab or row [[run-view-69](#run-view-69)]; closing that tab leaves the session listed and running nothing [[run-view-68](#run-view-68)]; the rest-revealing control lists the sessions the recent window omitted [[run-view-67](#run-view-67)]; the other project's Specs control shows that project with its Specs tab [[run-view-67](#run-view-67)]; and, with Projects showing the waiting session's tab, the current project's row and that session's row are selected, showing Space leaves no row selected with its own entry current, and Projects selects the remembered project again [[run-view-67](#run-view-67)];
-- with local folder tasks and no registered projects, neither expanded nor collapsed navigation contains a folder-task entry or task-only place heading, and Space remains keyboard-reachable in both states [[run-view-67](#run-view-67)].
+- with local folder tasks and no registered projects, neither expanded nor collapsed navigation contains a folder-task entry, and Space remains keyboard-reachable in both states [[run-view-67](#run-view-67)].
 
 #### run-view-84
 
@@ -1252,6 +1260,14 @@ Where the workspace renders with the sidebar expanded, the test suite shall asse
 Where a fixture stream contains records marked hidden (judge or router traffic), when the fixture is replayed into the run view, the test suite shall assert that no rendered pane contains the hidden records' content [[run-view-18](#run-view-18)] and that a player named only by hidden records — no call record of it reaching the view — has no pane [[run-view-7](#run-view-7)].
 
 ### Interaction Coverage
+
+#### run-view-202
+
+When the app receives successive connection and attention updates, the integration suite shall assert that the same polite status region stays mounted, stays silent on initial connection and the first attention snapshot, reports loss once through retries and restoration once, and announces new questions once, even at a fixed attention count, or a count increase when no new question arrives [[run-view-50](#run-view-50)].
+
+#### run-view-203
+
+When the app displays a personal Space project opening here and its operation stops, the integration suite shall assert the selectable sidebar row and current step while opening [[run-view-200](#run-view-200)] and the stop's cause with a working Space action on the selected page [[run-view-201](#run-view-201)].
 
 #### run-view-22
 
@@ -1297,7 +1313,7 @@ When the captain editor popover is opened from the Captain home's agent chip wit
 
 #### run-view-36
 
-Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run and an unpaired saved conversation opens at its own place even with no registered project, without project setup, permits retry after a failed first read, names Space → Files & history as its folder-recovery path and returns to its own place's open review with dismissed folder tasks revealed and focus on Files & history, closing review returning focus there without starting work [[run-view-33](#run-view-33)], that a session assigned to another runtime shows its reason "Runs on <label>" as the history notice with no composer, Restore or Discard [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
+Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run and an unpaired saved conversation opens even with no registered project, without project setup, permits retry after a failed first read, names Space → Files & history as its folder-recovery path and returns to the open review with dismissed folder tasks revealed and focus on Files & history, closing review returning focus there without starting work [[run-view-33](#run-view-33)], that a session assigned to another runtime shows its reason "Runs on <label>" as the history notice with no composer, Restore or Discard [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
 
 #### run-view-52
 

@@ -201,7 +201,7 @@ function entrySize(entry: SpaceEntry): string | undefined {
 
 /** The "Stays on this computer" panel (space-25): every ignored family
  * with its reason.
- * (space-112); folded state is chrome preference (DR-030). */
+ * (space-23); folded state is chrome preference (DR-030). */
 function PrivacyPanel() {
   const store = useAppStore;
   const collapsed = store((state) => state.spacePrivacyCollapsed);

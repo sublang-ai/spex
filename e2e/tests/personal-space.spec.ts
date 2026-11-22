@@ -437,7 +437,18 @@ test.describe("personal projects on two computers", () => {
       // A successful local add returns straight to the project task (space-40).
       await expect(palette).toBeHidden();
       await expect(page.getByTestId("captain-home")).toContainText("demo-project");
-      const localKey = (await app.core.command("project.list", {}))[0]!.id;
+      const localKey = (await app.core.command("project.list", {})).find((project) => project.path === app.projectDir)!.id;
+      if (existing) {
+        // Create while signed in, where the old destination chooser could appear.
+        await page.getByTestId("sidebar-palette").click();
+        await palette.getByTestId("palette-create-start").click();
+        const folder = join(app.home, "created-project");
+        await palette.getByTestId("palette-new-path").fill(folder);
+        await palette.getByTestId("palette-create").click();
+        await expect(palette).toBeHidden();
+        await expect(page.getByTestId("captain-home")).toContainText("created-project");
+        expect(existsSync(join(folder, ".git"))).toBe(true);
+      }
       const work = await app.core.command("session.create", { projectId: localKey });
       await runTurn(app, work.id, SESSION_TITLE);
       const intent = await app.core.command("intent.queue", { projectId: localKey, text: "Document the login redirect" });
@@ -445,7 +456,12 @@ test.describe("personal projects on two computers", () => {
       if (!existing) await signInThroughPage(page, app);
       const personal = instanceSection(page, host);
       await expect(personal.getByRole("heading", { name: /Personal Space/ })).toBeVisible();
-      const localRow = page.getByRole("group", { name: "This computer" }).getByRole("button", { name: "demo-project", exact: true });
+      const onThisComputer = page.getByRole("group", { name: "This computer" });
+      if (existing) {
+        await expect(onThisComputer.getByRole("button", { name: "created-project", exact: true })).toBeVisible();
+        await expect(personal.getByRole("button", { name: "created-project", exact: true })).toHaveCount(0);
+      }
+      const localRow = onThisComputer.getByRole("button", { name: "demo-project", exact: true });
       await expect(localRow).toBeVisible();
       const localRecordsKey = (await localRow.getAttribute("data-testid"))!.slice("space-repo-".length);
       const local = repositoryOf(await app.core.command("space.get", {}), localRecordsKey);

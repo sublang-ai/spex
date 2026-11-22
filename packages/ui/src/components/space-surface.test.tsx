@@ -37,6 +37,7 @@ import {
   NOW,
   ORIGIN,
   OWN,
+  SECOND,
   SESSION_UNIT,
   SETTINGS_UNIT,
   answer,
@@ -47,10 +48,12 @@ import {
   home,
   installClient,
   live,
+  placement,
   renderSpace,
   repo,
   repoState,
   strayRemote,
+  twoInstances,
   type RowOver,
 } from "../fixtures/space.js";
 
@@ -1007,7 +1010,69 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
   });
 });
 
-describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
+test("space-95: a personal project with two Space placements keeps both lines, sync progress and choices on its row", async () => {
+  const places = [
+    placement({ lastSync: { at: NOW - 60_000, sent: 1, received: 0 } }),
+    placement({
+      instance: SECOND,
+      path: "jada/academy-spex",
+      state: "read-only",
+      reason: "Archived",
+      lastSync: { at: NOW - 60 * 60_000, sent: 0, received: 1 },
+      incoming: [SESSION_UNIT],
+      conflicts: [CONFLICTS[0]],
+    }),
+  ];
+  const local = repo({ key: "local-spex", name: "local-spex", instance: null, state: "local-only", remote: null, branch: null });
+  const snapshot = (over: RowOver = {}) => twoInstances({}, [repo({ placements: places, ...over }), local]);
+  useAppStore.setState({ projects: [{
+    id: KEY, name: "academy", path: "/Users/jane/code/academy", registeredAt: NOW,
+    repository: { key: KEY, name: "academy-spex" },
+  }] });
+  const { onOpenProject } = await renderSpace(snapshot());
+  const row = screen.getByTestId(`space-row-${KEY}`);
+  expect(screen.getAllByRole("button", { name: "academy" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "local" })).toBeTruthy();
+  const lines = within(row).getByTestId(`space-lines-${KEY}`);
+  const first = within(within(lines).getByTestId(`space-line-${ORIGIN}`));
+  const second = within(within(lines).getByTestId(`space-line-${SECOND}`));
+  expect(first.getByTestId("space-line-instance").textContent).toBe("Spex Example");
+  expect(second.getByTestId("space-line-instance").textContent).toBe("Second Example");
+  expect(first.getByTestId("space-line-state").textContent).toMatch(/^Synced 1m ago$/);
+  expect(second.getByTestId("space-line-state").textContent).toBe("Read-only: Archived · last synced 1h ago");
+  fireEvent.click(within(row).getByRole("button", { name: "Open project" }));
+  expect(onOpenProject).toHaveBeenCalledWith(KEY);
+  const panel = within(row).getByTestId("space-repository");
+  expect(within(panel).getByRole("tab", { name: "Sync" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(syncControl());
+  await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+  const check = { phase: "running", op: "sync", step: "check", since: NOW, cancelable: true } as const;
+  deliver(snapshot({ sync: { ...check, placement: ORIGIN } }));
+  expect(first.getByTestId("space-line-state").textContent).toBe("Checking Spex Example…");
+  expect(second.getByTestId("space-line-state").textContent).toBe("Read-only: Archived · last synced 1h ago");
+  deliver(snapshot({ sync: { ...check, placement: SECOND } }));
+  expect(first.getByTestId("space-line-state").textContent).toMatch(/^Synced /);
+  expect(second.getByTestId("space-line-state").textContent).toBe("Checking Second Example…");
+  deliver(snapshot({ sync: { phase: "choices", placement: SECOND, savedCommit: "abc123" }, conflicts: [CONFLICTS[0]] }));
+  const incoming = within(panel).getByTestId("space-incoming-list");
+  const picker = within(panel).getByTestId("space-picker");
+  expect(within(panel).getByRole("heading", { name: "From Second Example (1)" })).toBeTruthy();
+  expect(incoming.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(panel).getByTestId("space-step-line").textContent).toBe("Needs your choice");
+  expect(within(panel).getByText("Your changes are saved; nothing is sent to Second Example yet")).toBeTruthy();
+  const choices = within(picker).getByRole("radiogroup", { name: "Fix the login redirect" });
+  const take = within(choices).getByRole("radio", { name: /Take Second Example's/ }) as HTMLInputElement;
+  expect(take.checked).toBe(false);
+  const apply = within(picker).getByTestId("space-apply") as HTMLButtonElement;
+  expect(apply.disabled).toBe(true);
+  fireEvent.click(take);
+  expect(apply.disabled).toBe(false);
+  fireEvent.click(within(openMore()).getByRole("menuitem", { name: "Explore records" }));
+  expect(within(panel).getByRole("tab", { name: "Explore" }).getAttribute("aria-selected")).toBe("true");
+  expect(await within(panel).findByTestId("space-tree")).toBeTruthy();
+});
+
+describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16)", () => {
   test("Sync sends the command naming the repository and reads 'Syncing…' with the rail naming each step while it runs", async () => {
     await renderSpace(repoState());
     // "Sync records" stands in the row's overflow, titled as what it does
@@ -1698,7 +1763,7 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
     ];
     // The acts a decision fixes as whole phrases stand past the budget:
     // "Add to a group…" and the fill naming the Space the choices are
-    // for, "All <display name>'s" (space-17, space-28, space-58).
+    // for, "All <display name>'s" (space-17, space-28).
     const named = new Set(["Add to a group…", "All Spex Example's"]);
     for (const state of states) {
       await renderSpace(state);

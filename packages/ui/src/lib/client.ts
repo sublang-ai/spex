@@ -130,7 +130,7 @@ export class SpexClient {
 
   /** End the connection for good: a redial still waiting is called
    * off, so a place dropped mid-backoff never dials again
-   * (run-view-168). */
+   * (app-shell-1). */
   close(): void {
     this.closedByUser = true;
     clearTimeout(this.reconnectTimer);

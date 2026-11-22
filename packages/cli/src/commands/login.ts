@@ -13,7 +13,7 @@
 import {
   anotherAccountError, HostError, type CredentialStore, type DeviceSignIn, type HostAccount, type StoredCredential,
 } from "../lib/git-host.js";
-import { homeFilePath, instanceAt, readHomeFile, updateHomeFile, withDisplayName, withSignIn } from "../lib/home-file.js";
+import { homeFilePath, instanceAt, isSpaceGitOrigin, readHomeFile, updateHomeFile, withDisplayName, withSignIn } from "../lib/home-file.js";
 import { authTarget } from "./auth-target.js";
 import { instanceFolder } from "../lib/instance.js";
 import { cacheRegistryName, clientOf, credentialsOf, describedRegistryName, homeDir, hostCause, hostOf, listed, nameOf, readHome, registryName, signedIn } from "./home.js";
@@ -95,7 +95,9 @@ export const login: Command = async (args, interrupt) => {
   const client = clientOf(origin, credentials, undefined, scope);
   // The registry's or Space's display name, read while the person
   // approves; a sign-in goes on where it does not answer.
-  const described = scope === "registry" ? describedRegistryName(origin) : client.describe().then((description) => description.displayName || null, () => null);
+  const described = scope === "registry"
+    ? describedRegistryName(origin).then((displayName) => ({ displayName }))
+    : client.describe().catch(() => null);
   // At a listed instance, only its entry's account (git-host-2): read in
   // the turn that would store the token, so another stores nothing.
   const admit = (account: HostAccount): HostError | null => {
@@ -155,7 +157,9 @@ export const login: Command = async (args, interrupt) => {
   const nameSkipped = new Promise<null>((resolve) => { skipName = () => resolve(null); });
   const deferred = interrupt.hold(() => skipName());
   try {
-    const displayName = await Promise.race([described, nameSkipped]);
+    const description = await Promise.race([described, nameSkipped]);
+    const displayName = description?.displayName || null;
+    const gitOrigin = description && "gitOrigin" in description && isSpaceGitOrigin(description.gitOrigin) ? description.gitOrigin : undefined;
     if (scope === "registry") {
       if (held) await clientOf(origin, heldOnly(held), undefined, scope).signOut().catch(() => undefined);
       // The registry's own name, kept for every command naming it (cli-22).
@@ -171,7 +175,8 @@ export const login: Command = async (args, interrupt) => {
     try {
       recorded = updateHomeFile(dir, (current) => {
         const next = withSignIn(current, origin, account, homeFilePath(dir));
-        return displayName === null ? next : withDisplayName(next, origin, displayName) ?? next;
+        if (displayName === null && gitOrigin === undefined) return next;
+        return withDisplayName(next, origin, displayName ?? instanceAt(next, origin)?.displayName ?? null, gitOrigin) ?? next;
       });
     } catch (error) {
       // Nothing recorded, so the pair the sign-in replaced is put back

@@ -314,7 +314,7 @@ test("git-host-3: slow_down backs the polling off by five seconds", async () => 
 });
 
 // ---------------------------------------------------------------------------
-// git-host-27, git-host-28: a seat's device request
+// Git credential refresh
 
 test("git-host-4: an access secret within a minute of expiring is refreshed once before the call", async () => {
   const skew = { ms: 0 };
@@ -824,7 +824,7 @@ test("git-host-5: every records repository across two pages, followed through a 
     assert.equal(renamed?.path, "bee-spex");
     assert.equal(renamed?.remoteUrl, `${t.host.gitOrigin}/${STANDIN_STORAGE}/acme/bee-spex.git`);
 
-    s.removeMember(a.id);
+    s.withdrawRepository(a.id);
     assert.deepEqual((await t.client.repositories()).map((r) => r.id), [b.id, c.id]);
     await assert.rejects(t.client.repository(a.id), hostError("not_found", { words: "The repository is not shared with this account." }));
   } finally {

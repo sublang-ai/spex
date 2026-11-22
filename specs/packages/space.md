@@ -6,8 +6,8 @@
 ## Intent
 
 This package defines the Space surface and personal project record synchronization ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
-An **instance** is a Git host the home has signed in to, listed in `home.yaml` by its origin with its account, its display name and its sign-out mark, the first it lists, or the origin the home was created with while it lists none, being the home's **default instance** [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)); your **namespace** at an instance is where it lists spex repositories under your login there, and another account's where it lists them under theirs.
-A **spex repository** holds a project’s records on its `spex` branch and is identified locally by its clone’s path under `workspace/` [[storage-1](storage.md#storage-1)].
+A Space **instance** is a Spex Space service the home has signed in to, listed in `home.yaml` by its origin with its account, its display name and its sign-out mark, the first it lists, or the origin the home was created with while it lists none, being the home's **default instance** [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)); your **namespace** at an instance is where it lists spex repositories under your login there.
+A **spex repository** holds global or project records on its `spex` branch and is identified locally by its clone’s path under `workspace/` [[storage-1](storage.md#storage-1)].
 The core performs every Git operation and every call to an instance; the surface renders the core's state and runs neither itself.
 
 ## External Behavior
@@ -100,10 +100,14 @@ When a working folder's remote is read for `project.json` [[storage-3](storage.m
 | blank, or containing whitespace or control characters | refused as malformed |
 | carrying anything before the host on `http://` or `https://`, with or without a colon (`https://user:secret@host`, `https://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
 
-- an instance's own remote URLs are those it hands over, used as given and never edited by the reader, each written as a placement's remote named by that instance's folder, `@<host>`, with the host's id beside it [[storage-34](storage.md#storage-34)], and a remote the reader names being the clone's one path placement, `origin`, beside them ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md));
-- before accepting an HTTP(S) records remote, the core checks the service and Git addresses of the default Space and every listed Space, using their public descriptions when needed [[git-host-5](git-host.md#git-host-5)] and refusing the operation while an address cannot be classified;
-- before Git transfers records through a path placement, the core checks the effective fetch or push destinations, including Git URL rewrites and separate push URLs, and stops a transfer to a Space address or one whose status cannot be determined. A records transfer uses the verified destination directly, with HTTP redirects disabled [[space-133](#space-133)];
-- a placement's last check, the `spex` the clone holds of it and this device's recorded last sync with it [[space-22](#space-22)] are of the host repository its remote records by the host's id, which survives renames, transfers and a follow to another instance listing it [[space-60](#space-60)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)): the remote an instance hands over for that id keeps all three, renamed in a follow or not; a placement dropped [[space-98](#space-98)] [[space-91](#space-91)] takes all three with its remote and id [[storage-5](storage.md#storage-5)]; and naming another path placement clears the former one's, what the old remote held saying nothing of the new one.
+#### space-136
+
+When the core classifies a records destination, it shall use the same locally known Space addresses for routing and admission across restarts and sign-outs [[storage-2](storage.md#storage-2)]:
+
+- use each listed or default Space’s reported Git address, or its service origin until its Git address is known. Compare normalized origins and path segments. A separate address no Space has identified is external;
+- a Space supplies its placement URL [[storage-34](storage.md#storage-34)]. Before transferring records there, verify the repository in the current account’s personal namespace [[git-host-22](git-host.md#git-host-22)] [[space-133](#space-133)];
+- check Git’s effective fetch and push URLs and the selected LFS endpoint before use. Managed Git transfers disable HTTP redirects;
+- an explicitly configured external records remote uses `origin`, the computer’s Git credentials and ordinary Git redirect behavior, independently of any Space being online.
 
 #### space-6
 
@@ -113,6 +117,7 @@ When the reader activates Sign out on a signed-in instance's heading, the core s
 
 When the reader selects Remove from this list for a signed-out Space, the core shall remove its entry from the home [[storage-2](storage.md#storage-2)] after following placements another signed-in Space still identifies as personal [[space-60](#space-60)], refusing while a clone or placement still depends on that Space:
 
+- a failed ownership read at the Space a placement would follow refuses Forget with that Space’s reported failure and keeps the failed placement;
 - the global records repository keeps its local folder; the core follows another signed-in Space listing the same personal repository, or drops only the forgotten Space’s global records remote.
 
 ### Personal Projects and Records
@@ -134,15 +139,15 @@ While the home’s personal records folder bears this device's user name, as it 
 
 #### space-60
 
-When a sync of a spex repository reaches a placement's Check step [[space-12](#space-12)] while a host read [[git-host-5](git-host.md#git-host-5)], a placement file under another instance signed in on this device that lists its host repository [[storage-36](storage.md#storage-36)] or the instances migration's receipt [[storage-30](storage.md#storage-30)] places that placement elsewhere than it stands — at another instance than its remote names, or, for the key placement, at another path than the clone's key [[storage-1](storage.md#storage-1)], as a Space rename or move, a first placement or an Attach from the local projects folder [[storage-35](storage.md#storage-35)] and a move the migration deferred leave it — the core shall, before any fetch or push there, rename that placement's remote to the folder of the instance it follows, rewriting its placement file to that instance and deleting the former instance's file [[storage-36](storage.md#storage-36)], and, for the key placement, move the clone to its path at the instance a host read reports it at, else to the destination that receipt names, rewriting every pair that names it, its session locations, its sync preferences [[storage-5](storage.md#storage-5)] and the skills placed for your agents beneath it, all in the same step, so that its key and name follow its key placement ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When a sync of a spex repository reaches a placement's Check step [[space-12](#space-12)] while a host read [[git-host-5](git-host.md#git-host-5)], a placement file under another instance signed in on this device that lists its host repository [[storage-36](storage.md#storage-36)] or the instances migration's receipt [[storage-30](storage.md#storage-30)] places that placement elsewhere than it stands — at another instance than its remote names, or, for the key placement, at another path than the clone's key [[storage-1](storage.md#storage-1)], as a Space rename or move, a first placement or an Attach from the personal records folder [[storage-35](storage.md#storage-35)] and a move the migration deferred leave it — the core shall, before any fetch or push there, rename that placement's remote to the folder of the instance it follows, rewriting its placement file to that instance and deleting the former instance's file [[storage-36](storage.md#storage-36)], and, for the key placement, move the clone to its path at the instance a host read reports it at, else to the destination that receipt names, rewriting every pair that names it, its session locations, its sync preferences [[storage-5](storage.md#storage-5)] and the skills placed for your agents beneath it, all in the same step, so that its key and name follow its key placement ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - the move is one rename within the sync at its instant, made only while the clone still reads the remote its check read before asking the host and lies where the home says, and, where a host read placed it, records the host's id [[space-21](#space-21)];
-- a placement following another instance has its remote renamed, and its sync preferences [[storage-5](storage.md#storage-5)] re-keyed, in the same step [[space-5](#space-5)] and proceeds with that instance — its catalog, its credential and, for the key placement, the commit identity [[space-32](#space-32)] — and a follow onto an instance at which the clone holds another placement is not made, the placement reading unreachable;
+- a placement following another instance has its remote renamed, and its sync preferences [[storage-5](storage.md#storage-5)] re-keyed, in the same step [[space-136](#space-136)] and proceeds with that instance — its catalog, its credential and, for the key placement, the commit identity [[space-32](#space-32)] — and a follow onto an instance at which the clone holds another placement is not made, the placement reading unreachable;
 - a rename or move of another placement's host repository at its instance changes that placement's path alone, moving no clone [[space-87](#space-87)];
 - the global records repository keeps its location as its placements follow, each changing only its remote and placement file;
 - what the core holds open within the clone is let go of across the move and taken up again where the clone then lies, before resuming work; where something else holds a file or folder of the clone open, as Windows then refuses its rename, the move is tried again, whole, up to twenty times 50 ms apart, and still held stops that placement with nothing moved, naming the project as in use, with Retry [[space-15](#space-15)];
 - the move stops that placement, the clone, its pairs and its sessions left where they were, where the destination is taken by anything but the clone itself under the same namespace folder — which a rename changing only the case of the repository's own name moves onto — or a folder on its path below `workspace/` stands spelled otherwise, or where the clone holds a session lease under it, naming that session with Retry [[space-15](#space-15)];
-- the move, and a pick's [[storage-35](storage.md#storage-35)], is checked against `home.yaml` before the clone moves, and moves nothing where `home.yaml` does not read [[storage-2](storage.md#storage-2)] or would not stand with its pairs rewritten, and a write of `home.yaml` that fails after the clone moved moves it back where that path stands empty or, after a case-only rename where the filesystem folds case, names the clone itself ([DR-221](../decisions/221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md));
+- the move, and a pick's [[storage-35](storage.md#storage-35)], is checked against `home.yaml` before the clone moves, and moves nothing where `home.yaml` does not read [[storage-2](storage.md#storage-2)] or would not stand with its pairs rewritten, and a write of `home.yaml` that fails after the clone moved moves it back where that path stands empty or, after a case-only rename where the filesystem folds case, names the clone itself ([DR-221](../decisions/221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md)).
 
 #### space-61
 
@@ -156,10 +161,18 @@ The Space surface shall show each spex repository, and each of its placements, i
 | unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while no signed-in instance lists its host repository | "Unreachable: <cause>", or "Signed out of <display name>" while its instance is signed out | Retry, none while its instance is signed out |
 | not on this device | an instance listed it and no clone is here, or its join still runs [[space-63](#space-63)], or a placement file of a clone here names it | nothing, the row carrying no local-location text [[space-1](#space-1)]; "Opening…" while its join runs | Open [[space-111](#space-111)] |
 
-- a project whose only destination is an explicitly configured non-Space remote can also choose its first Space [[space-5](#space-5)] [[space-97](#space-97)]. Once a Space destination is attached, the row offers the controls for its current state;
+- a project whose only destination is an explicitly configured non-Space remote can also choose its first Space [[space-137](#space-137)] [[space-136](#space-136)] [[space-97](#space-97)]. Once a Space destination is attached, the row offers the controls for its current state;
 - a reachable placement's last sync is read from this device's last completed sync with it [[space-22](#space-22)] as "Synced <age>", or, where none is recorded, from the last one its clone holds ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)): "Synced <age>" at `spex`'s commit time where `spex` equals that placement's `spex` as the clone last fetched or pushed it, "Not synced since <moment>" at their common ancestor's commit time where the two differ, and "Never synced" where the clone holds no `spex` of it sharing its history;
 - nothing on this device is deleted because the host refused or stopped listing;
 - a waiting creation or branch preparation [[space-64](#space-64)] shows on its placement's line [[space-87](#space-87)]; the wait is held for the app's run alone, so after a restart the row offers its control again and the next attempt finds whether it is available.
+
+#### space-137
+
+When the reader chooses “Sync to a Space…” for a project with no Space placement, the Space surface shall open a panel at that row for selecting its first destination [[space-97](#space-97)]:
+
+- focus the Space selector and preselect its first signed-in Space. Changing the Space resets the project records choice;
+- default to creating a new copy. Where the Space lists unpaired personal records matching the project name and code, offer those copies as alternatives;
+- only “Sync records” submits the choice. While it is pending, hold the controls and dismissal. On success close the panel, and on refusal keep the choice and show the cause.
 
 #### space-63
 
@@ -186,9 +199,10 @@ When a sign-in finds no global records placement at that Space [[space-4](#space
 
 #### space-97
 
-When a client selects a Space destination through `space.pick` or `space.place` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], join the listed spex repository it names as a placement, its history joined with the clone's as any two [[space-13](#space-13)], or create `<name>-spex` in the signed-in account’s own namespace [[git-host-6](git-host.md#git-host-6)], then sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When a client selects a Space destination through `space.pick` or `space.place` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], join the named personal repository only after the Space confirms the current account and repository in its namespace [[git-host-22](git-host.md#git-host-22)], its history joined with the clone's as any two [[space-13](#space-13)], or create `<name>-spex` in the signed-in account’s own namespace [[git-host-6](git-host.md#git-host-6)], then sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- a creation the host leaves pending adds no placement, its wait standing on that instance's line [[space-64](#space-64)] while the clone syncs its other placements.
+- a creation the host leaves pending adds no placement, its wait standing on that instance's line [[space-64](#space-64)] while the clone syncs its other placements;
+- if the account cannot be verified before either command’s repository creation, that creation is refused and reports the Space’s failure [[git-host-11](git-host.md#git-host-11)].
 
 #### space-98
 
@@ -197,6 +211,7 @@ When a client sends `space.leave` [[space-29](#space-29)], the core shall, as an
 | Case | Outcome |
 | --- | --- |
 | its instance signed out, another signed-in instance listing its host repository [[git-host-5](git-host.md#git-host-5)], and the clone holding no placement at that instance | nothing fetched or dropped: its remote renamed to the folder of the instance it follows [[space-60](#space-60)] and its file rewritten to that instance [[storage-36](storage.md#storage-36)]; where at a try of the clone's move that instance no longer reads as signed in and listing it, or the clone holds a placement there, nothing changed, the leave stopped as changed meanwhile, with Retry |
+| the ownership read at the Space a placement would follow fails | nothing dropped; the leave stops with the Space’s reported failure and Retry |
 | a unit that placement's `spex` or the clone holds is held by no remaining placement's `spex`, as the clone last fetched or pushed it or at their last shared commit — a placement whose last check found its host holding no `spex` holding none; every unit, where none remains — and the leave is not `confirmed` | nothing dropped; the leave stopped `unreceived`, naming the count |
 | the placement cannot be read, and the leave is not `confirmed` | nothing dropped; the leave stopped, saying that records pushed there since the last sync may be left behind |
 | it is the first placement | the clone moved with the drop [[storage-38](storage.md#storage-38)], a refusal of that move refusing the leave whole, naming the session or the instance, with Retry |
@@ -205,9 +220,9 @@ When a client sends `space.leave` [[space-29](#space-29)], the core shall, as an
 
 #### space-99
 
-When a client sends `space.attach` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], add that placement's remote, named by its instance's folder with the host's id beside it [[storage-34](storage.md#storage-34)], and sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When a client sends `space.attach` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], verify the placement file’s repository id and personal namespace against the Space’s current account and repository details [[git-host-22](git-host.md#git-host-22)], then add its remote, named by its instance's folder with the host's id beside it [[storage-34](storage.md#storage-34)], and sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- a local-only clone in the local projects folder attaching its first placement moves as a pick's does [[storage-35](storage.md#storage-35)].
+- a local-only clone in the personal records folder attaching its first placement moves as a pick's does [[storage-35](storage.md#storage-35)].
 
 #### space-111
 
@@ -240,7 +255,7 @@ When the user locates a repair's existing project folder or dismisses the remind
 - Use this folder confirms the candidate, Cancel and Escape cancel without changing it, and a refusal stays beside the field with its value kept;
 - confirmation applies the existing-identity folder choice [[core-service-85](core-service.md#core-service-85)], recording the previous directories as aliases so those conversations remain readable with the chosen folder [[storage-6](storage.md#storage-6)];
 - a different folder already paired elsewhere, a nested working folder and a running turn remain refusals [[core-service-85](core-service.md#core-service-85)];
-- sync does not disable the choice [[space-21](#space-21)];
+- sync does not disable the choice [[space-21](#space-21)].
 
 #### space-48
 
@@ -427,10 +442,10 @@ When a placement's merge in a sync changes the clone's placement files [[storage
 
 #### space-13
 
-Where the clone's `spex` and a placement's `spex` share no common ancestor, when a sync compares at that placement, the core shall stop that placement with "Started separately at <display name>", <display name> being its instance's, unless the sync was started as a join of it, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)]  ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+Where the clone's `spex` and a placement's `spex` share no common ancestor, when a sync compares at that placement, the core shall stop that placement with "Started separately at <display name>", <display name> being its instance's, unless the sync was started as a join of it, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)], except that signing in takes the Space copy when the global records clone still contains only its untouched bootstrap [[space-59](#space-59)] [[space-65](#space-65)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - "Combine…" confirms inline, naming that both sets of records become one and that a unit present on both sides differently will ask for a choice ([DR-010](../decisions/010-interface-craft.md) §4, [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- A join started by Place [[space-97](#space-97)] or Attach [[space-99](#space-99)] uses that action’s confirmation.
+- Sign-in, a destination selection [[space-97](#space-97)] and Attach [[space-99](#space-99)] authorize their join without a second confirmation.
 
 #### space-14
 
@@ -453,6 +468,7 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | Check, Push | the host no longer listing the repository | commits stand | "Project records are no longer available at this Space"; the placement turns unreachable; nothing deleted |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <display name>"; Retry |
 | Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<display name> answered with an error (HTTP <status>)"; Retry |
+| Check, Push | a configured Git destination conflicts with the Space-approved address [[space-136](#space-136)] | no records transferred to that address | identify the Git settings and offer Retry |
 | Compare | unrelated history | unchanged | "Combine…" [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation | nothing written; its base stands [[space-19](#space-19)] | the unit and reason; the picker stays with the unit marked; Retry |
 | Check | a session lease beneath a clone its move would move, a deferred migration move among them [[space-60](#space-60)] | commits stand; the clone where it was, nothing fetched | the session and reason; Retry |
@@ -555,7 +571,10 @@ While a clone holds the repair marker an interrupted Apply left [[space-31](#spa
 
 #### space-22
 
-When a sync completes a placement's turn through its Push, or through Refresh for a read-only placement, the core shall record its time and its counts of units sent to and received from that placement in the preference store [[storage-5](storage.md#storage-5)] under `sync:<repository>:<placement>:last`, never in a tracked file ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
+When a sync completes a placement's turn through its Push, or through Refresh for a read-only placement, the core shall record its time and its counts of units sent to and received from that placement in the preference store [[storage-5](storage.md#storage-5)] under `sync:<repository>:<placement>:last`, never in a tracked file ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+
+- the receipt, tracking ref and last check belong to the placement's repository id. A rename or a follow to another Space preserves all three [[space-60](#space-60)];
+- dropping a placement removes all three [[space-98](#space-98)] [[space-91](#space-91)]. Replacing an external records remote clears its former check, tracking ref and receipt [[space-136](#space-136)].
 
 ### Explorer and Privacy
 
@@ -628,7 +647,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 20rem the header's fields stack with the primary control last and full-width, and an instance heading's stack with its primary control full-width and its overflow after it, as in every width ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - in each repository row and change row the label owns the slack and truncates with its title, the code-location caption and optional detail hiding below 28rem, the missing-code-remote control remaining visible, and every row control keeping its accessible name;
 - Explore's viewing area for its tree and preview stays in the surface flow at 60vh bounded between 24rem and 36rem; the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the tree and preview's boxes scroll inside themselves and the diff box scrolls sideways as a canvas ([DR-225](../decisions/225-bounded-surfaces-and-attached-records.md));
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Sync records, Syncing…, Check, Checking…, Stop, Open here, Opening…, More, Disconnect, Resolve, Combine…, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Locate folder…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, Close, Create, Creating…, Add, Keep, Add a Space…; a standing-phrase control [[space-120](#space-120)], a code-status control [[space-1](#space-1)], a menu's entries and conversation-title controls [[space-46](#space-46)] and the acts a decision fixes as whole phrases — "Files & history" and its count-bearing form ([DR-214](../decisions/214-project-navigation-and-contextual-recovery.md)), "Needs attention", "Technical details", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-192](../decisions/192-choose-a-group-before-adding.md));
+- every control reads at most 14 characters, its busy form included; a standing-phrase control [[space-120](#space-120)], a code-status control [[space-1](#space-1)], a menu's entries and conversation-title controls [[space-46](#space-46)] and the acts a decision fixes as whole phrases — "Files & history" and its count-bearing form ([DR-214](../decisions/214-project-navigation-and-contextual-recovery.md)), "Needs attention", "Technical details", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the surface scrolls inside its own box and the page never scrolls.
 
 ### Sign-In Completion
@@ -667,12 +686,12 @@ The core shall expose the Space surface through these commands and messages, eac
 | `space.signin.cancel` | `{ startId? }`, matched as [[space-109](#space-109)] states | `{ stopped: boolean }` | — |
 | `space.signout` | `{ instance }` | `SpaceState` | `invalid_request` (signed out), `conflict` (the stored sign-in changed meanwhile [[git-host-10](git-host.md#git-host-10)]) |
 | `space.forget` | `{ instance }` | `SpaceState` | `invalid_request` (signed in; a clone still of that instance or a placement still at it, naming each such spex repository or the session refusing its follow [[space-82](#space-82)]) |
-| `space.pick` | `{ repository, choice: { kind: "join", instance, hostId } \| { kind: "create", instance, name } }` — `instance` the one the choice is at; `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (already has a Space placement; malformed name; the name taken at the host; a repository another clone here holds; a target outside the personal namespace), `not_found` (a personal project the Space does not list), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
+| `space.pick` | `{ repository, choice: { kind: "join", instance, hostId } \| { kind: "create", instance, name } }` — `instance` the one the choice is at; `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the Space confirms the personal destination [[space-97](#space-97)], the push following as state | `invalid_request` (already has a Space placement; malformed name; the name taken at the host; a repository another clone here holds; a target outside the personal namespace), `not_found` (a personal project the Space does not list), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
 | `space.join` | `{ instance, hostId, folder?: string }` — `instance` the one its row stands under [[space-1](#space-1)] | `{ accepted: true }` | `invalid_request` (already here, or named by a placement file of a clone here [[space-87](#space-87)]) |
-| `space.place` | `{ repository, choice: { kind: "join", instance, hostId } \| { kind: "create", instance, name } }` — as `space.pick`'s, at an instance the clone holds no placement at [[space-97](#space-97)] | `{ accepted: true }` after the creation or the join is accepted at the host, the sync following as state | `invalid_request` (local only; an instance it holds a placement at; malformed name; the name taken at the host; a repository another clone here holds; a target outside the personal namespace), `not_found` (as `space.pick`'s), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
+| `space.place` | `{ repository, choice: { kind: "join", instance, hostId } \| { kind: "create", instance, name } }` — as `space.pick`'s, at an instance the clone holds no placement at [[space-97](#space-97)] | `{ accepted: true }` after the Space confirms the personal destination [[space-97](#space-97)], the sync following as state | `invalid_request` (local only; an instance it holds a placement at; malformed name; the name taken at the host; a repository another clone here holds; a target outside the personal namespace), `not_found` (as `space.pick`'s), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
 | `space.leave` | `{ repository, instance, confirmed?: boolean }` — `instance` the placement's [[space-98](#space-98)] | `{ accepted: true }`, its outcome as state | `invalid_request` (no placement at that instance), `not_found` |
-| `space.attach` | `{ repository, instance }` — `instance` the one a placement file names [[space-99](#space-99)] | `{ accepted: true }` | `invalid_request` (signed out; no file naming a host repository that instance lists; one already attached, or held by another clone here), `conflict` (a remote set meanwhile) |
-| `space.remote.set` | `{ repository, url: string \| null }` — the clone's path placement, `origin`, set or removed alone, its instance placements untouched [[space-5](#space-5)] | `SpaceState` | `invalid_request` (no Git; not initialized; a malformed or credential-bearing URL, a Space address, or an unclassified HTTP(S) destination [[space-5](#space-5)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
+| `space.attach` | `{ repository, instance }` — `instance` the one a placement file names [[space-99](#space-99)] | `{ accepted: true }` | `invalid_request` (signed out; no file naming a host repository that instance lists; one already attached, or held by another clone here), `not_found` (a repository whose current details no longer place it in the personal namespace), `conflict` (a remote set meanwhile) |
+| `space.remote.set` | `{ repository, url: string \| null }` — the clone's path placement, `origin`, set or removed alone, its instance placements untouched [[space-136](#space-136)] | `SpaceState` | `invalid_request` (no Git; not initialized; a malformed or credential-bearing URL, a known Space address [[space-136](#space-136)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only) |
 | `space.sync` | `{ repository, placement?: string \| null, choices?: Record<unit, "mine" \| "remote">, join?: boolean }` — `placement` the one `choices` and `join` are for — its instance's origin, or null for the path placement — required with choices or join | `{ accepted: true }` | `invalid_request` (local only, merge pending, blocking diagnostic [[space-11](#space-11)]; a placement the clone does not hold; unknown unit; a choice for a unit that is not a conflict) |
 | `space.cancel` | `{ repository }` | `{ stopped: boolean }` | — |
@@ -753,7 +772,7 @@ interface PlacementState {
     | { kind: "synced" | "behind" | "choices" | "unrelated" | "waiting"; sent: number; received: number }
     | { kind: "stopped"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean };   // what the last sync left on its line (space-87)
 }
-type CodeKind = "space" | "elsewhere" | "none" | "unknown";   // where the code is (space-1): under a listed instance's reported Git origin, at another remote, no remote in project.json, or not yet known — an instance not yet reported, or the personal settings repository
+type CodeKind = "space" | "elsewhere" | "none" | "unknown";   // where the code is (space-1): under a listed instance's reported Git origin, at another remote, no remote in project.json, or not yet known — an instance not yet reported, or the global records repository
 type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";   // code: a join's code clone
 type SyncCause = "unreachable" | "throttled" | "reauth" | "refused" | "size_limit" | "gone" | "timeout" | "stopped" | "rejected"
   | "validation" | "lease" | "writer" | "unrelated" | "git" | "unreceived";   // throttled: the host asked to wait (space-15); size_limit: content above the host's size limit (space-15); unreceived: a leave's units no remaining placement received (space-98)
@@ -805,18 +824,19 @@ done: a placement in choices → choices;  choices ─sync with choices→ save;
 
 #### space-32
 
-The core shall invoke Git as a child process per step, never through a shell, from the clone, with this environment and these commands, `<remote>` being the name of the remote of the placement a step runs on — its instance's folder, `@<host>` [[storage-34](storage.md#storage-34)], or `origin` for the remote the reader named [[space-5](#space-5)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+The core shall invoke Git as a child process per step, never through a shell, from the clone, with this environment and these commands, `<remote>` being the name of the remote of the placement a step runs on — its instance's folder, `@<host>` [[storage-34](storage.md#storage-34)], or `origin` for the remote the reader named [[space-136](#space-136)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - environment: the core's captured environment plus `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, `LANG=C`, and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` only where none is set; for a transport to a placement's instance's Git origin, `-c credential.helper=` naming the app's own helper and the credential that instance brokers [[git-host-9](git-host.md#git-host-9)], and for any other origin the device's own credential helpers; `process.umask(0o077)` around a new clone's `init` and its commits, which run synchronously, restored after; a join's `clone` and `checkout` children each spawned under `0o077`, the core's own umask restored before it awaits them; a 120-second limit on `ls-remote`, `fetch`, `clone` and `push` after which the child receives `SIGTERM`, then `SIGKILL` after five seconds;
 - commit-writing commands carry `-c commit.gpgsign=false -c core.hooksPath=/dev/null`, and `-c user.name=<login> -c user.email=<login>@users.noreply.<host>` where the clone's instance [[storage-31](storage.md#storage-31)], its key placement's, is signed in, the account's there and that instance's host name, else `-c user.name=Spex -c user.email=spex@<hostname>` only where `git var GIT_COMMITTER_IDENT` fails;
 - state: `--version`, `rev-parse --show-toplevel`, `rev-parse --git-dir`, `symbolic-ref -q --short HEAD`, `rev-parse -q --verify HEAD^{commit}`, `rev-parse -q --verify MERGE_HEAD`, `config --local --get-regexp ^remote\..+\.url$` for the placements in the order added, `remote get-url <remote>`, `config --get remote.<remote>.spexId`, `config --get branch.spex.remote`, `rev-parse -q --verify refs/remotes/<remote>/spex^{commit}`, `rev-list --left-right --count HEAD...refs/remotes/<remote>/spex`, `rev-list --count HEAD` where the host holds no `spex`, `status --porcelain=v1 -z -uall`, for the last sync a clone holds `merge-base <spex> <remote>/spex` and `log -1 --no-show-signature --format=%ct <commit>` [[space-61](#space-61)], and uses the recorded `spex.bootstrap` commit and exact tree to check an unchanged bootstrap [[space-59](#space-59)];
-- initialize and the remote: `init -q -b spex`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/spex`; `clone -q --origin <remote> --branch spex --single-branch <url> <clone>` for a join, falling back to a clone of the default branch followed by `checkout -q -b spex` where the host holds no `spex` yet; `remote add <remote> <url>` then `config remote.<remote>.spexId <id>`, and for a repository the core created [[git-host-7](git-host.md#git-host-7)] `config remote.<remote>.spexCreated <id>` first, then `config remote.<remote>.url <url>`, `config remote.<remote>.fetch +refs/heads/*:refs/remotes/<remote>/*` and `config remote.<remote>.spexId <id>` in place of `remote add`, so its remote never stands without the flag; `remote set-url <remote> <url>`, `remote rename <remote> <new>` for a follow [[space-60](#space-60)] [[space-82](#space-82)] [[space-91](#space-91)] [[space-98](#space-98)], `config --remove-section remote.<remote>` with `update-ref -d refs/remotes/<remote>/spex` to drop a placement, `update-ref -d refs/remotes/origin/spex` for the former path placement where the reader names another [[space-5](#space-5)], and `config --unset branch.spex.remote` where the remote dropped or replaced was the upstream;
+- initialize and the remote: `init -q -b spex`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/spex`; `clone -q --origin <remote> --branch spex --single-branch <url> <clone>` for a join, falling back to a clone of the default branch followed by `checkout -q -b spex` where the host holds no `spex` yet; `remote add <remote> <url>` then `config remote.<remote>.spexId <id>`, and for a repository the core created [[git-host-7](git-host.md#git-host-7)] `config remote.<remote>.spexCreated <id>` first, then `config remote.<remote>.url <url>`, `config remote.<remote>.fetch +refs/heads/*:refs/remotes/<remote>/*` and `config remote.<remote>.spexId <id>` in place of `remote add`, so its remote never stands without the flag; `remote set-url <remote> <url>`, `remote rename <remote> <new>` for a follow [[space-60](#space-60)] [[space-82](#space-82)] [[space-91](#space-91)] [[space-98](#space-98)], `config --remove-section remote.<remote>` with `update-ref -d refs/remotes/<remote>/spex` to drop a placement, `update-ref -d refs/remotes/origin/spex` for the former path placement where the reader names another [[space-136](#space-136)], and `config --unset branch.spex.remote` where the remote dropped or replaced was the upstream;
 - save: the managed-rules writer, `add -A -- .`, `diff --cached --name-only -z`, `write-tree` and `rev-parse HEAD` before validation, `read-tree <tree>` and `checkout-index -a -f --prefix=<private copy>/` under a temporary `GIT_INDEX_FILE`, `rev-parse <that HEAD>^{tree}`, `commit-tree <tree> -p <that HEAD> -m <message>`, `update-ref refs/heads/spex <commit> <that HEAD>`, `reset -q` on refusal; and for every version check, `hash-object --stdin-paths` over a unit's files;
 - check: `ls-remote --exit-code --heads <remote> refs/heads/spex` (exit 2 means no `spex`), `fetch -q --no-tags <remote> +refs/heads/spex:refs/remotes/<remote>/spex`, `merge-base HEAD <remote>/spex`; `config --get remote.<remote>.spexCreated`, and `config --unset remote.<remote>.spexCreated` where the clone records a creation there [[git-host-7](git-host.md#git-host-7)]; for a default branch the core pushes itself [[git-host-7](git-host.md#git-host-7)], `hash-object -w --stdin` on the README, `mktree`, `commit-tree <tree> -m "Initial commit"` and `push -q <remote> <commit>:refs/heads/main`;
 - plan: `ls-tree -rz --full-tree <rev>` per revision, and for the working tree `add -A -- .` then `write-tree` under a temporary `GIT_INDEX_FILE`;
 - labels and diffs: one `cat-file --batch` over the files of each session side summarized [[space-33](#space-33)], `cat-file blob <oid>` per other described file, `log -1 --format=%ct <rev> -- <paths>` for a side's change time, `diff --no-color <ancestor> <side> -- <path>` for `space.diff`;
 - apply: under a temporary `GIT_INDEX_FILE`, `read-tree HEAD`, `update-index -z --index-info` setting or removing each path of a unit taken from the host and `write-tree`, then that tree checked out into a private copy as at Save; `cat-file blob <oid>` per file of a unit written; `read-tree <tree>` and `update-index -q --refresh` on the clone's index; `merge-base --is-ancestor HEAD <remote>/spex` with `rev-parse <remote>/spex^{tree}`, `commit-tree <tree> -p HEAD -p <remote>/spex -m <message>` or none on a fast-forward, `update-ref refs/heads/spex <commit> <old HEAD>`;
-- push: `push -q <remote> spex`, `push -q -u <remote> spex` where no upstream is set, at the first placement;
+- a hosted check or clone resolves the effective URL with `ls-remote --get-url` and uses the verified address directly. For a hosted push the core uses a command-scoped remote with one approved effective push URL, then records the named placement as upstream; for an external placement it checks Git's effective URLs with `remote get-url` [[space-136](#space-136)];
+- push: `push -q <destination> spex`, with `-u` for the first external placement when no upstream is set;
 - stderr classification under `LC_ALL=C`: explicit content-size rejection wording from the instance → `size_limit` before a generic hook decline, a hook decline alone establishing no size cause ([DR-129](../decisions/129-content-size-is-not-permission.md)); "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the cause-preserving summary, or, where Git printed an HTTP status on a transport to its instance's Git origin, the host's error with that status [[space-15](#space-15)]; public lines follow space-15's instance-only and URL rules.
 - the instance's size rule follows transport, authentication, missing-repository and explicit access refusals (`403`, "Permission denied", "protected branch", "You are not allowed"), but precedes a bare hook decline; it recognizes a whole `remote:` sentence, case-insensitively: "You are attempting to check in one or more blobs which exceed the <limit> limit", with an optional single ASCII identifier and colon before it, and an optional final period or colon; `<limit>` is either a nonnegative quantity of at most twelve digits with an optional decimal of at most six digits followed by `byte`, `bytes`, `KB`, `KiB`, `MB`, `MiB`, `GB`, `GiB`, `TB` or `TiB`, allowing whitespace before the unit, or the words "size" or "file size"; a numeric limit is public only when every recognized sentence carries the same captured quantity and unit, absent or conflicting limits retaining the size cause without a numeric claim; quoted sentences, filenames and URLs alone establish no size rejection.
 
@@ -889,6 +909,10 @@ When a browser journey opens "Add a Space…", it shall verify that the chooser 
 
 When an integration suite starts a real core on a fresh home and adds a Git working folder before signing in to a stand-in Space, the suite shall assert that local records remain available [[space-1](#space-1)], sign-in and Refresh list personal projects without creating a remote automatically [[space-4](#space-4)] [[space-2](#space-2)], explicitly choosing that Space sends records [[space-97](#space-97)] [[space-12](#space-12)], and signing out retains the project and local records [[space-6](#space-6)].
 
+#### space-138
+
+When the stand-in fails the account read before creating a project placement, the suite shall assert that Pick names the Space in its refusal, creates nothing, and succeeds on a fresh request [[space-97](#space-97)].
+
 #### space-38
 
 When an integration suite runs two real cores on two scratch homes sharing one stand-in Git host, both signed in to the same personal account, it shall assert the sync loop of one spex repository:
@@ -949,6 +973,14 @@ When an integration suite reads a working folder's remote carrying a credential,
 
 #### space-73
 
+When an integration suite adds and removes an external records remote alongside a personal Space placement, it shall verify the independent placement state:
+
+- the external address is recorded as `origin` and removing it keeps the Space remote, repository id, tracking ref and last sync [[space-22](#space-22)] [[space-136](#space-136)] [[space-29](#space-29)];
+- leaving the Space removes its remote, tracking ref and last sync and keeps the local clone [[space-98](#space-98)];
+- setting an external local path makes the clone reachable and lets Sync send its records there, and removing it returns the clone to local-only status [[space-61](#space-61)] [[space-12](#space-12)].
+
+#### space-134
+
 When the Space moves an already synced project repository outside the signed-in account’s personal namespace, integration verification shall assert:
 
 - Refresh marks its local placement unavailable [[space-61](#space-61)], and Check and Sync stop that placement before Git transfer [[space-12](#space-12)] [[space-15](#space-15)];
@@ -987,7 +1019,8 @@ When an integration suite starts a real core on a scratch home against two stand
 
 - signed in at both, each repository reads as one row, not on this device, under the instance listed first, and Join keys it under that instance's folder with its remote named by it [[space-1](#space-1)] [[space-61](#space-61)] [[space-63](#space-63)];
 - joined, each stays one row under the first, the second's listing withholding Join alone [[space-61](#space-61)];
-- the first signed out, both rows stand reachable under the second, and `a-spex`'s Sync re-keys its clone under the second's folder with its remote renamed, its pair and sync preferences re-keyed and its recorded last sync kept, then syncs with the second [[space-60](#space-60)] [[space-61](#space-61)] [[space-5](#space-5)] [[space-11](#space-11)];
+- the first signed out, both rows stand reachable under the second, and `a-spex`'s Sync re-keys its clone under the second's folder with its remote renamed, its pair and sync preferences re-keyed and its recorded last sync kept, then syncs with the second [[space-60](#space-60)] [[space-61](#space-61)] [[space-136](#space-136)] [[space-11](#space-11)];
+- with the first signed out, a failed ownership read at the second refuses Forget with the second’s failure, keeping the placement and the signed-out entry [[space-82](#space-82)];
 - with a session beneath `b-spex`'s clone, still keyed under the first, standing under a lease taken out of band, `space.forget` of the first is refused naming that session, the instance and that clone kept as they were [[space-82](#space-82)] [[space-29](#space-29)];
 - the lease released, `space.forget` of the first re-keys `b-spex`'s clone under the second's folder with its remote renamed and its pair re-keyed, then removes the instance from the state [[space-82](#space-82)] [[space-60](#space-60)];
 - on another scratch home signed in at the first, then at a third instance on a Git backend of its own, then at the second, `a-spex` joined through the first and a repository the first lists alone read the first as `governing`, and, the first signed out, `a-spex` reads the second, the earliest signed-in instance listing it, and the other none [[space-30](#space-30)] [[space-1](#space-1)];
@@ -1002,7 +1035,7 @@ When an integration suite runs a real core on a scratch home signed in to two st
 - with both stand-ins' `spex` advanced by peers, one Sync merges the first's, then the second's against the first's merge, then pushes the first once more as a fast-forward, each line reading synced, a unit the first's merge rewrote taken from the second's side with no restart, and each placement's last sync recorded apart [[space-12](#space-12)] [[space-19](#space-19)] [[space-33](#space-33)] [[space-31](#space-31)] [[space-22](#space-22)];
 - a catch-up push the first rejects runs it once more from Check, and rejected again leaves its line reading "Behind — Sync again" [[space-12](#space-12)];
 - a conflict at the second ends that placement in choices with the first's merge and push standing, the caption naming the second's display name, and the sync sent with those choices passes the first as a fast-forward [[space-14](#space-14)] [[space-9](#space-9)] [[space-17](#space-17)] [[space-18](#space-18)];
-- a path placement set by `space.remote.set` syncs last with no catalog read, and no merge drops it [[space-12](#space-12)] [[space-5](#space-5)] [[space-91](#space-91)];
+- a path placement set by `space.remote.set` syncs last with no catalog read, and no merge drops it [[space-12](#space-12)] [[space-136](#space-136)] [[space-91](#space-91)];
 - a repository the first lists with no clone here reads as a row carrying its one listed placement, `attached` false and `absent` [[space-30](#space-30)];
 - the commit identity is the first's account, each remote holds its id in its own section, and `space.tree` reads `placements/<folder>.yaml` as a placement, shared [[space-32](#space-32)] [[space-23](#space-23)] [[space-35](#space-35)];
 - `space.leave` of the second, not confirmed, stops `unreceived` counting a unit changed here that no remaining placement holds and not one this device holds unchanged since its last shared commit with the first while a peer rewrote it there; of the first, once a Check found the second's host holding no `spex`, it counts every record unit whatever the second's tracking ref still names; each keeps the placement, and the second sent `confirmed` drops the first, moving the clone to its path at the second [[space-98](#space-98)] [[space-12](#space-12)];
@@ -1031,22 +1064,23 @@ When an integration suite runs real cores on three scratch homes against two sta
 - the third home's Join at the first lists the second's placement from its file, not attached, and no row of its own, `space.join` of it refused; `space.attach` attaches and syncs that placement, its line synced [[space-87](#space-87)] [[space-29](#space-29)] [[space-99](#space-99)] [[space-61](#space-61)];
 - a newly synchronized personal placement file stays unattached on every home until `space.attach` names it there [[space-99](#space-99)];
 - the first home's `space.leave` of the second deletes the file, and the third home's next Sync drops its remote there with the clone's records kept; a Leave asked while that sync runs follows it [[space-98](#space-98)] [[space-91](#space-91)] [[space-21](#space-21)];
-- the first and third homes each placing at the second at once meet as one choice of the file, the home whose side is not chosen dropping its remote at its next sync, the unchosen repository left at the stand-in, and listing the chosen one not attached [[space-91](#space-91)];
+- the first and third homes each placing at the second at once meet as one choice of the file, the home whose side is not chosen dropping its remote at its next sync, the unchosen repository left at the stand-in, and listing the chosen one not attached [[space-91](#space-91)].
 
 #### space-94
 
 When three stand-in Spaces provide two distinct Git backends for the same person's accounts, integration verification shall assert:
 
 - sign-in places personal global records once per backend, and explicit Place and Leave of those settings are refused [[space-4](#space-4)] [[space-65](#space-65)] [[space-29](#space-29)];
-- after a peer adds a duplicate placement file for one project repository, Sync retains one placement. When the peer replaces the original file, the home follows the new Space and keeps its last sync [[space-91](#space-91)] [[space-60](#space-60)] [[space-5](#space-5)];
-- when a forgotten Space's personal settings repository is available at another signed-in Space, the home follows that placement and syncs the change to the remaining backend [[space-82](#space-82)] [[space-60](#space-60)].
+- after a peer adds a duplicate placement file for one project repository, Sync retains one placement. When the peer replaces the original file, the home follows the new Space and keeps its last sync [[space-91](#space-91)] [[space-60](#space-60)] [[space-136](#space-136)];
+- when a forgotten Space's global records repository is available at another signed-in Space, the home follows that placement and syncs the change to the remaining backend [[space-82](#space-82)] [[space-60](#space-60)].
 
 #### space-101
 
 When an integration suite runs a real core on a scratch home signed in to three stand-in instances, the first two over one Git backend and the third on another, it shall drive `space.leave` over the protocol and assert ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- for a project placed at the first and the third, the first lacking records the third holds: `space.leave` of the third stops `unreceived` naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session, and once it is released moves the clone under the third's folder with its pair re-keyed; and of the third, the last, sent `confirmed` after it stops naming every unit, moves the clone in the local projects folder, local only [[space-98](#space-98)] [[space-15](#space-15)];
+- for a project placed at the first and the third, the first lacking records the third holds: `space.leave` of the third stops `unreceived` naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session, and once it is released moves the clone under the third's folder with its pair re-keyed; and of the third, the last, sent `confirmed` after it stops naming every unit, moves the clone in the personal records folder, local only [[space-98](#space-98)] [[space-15](#space-15)];
 - for a project placed at the first and the third, a peer's commit at the third deleting the first's placement file drops nothing at the next Sync while a lease taken out of band stands beneath the clone, syncing nothing with the first, and the Sync after the release drops it and moves the clone under the third's folder [[space-91](#space-91)];
+- a failed ownership read at the second stops a confirmed Leave of the first with Retry, keeping the placement and the working folder’s pair [[space-98](#space-98)];
 - with the first signed out, `space.leave` of the first for a project placed there alone, whose repository the second lists, renames its remote to the second's folder and rewrites its file, dropping nothing; a project placed at the first and at the second reads its first placement unreachable, its Sync's Check following nothing, and its `space.leave` of the first, sent `confirmed` after it stops for the placement it could not read, drops it [[space-98](#space-98)] [[space-60](#space-60)] [[space-61](#space-61)];
 - with the third signed out, `space.forget` of it is refused naming a project placed there [[space-82](#space-82)] [[space-29](#space-29)].
 
@@ -1055,6 +1089,14 @@ When an integration suite runs a real core on a scratch home signed in to three 
 When the integration suite runs a real core on a scratch home signed in to the stand-in host and the place of a spex repository being joined, named in 250 characters — on Windows, where Git takes no path so long, in a short name — is taken while its clone runs, on every platform and on Windows on the Node the app ships, it shall assert that the join stops reading the place taken, leaving what stands there as it is, and that no private folder of the join remains, the clone's read-only Git objects removed with it [[space-63](#space-63)].
 
 #### space-119
+
+When the integration suite starts a real core on a scratch home reading its clones' sessions and config as they change, signed in to the stand-in host, on every platform and on Windows on the Node the app ships, it shall assert:
+
+- the first sign-in moves the personal records folder with a project's clone holding a session a peer wrote, places the global records repository at the stand-in and pushes it, the pair naming the moved clone and the session moved with it, and then reads a session a peer writes into the moved clone and a change of global configuration where they now lie [[space-59](#space-59)];
+- a sync after the stand-in renamed a placed project's repository moves its clone, its pair following, and reads a session written there afterwards [[space-60](#space-60)];
+- on Windows, that sync while another program holds the clone open stops at Check naming the project as in use with Retry, the clone and its pair where they were, and reads a session written into the clone afterwards; a sync whose holder lets go within its tries moves the clone in that same request [[space-60](#space-60)].
+
+#### space-135
 
 When integration verification holds a core read open while a project clone moves to its first Space, the suite shall assert that the next Space state shows the moved records and reflects the current clone and sync plan without repeating the clone under its previous key [[space-60](#space-60)] [[space-29](#space-29)].
 
@@ -1092,7 +1134,15 @@ When the rendered surface signs in to a Space while holding a local-only project
 
 #### space-95
 
-Where the Space surface renders personal projects and local projects across two signed-in Spaces, the integration suite shall assert that the project appears once, its attached Sync tab names each placement by Space with state and last sync [[space-87](#space-87)], and the project’s row offers local opening and records actions [[space-1](#space-1)] [[space-111](#space-111)] [[space-125](#space-125)].
+Where a project has records at two signed-in Spaces, when a reader inspects it in the Space surface, the integration suite shall verify its row and both placement lines:
+
+- the project appears once with local opening and records actions, and its Sync and Explore panels stay attached [[space-1](#space-1)] [[space-111](#space-111)] [[space-125](#space-125)];
+- each placement shows its Space, state and last sync independently, and only the active placement shows its current step [[space-87](#space-87)] [[space-61](#space-61)] [[space-12](#space-12)];
+- a conflict at the second Space identifies that Space in the caption and incoming list. The picker names that Space’s copy and enables Apply only after a choice [[space-9](#space-9)] [[space-17](#space-17)].
+
+#### space-139
+
+When a reader chooses a project’s first Space in the IDE, the integration suite shall verify that changing the Space resets the matching-records choice, selection alone sends nothing, and submitting sends the chosen Space either a new personal copy or the selected repository id [[space-137](#space-137)].
 
 ### Browser Journeys
 
@@ -1101,7 +1151,7 @@ Where the Space surface renders personal projects and local projects across two 
 When a standalone browser journey uses two fresh homes signed in to the same Space account, the suite shall verify one personal project’s lifecycle across devices:
 
 - Add registers an existing folder and Create creates a local working folder, each returning to the project without a destination chooser [[space-1](#space-1)];
-- explicitly syncing sends the first home’s project records to that Space [[space-97](#space-97)] [[space-12](#space-12)];
+- the first destination panel shows signed-in Spaces and sends the project records only on explicit submission [[space-137](#space-137)] [[space-97](#space-97)] [[space-12](#space-12)];
 - the second home lists it and opens it using the existing folder and records flow [[space-1](#space-1)] [[space-63](#space-63)] [[space-111](#space-111)];
 - Sync and Explore remain attached to its row [[space-125](#space-125)] and local Files & history remains accessible after sign-out [[space-55](#space-55)] [[space-6](#space-6)].
 

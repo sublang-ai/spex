@@ -89,9 +89,7 @@ const copyUnavailable = (): string =>
 
 /** Reveal in the file manager where the bridge exists, Copy path
  * otherwise (space-26): the copy is acknowledged in words, and a page
- * with no clipboard falls back to a selectable read-only field. A
- * remote place's path is on its server, so nothing reveals it there
- * (run-view-169). */
+ * with no clipboard falls back to a selectable read-only field. */
 export function PathControls({
   path,
   testId,
@@ -291,9 +289,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, reviewRequest, onRe
     issuesOpener.current = control;
     control.focus();
   }, [issuesOpen, revealDismissed, groups]);
-  // The reader's own Refresh (space-2), counted: it lets the issues
-  // list lay itself out afresh (space-48, space-55) and an open members
-  // list read the host again (space-62).
+  // A reader's Refresh also lets the issues list lay itself out again
+  // (space-2, space-48, space-55).
   const [refreshes, setRefreshes] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string>();
@@ -799,7 +796,7 @@ function RepositoryPanel({
         className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
       >
         {tabButton("sync", i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }))}
-        {tabButton("explore", i18n._({ id: "Explore", comment: "tab: browse the files of a project's or a group's records" }))}
+        {tabButton("explore", i18n._({ id: "Explore", comment: "tab: browse the files of a project's records" }))}
       </div>
       <div
         role="tabpanel"

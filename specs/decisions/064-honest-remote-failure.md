@@ -12,6 +12,7 @@ Amended by [DR-114](114-groups-and-sharing-from-spex.md): where membership decid
 Amended by [DR-120](120-the-instance-is-the-space.md) in what a report prints and in its guidance: no URL under the Git host's origin is printed, the clone's own remote reading as the repository's path in the instance and any other as the host's display name; any other remote URL is printed only with its embedded user removed; a host transport that reaches no rule is classified as the host's error; where membership decides, a failure names Share, or a member who may share, in Spex, never the host's members page.
 Amended by [DR-129](129-content-size-is-not-permission.md) for explicit content-size rejections: their distinct cause leaves access unchanged and reports only the supported size cause and reported limit, not raw transport words or membership guidance.
 Amended by [DR-186](186-unavailable-group-operations.md) for a recognized missing group operation: the report names its unavailability instead of relaying an unrelated fallback message, preserving genuine resource and permission refusals.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of membership actions from retry guidance.
 
 ## Context
 

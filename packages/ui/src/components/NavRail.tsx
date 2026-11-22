@@ -10,7 +10,7 @@
 // "selected session" are different words (run-view-67).
 // is open, the tree lists each place's projects under a heading naming
 // the place, this computer's first, the heading a row of its own that
-// shows its place on the Projects surface (run-view-168).
+// opens the project on the Projects surface (run-view-200).
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
@@ -67,7 +67,7 @@ export const SURFACE_LABELS: Record<Surface, () => string> = {
       id: "Playbooks",
       comment: "the rail's Playbooks destination: the global playbooks, which run in every project of yours",
     }),
-  Space: () => i18n._({ id: "Space", comment: "the Space destination: groups, projects and their shared records" }),
+  Space: () => i18n._({ id: "Space", comment: "the Space surface for personal projects and records" }),
   Settings: () => i18n._("Settings"),
 };
 
@@ -88,19 +88,16 @@ const SURFACE_ICONS: Record<Surface, IconName> = {
   Settings: "gear",
 };
 
-/** One place's projects in the tree (run-view-67, run-view-168): its
- * core's own state, and acts taken at that core. */
+/** The sidebar's project tree (run-view-67). */
 export interface ProjectTree {
   projects: ProjectInfo[];
-  /** The projects opening at this place (run-view-168): each listed
-   * after the projects, reading "Opening…" until the place's core lists
-   * it, selected while it is the current project. */
+  /** Projects still opening (run-view-200), listed after registered projects. */
   opening?: OpeningProject[];
   sessions: SessionInfo[];
   /** Non-idle attention by session id, the same derivation the badge
    * and the tab dots use (run-view-73). */
   attention: Map<string, AttentionItem>;
-  /** The place's current project, which starts disclosed. */
+  /** The current project, which starts disclosed. */
   currentProjectId?: string;
   /** The session whose tab is showing at this place, if any. */
   activeSessionId?: string;
@@ -125,7 +122,7 @@ export interface NavRailProps {
   attentionCount: number;
   collapsed: boolean;
   onCollapsed(collapsed: boolean): void;
-  /** Every place, this computer's first (run-view-168). */
+  /** Project rows and openings supplied by the IDE's core (run-view-67, run-view-200). */
   projects: ProjectTree;
   onAddProject(): void;
   /** Config status / playbook count, the foot's other tenant. */
@@ -352,8 +349,7 @@ export function NavRail(props: NavRailProps) {
       activate: () => treeState.onNewSession(project.id),
     });
   }
-  // A project opening at the place (run-view-168): a row with no
-  // sessions yet, reached and activated as a project's is.
+  // Opening projects remain selectable (run-view-200).
   for (const entry of treeState.opening ?? []) {
     const projectRow = `o:${entry.id}`;
     rows.push({
@@ -561,7 +557,7 @@ export function NavRail(props: NavRailProps) {
   );
 
   /** One project node and, disclosed, its sessions — every row's key
-   * and test id placed (run-view-168), this computer's as they were. */
+   * and test id placed (run-view-200), this computer's as they were. */
   const projectNode = (project: ProjectInfo) => {
     const open = isExpanded(project.id);
     const bucket = bucketOf(project.id);
@@ -843,10 +839,7 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  /** A project opening at its place (run-view-168): its name as its
-   * code's, "Opening…" beside it and the step in flight as its title,
-   * selected while it is the place's current project; it discloses
-   * nothing, holding no session yet. */
+  /** An opening project's row gives its current step as a tooltip (run-view-200). */
   const openingNode = (entry: OpeningProject) => {
     const projectRow = `o:${entry.id}`;
     const selected = entry.id === selectedProjectOf() && !shownSessionOf();

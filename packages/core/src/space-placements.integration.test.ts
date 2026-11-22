@@ -151,7 +151,7 @@ test("space-87: a personal listing named by another clone’s placement file app
   // first, under the first account's namespace (space-61, space-1).
   assert.equal(row.state, "reachable");
   assert.equal(row.governing, firstOrigin);
-  // Every instance its files name, held here or not (space-62).
+  // Every instance its files name, held here or not (space-87).
   assert.deepEqual([...row.placedAt].sort(), [firstOrigin, secondOrigin].sort());
   // Join of it is refused: it is a placement of the clone's, to attach
   // on its row (space-29, space-87).
@@ -204,7 +204,7 @@ test("space-87: personal listings from two Spaces over one Git backend identify 
   await home.client.expectError("space.join", { instance: second.url, hostId: id }, "invalid_request", /^team is on this computer already — Show it instead$/);
 });
 
-test("space-97: creating a second personal placement writes its remote and file, then syncs both", async (t) => {
+test("space-92, space-97, space-87: creating a second personal placement writes its remote and file, then syncs both", async (t) => {
   const { first, second, home, keys: [key] } = await twoInstances("place-create", ["atlas"]);
   t.after(() => home.stop());
   const clone = clonePath(home.dataDir, key);
@@ -244,7 +244,7 @@ test("space-97: creating a second personal placement writes its remote and file,
   assert.ok(created, "the second created atlas-spex in the account’s namespace");
 
   // The same sync merges and pushes the first's peer change to both
-  // placements without another acknowledgement (space-97, space-57,
+  // placements without another acknowledgement (space-97, space-12,
   // space-87, space-12).
   assert.equal(placed.sync.phase, "done", JSON.stringify(placed.sync));
   assert.deepEqual(placed.placements.map((line) => [line.instance, line.path, line.attached, line.outcome?.kind]), [
@@ -270,7 +270,7 @@ test("space-97: creating a second personal placement writes its remote and file,
 
   // The Place prepares the second's branch and pushes with its own
   // credential, recording the completed sync without an acceptance
-  // preference (space-57, git-host-7, git-host-9, storage-5).
+  // preference (space-12, git-host-7, git-host-9, storage-5).
   assert.ok(apiCalls(second, secondAsked).includes(`POST /api/v1/host/repositories/${created.id}/spex-branch`), "the second prepared its branch");
   assert.equal(git(created.bare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
   assert.equal(configOf(clone, `remote.${secondFolder}.spexCreated`), null, "the prepared branch spends the creation");
@@ -284,7 +284,8 @@ test("space-97: creating a second personal placement writes its remote and file,
   // The flat list contains one row identifying both placements.
   const state = await home.client.expectOk("space.get", {});
   assert.equal(rowsOf(state).filter((repository) => repository.key === key).length, 1);
-  assert.deepEqual(repositoryOf(state, key).placements.map((line) => [instanceOf(state, line.instance ?? "")?.displayName, line.path]), [[HOST_NAME, "ada/atlas-spex"], [SECOND_NAME, "bob/atlas-spex"]]);
+  assert.deepEqual(repositoryOf(state, key).placements.map((line) => [instanceOf(state, line.instance ?? "")?.displayName, line.path, line.state]), [[HOST_NAME, "ada/atlas-spex", "reachable"], [SECOND_NAME, "bob/atlas-spex", "reachable"]]);
+  assert.ok(repositoryOf(state, key).placements.every((line) => line.lastSync !== null));
 
   // Check host lists each placement's incoming units under its instance,
   // and the local list a unit the second lacks — sent to the first alone
@@ -378,7 +379,7 @@ test("git-host-26, git-host-7, space-97, space-12, space-15, space-87: a Place's
   assert.equal(configOf(clone, `remote.${secondFolder}.spexCreated`), null, "the default branch spends the creation");
 });
 
-test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-60, space-5, storage-31, storage-34, storage-36, storage-5, git-host-6, git-host-9: personal settings are placed at every instance the home signs in to — a sign-in at the first creates its own repository there; one at the third, on a Git backend of its own, creates bob-spex in the namespace there as its second placement, its remote named by the third's folder with its id and its file written, its first push proceeding directly with a credential the third issued; one at the second, over the first's Git backend and listing the first's repository, adds no placement; space.place and space.leave naming it are each refused, nothing asked of any instance; the first signed out and forgotten, its placement there follows the second, its remote renamed in its place with its id and last sync kept and its file rewritten to the second's with the first's deleted, and the third receives that change at the next sync; the third then signed out and forgotten, which no signed-in instance but the second lists, its remote there is dropped with its id, what it fetched and its last sync, its file left", async (t) => {
+test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-60, space-5, storage-31, storage-34, storage-36, storage-5, git-host-6, git-host-9: personal settings are placed at every instance the home signs in to — a sign-in at the first creates its own repository there; one at the third, on a Git backend of its own, creates bob-spex in the namespace there as its second placement, its remote named by the third's folder with its id and its file written, its first push proceeding directly with a credential the third issued; one at the second, over the first's Git backend and listing the first's repository, adds no placement; space.place and space.leave naming it are each refused, nothing asked of any instance; the first signed out and forgotten, its placement there follows the second, its remote renamed in its place with its id and last sync kept and its file rewritten to the second's with the first's deleted, and the third receives that change at the next sync; the third then signed out and forgotten, which no signed-in instance but the second lists, its remote there is dropped with its id, what it fetched and its last sync, its file left", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
   const third = await startHost({ displayName: THIRD_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
@@ -401,7 +402,7 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   // there as its second placement, its remote named by the third's
   // folder with the host's id in its own section and its file written;
   // its first push reaches the third directly, both synced (space-4,
-  // space-65, space-57, git-host-6, storage-34, storage-36). The row stays at the first, its first
+  // space-65, space-12, git-host-6, storage-34, storage-36). The row stays at the first, its first
   // placement's (storage-31, space-1).
   mark = home.client.mark();
   await signIn(home, third);
@@ -510,7 +511,7 @@ test("space-82: Forget follows available personal copies and refuses when projec
   // `atlas` keyed under the first, in your namespace there, which the
   // second lists too, and placed in the third account's namespace; `borealis` keyed
   // under the third account's namespace and placed in your namespace at the first
-  // (space-58, space-97). A group of `null` is your namespace.
+  // (space-97). A group of `null` is your namespace.
   const created = async (name: string, at: StandinHost, namespace: string): Promise<string> => {
     const { key: local } = await addFolder(home, gitFolder(name));
     const from = home.client.mark();

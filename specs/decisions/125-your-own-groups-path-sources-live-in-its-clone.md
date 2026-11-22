@@ -12,6 +12,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-103](103-the-home-and-its-groups.md) in its units: a folder holding a spec package's `meta.yaml`, outside Spex's own paths, is one unit with every file under it.
 
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in Spex's own paths: `placements/` joins them.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of group environments. Global and project package sources keep their existing roots.
 
 ## Context
 

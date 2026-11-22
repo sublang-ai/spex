@@ -14,6 +14,7 @@ Amended by [DR-104](104-spec-package-format-and-client-environments.md): the com
 Extended by [DR-108](108-the-root-lease-names-the-machine.md): the root lease's owner names its machine by Playbook's machine identity, and its retirement keeps a permanent record; one core per state root stands.
 Amended by [DR-134](134-execution-ownership.md) in "resumability stays machine-local": it stays with the assigned runtime, named in the records.
 Amended by [DR-132](132-team-servers.md) in "forge auth stay with their own tools": a member's code-host token on a seat is kept under `local/`.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of seat-specific credential storage.
 
 ## Context
 

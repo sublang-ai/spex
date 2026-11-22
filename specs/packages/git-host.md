@@ -6,10 +6,10 @@
 ## Intent
 
 This package defines Space account sign-in, personal project discovery, placement creation and authenticated Git transport ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
-A **Git host**, or **instance**, is a deployment of Spex Space, which brokers the Git credential and wraps the Git system behind it; its routes are JSON under `/api/v1` and its sign-in pages under `/login`, as Spex Space's own specs state [[1]].
+A Space **instance** brokers credentials for personal records and exposes the service under its own name; its routes are JSON under `/api/v1` and its sign-in pages under `/login`, as Spex Space's own specs state [[1]].
 A home may be signed in to several instances at once, each known by its origin [[storage-2](storage.md#storage-2)] and holding in the core its own client, app token, account, view and rate-limit hold.
 An **app token** is the credential an instance issues to one signed-in device: a short-lived access secret and a rotating refresh secret [[storage-19](storage.md#storage-19)].
-The core reads an instance only when a person signs in there, activates Refresh, or starts a sync, and once when a client first asks for the Space state after a start with it signed in, never on a timer, and derives nothing from a cached list.
+Full catalog reads and operation-specific ownership checks have separate lifetimes.
 
 ## External Behavior
 
@@ -73,11 +73,11 @@ When a signed-in Space is first read after startup, refreshed or read at sign-in
 
 #### git-host-22
 
-When sync checks a Space placement, the core shall independently re-read that Space's current account, complete catalog and matched target's repository details before fetching or writing, and refuse the destination unless the fresh result matches the placement's identity [[git-host-5](#git-host-5)] and identifies the repository in the signed-in account's own namespace ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
+When sync checks a Space placement, the core shall re-read that Space’s current account, complete catalog and matched repository details, and refuse the destination unless the fresh result matches the placement’s identity [[git-host-5](#git-host-5)] and identifies the repository in the signed-in account's own namespace ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
-- a target answer governs the repository's path, branch and access without advancing the full-view read time;
+- the target read governs the repository's path, branch and access without advancing the full-view read time. Before a push, including catch-up, confirm the account and the destination's current details again;
 - Git must use the Space-approved records address for a check, push or clone. A Git setting that would rewrite it stops the transfer with guidance to check the rewrite rules;
-- a user-supplied records remote is eligible for external Git transport only after the core classifies its destination [[space-5](space.md#space-5)];
+- a user-supplied records remote is eligible for external Git transport only after the core classifies its destination [[space-136](space.md#space-136)];
 - a changed account or credential [[git-host-4](#git-host-4)] refuses the step and prevents a stale result from being published;
 - a valid move within the personal namespace follows the clone's unchanged-path guards [[space-60](space.md#space-60)].
 
@@ -146,7 +146,6 @@ When an instance answers a call 429, the core shall hold, for that instance alon
 The shared sign-in client shall bind each authorization, device, token, refresh and revoke request to its `registry` or `space` scope, defaulting an omitted client scope to `space`, and keep credentials independently by canonical origin and purpose, treating legacy origin-only entries solely as Space credentials ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - registry sign-in reads its account through the registry account API, acquires no host description or Git origin, and registers no Space;
-- registry devices carry no Space server, person or admission ticket;
 - refresh, refusal and sign-out affect only the selected purpose's credential, even when both share an origin.
 
 ## Internal Behavior
@@ -194,8 +193,9 @@ When a real core syncs an individual repository against the stand-in Space, the 
 
 - an unrelated repository detail failure leaves the selected sync available and the full read time unchanged;
 - a repository moved outside the personal namespace stops the transfer, retains its local files and receives no new records, including during catch-up;
-- before the first account read after startup, a separate Git address reported by a Space is refused as an external records remote. An unavailable description blocks an ambiguous HTTP(S) destination while an explicitly configured local path still syncs;
-- a Git URL rewrite, separate push URL or HTTP redirect cannot divert a records transfer to an unverified Space repository;
+- a previously reported separate Git address is recognized after restart and its personal repository routes through an ownership check while signed in, and an unavailable Space does not prevent an independent external records remote from syncing;
+- a configured LFS endpoint for a different Space repository is refused before object fetch;
+- a Git URL rewrite or separate push URL does not divert a managed transfer from its approved destination, and external Git remotes keep their redirect behavior;
 - target, catalog and authentication failures prevent transfer, and a held response across sign-out cannot restore access;
 - a later complete read supersedes an earlier target read, while a target-only check after restart leaves the first full read due.
 

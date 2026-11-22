@@ -417,7 +417,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
 });
 
-test("storage-38, space-91, storage-31, space-57, space-4: the personal settings repository placed at two instances on separate Git backends by their sign-ins, syncing directly at both, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
+test("storage-38, space-91, storage-31, space-12, space-4: the personal settings repository placed at two instances on separate Git backends by their sign-ins, syncing directly at both, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
   const firstFolder = hostFolder(first);
@@ -634,6 +634,14 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   const followed = hostKey(second, `${LOGIN}/beacon-spex`);
   const followedClone = clonePath(home.dataDir, followed);
   const transports = first.script.transportCredentials.length;
+  second.script.unavailable(1);
+  mark = home.client.mark();
+  await home.client.expectOk("space.leave", { repository: beacon, instance: first.url, confirmed: true });
+  const stopped = await home.client.waitRepository(mark, beacon, (row) => row.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "unreachable" && stopped.sync.retry);
+  assert.equal(stopped.sync.message, `Could not reach ${SECOND_NAME}`);
+  assert.equal(Home.load(home.dataDir).keyForFolder(beaconCode), beacon);
+  assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, beacon)), [firstFolder]);
   mark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.leave", { repository: beacon, instance: first.url }), { accepted: true });
   const renamed = await home.client.waitRepository(mark, followed, (repository) => repository.sync.phase !== "running", 30_000);

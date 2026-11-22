@@ -346,7 +346,7 @@ msgstr "{name} is not at {registry}, or private — check the name and your sign
 msgid "{name} is not in spex.yaml here"
 msgstr "{name} is not in spex.yaml here"
 
-#. Refusal: the command names a project's or a group's records that this computer does not hold; {name} names them; Refresh is the Space surface's control
+#. Refusal: the command names the project's records that this computer does not hold; {name} names them; Refresh is the Space surface's control
 #: src/space.ts
 msgid "{name} is not on this computer — Refresh, then Retry"
 msgstr "{name} is not on this computer — Refresh, then Retry"
@@ -1831,7 +1831,7 @@ msgstr "No playbook runs in {name} — add a package that provides one"
 msgid "no project {projectId}"
 msgstr "no project {projectId}"
 
-#. Refusal: the key names no project's or group's records under workspace/; {key} is their path
+#. Refusal: the key names no project records under workspace/; {key} is their path
 #: src/store.ts
 msgid "no records {key} on this computer"
 msgstr "no records {key} on this computer"
@@ -2166,7 +2166,7 @@ msgstr "Published upload has a different byte length."
 msgid "Publishing stopped: {cause} — Retry"
 msgstr "Publishing stopped: {cause} — Retry"
 
-#. Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path
+#. Storage diagnostic: one project's records appear in two pairs of home.yaml; {key} is their path
 #: src/home.ts
 msgid "records {key} belong to two project folders"
 msgstr "records {key} belong to two project folders"
@@ -2849,7 +2849,7 @@ msgstr "These records are no longer available in your Space account"
 msgid "these records are not a folder"
 msgstr "these records are not a folder"
 
-#. Refusal: the folder holding a project's or a group's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control
+#. Refusal: the folder holding the project's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control
 #: src/space.ts
 msgid "These records are not a Git repository — Refresh, then Retry"
 msgstr "These records are not a Git repository — Refresh, then Retry"

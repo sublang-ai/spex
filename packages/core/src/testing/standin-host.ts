@@ -5,7 +5,7 @@
 // transport (git-host-12). Tests script OAuth and transport behavior
 // against bare repositories served by Git's own HTTP backend. Multiple
 // instances can share one backend while retaining their own accounts,
-// visibility, credentials and rate limits. Seeded groups represent
+// access, credentials and rate limits. Seeded groups represent
 // repositories outside a personal namespace.
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
@@ -27,15 +27,9 @@ export interface StandinGroup {
   fullPath: string;
   name: string;
   kind: "user" | "group";
-  /** Seeded membership metadata for a fixture's namespace. */
-  members?: StandinMember[];
 }
 
-/** A member by the Git host's own role name (e.g. "Developer"). */
-export interface StandinMember { id: string; login: string; displayName: string | null; role: string }
-
-/** One of the stand-in's roles (host-1): `id` a client sends back,
- * `name` the Git host's role name, and whether it may push. */
+/** One of the stand-in’s access roles and whether it may push. */
 export interface StandinRole { id: string; name: string; mayPush: boolean }
 
 export interface StandinRepository {
@@ -46,14 +40,11 @@ export interface StandinRepository {
   path: string;
   group: StandinGroup;
   description: string;
-  visibility: string;
   archived: boolean;
   lfs: boolean;
   /** The signed-in person's role on it, by the Git host's own names. */
   role: string;
-  /** Members besides the person. */
-  members: StandinMember[];
-  /** False once the person's membership was removed: left out of
+  /** False once access was withdrawn: left out of
    * listings, 404 on reads and on its transport. */
   listed: boolean;
   /** Whether a rule matching `spex` would block a push by a writer. */
@@ -155,8 +146,6 @@ export interface StandinScript {
     name: string;
     project?: Record<string, unknown>;
     archived?: boolean;
-    visibility?: string;
-    members?: StandinMember[];
     role?: string;
     empty?: boolean;
     description?: string;
@@ -171,8 +160,8 @@ export interface StandinScript {
    * Git system's own state, which the transport follows, is the first
    * instance's to script (DR-127). */
   archive(id: string, archived?: boolean): void;
-  /** Remove the person from a repository's members. */
-  removeMember(id: string): void;
+  /** Withdraw access to a repository, including Git transport. */
+  withdrawRepository(id: string): void;
   /** Set the person's role on a repository; over another instance's Git
    * backend, in this instance's answers alone, as `archive`. */
   accessLevel(id: string, role: string): void;
@@ -682,7 +671,6 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       path: repo.path,
       group: groupWire(repo.group),
       remote_url: remoteUrl(repo),
-      visibility: repo.visibility,
       archived: archivedOf(repo),
       empty: !heads.has("main"),
       lfs: repo.lfs,
@@ -821,7 +809,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     accounts: [DEFAULT_PERSON, ...DEFAULT_ACCOUNTS].filter((account) => account.login !== person.login).map((account) => ({ ...account })),
     groups: [
       personGroup,
-      { id: groupId("2002"), fullPath: "acme", name: "Acme", kind: "group", members: [{ ...person, role: "Owner" }] },
+      { id: groupId("2002"), fullPath: "acme", name: "Acme", kind: "group" },
       { id: groupId("2003"), fullPath: "acme/research", name: "Research", kind: "group" },
     ],
     get repositories() { return mine(); },
@@ -871,11 +859,9 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
         path: input.name,
         group,
         description: input.description ?? "",
-        visibility: input.visibility ?? "private",
         archived: input.archived === true,
         lfs: true,
         role: input.role ?? "Owner",
-        members: input.members ?? [],
         listed: true,
         blocked: false,
         bare,
@@ -906,7 +892,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       if (serves) repo.archived = archived;
       else archivedHere.set(repo, archived);
     },
-    removeMember: (id) => { findRepository(id).listed = false; },
+    withdrawRepository: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => {
       const repo = findRepository(id);
       if (serves) repo.role = role;
@@ -973,7 +959,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       const found = bearerDevice(bearerOf(req));
       if ("code" in found) return envelope(res, 401, found.code, found.message);
       if (found.device.scope !== "registry" || target.searchParams.get("scope") !== "registry") return envelope(res, 403, "wrong_scope", "Sign in to registry.");
-      return json(res, 200, { id: script.person.id, login: script.person.login, display_name: script.person.displayName, can_create_group: false });
+      return json(res, 200, { id: script.person.id, login: script.person.login, display_name: script.person.displayName });
     }
     if (path === "/login/app" && method === "GET") return loginApp(res, target.searchParams);
     if (path === "/login/device") return loginDevice(req, res, target.searchParams);
@@ -981,8 +967,6 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (path === "/api/v1/auth/token" && method === "POST") return token(req, res);
     if (path === "/api/v1/auth/revoke" && method === "POST") return revoke(req, res);
     if (path === "/api/v1/host" && method === "GET") {
-      // `groups`: whether root groups can be made, as the person's
-      // `can_create_group` says it (host-1, host-3).
       return json(res, 200, { display_name: displayName, git_origin: gitOrigin });
     }
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
@@ -1225,11 +1209,9 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       path: name,
       group,
       description,
-      visibility: "private",
       archived: false,
       lfs: true,
       role: "Owner",
-      members: [],
       listed: true,
       blocked: false,
       bare,

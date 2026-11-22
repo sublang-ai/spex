@@ -57,9 +57,8 @@ export function clonePath(home: string, key: string): string {
   return `${home.replace(/\/$/, "")}/workspace/${key}`;
 }
 
-/** The phrase a step waiting on someone else's rights reads on its
- * row (space-58, space-64): the step and the group, phrased here in the
- * reader's language; the host's own words ride the row's title. */
+/** Describe a waiting placement step in the reader's language
+ * (space-64), with the Space's own words in the row's title. */
 export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): string {
   return waiting.step === "create"
     ? i18n._("Waiting for the Space to create the records")
@@ -211,9 +210,7 @@ export function lineOutcome(
 ): PlacementState["outcome"] {
   const outcome = line.outcome;
   if (!outcome) return null;
-  // Old cores may leave a first-share acknowledgement outcome in a
-  // snapshot. The chosen destination already authorizes syncing
-  // (space-57, DR-215); it no longer asks the reader for an action.
+  // A waiting step is rendered from the placement's waiting state (space-64).
   if (outcome.kind === "waiting") return null;
   const putAway = dismissed !== undefined && dismissed === JSON.stringify(repo.sync);
   return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
@@ -516,10 +513,7 @@ export function projectName(name: string): string {
   return name.replace(/-spex$/i, "") || name;
 }
 
-/** A project opening at a place (run-view-168, space-63): a spex
- * repository whose join runs there, named as its code is, with the step
- * in flight — or one whose join stopped, with its cause. Its id is the
- * row's key, which the project bears once that place's core lists it. */
+/** A Space project opening here (run-view-200, run-view-201). */
 export interface OpeningProject {
   id: string;
   name: string;
@@ -528,9 +522,7 @@ export interface OpeningProject {
   stopped?: string;
 }
 
-/** What a row says of its open (run-view-168): the join running or
- * stopped on it; nothing for any other row. */
-export function openingOf(repo: RepositoryState | undefined): OpeningProject | undefined {
+function openingOf(repo: RepositoryState | undefined): OpeningProject | undefined {
   if (!repo) return undefined;
   const sync = repo.sync;
   if (sync.phase === "running" && sync.op === "join") return { id: repo.key, name: projectName(repo.name), step: sync.step };
@@ -538,33 +530,24 @@ export function openingOf(repo: RepositoryState | undefined): OpeningProject | u
   return undefined;
 }
 
-/** Every row a Space state lists; a state read in part lists what it
- * holds. */
-function rowsOf(state: SpaceState): RepositoryState[] {
-  return state.repositories;
-}
-
-/** The projects opening at a place (run-view-168): every row of its
- * Space state whose join runs, left out once its core lists the
- * project. */
+/** The sidebar's opening rows (run-view-200). */
 export function openingProjects(state: SpaceState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
   if (!state) return [];
-  return rowsOf(state)
+  return state.repositories
     .map((repo) => openingOf(repo))
     .filter((entry): entry is OpeningProject => entry !== undefined && entry.stopped === undefined && !projects.some((project) => project.id === entry.id));
 }
 
-/** What a place says of opening the project keyed `id` (run-view-168):
- * its join running or stopped, nothing otherwise. */
+/** The selected project's opening or stopped state (run-view-200, run-view-201). */
 export function openingAt(state: SpaceState | undefined, id: string | undefined): OpeningProject | undefined {
   if (!state || id === undefined) return undefined;
-  return openingOf(rowsOf(state).find((repo) => repo.key === id));
+  return openingOf(state.repositories.find((repo) => repo.key === id));
 }
 
 /** "Personal" (space-1, DR-172): your own records and your namespace
  * at a Space, as a heading and a picker's first choice. */
 export const personalLabel = (): string =>
-  i18n._({ id: "Personal", comment: "your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into" });
+  i18n._({ id: "Personal", comment: "heading for your personal projects and records at a Space" });
 
 /** "This computer" (space-1, DR-172): the heading of what stands in no
  * group — your sessions before any sign-in, and each project not yet
@@ -573,7 +556,7 @@ export const thisComputerLabel = (): string =>
   i18n._({ id: "This computer", comment: "the heading of the projects and sessions kept on this computer alone, in no group at any Space" });
 
 /** Whether a spex repository a Space lists may hold the records of a
- * project here (space-58): its code read alike — the core names where a
+ * project here (space-97): its code read alike — the core names where a
  * project's code is, never its remote (space-1) — at a Space or
  * elsewhere, and the same project name, compared as the reader reads
  * them. */
@@ -589,7 +572,7 @@ export function sameCode(listed: RepositoryState, local: RepositoryState): boole
 }
 
 /** A path's last segment: a working folder's name, the default name
- * of the spex repository made for it (space-58). */
+ * of the spex repository made for it (space-97). */
 export function lastSegment(path: string): string {
   return path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? path;
 }

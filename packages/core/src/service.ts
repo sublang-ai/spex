@@ -1622,7 +1622,7 @@ export class CoreService {
     } finally {
       bound.clear();
       // The forms go back as the process started with them, however far
-      // the stop got (core-service-126), Claude's settings' first.
+      // the stop got (core-service-155).
       this.claudeSettings.restore();
     }
   }
@@ -3054,7 +3054,7 @@ export class CoreService {
               command: command.command,
               intent: command.intent,
               libraryDir,
-              // The compile's agent is an agent run (core-service-126).
+              // Pass the current agent environment to the compiler (core-service-155).
               env: this.agentRunEnv(),
               // The form's compile runs on the Captain's block
               // (playbook-library-42).
@@ -3435,7 +3435,7 @@ export class CoreService {
         return this.environments.setRegistry(command.repository, command.origin);
       case "space.get":
         return this.requireSpace().get();
-      // The Git host (git-host-2..10, space-3..6, space-58..65): sign-in
+      // The Git host (git-host-2..10, space-3..6, space-63, space-64, space-65, space-97): sign-in
       // and its set-up, the host read, picks, joins and members.
       case "space.refresh":
         return this.requireSpace().refresh();

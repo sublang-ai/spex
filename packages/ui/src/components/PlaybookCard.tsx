@@ -29,7 +29,6 @@ import {
 } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
-import type { SpexClient } from "../lib/client.js";
 import { bindRole } from "../lib/config-ops.js";
 import { i18n } from "../i18n.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
@@ -84,13 +83,13 @@ function effectivePlayers(entry: PlaybookAvailability): Record<string, string> {
 /** The write behind ✎ (playbook-library-3, playbook-library-4): the
  * entry of the card's scope, written whole where only the default — or,
  * for a project's override, only the global binding — stood. */
-export async function writeBinding(
-  client: Pick<SpexClient, "command">,
+async function writeBinding(
   scope: CardScope,
   entry: PlaybookAvailability,
   role: string,
   change: BindingChange,
 ): Promise<void> {
+  const client = useAppStore.getClient();
   // Where no entry of the scope stands, saving the player that already
   // plays the role, with nothing pinned, changes nothing and writes
   // nothing (playbook-library-3, playbook-library-4).
@@ -110,14 +109,14 @@ export async function writeBinding(
       });
       if (!tuned) return;
     }
-    await bindRole(entry.id, role, change, scope.repository, client as SpexClient);
+    await bindRole(entry.id, role, change, scope.repository, client);
     return;
   }
   const repository = scope.projectId;
   const written = entry.written?.project;
   if (scope.kind === "project") {
     if (written) {
-      await bindRole(entry.id, role, { playerId: change.playerId }, repository, client as SpexClient);
+      await bindRole(entry.id, role, { playerId: change.playerId }, repository, client);
       return;
     }
     if (unchanged) return;
@@ -141,7 +140,7 @@ export async function writeBinding(
     return;
   }
   if (written) {
-    await bindRole(entry.id, role, { playerId: target }, repository, client as SpexClient);
+    await bindRole(entry.id, role, { playerId: target }, repository, client);
     return;
   }
   await client.command("config.edit", {
@@ -311,7 +310,6 @@ function RoleLine({
   readiness: ReadinessEntry[];
   onChanged: () => void;
 }) {
-  const store = useAppStore;
   const [open, setOpen] = useState<string>();
   const anchors = useRef(new Map<string, HTMLButtonElement>());
   const anchorRef = useRef<HTMLButtonElement | null>(null);
@@ -404,7 +402,7 @@ function RoleLine({
           {...(scope.kind === "override" ? { sameAsGlobal: { selected: !overridden(entry, open), playerId: globalPlayer(entry, open) } } : {})}
           anchorRef={anchorRef}
           onSave={(next) =>
-            writeBinding(store.getClient(), scope, entry, open, next).then(() => {
+            writeBinding(scope, entry, open, next).then(() => {
               setOpen(undefined);
               onChanged();
             })

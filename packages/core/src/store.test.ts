@@ -949,7 +949,7 @@ test("storage-14: a live core of the former layout holding .lock keeps this one 
   new Store({ machineIdentity, dir, own: "tester" }).close();
 });
 
-test("storage-2: a new home writes home.yaml with this device, the origin it was created with, no instance and your own group", () => {
+test("storage-2: a new home writes home.yaml with this device, the origin it was created with, no instance and the local records folder name", () => {
   const dir = tempRoot();
   const store = new Store({ machineIdentity, dir, own: "tester", env: { ...process.env, SPEX_HOST_URL: "HTTPS://Host.test:443/" } });
   const project = store.registerProject(join(tmpdir(), "spex-home-file"), "Home File", 1);
@@ -963,7 +963,7 @@ test("storage-2: a new home writes home.yaml with this device, the origin it was
   assert.equal(file.own, "tester");
   assert.equal(project.id, "tester/home-file-spex");
   assert.deepEqual(file.folders, [{ path: join(tmpdir(), "spex-home-file"), repository: "tester/home-file-spex" }]);
-  assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex", group: "tester", own: true });
+  assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex" });
   // The project file names the code's remote, none here (storage-3).
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "workspace", "tester", "home-file-spex", "project.json"), "utf8")), { format: 1, name: "Home File", remote: null });
   // Your own group's spex repository stands on its spex branch, seeded.
@@ -1147,7 +1147,7 @@ test("storage-12: an unpaired clone and a pair whose clone is missing are repair
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   const repairs = reopened.storageDiagnostics().map((entry) => entry.repair);
   assert.deepEqual(repairs.find((repair) => repair?.kind === "repository"),
-    { kind: "repository", repository: kept.id, name: "kept-spex", group: "tester", projectName: "kept", directories: [], sessions: 0, key: `${kept.id}|` });
+    { kind: "repository", repository: kept.id, name: "kept-spex", projectName: "kept", directories: [], sessions: 0, key: `${kept.id}|` });
   assert.deepEqual(repairs.find((repair) => repair?.kind === "folder"),
     { kind: "folder", repository: lost.id, directories: [join(tmpdir(), "spex-lost")], sessions: 0, key: `${lost.id}|${join(tmpdir(), "spex-lost")}` });
   assert.deepEqual(reopened.listProjects(), []);

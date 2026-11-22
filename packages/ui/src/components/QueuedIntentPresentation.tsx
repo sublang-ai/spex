@@ -55,7 +55,7 @@ export function runsOnPhrase(label: string): string {
     id: "Runs on {label}",
     values: { label },
     comment:
-      "queued row: the intent is assigned to another runtime, named by its label — the server's name on a seat, else the host name — and runs there alone",
+      "queued row: the intent is assigned to another runtime, named by its label, and runs there alone",
   });
 }
 

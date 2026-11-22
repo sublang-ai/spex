@@ -346,7 +346,7 @@ msgstr "{name} 不在 {registry} 上，或是私有的 — 请检查名称和登
 msgid "{name} is not in spex.yaml here"
 msgstr "此处的 spex.yaml 中没有 {name}"
 
-#. Refusal: the command names a project's or a group's records that this computer does not hold; {name} names them; Refresh is the Space surface's control
+#. Refusal: the command names the project's records that this computer does not hold; {name} names them; Refresh is the Space surface's control
 #: src/space.ts
 msgid "{name} is not on this computer — Refresh, then Retry"
 msgstr "{name} 不在本机 — 请刷新，然后重试"
@@ -1831,7 +1831,7 @@ msgstr "{name} 中没有可运行的规程 — 请添加一个提供规程的规
 msgid "no project {projectId}"
 msgstr "没有项目 {projectId}"
 
-#. Refusal: the key names no project's or group's records under workspace/; {key} is their path
+#. Refusal: the key names no project records under workspace/; {key} is their path
 #: src/store.ts
 msgid "no records {key} on this computer"
 msgstr "本机没有记录 {key}"
@@ -2166,7 +2166,7 @@ msgstr "已保存文件的长度与上传声明不符。"
 msgid "Publishing stopped: {cause} — Retry"
 msgstr "发布已停止：{cause} — 请重试"
 
-#. Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path
+#. Storage diagnostic: one project's records appear in two pairs of home.yaml; {key} is their path
 #: src/home.ts
 msgid "records {key} belong to two project folders"
 msgstr "记录 {key} 属于两个项目文件夹"
@@ -2849,7 +2849,7 @@ msgstr "你的 Space 账户已无法访问这些记录"
 msgid "these records are not a folder"
 msgstr "这些记录不是文件夹"
 
-#. Refusal: the folder holding a project's or a group's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control
+#. Refusal: the folder holding the project's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control
 #: src/space.ts
 msgid "These records are not a Git repository — Refresh, then Retry"
 msgstr "这些记录不是 Git 仓库 — 请刷新，然后重试"

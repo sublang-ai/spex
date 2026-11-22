@@ -913,7 +913,7 @@ export class Store {
   private requireRepository(key: string): SpexRepository {
     const repository = this.repository(key);
     if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no records {key} on this computer",
-      comment: "Refusal: the key names no project's or group's records under workspace/; {key} is their path", values: { key } }));
+      comment: "Refusal: the key names no project records under workspace/; {key} is their path", values: { key } }));
     return repository;
   }
 
@@ -1825,15 +1825,14 @@ export class Store {
     this.saveHome();
   }
 
-  /** A listed instance's display name as its last read named it
-   * (storage-2), written only where it changed; a home that does not
-   * read keeps it unwritten until a later read. */
-  setDisplayName(origin: string, displayName: string): void {
+  /** Persist a listed Space's display name and Git address (storage-2)
+   * when either changes and the current home file can be read. */
+  setSpaceDescription(origin: string, displayName: string, gitOrigin: string): void {
     this.refreshHome();
     if (this.homeProblem) return;
     const entry = this.homeFile.instance(origin);
-    if (!entry || entry.displayName === displayName) return;
-    this.homeFile.setDisplayName(origin, displayName);
+    if (!entry || (entry.displayName === displayName && entry.gitOrigin === gitOrigin)) return;
+    this.homeFile.setDisplayName(origin, displayName, gitOrigin);
     this.saveHome();
   }
 

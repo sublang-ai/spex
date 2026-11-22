@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's menus (space-1, space-111, run-view-170, DR-159,
+// The Space surface's menus (space-1, space-111, DR-159,
 // DR-172): a row's and a group heading's one overflow control, "More",
 // with a project's other opening destinations grouped in that menu.
 // One trigger opens a menu of acts anchored beneath it through the
@@ -41,7 +41,7 @@ const MENU_ITEM =
 
 /** The words "More" the overflow control is named by (space-1). */
 export const moreLabel = (): string =>
-  i18n._({ id: "More", comment: "the one overflow control of a Space row, a group's heading or a server's line: opens its other acts" });
+  i18n._({ id: "More", comment: "the overflow control for a Space or project row" });
 
 /** A menu button: the trigger, and while open, its entries beneath it.
  * `trigger` is what the button shows; `name` its accessible name. */
@@ -156,7 +156,7 @@ export function MoreMenu({
   const name = i18n._({
     id: "More for {name}",
     values: { name: of },
-    comment: "the accessible name of the overflow control \"More\" on a Space row, a group's heading or a server's line; {name} is what it acts on",
+    comment: "the accessible name of the overflow control \"More\" on a Space or project row; {name} identifies the row",
   });
   return (
     <MenuButton

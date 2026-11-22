@@ -167,7 +167,7 @@ export const BRANCH: PlacementBranch = {
 };
 
 /** The opened project's placement at the fixtures' instance, held and
- * reachable, its only member the account, nothing synced since its
+ * reachable, nothing synced since its
  * check, unless a test says otherwise (space-30, space-87). */
 export function placement(over: Partial<PlacementState> = {}): PlacementState {
   return placementState({
@@ -268,10 +268,6 @@ export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): 
     ...home,
     issues: home.issues ?? home.diagnostics?.filter((entry) => !entry.repair?.declined && !entry.notice?.dismissed).length ?? 0,
   };
-}
-
-export function withInstance(state: SpaceState, over: Partial<InstanceState>): SpaceState {
-  return { ...state, instances: [{ ...state.instances[0]!, ...over }, ...state.instances.slice(1)] };
 }
 
 export function noInstance(over: Partial<SpaceState> = {}, repos: RepositoryState[] = []): SpaceState {
@@ -400,7 +396,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
   }
 }
 
-/** Before each test: the mocked client, the store's Groups slice
+/** Before each test: the mocked client, the store's Space state
  * cleared, no clipboard and no native bridge. */
 export function installClient(): void {
   commandMock.mockReset();
@@ -449,7 +445,6 @@ export const live = (): string => screen.getByTestId("space-live").textContent ?
 /** Words the surface never shows (space-27): Git's own for a sync's
  * sides, and "space" or "namespace" for the host's things. */
 export const GIT_WORDS = /\b(ours|theirs|HEAD|origin\/main|origin\/spex|MERGE_HEAD)\b/;
-export const HOST_WORDS = /\b(space|namespace)\b/i;
 /** "remote" says only what space-7 and space-23 name it for: the
  * code's remote, never the host's things. */
 export function strayRemote(text: string): boolean {

@@ -8,6 +8,7 @@ import {
   retryAfterSeconds,
   type GitHostClient,
   type HostAccount,
+  type HostDescription,
   type HostRepository,
   type SignInCause,
 } from "@sublang/spex/git-host";
@@ -77,19 +78,24 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
 }
 
 /** Read the catalog and enrich only personal repositories. */
-export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
-  const { repositories, ...catalog } = await readHostCatalog(client, true);
+export async function readHostView(client: GitHostClient, onDescription: (description: HostDescription) => void): Promise<HostView> {
+  const { repositories, ...catalog } = await readHostCatalog(client, onDescription, true);
   const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, (repository) =>
     readHostListing(client, repository.id, catalog.account, { retryRead: true }));
-  return { ...catalog, readAt: now(), listings: listings.filter((listing) => listing !== undefined) };
+  return { ...catalog, readAt: Date.now(), listings: listings.filter((listing) => listing !== undefined) };
 }
 
 /** Read identity and the projects the Space attributes to that account. */
-export async function readHostCatalog(client: GitHostClient, retryRead = false): Promise<HostCatalog> {
+export async function readHostCatalog(
+  client: GitHostClient,
+  onDescription: (description: HostDescription) => void,
+  retryRead = false,
+): Promise<HostCatalog> {
   const wait = { wait: true };
   const essentials = { ...wait, retryRead };
+  const description = client.describe(wait).then((value) => { onDescription(value); return value; });
   const [described, account, repositories] = await drainRead([
-    client.describe(wait), client.me(essentials), client.repositories(essentials),
+    description, client.me(essentials), client.repositories(essentials),
   ] as const);
   return { ...described, account, repositories: repositories.filter((repository) => ownsHostRepository(account, repository)) };
 }
@@ -195,7 +201,7 @@ export function waitingPhrase(words: string): string {
     : i18n._({ id: "Waiting for the records branch", comment: "A Space has yet to prepare the records branch." });
 }
 
-/** A name the host reports taken (space-58). */
+/** A name the host reports taken (space-97). */
 export function nameTaken(name: string, space: string): string {
   return i18n._({
     id: "{name} is already used at {space}. Choose another name.",

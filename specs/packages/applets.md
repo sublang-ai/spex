@@ -73,7 +73,7 @@ While an applet's frame is shown [[applets-2](#applets-2)], when the framed page
 
 #### applets-7
 
-When an integration suite starts a real core on a scratch home with a project whose environment installs, from the core's stand-in registry, a release holding an applet and requests by path a folder of the working folder holding an applet of another id, and the global environment’s environment installs the first release too, it shall assert:
+When an integration suite starts a real core on a scratch home with a project whose environment installs, from the core's stand-in registry, a release holding an applet and requests by path a folder of the working folder holding an applet of another id, and the global environment installs the first release too, it shall assert:
 
 - `applet.open` for the project's applet answers a path `/applets/<capability>/` whose capability is 43 base64url characters, the same path on a second ask, another path for the global environment’s applet of the same id, and `not_found` for an unknown applet, an unknown repository and a project pairing no working folder, and `invalid_request` for the path source's applet once its folder is removed [[applets-3](#applets-3)];
 - `GET` of `/`, `index.html`, a script beside it, `~/README.md` and `~/` — a listing naming the README and a folder, no link — each answer `200` with their bytes, content types, `no-store`, `nosniff`, DNS prefetching off and `Access-Control-Allow-Origin: *` [[applets-4](#applets-4)], the policy naming the request's own scheme and `Host` [[applets-5](#applets-5)], and `HEAD` the same headers without a body [[applets-4](#applets-4)];

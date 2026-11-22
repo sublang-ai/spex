@@ -8,7 +8,7 @@
 // HTTP transport, and groups and sharing — the host's roles and what
 // it lets the person do, groups created, members added and removed
 // (space-37, space-38, space-52, space-59, space-65, git-host-4,
-// git-host-5, git-host-7, git-host-8, git-host-11, git-host-15..17) —
+// git-host-5, git-host-7, git-host-11, git-host-21) —
 // hermetic, on loopback alone, in a file budget of its own.
 
 import { test } from "node:test";
@@ -496,7 +496,7 @@ test("space-37: Choosing a Space creates personal <name>-spex there and pushes, 
   // Your own group's id names no group of the instance: refused before
   // the stand-in is asked to create anything (git-host-6).
   // A group picked: `<name>-spex` created there, the clone following it
-  // under `workspace/ada/`, its `spex` pushed (space-58, space-60).
+  // under `workspace/ada/`, its `spex` pushed (space-97, space-60).
   const from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name: "alpha" } }), { accepted: true });
   const created = await home.client.waitRepository(from, hostKey(host, "ada/alpha-spex"), (repository) => repository.sync.phase === "done", syncTimeoutMs);
@@ -518,7 +518,7 @@ test("space-37: Choosing a Space creates personal <name>-spex there and pushes, 
   assert.equal(git(clone, "log", "-1", "--format=%an <%ae>"), "ada <ada@users.noreply.127.0.0.1>");
   // The host's own URLs are its to hand over (space-5).
   await home.client.expectError("space.remote.set", { repository: hostKey(host, "ada/alpha-spex"), url: `${host.gitOrigin}/ada/other-spex.git` }, "invalid_request", /^Choose that Space as a sync destination$/);
-  // A name the host reports taken is refused in place (space-58).
+  // A name the host reports taken is refused in place (space-97).
   host.script.addRepository({ group: "ada", name: "beta-spex" });
   const fromBeta = home.client.mark();
   const beta = await addFolder(home, gitFolder("beta"));
@@ -1335,7 +1335,7 @@ test("space-5: a remote set while space.remote.set read the clone is refused, ne
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
 });
 
-test("space-58: a remote set while a pick asked the host is refused, never replaced", async (t) => {
+test("space-97: a remote set while a pick asked the host is refused, never replaced", async (t) => {
   const host = await startHost();
   const dataDir = mkdtempSync(join(scratch, "pick-origin-"));
   const key = `${LOGIN}/raced-spex`;
@@ -1367,7 +1367,7 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
 });
 
-test("space-58, storage-35: a clone under your own group's folder holding only the path placement origin is picked into a group, moving under the instance's folder at its path there with origin kept beside its new placement", async (t) => {
+test("space-97, storage-35: a local clone holding only the path placement origin is picked into the account’s Space namespace, moving under the instance's folder at its path there with origin kept beside its new placement", async (t) => {
   const host = await startHost();
   const home = await startHome("path-only-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1944,7 +1944,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   assert.ok((await b.client.expectOk("session.list", {})).some((session) => session.id === sessionA2));
   assert.ok(brought.local.some((unit) => unit.sessionId === sessionB), "this home's session stays here, listed to send");
   // The membership removed: unreachable on the next read, the clone whole.
-  host.script.removeMember(id);
+  host.script.withdrawRepository(id);
   const fromGone = b.client.mark();
   await b.client.expectOk("space.refresh", {});
   const gone = await b.client.waitRepository(fromGone, renamed, (repository) => repository.state === "unreachable");

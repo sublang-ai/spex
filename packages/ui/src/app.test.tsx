@@ -30,7 +30,6 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
  * here. Add a command to this table rather than teaching a caller to
  * survive a reply the protocol forbids. */
 function defaultReply(type: string): object {
-  if (type === "server.list") return { servers: [], failures: [] };
   if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
   return type === "specs.get"
     ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
@@ -145,7 +144,7 @@ const SESSIONS: SessionInfo[] = [
 
 // The one attention fold (DR-035): the badge and every dot re-source
 // from the core-derived ledger, so the fixture serves one.
-const LEDGER = {
+const LEDGER: LedgerState = {
   intents: [],
   attention: [
     {
@@ -166,7 +165,7 @@ const LEDGER = {
     },
   ],
   badge: 2,
-} as never;
+};
 
 function seed(): void {
   useAppStore.setState({
@@ -217,7 +216,7 @@ beforeEach(() => {
   // The App re-pulls the ledger once connected (DR-035): the default
   // reply must keep serving the seeded fold.
   commandMock.mockImplementation(async (type: string) =>
-    type === "ledger.get" ? (LEDGER as object) : defaultReply(type),
+    type === "ledger.get" ? LEDGER : defaultReply(type),
   );
   // Store actions resolve the module-local client, which the module
   // mock above cannot reach.
@@ -313,7 +312,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     // and tooltip (run-view-108).
     act(() => {
       useAppStore.setState({
-        ledger: { ...(LEDGER as Record<string, unknown>), badge: 12 } as never,
+        ledger: { ...LEDGER, badge: 12 },
       });
     });
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("9+");
@@ -859,7 +858,7 @@ describe("run-view-50: a boot that never connects says so, after its grace", () 
   });
 });
 
-describe("run-view-50: one app-wide region announces changes", () => {
+describe("run-view-202: one app-wide region announces changes", () => {
   test("announces one loss and restoration through retries, without announcing startup", async () => {
     const ledger: LedgerState = { intents: [], attention: [], badge: 0 };
     commandMock.mockImplementation(async (type: string) => type === "ledger.get" ? ledger : defaultReply(type));
@@ -883,6 +882,26 @@ describe("run-view-50: one app-wide region announces changes", () => {
     expect(live.textContent).toBe("Connection restored.");
     await act(async () => {});
     expect(screen.getByTestId("app-live")).toBe(live);
+  });
+
+  test("baselines a populated first read and announces a new question once when its count rises", async () => {
+    useAppStore.setState({ ledger: undefined });
+    let initialRead: (ledger: LedgerState) => void = () => {};
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? new Promise<LedgerState>((resolve) => { initialRead = resolve; }) : defaultReply(type),
+    );
+    render(<App />);
+    const live = screen.getByTestId("app-live");
+    await act(async () => initialRead(LEDGER));
+    expect(live.textContent).toBe("");
+    const question: AttentionEntry = {
+      band: "interrupted", kind: "question", title: "Which branch?",
+      projectId: "p1", sessionId: "a-idle", since: NOW,
+    };
+    act(() => useAppStore.setState({
+      ledger: { ...LEDGER, attention: [...LEDGER.attention, question], badge: LEDGER.badge + 1 },
+    }));
+    expect(live.textContent).toBe("A player is waiting for your reply: Which branch?");
   });
 
   test("announces increases and new questions, including a question replacing existing attention", async () => {
@@ -911,6 +930,39 @@ describe("run-view-50: one app-wide region announces changes", () => {
     expect(live.textContent).toBe("1 session needs your attention");
     expect(live.firstElementChild).not.toBe(announcement);
   });
+});
+
+test("run-view-203: choose an opening project and recover a stopped opening in Space", async () => {
+  const key = "ada/incoming-spex";
+  const incoming = repositoryRow(key, {
+    name: "incoming-spex",
+    sync: { phase: "running", op: "join", step: "check", since: NOW, cancelable: false },
+  });
+  const space = spaceState({ repositories: [incoming] });
+  commandMock.mockImplementation(async (type: string) => type === "space.get" ? space : defaultReply(type));
+  useAppStore.setState({ space });
+  render(<App />);
+  const row = screen.getByRole("treeitem", { name: "incoming, Opening…" });
+  expect(row.getAttribute("aria-selected")).toBe("false");
+  fireEvent.click(row);
+  expect(row.getAttribute("aria-selected")).toBe("true");
+  const opening = screen.getByTestId("project-opening");
+  expect(within(opening).getByRole("heading", { name: "incoming" })).toBeTruthy();
+  expect(row.getAttribute("title")).toBe("Checking…");
+  expect(within(opening).getByRole("status").textContent).toBe("Checking…");
+  act(() => useAppStore.setState({
+    space: { ...space, repositories: [{
+      ...incoming,
+      sync: {
+        phase: "stopped", op: "join", step: "check", cause: "unreachable",
+        message: "Space is unavailable", guidance: "", retry: true,
+      },
+    }] },
+  }));
+  expect(screen.queryByRole("treeitem", { name: "incoming, Opening…" })).toBeNull();
+  expect(within(opening).getByRole("status").textContent).toBe("Checking stopped — Space is unavailable");
+  fireEvent.click(within(opening).getByRole("button", { name: "Open Space" }));
+  expect(await screen.findByTestId("space-surface")).toBeTruthy();
 });
 
 describe("run-view-81: the reader sets the Captain/players split", () => {
@@ -1311,7 +1363,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
     // Open the idle session as a tab, so the removal has one to close.
     commandMock.mockImplementation(async (type: string) =>
       type === "ledger.get"
-        ? (LEDGER as object)
+        ? LEDGER
         : type === "history.get"
           ? { records: [] }
           : defaultReply(type),
@@ -1385,7 +1437,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
       if (type === "session.delete") {
         throw new Error("the session is live — end it first");
       }
-      return type === "ledger.get" ? (LEDGER as object) : defaultReply(type);
+      return type === "ledger.get" ? LEDGER : defaultReply(type);
     });
     render(<App />);
     fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));

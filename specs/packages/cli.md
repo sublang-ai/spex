@@ -210,7 +210,7 @@ When the packed CLI, installed into a scratch prefix from `npm pack`, runs with 
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
 - after a hand edit to `demo/spec`'s placed copy, `spex install` prints `spec edited in specs/ — left as yours` beneath `demo/spec` [[cli-4](#cli-4)], and once the registry publishes `demo/spec` 1.1.0, `spex update` prints `demo/spec` with both versions and, beneath it, `spec edited in specs/ — left as yours, 1.1.0 waiting` [[cli-5](#cli-5)];
 - `spex remove demo/other` drops the request, the files and the placement and prints the loss, a name not requested refused, and `spex remove sublang/playbooks`, in the folder whose lock records the built-in package, drops its request and prints the loss as for any other [[cli-3](#cli-3)];
-- the environment root is found from a subfolder of the working folder, and from a working folder without `spex.yaml` at its Git top level [[cli-1](#cli-1)].
+- the environment root is found from a subfolder and defaults to the Git top level when no manifest exists. A root inside the Spex home, the user's home folder, or a root whose `.spex` contains the Spex home is refused before package files are changed [[cli-1](#cli-1)].
 
 #### cli-16
 

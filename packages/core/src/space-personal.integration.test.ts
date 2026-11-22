@@ -40,13 +40,27 @@ async function refresh(home: Awaited<ReturnType<typeof startHome>>, host: Awaite
   return home.client.waitSpace(mark, (state) => (instanceOf(state, host.url)?.readAt ?? 0) > last, 30_000);
 }
 
+test("space-97: if the Space cannot verify the account, Pick names the Space and creates nothing until retried", async (t) => {
+  const host = await startHost();
+  const home = await signedIn("pick-account-unavailable", host);
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, gitFolder("orchard"));
+  const fields = { repository: key, choice: { kind: "create" as const, instance: host.url, name: "orchard" } };
+  await refresh(home, host);
+  const creations = host.script.creations.length;
+  host.script.unavailable(1);
+  await home.client.expectError("space.pick", fields, "invalid_request", /^Could not reach /);
+  assert.equal(host.script.creations.length, creations);
+  const mark = home.client.mark();
+  await home.client.expectOk("space.pick", fields);
+  await home.client.waitRepository(mark, hostKey(host, "ada/orchard-spex"), (row) => row.sync.phase === "done", 30_000);
+  assert.equal(host.script.creations.length, creations + 1);
+});
+
 test("DR-246: a second home discovers and joins only the account’s personal projects", async (t) => {
   const host = await startHost();
   const group = host.script.addRepository({ group: "acme", name: "team-spex" });
-  const another = host.script.addRepository({
-    group: "bob", name: "another-spex",
-    members: [{ id: "1001", login: "ada", displayName: "Ada Lovelace", role: "Developer" }],
-  });
+  const another = host.script.addRepository({ group: "bob", name: "another-spex" });
   const writer = await signedIn("personal-writer", host);
   t.after(() => writer.stop());
   const { key, id, clone } = await personalProject(writer, host);
@@ -69,7 +83,7 @@ test("DR-246: a second home discovers and joins only the account’s personal pr
   assert.ok(host.script.requests.every((request) => !/\/api\/v1\/host\/(?:groups|servers)|\/members$/.test(request.path)));
 });
 
-test("DR-246: a cached project moved out of the personal namespace cannot open, attach, or receive a push", async (t) => {
+test("space-134, space-133: a cached project moved out of the personal namespace cannot open, attach, or receive a push", async (t) => {
   const first = await startHost();
   const second = await startHost();
   const home = await signedIn("personal-ownership", first);
@@ -113,7 +127,7 @@ test("DR-246: a cached project moved out of the personal namespace cannot open, 
   assert.throws(() => git(replacement.bare, "show", "spex:local-only.md"));
 });
 
-test("DR-246: catch-up checks the first destination again when a later personal placement adds records", async (t) => {
+test("space-134, space-133: catch-up checks the first destination again when a later personal placement adds records", async (t) => {
   const first = await startHost();
   const second = await startHost();
   const home = await signedIn("personal-catch-up", first);

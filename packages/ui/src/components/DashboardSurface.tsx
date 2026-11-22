@@ -500,7 +500,7 @@ export function DashboardSurface({
   // The place the project groups stand at: this computer's, the
   // Dashboard joining the places' attention alone (DR-133). A link to a
   // project, or to Projects from the empty state, opens at this place,
-  // whichever the Projects surface last showed (run-view-168).
+  // whichever the Projects surface last showed (dashboard-9).
   const home = useAppStore;
   const projects = useAppStore((state) => state.projects);
   const sessions = useAppStore((state) => state.sessions);
@@ -608,7 +608,7 @@ export function DashboardSurface({
 
   // The Sources guidance points at the project's Overview, where the
   // repository header shows the GitHub binding (dashboard-8, DR-038),
-  // opened at the project's place (run-view-168).
+  // opened at the project's place (dashboard-9).
   const openOverview = (projectId: string) => () => {
     const state = home.getState();
     state.setCurrentProject(projectId);

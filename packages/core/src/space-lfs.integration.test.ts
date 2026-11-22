@@ -102,6 +102,16 @@ test("git-host-14: an alternate LFS endpoint receives no brokered credential", a
   assert.equal(existsSync(join(clone, "asset.bin")), false);
 });
 
+test("git-host-14, git-host-23: an LFS override cannot send a personal records Check to another Space repository", async (t) => {
+  const { host, home, key, clone } = await coldReader(t);
+  const endpoint = `${host.gitOrigin}/elsewhere.git/info/lfs`;
+  git(clone, "config", "lfs.url", endpoint);
+  const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
+  assert.ok(result.sync.phase === "stopped" && result.sync.step === "check" && result.sync.cause === "gone", JSON.stringify(result.sync));
+  assert.ok(!host.script.requests.some((request) => request.path.startsWith(new URL(endpoint).pathname)), "the override receives no LFS request");
+  assert.equal(existsSync(join(clone, "asset.bin")), false);
+});
+
 function selected() {
   const dir = gitFolder("lfs-selection"); filters(dir); git(dir, "checkout", "-qb", "spex");
   writeFileSync(join(dir, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n*.txt text eol=crlf\n");

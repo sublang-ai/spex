@@ -111,7 +111,7 @@ beforeEach(() => {
   commandMock.mockReset();
   commandMock.mockResolvedValue(CONFIG);
   // The surface acts through the client of the place it shows
-  // (run-view-168), this computer's here: the store's own client, which
+  // (app-shell-1), this computer's here: the store's own client, which
   // the module mock cannot reach.
   setClientForTests({ command: commandMock } as never);
 });

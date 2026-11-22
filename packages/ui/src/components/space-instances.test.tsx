@@ -12,7 +12,7 @@
 // card "Sign in to a Space" with its chooser of Spaces (space-3,
 // space-115); "Add to a group…" offering each signed-in Space's Personal
 // and groups under its display name, a choice naming its Space
-// (space-58, space-29); "Open here" naming the Space its row stands
+// (space-97, space-29); "Open here" naming the Space its row stands
 // under (space-63, space-111, space-29); "Add a Space…" at the list's
 // foot opening the card in its place (space-1, space-3, space-28); and
 // "Remove from this list" on a signed-out heading removing the Space

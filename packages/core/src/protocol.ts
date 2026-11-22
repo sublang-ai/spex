@@ -2264,7 +2264,7 @@ export interface RepositoryState {
    * listed placement, `attached` false. */
   placements: PlacementState[];
   /** The origin of each instance a placement file of the clone names,
-   * held here or not (space-62). */
+   * held here or not (space-87). */
   placedAt: string[];
   local: SpaceUnit[];
   /** Every placement's, in the placements' order. */

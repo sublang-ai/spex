@@ -5,7 +5,7 @@
 
 ## Status
 
-Implemented and independently reviewed by GPT-6 Astra; two stale CI assertions corrected and verified, with successor CI pending (2026-10-27).
+Closed by [DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md) (2026-11-22), which removed member reads and sharing notices from the client. The implementation, review and verification of the earlier optimization are recorded below.
 
 ## Intent
 

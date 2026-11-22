@@ -93,7 +93,7 @@ While an entry bound to an open intent stands on the Dashboard [[dashboard-1](#d
 
 #### dashboard-9
 
-The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)] of each connected core, for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md), [DR-133](../decisions/133-one-desktop-over-several-cores.md)):
+The Dashboard shall publish an attention count equal to the number of entries in the attention queue, from the one ledger fold [[dashboard-10](#dashboard-10)] of the connected core, for consumers such as the sidebar's Dashboard badge and the desktop shell's dock badge ([DR-002](../decisions/002-desktop-app-architecture.md), [DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
 - When the queue changes, the published count updates to the new queue size.
 

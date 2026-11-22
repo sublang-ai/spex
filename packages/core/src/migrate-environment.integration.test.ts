@@ -59,7 +59,7 @@ async function environmentOf(home: Home, key: string, check: (state: Environment
 
 const installed = (state: EnvironmentState, name: string): boolean => state.packages.some((pkg) => pkg.name === name && pkg.installed);
 
-/** Pick a project into your namespace at an instance (space-58): its key
+/** Pick a project into your namespace at an instance (space-97): its key
  * there once its sync is done. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
   const key = hostKey(host, `${LOGIN}/${name}-spex`);

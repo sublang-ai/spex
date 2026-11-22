@@ -8,7 +8,7 @@
 // Cancel, the instance's sign-out of this device and Sign out on its
 // heading (space-3, space-6), every row state with its control, its
 // overflow and its phrase (space-61, space-64), "Add to a group…"
-// (space-58), "Open here" (space-63, space-111), Members (space-62), the
+// (space-97), "Open here" (space-63, space-111), the
 // vocabulary (space-27) and the label budget and the container steps the
 // fit rests on (space-28). Each act is checked by the command it sends;
 // its outcome arrives as state.
@@ -625,6 +625,42 @@ describe("Personal Space destinations", () => {
       choice: { kind: "create", name: "academy", instance: ORIGIN },
     }]));
     expect(calls("space.place")).toEqual([]);
+  });
+
+  test("space-137: changing Space resets the matching records choice and only submission joins", async () => {
+    const project = repo({ key: "jane/academy-spex", instance: null, state: "local-only", id: null, remote: null, branch: null });
+    const firstCopy = repo({
+      key: "@spex.example/jane/academy-spex", instance: ORIGIN, id: "101", state: "absent", branch: null, folder: null,
+    });
+    const secondCopy = repo({
+      key: "@second.example/jada/academy-spex", instance: SECOND, id: "202", state: "absent", branch: null, folder: null,
+    });
+    await renderSpace(twoInstances({}, [project, firstCopy, secondCopy]), { open: false });
+    fireEvent.click(within(moreOf(project.key)).getByRole("menuitem", { name: "Sync to a Space…" }));
+    const picker = within(screen.getByTestId(`space-destination-${project.key}`));
+    const destination = picker.getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
+    const records = picker.getByRole("combobox", { name: "Project records" }) as HTMLSelectElement;
+    const sync = picker.getByRole("button", { name: "Sync records" }) as HTMLButtonElement;
+    expect(document.activeElement).toBe(destination);
+    expect(destination.value).toBe(ORIGIN);
+    expect(records.selectedOptions[0]?.textContent).toBe("Create a new copy");
+    fireEvent.change(records, { target: { value: firstCopy.id } });
+    expect(records.value).toBe(firstCopy.id);
+    expect(calls("space.pick")).toEqual([]);
+
+    fireEvent.change(destination, { target: { value: SECOND } });
+    expect(records.selectedOptions[0]?.textContent).toBe("Create a new copy");
+    expect(sync.disabled).toBe(false);
+    fireEvent.change(records, { target: { value: secondCopy.id } });
+    expect(records.value).toBe(secondCopy.id);
+    expect(calls("space.pick")).toEqual([]);
+
+    fireEvent.click(sync);
+    await waitFor(() => expect(calls("space.pick")).toEqual([{
+      repository: project.key,
+      choice: { kind: "join", instance: SECOND, hostId: secondCopy.id },
+    }]));
+    await waitFor(() => expect(screen.queryByTestId(`space-destination-${project.key}`)).toBeNull());
   });
 
   test("a project synced to one Space keeps its sync action with another Space signed in", async () => {

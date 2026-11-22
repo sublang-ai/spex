@@ -16,7 +16,7 @@
 // Stop, an Apply's refusal and Git's own error end the sync (space-12,
 // space-15, space-19, space-31); explicit placement authorizes its first
 // push, while a failed fresh read stops that placement alone
-// (space-57, git-host-22) — hermetic, on loopback alone, in a file
+// (space-133, git-host-22) — hermetic, on loopback alone, in a file
 // budget of its own.
 
 import { test } from "node:test";
@@ -732,7 +732,7 @@ function catalogReads(host: StandinHost): number {
   return host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
 }
 
-test("git-host-26, git-host-22, space-57, space-15: a fresh read failing at the second — the second unavailable, or refusing in its own words — leaves the first synced and the second stopped at Check before any Git effect; each Check reads its own instance's catalog at its placement's turn; a failed read of the second at its Check stops its placement alone", async (t) => {
+test("git-host-26, git-host-22, space-12, space-15: a fresh read failing at the second — the second unavailable, or refusing in its own words — leaves the first synced and the second stopped at Check before any Git effect; each Check reads its own instance's catalog at its placement's turn; a failed read of the second at its Check stops its placement alone", async (t) => {
   const { first, second, home, key, clone, firstBare, secondBare } = await placedAtBoth("fresh-read");
   t.after(() => home.stop());
 
@@ -800,8 +800,8 @@ test("git-host-26, git-host-22, space-57, space-15: a fresh read failing at the 
   assert.notEqual(git(secondBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
 });
 
-test("space-21, space-98, space-31, space-57, space-93: a Leave sent while a Sync awaits the second placement's fresh Check enters no step until that Sync has run, then follows it, dropping the second's remote and deleting its file", async (t) => {
-  // The second placement checks the current account before its push (space-57).
+test("space-21, space-98, space-31, space-12, space-93: a Leave sent while a Sync awaits the second placement's fresh Check enters no step until that Sync has run, then follows it, dropping the second's remote and deleting its file", async (t) => {
+  // The second placement reads the current account in Check (space-12).
   const { first, second, home, key, clone, placed, firstBare } = await placedAtBoth("leave-follows");
   t.after(() => home.stop());
   const client = clientAt(home, second.url);

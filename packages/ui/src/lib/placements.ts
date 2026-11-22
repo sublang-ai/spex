@@ -18,7 +18,7 @@ export function heldPlacements(repo: RepositoryState): PlacementState[] {
   return repo.placements.filter((placement) => placement.attached);
 }
 
-/** The held placements at an instance (space-88, space-89): every one
+/** The held placements at an instance (space-97, space-98): every one
  * but the path placement. */
 export function instancePlacements(repo: RepositoryState): PlacementState[] {
   return heldPlacements(repo).filter((placement) => placement.instance !== null);
@@ -59,7 +59,7 @@ export function waitingOf(repo: RepositoryState): PlacementState | undefined {
   return repo.placements.find((placement) => placement.waiting !== null);
 }
 
-/** How a line names an instance (space-62, space-87): its display name
+/** How a line names an instance (space-87): its display name
  * as the home last read it, else its origin's host name — an instance
  * this home does not list among them. */
 export function instanceNameAt(state: SpaceState, origin: string): string {

@@ -5,7 +5,7 @@
 
 ## Status
 
-Implemented, verified locally and independently reviewed (2026-10-25); awaiting integration.
+Closed by [DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md) (2026-11-22), which retired the hub and its seat lease lifecycle. The local verification and independent review of the lease ordering are recorded below.
 
 ## Intent
 

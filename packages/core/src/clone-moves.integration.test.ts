@@ -190,7 +190,7 @@ test("storage-60: on Windows, a Leave of a clone's first placement while another
   assert.ok(!existsSync(clone) && existsSync(join(clonePath(home.dataDir, local), ".git")), "[storage-38] dropped and moved under your own group's folder once let go");
 });
 
-test("media-23: a pick moving a project's clone while the core reads an attachment there leaves it readable under the project's key now, from where the clone now lies, and under its former key no more", async (t) => {
+test("space-135, media-23: a pick moving a project's clone while the core reads an attachment there leaves it readable under the project's key now, from where the clone now lies, and under its former key no more", async (t) => {
   const host = await startHost();
   const home = await watchingHome("moves-media", host, false);
   t.after(() => home.stop());
@@ -213,6 +213,10 @@ test("media-23: a pick moving a project's clone while the core reads an attachme
   const synced = await home.client.waitRepository(from, key, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.equal(synced.sync.phase, "done", `[media-22] the clone moved: ${JSON.stringify(synced.sync)}`);
   assert.ok(!existsSync(clonePath(home.dataDir, local)), "[media-22] the clone left its former path");
+  const state = await home.client.expectOk("space.get", {});
+  assert.equal(state.repositories.filter((row) => row.key === key).length, 1);
+  assert.equal(state.repositories.some((row) => row.key === local), false);
+  assert.equal(synced.folder, folder);
   await home.client.expectError("media.read", { owner: { kind: "project", id: local }, assetId: asset.assetId, offset: MEDIA_CHUNK_BYTES, length: MEDIA_CHUNK_BYTES }, "not_found", /no project/i);
   const rest = await home.client.expectOk("media.read", { owner: { kind: "project", id: key }, assetId: asset.assetId, offset: MEDIA_CHUNK_BYTES, length: MEDIA_CHUNK_BYTES });
   assert.ok(rest.eof, "[media-22] the read under the project's key now ends the file");

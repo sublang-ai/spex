@@ -386,7 +386,7 @@ function PlayerToSetUpRow({
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void patchPlayer(player.id, captainBlock(captain), store.getClient())
+            void patchPlayer(player.id, captainBlock(captain))
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}
@@ -531,7 +531,7 @@ function PlayerRoster({
                 readiness={readiness}
                 captain={captain}
                 onSave={(patch) =>
-                  patchPlayer(player.id, patch, store.getClient()).then((result) => {
+                  patchPlayer(player.id, patch).then((result) => {
                     rows.close(player.id);
                     setSaved(player.id);
                     return result;
@@ -602,7 +602,7 @@ function PlayerRoster({
                 });
                 return Promise.reject(new Error("duplicate id"));
               }
-              return patchPlayer(id, applyLocalPatch(newPlayer, patch), store.getClient()).then(
+              return patchPlayer(id, applyLocalPatch(newPlayer, patch)).then(
                 (result) => {
                   setNewPlayer(undefined);
                   setNewId("");
@@ -901,7 +901,7 @@ export function SettingsSurface({
                 initial={summary.captain}
                 readiness={readiness}
                 onSave={(patch) =>
-                  setCaptain(patch, store.getClient()).then((result) => {
+                  setCaptain(patch).then((result) => {
                     rows.close("captain");
                     setSaved("captain");
                     return result;

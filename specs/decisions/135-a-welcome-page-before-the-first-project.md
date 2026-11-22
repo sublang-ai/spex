@@ -10,6 +10,7 @@ Amends [DR-007](007-conversational-session-start.md) and [DR-010](010-interface-
 The own-project entry's label and palette layout are amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md).
 The welcome copy and action order are amended by [DR-137](137-specs-first-welcome-and-distinct-project-paths.md).
 The welcome page's actions are amended by [DR-159](159-projects-in-groups-opened-where-you-work.md): a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the welcome action that opens personal projects through Space.
 
 ## Context
 

@@ -27,6 +27,10 @@ This decision amends the following decisions within the listed scope.
 | Server-specific location wording and recovery navigation. Local Files & history continues. | [DR-189](189-repairs-explain-the-next-step.md), [DR-195](195-read-saved-conversations-before-locating-files.md), [DR-196](196-a-review-count-and-a-way-back.md), [DR-214](214-project-navigation-and-contextual-recovery.md) |
 | Seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work. | [DR-134](134-execution-ownership.md), [DR-156](156-an-untouched-seed-follows-the-credentials.md), [DR-161](161-an-applet-is-a-page-the-ide-serves.md), [DR-168](168-independent-package-registry.md), [DR-204](204-workshop-agents-in-one-pass.md), [DR-205](205-agent-cards-read-alike.md), [DR-223](223-windows-storage-checks-what-macos-checks.md) |
 | Group and seat examples in user guidance, and the hub lane in app validation and download caching | [DR-202](202-registry-guidance-keeps-account-scope.md), [DR-199](199-release-gated-full-validation.md), [DR-228](228-ci-keeps-its-downloads.md) |
+| Local config, storage and environments | [DR-004](004-config-and-persistence.md), [DR-036](036-file-state-store.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) |
+| Project picker, welcome and recovery navigation | [DR-011](011-project-workspace.md), [DR-065](065-repairs-the-reader-answers.md), [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) |
+| Personal project listing, wording, attached records and failure guidance | [DR-057](057-space-surface.md), [DR-064](064-honest-remote-failure.md), [DR-069](069-key-phrases-not-sentences.md), [DR-225](225-bounded-surfaces-and-attached-records.md), [DR-227](227-remove-the-storage-footer-from-space.md) |
+| Retirement of hub validation from the test tiers and merge workflow | [DR-086](086-tests-in-tiers.md), [DR-145](145-merge-on-green.md) |
 
 ## Context
 
@@ -44,7 +48,7 @@ Spex has no public users who need an upgrade path for these features.
 Wherever Spex identifies the service, it names only the Space, including in replies, keys, folders and documents ([DR-120](120-the-instance-is-the-space.md)).
 
 - Space shows a flat project list for each signed-in account. Opening or creating a local project needs no Space account and opens no destination picker. To sync its records, the person chooses a Space and the IDE uses their own namespace there. On a second computer they can sign in, select the project and open it using the existing folder and records flow.
-- Remove group trees, group sessions, membership and invitations, project sharing, and group choices from Space, project rows, the welcome screen and the project picker. Delete their commands and listings from the client protocol.
+- Remove group trees, group sessions, membership and invitations, project sharing, and group choices from Space, project rows, the welcome screen and the project picker. Delete their commands and listings from the client protocol. The project picker lists local projects. The welcome action opens Space to discover and open personal projects.
 - Personal sessions, global settings and playbooks keep their existing storage. Space keeps sign-in, sign-out, Forget, sync conflict resolution and Files & history, including local recovery while signed out ([DR-214](214-project-navigation-and-contextual-recovery.md)).
 - Sync and Explore stay attached to their project row in the flat list ([DR-225](225-bounded-surfaces-and-attached-records.md)).
 - The CLI keeps `login`, `logout` and `whoami` with `--space` or `--registry`. Package installation and publishing keep their existing registry selection and credentials. CLI help, IDE guidance and their translations describe the supported workflows.
@@ -53,7 +57,7 @@ Wherever Spex identifies the service, it names only the Space, including in repl
 
 Discover, open and sync a Space repository only when that Space identifies it as belonging to the signed-in account's own namespace.
 This rule applies to each sync destination, even if its repository has moved since the last sync.
-An explicitly configured non-Space records remote follows its existing rules [[space-5](../packages/space.md#space-5)].
+The home recognizes a Space’s reported Git address across restarts and uses its service address until it learns that Git address. An explicitly configured external records remote uses ordinary Git credentials and redirect behavior, independently of Space availability [[space-136](../packages/space.md#space-136)].
 Project removal and placement detachment keep their existing loss confirmations [[projects-9](../packages/projects.md#projects-9)] [[space-98](../packages/space.md#space-98)].
 
 ### One core per IDE

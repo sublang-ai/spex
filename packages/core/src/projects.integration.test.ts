@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { requestsDigest, serializeLock } from "@sublang/spex/environment";
 import { WebSocket } from "ws";
 
@@ -118,6 +118,67 @@ async function boot(dataDir: string, home: string): Promise<{ service: CoreServi
   await client.open();
   return { service, client };
 }
+
+test("projects-17: register a Git root, read its local status, refuse invalid folders, and rebind an unpaired clone", async (t) => {
+  const scratch = scratchDir("spex-project-register-");
+  const dataDir = join(scratch, "records");
+  const accountHome = join(scratch, "user");
+  mkdirSync(join(accountHome, ".claude"), { recursive: true });
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+
+  const folder = join(scratch, "fixture");
+  const upstream = join(scratch, "upstream");
+  mkdirSync(folder);
+  mkdirSync(upstream);
+  git(folder, "init", "-q", "-b", "feature");
+  git(folder, "commit", "--allow-empty", "-qm", "Initial");
+  git(upstream, "init", "-q", "--bare");
+  git(folder, "remote", "add", "origin", upstream);
+  git(folder, "push", "-u", "origin", "feature");
+  const peer = join(scratch, "peer");
+  git(scratch, "clone", "-q", "-b", "feature", upstream, peer);
+  git(peer, "commit", "--allow-empty", "-qm", "Peer change");
+  git(peer, "push");
+  git(folder, "fetch");
+  git(folder, "commit", "--allow-empty", "-qm", "Local change");
+  // An unreachable upstream proves the status uses only the local tracking ref.
+  const offline = join(scratch, "offline");
+  git(folder, "remote", "set-url", "origin", offline);
+  writeFileSync(join(folder, "draft.md"), "Uncommitted\n");
+  const nested = join(folder, "nested");
+  mkdirSync(nested);
+
+  const { service, client } = await boot(dataDir, accountHome);
+  t.after(async () => { client.close(); await service.stop(); });
+  const project = await client.ok("project.register", { path: folder });
+  assert.deepEqual([project.name, project.path], ["fixture", folder]);
+  const { branch, dirty, ahead, behind } = await client.ok("project.status", { projectId: project.id });
+  assert.deepEqual({ branch, dirty, ahead, behind }, { branch: "feature", dirty: true, ahead: 1, behind: 1 });
+  assert.equal((await client.ok("project.register", { path: folder })).id, project.id);
+  const duplicate = await client.command("project.create", { path: folder });
+  assert.ok(!duplicate.ok);
+  assert.equal(duplicate.error.code, "conflict");
+  assert.equal(duplicate.error.details?.path, folder);
+  for (const path of [nested, accountHome]) {
+    const rejected = await client.command("project.register", { path });
+    assert.ok(!rejected.ok);
+    assert.equal(rejected.error.code, "invalid_request");
+    assert.match(rejected.error.message, /not the root of a git work tree.*use project.create/);
+  }
+  assert.deepEqual((await client.ok("project.list", {})).map((entry) => entry.id), [project.id]);
+
+  const homeFile = join(dataDir, "home.yaml");
+  const home = parseYaml(readFileSync(homeFile, "utf8")) as { folders: { repository: string }[] };
+  home.folders = home.folders.filter((pair) => pair.repository !== project.id);
+  writeFileSync(homeFile, stringifyYaml(home));
+  const diagnostics = await client.ok("storage.diagnostics", {});
+  assert.ok(diagnostics.some(({ repair }) => repair?.kind === "repository" && repair.repository === project.id));
+  assert.deepEqual(await client.ok("project.list", {}), []);
+  const rebound = await client.ok("project.rebind", { projectId: project.id, path: folder });
+  assert.equal(rebound.id, project.id);
+});
 
 test("storage-6, environments-11, environments-26: a folder holding a stray spex.lock and no spex.yaml is paired with spex.yaml written at its root requesting nothing, nothing in the clone, the lock left as it was and read as stale", async () => {
   const scratch = scratchDir("spex-project-stray-lock-");

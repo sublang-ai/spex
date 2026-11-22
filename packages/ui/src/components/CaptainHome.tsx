@@ -65,7 +65,7 @@ export interface CaptainHomeProps {
   onRecheckReadiness?: () => Promise<unknown>;
   /** Settings at an adapter's agent card (run-view-45, settings-70). */
   onOpenAgentCard?: (adapter: string) => void;
-  /** The current project while this place opens it (run-view-168):
+  /** The current project while this place opens it (run-view-200):
    * its name over the join's step, or the join's cause where it
    * stopped, in place of the welcome page and the greeting. */
   opening?: OpeningProject;
@@ -240,9 +240,7 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [captainPopover, setCaptainPopover] =
     useState<ReturnType<typeof popoverRoom>>();
   // With nothing registered the greeting itself carries the ways in
-  // (run-view-25); seeding is the store action the palette uses. The
-  // example is seeded at a folder this page names, so it is this
-  // computer's alone (run-view-169).
+  // (run-view-25), including the palette's Academy example action (projects-27).
   const openAcademyExample = store((state) => state.openAcademyExample);
   const personalSpace = useAppStore((state) => state.space);
   const loadLocalSpace = useAppStore((state) => state.loadSpace);
@@ -398,10 +396,8 @@ export function CaptainHome(props: CaptainHomeProps) {
   // Any real content reverts to the IM bottom-docked layout (DR-010 §8).
   const emptyCanvas = !configBroken && !error;
 
-  // The project this place is opening (run-view-168): named over the
-  // step in flight until its core lists it, when its own home takes
-  // over; a join that stopped reads its cause here, the Space row
-  // holding the way on (space-63).
+  // Show the selected opening until the core lists its project (run-view-200).
+  // A stopped opening keeps its cause and a way back to Space (run-view-201).
   if (!props.hasProject && props.opening) {
     const { name, step, stopped } = props.opening;
     return (
@@ -819,7 +815,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               onCompileNew={() => {
                 // The project's Playbooks tab lands on its id field
                 // (playbook-library-51), at the place shown here
-                // (run-view-168, DR-172).
+                // (run-view-200, DR-172).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}

@@ -8,13 +8,13 @@ export interface PublicationOptions {
 }
 
 // App store: wires the protocol client into view state, one store per
-// core, each at its place (run-view-168). Composer
+// core, each at its place (app-shell-1). Composer
 // submissions queue client-side while a turn is active and dispatch
 // when it ends (RUN-8); the core enforces one turn at a time.
 // Reconnects re-subscribe every live session and backfill missed
 // records via history afterSeq, so panes never silently freeze.
 
-import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { hasPresentationHeader } from "@sublang/spex-core/protocol";
 import { isLanguage, resolveLanguage, type Language } from "@sublang/spex-core/language";
 import type {
@@ -129,9 +129,8 @@ export type PlaybookLists = CommandResults["environment.playbooks"] & {
 export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
 /** Where a pick or a Place puts a spex repository at an instance
- * (space-58, space-88, space-29): a spex repository that instance lists,
- * by its host id, or a new `<name>-spex` in a group there by its host
- * id, your namespace there by none. */
+ * (space-29, space-97): a listed personal repository by its id,
+ * or a new `<name>-spex` in the signed-in account's namespace. */
 export type SpaceDestination =
   | { kind: "join"; instance: string; hostId: string }
   | { kind: "create"; instance: string; name: string };
@@ -334,11 +333,8 @@ export interface AppState extends AttachmentState {
    * every record kept; the reply is the new state. Refused, the core's
    * words name what is still kept under it. */
   spaceForget(instance: string): Promise<void>;
-  /** Give a local-only spex repository a home at an instance (space-58):
-   * a listed spex repository by its host id, or a new one in a group,
-   * the choice naming the instance it is at (space-29). The choice
-   * authorizes syncing there (space-57). Accepted at once, outcome as
-   * state. */
+  /** Place and sync a local project's records in the account's own
+   * namespace at the chosen Space (space-29, space-97). */
   spacePick(repository: string, choice: SpaceDestination): Promise<void>;
   /** Clone a spex repository an instance lists and this device lacks
    * (space-63), `instance` the one its row stands under, pairing it with
@@ -880,34 +876,18 @@ type GetState = Parameters<StateCreator<AppState>>[1];
 
 /** What a store offers beside its state: its client, and a message
  * handed to it as its client would. */
-interface CoreStoreSeams {
+interface StoreClientAccess {
   /** The store's client; throws while none is connected. */
   getClient(): SpexClient;
   /** Put a client in place without dialing — a fake in tests. */
   setClient(client: SpexClient | undefined): void;
   /** Hand the store a server message as its client would. */
   deliver(message: ServerMessage): void;
-  /** End the store's connection for good, dialing no more; a later
-   * `connect()` dials afresh (run-view-50). */
-  close(): void;
 }
 
-/** One core's store (run-view-168): its state, its seams, and the
- * place it keeps. */
-export type AppStore = UseBoundStore<StoreApi<AppState>> & CoreStoreSeams;
-
-/** One core's state and acts (run-view-168, DR-133). Everything the
- * store keeps of its core — the client, the reads in flight and their
- * counts, the backfills and their buffers — lives in this call, so no
- * two places share any of it, and every id stays as its core sent it. */
-function coreState(
-  initialClient: SpexClient | undefined,
-  seams: CoreStoreSeams,
-  set: SetState,
-  get: GetState,
-): AppState {
+function createAppState(clientAccess: StoreClientAccess, set: SetState, get: GetState): AppState {
   const framePrefix = "spex.frame:";
-  let client = initialClient;
+  let client: SpexClient | undefined;
   const modelReads = new Map<AdapterName, Promise<AgentOptions>>();
 
   function getClient(): SpexClient {
@@ -983,7 +963,7 @@ function coreState(
    * one a Retry joins again (space-13) — the instance an Attach, a Place
    * or a Leave named, a Place's choice and whether a Leave was confirmed —
    * which confirm a stopped Leave asks next, and what its Retry sends
-   * again (space-89). It outlives a row remounting and not a reload. */
+   * again (space-98). It outlives a row remounting and not a reload. */
   const lastActs = new Map<string, SpaceLastAct>();
 
   /** Records describe the conversation; the listing owns activity,
@@ -1736,24 +1716,15 @@ function coreState(
     }
   }
 
-  seams.getClient = getClient;
-  seams.setClient = (next) => {
+  clientAccess.getClient = getClient;
+  clientAccess.setClient = (next) => {
     client = next;
     modelReads.clear();
     set({ modelCatalogs: {} });
     // What a page asked of the clones goes with its client.
     lastActs.clear();
   };
-  seams.deliver = handleMessage;
-  seams.close = () => {
-    // The client is let go first, so its closing reports nothing here.
-    const closing = client;
-    client = undefined;
-    modelReads.clear();
-    set({ modelCatalogs: {} });
-    closing?.close();
-  };
-
+  clientAccess.deliver = handleMessage;
   return {
     ...createAttachmentState(set, get, getClient),
     connection: "closed",
@@ -3273,9 +3244,9 @@ function coreState(
   };
 }
 
-const seams = {} as CoreStoreSeams;
-const store = create<AppState>((set, get) => coreState(undefined, seams, set, get));
-export const useAppStore = Object.assign(store, seams);
+const clientAccess = {} as StoreClientAccess;
+const store = create<AppState>((set, get) => createAppState(clientAccess, set, get));
+export const useAppStore = Object.assign(store, { getClient: clientAccess.getClient });
 
 /** The local store's client. */
 export function getClient(): SpexClient {
@@ -3285,11 +3256,11 @@ export function getClient(): SpexClient {
 /** Test seam: store actions resolve the local store's client, which
  * module mocks cannot reach — vitest injects a fake through here. */
 export function setClientForTests(fake: SpexClient | undefined): void {
-  useAppStore.setClient(fake);
+  clientAccess.setClient(fake);
 }
 
 /** Test seam: hand the local store a server message as the client
  * would, without a socket. */
 export function deliverServerMessageForTests(message: ServerMessage): void {
-  useAppStore.deliver(message);
+  clientAccess.deliver(message);
 }

@@ -469,7 +469,6 @@ export function DraftRegisterTab({
             title={packageName}
             onClick={() =>
               openPackageRow(
-                store,
                 ofProject ? { projectId: draft.projectId } : { show: () => store.getState().closeDraft() },
                 packageName,
               )

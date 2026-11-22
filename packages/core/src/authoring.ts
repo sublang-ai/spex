@@ -1816,7 +1816,7 @@ export class AuthorManager {
         command: id,
         intent: "(draft)",
         libraryDir: join(packageDir, "playbooks", this.drafts.language(id)),
-        // The compile's agent is an agent run (core-service-126).
+        // Pass the current agent environment to the compiler (core-service-155).
         env: this.options.agentEnv?.() ?? this.options.env,
         // Once admitted: the marker, the config as its files stand, and
         // the block that answers the draft as the compile's agent

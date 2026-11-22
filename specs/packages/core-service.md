@@ -46,7 +46,7 @@ An Origin is not foreign only in these cases:
 
 #### core-service-2
 
-Where the local global repository holds its `config/playbook.config.yaml` [[storage-1](storage.md#storage-1)], when the core service starts, the core service shall load and validate the config, composing a session's configuration from the global file with the session's spex repository's file on top [[storage-7](storage.md#storage-7)], reloading and revalidating without a restart whenever either file's content changes on disk while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)).
+Where the global records repository holds its `config/playbook.config.yaml` [[storage-1](storage.md#storage-1)], when the core service starts, the core service shall load and validate the config, composing a session's configuration from the global file with the session's spex repository's file on top [[storage-7](storage.md#storage-7)], reloading and revalidating without a restart whenever either file's content changes on disk while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
 On every load and reload:
 
@@ -83,7 +83,7 @@ Where no config file exists at the shared config path, when the core service sta
 
 #### core-service-137
 
-Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, when a client asks for readiness — a re-check among them [[settings-5](settings.md#settings-5)] —, the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
+Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], during startup or a readiness request, including Re-check [[settings-5](settings.md#settings-5)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
 
 | The file | Outcome |
 | --- | --- |
@@ -100,7 +100,7 @@ Where the shared config path is the default one and holds nothing, when the core
 
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
-- A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is the local global clone's [[storage-1](storage.md#storage-1)].
+- A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is the global records repository's [[storage-1](storage.md#storage-1)].
 
 #### core-service-44
 
@@ -440,7 +440,7 @@ While an intent is closed [[core-service-46](#core-service-46)], when a client s
 
 While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, and queued — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
-- a submission whose intent fails validation is rejected and starts no turn; one whose intent is assigned to another runtime [[storage-4](storage.md#storage-4)] ([DR-132](../decisions/132-team-servers.md)), is rejected `conflict`, "Runs on <label>", or "Runs nowhere yet" for the latter ([DR-134](../decisions/134-execution-ownership.md));
+- a submission whose intent fails validation is rejected and starts no turn; one whose intent is assigned to another runtime [[storage-4](storage.md#storage-4)] is rejected `conflict` with "Runs on <label>" ([DR-134](../decisions/134-execution-ownership.md));
 - while a run of the session stands parked on a Boss question [[core-service-107](#core-service-107)], a submission carrying an intent id is rejected `conflict`, the intent staying queued: a dispatch is new work, never an answer ([DR-119](../decisions/119-an-answer-continues-its-intent.md));
 - a submission that never starts a turn stamps nothing, and the intent stays queued;
 - a later dispatch of the same intent re-writes the stamps;
@@ -579,7 +579,7 @@ When serving a stored session, the core service shall resolve its immutable part
 
 When a client requests adapter readiness, the core service shall report an entry for `claude` and one for `codex` always and one deduplicated entry per other adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)), none where no position does — and carrying a readiness status derived from the adapter readiness rules — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-204](../decisions/204-workshop-agents-in-one-pass.md)) — naming the unmet requirement for each adapter that is not ready, reporting null readiness with verify-yourself guidance for an adapter with no preflight rule, and null readiness with the reason for a sign-in that could not be confirmed:
 
-- The entry carries the new-player model choices that Cligent supplies for this adapter for the environment and home used when seeding [[core-service-3](#core-service-3)], or an empty selection when that provider supplies its own defaults. ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
+- The entry carries the new-player model choices that Cligent supplies for this adapter for the environment and home used when seeding [[core-service-3](#core-service-3)], or an empty selection when that provider supplies its own defaults ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
 - The runtime half is cligent's availability probe, which confirms the native executable a bundled SDK spawns as well as the SDK itself; when the probe fails and no published runtime target is at fault, the unmet requirement for `claude` or `codex` comes from cligent's executable lookup — a missing platform package, named with its platform and architecture and the repair of running `npm ci` in the checkout or reinstalling the app, or a host the SDK publishes no executable for, named with no repair — and otherwise states that the runtime failed to load ([DR-090](../decisions/090-readiness-names-what-cligent-finds-missing.md)).
 - While the config is missing or invalid, the `claude` and `codex` entries are the only ones, with no positions: no earlier config's positions carry over.
 - Each entry lists its faults, each of kind `runtime` or `credential` with its own requirement, and keeps the requirement string joining them.
@@ -699,7 +699,7 @@ When the core service composes text for the reader [[core-service-111](#core-ser
 
 ### core-service-143
 
-The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 33 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using the shared protocol [[core-service-12](#core-service-12)] and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
 - sign-in uses the shell's existing browser or device flow with registry purpose, and stores no Space entry or placement;

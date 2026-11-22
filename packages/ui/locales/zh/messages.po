@@ -3052,7 +3052,7 @@ msgstr "展开图片"
 msgid "Expand image {name}"
 msgstr "展开图片 {name}"
 
-#. tab: browse the files of a project's or a group's records
+#. tab: browse the files of a project's records
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
 msgstr "浏览"
@@ -4057,7 +4057,7 @@ msgstr "模型列表不可用：{reason}"
 msgid "Models reported by the installed runtime."
 msgstr "由已安装的运行时报告的模型。"
 
-#. the one overflow control of a Space row, a group's heading or a server's line: opens its other acts
+#. the overflow control for a Space or project row
 #: src/components/SpaceMenu.tsx
 msgid "More"
 msgstr "更多"
@@ -4067,7 +4067,7 @@ msgstr "更多"
 msgid "More details"
 msgstr "更多详情"
 
-#. the accessible name of the overflow control "More" on a Space row, a group's heading or a server's line; {name} is what it acts on
+#. the accessible name of the overflow control "More" on a Space or project row; {name} identifies the row
 #: src/components/SpaceMenu.tsx
 msgid "More for {name}"
 msgstr "{name} 的更多操作"
@@ -4938,10 +4938,6 @@ msgid "Paste"
 msgstr "粘贴"
 
 #: src/components/DraftSourceTab.tsx
-msgid "Paste a source"
-msgstr "粘贴源文"
-
-#: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
 msgstr "粘贴源文或选择文件"
 
@@ -4962,7 +4958,7 @@ msgstr "已有 Git 仓库路径"
 msgid "Permission mode"
 msgstr "权限模式"
 
-#. your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into
+#. heading for your personal projects and records at a Space
 #: src/lib/space.ts
 msgid "Personal"
 msgstr "个人"
@@ -5641,10 +5637,6 @@ msgid "Removing…"
 msgstr "移除中…"
 
 #: src/components/DraftSourceTab.tsx
-msgid "Replace the source with pasted text"
-msgstr "用粘贴的文本替换源文"
-
-#: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
 msgstr "用粘贴的文本或文件替换源文"
 
@@ -5897,7 +5889,7 @@ msgstr "运行中 · {span}"
 msgid "Running the workflow's control"
 msgstr "正在执行工作流的操作"
 
-#. queued row: the intent is assigned to another runtime, named by its label — the server's name on a seat, else the host name — and runs there alone
+#. queued row: the intent is assigned to another runtime, named by its label, and runs there alone
 #: src/components/QueuedIntentPresentation.tsx
 msgid "Runs on {label}"
 msgstr "在 {label} 上运行"
@@ -6485,7 +6477,7 @@ msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未完成记�
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未完成记录}}"
 
-#. the Space destination: groups, projects and their shared records
+#. the Space surface for personal projects and records
 #. the Space destination: personal projects and records
 #. the accessible name of the sign-in card's chooser of Spaces
 #: src/components/NavRail.tsx

@@ -32,8 +32,8 @@ const GROUP_NAME = /^[a-z0-9][a-z0-9-]*$/;
 export interface HomeAccount { id: string; login: string; displayName: string | null }
 /** An instance the home has signed in to (DR-127), by its canonical
  * origin: its client, the account it signed in as, whether it was
- * signed out since, and its display name as last read. */
-export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string }
+ * signed out since, and the display name and Git address last reported. */
+export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string; gitOrigin?: string }
 export interface HomeFolder { path: string; repository: string; aliases?: string[] }
 export interface HomeFile {
   format: 2;
@@ -96,6 +96,13 @@ function isOrigin(value: unknown): value is string {
   try { return canonicalOrigin(value) === value; } catch { return false; }
 }
 
+/** The reported Git endpoint can include a path but never credentials. */
+export function isSpaceGitOrigin(value: unknown): value is string {
+  if (typeof value !== "string" || !/^https?:\/\/[^/?#@\s]+(?:[/?#]|$)/i.test(value) || /[\s\x00-\x1f\x7f?#]/.test(value)) return false;
+  const url = URL.parse(value);
+  return url !== null && !url.username && !url.password;
+}
+
 /** `home.yaml`'s format, refused unless it is this Spex's: format 1 says
  * the instances migration has not run (storage-1). */
 function homeFormat(value: Record<string, unknown>, file: string): void {
@@ -127,8 +134,9 @@ export function parseHomeFile(value: unknown, file: string, checkFolders?: Folde
   need(isOrigin(value.origin), file, notAnOrigin(value.origin));
   const folders = new Map<string, string>();
   for (const instance of value.instances) {
-    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName"], file);
+    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName", "gitOrigin"], file);
     need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
+      (instance.gitOrigin === undefined || isSpaceGitOrigin(instance.gitOrigin)) &&
       (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
       (instance.displayName === undefined || typeof instance.displayName === "string"), file, invalidHome());
     need(isOrigin(instance.origin), file, notAnOrigin(instance.origin));
@@ -237,6 +245,7 @@ export function withSignIn(home: HomeFile, origin: string, account: HomeAccount,
   const entry: HomeInstance = {
     origin: canonical, clientId: CLIENT_ID,
     account: { id: account.id, login: account.login, displayName: account.displayName },
+    ...(prior?.gitOrigin !== undefined ? { gitOrigin: prior.gitOrigin } : {}),
     ...(prior?.displayName !== undefined ? { displayName: prior.displayName } : {}),
   };
   const instances = index < 0 ? [...home.instances, entry] : home.instances.map((item, at) => at === index ? entry : item);
@@ -264,13 +273,13 @@ export function withoutInstance(home: HomeFile, origin: string): HomeFile | null
   return { ...home, instances: home.instances.filter((_, at) => at !== index) };
 }
 
-/** The home with an instance's display name as last read; null where it
- * is not listed. */
-export function withDisplayName(home: HomeFile, origin: string, displayName: string | null): HomeFile | null {
+/** The home with a listed Space's last display name and, when supplied,
+ * its Git address. Null where the Space is not listed. */
+export function withDisplayName(home: HomeFile, origin: string, displayName: string | null, gitOrigin?: string): HomeFile | null {
   const index = indexOf(home, origin);
   if (index < 0) return null;
   const { displayName: _, ...rest } = home.instances[index];
-  const entry: HomeInstance = displayName === null ? rest : { ...rest, displayName };
+  const entry: HomeInstance = { ...rest, ...(displayName === null ? {} : { displayName }), ...(gitOrigin === undefined ? {} : { gitOrigin }) };
   return { ...home, instances: home.instances.map((item, at) => at === index ? entry : item) };
 }
 

@@ -33,7 +33,6 @@ import type {
   Command,
   CommandResults,
   SpaceState,
-  PlacementState,
   RepositoryState,
   ServerMessage,
 } from "@sublang/spex-core";
@@ -109,7 +108,7 @@ export interface AppOptions {
    * With `project`: a bare clone of the demo project in the scratch
    * root, `code/demo-project.git`, set as its `origin` before it is
    * registered, so its `project.json` names the code by a path this
-   * machine serves (space-36, space-96) — one a second home's Join
+   * machine serves (space-36, space-83) — one a second home's Join
    * clones, reading as the reader set it on the row (space-1), with
    * neither "remote" nor "space" in it.
    */
@@ -182,7 +181,7 @@ export interface AppOptions {
    * (environments-18) the host fronts at its own origin, as Spex Space
    * serves both (DR-104); `share` points a second home at a host
    * another app started, and its `second` at that app's second instance
-   * (space-96), which this home reaches only by a sign-in naming it,
+   * (space-83), which this home reaches only by a sign-in naming it,
    * both left to their owner to close. The home's configuration lies in
    * your own group's spex repository and follows it when sign-in
    * renames it (space-59), and the core's Git is the isolated one of
@@ -191,12 +190,9 @@ export interface AppOptions {
    * origin of its own that the home reaches only by a sign-in naming it:
    * on a Git backend of its own (`separate`, the default) or over the
    * first's (`shared`), with its own display name, the person it signs
-   * in and whether that person may make a root group; its `registry`
+   * in; its `registry`
    * starts a stand-in registry of its own that the second fronts at its
    * origin, as each instance serves its own (environments-18).
-   * `third` starts a third stand-in instance after the second (DR-128),
-   * read as `second` is, `shared` meaning over the first's Git backend,
-   * and named "Third stand-in" unless another name is given.
    */
   host?: boolean | {
     /** Friendly Space name for journeys and visual evidence. */
@@ -204,7 +200,6 @@ export interface AppOptions {
     registry?: boolean;
     share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
     second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; registry?: boolean };
-    third?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
@@ -276,9 +271,6 @@ export const HOST_LOGIN = "ada";
 /** The second stand-in instance's display name unless one is named
  * (`host.second`, DR-127). */
 export const SECOND_HOST_NAME = "Second stand-in";
-/** The third stand-in instance's display name unless one is named
- * (`host.third`, DR-128). */
-export const THIRD_HOST_NAME = "Third stand-in";
 /** The stand-in's team group and its id (git-host-12). */
 
 /** Your own group's name in a home: the one `home.yaml` records once
@@ -320,16 +312,6 @@ export function repositoryOf(state: SpaceState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key}`);
-}
-
-/** A row's line for the placement at an instance by its origin, in any
- * spelling of it, or the path placement's for null (space-30,
- * space-87). */
-export function placementOf(row: RepositoryState, origin: string | null): PlacementState {
-  const wanted = origin === null ? null : canonicalOrigin(origin);
-  const found = row.placements.find((line) => (line.instance === null ? null : canonicalOrigin(line.instance)) === wanted);
-  if (found) return found;
-  throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
 /** The roster id `AppOptions.compiler` writes. */
@@ -646,7 +628,6 @@ export const LOCAL_TURN = "Add the expiry test";
 /** The shared session's title: its first turn. */
 export const SESSION_TITLE = "Fix the login redirect";
 /** The peer's own session in the project it pushed (space-36). */
-export const PEER_SESSION_TITLE = "Plan the release on the other laptop";
 
 // ---------------------------------------------------------------------------
 // The app under test
@@ -679,7 +660,7 @@ export interface App {
   host?: StandinHost;
   /** Every stand-in instance of the journey, the first being `host`,
    * the second `host.second`'s, or another app's `host.share.second`
-   * (DR-127), and the third `host.third`'s (DR-128); empty without
+   * (DR-127); empty without
    * `host`. */
   hosts: StandinHost[];
   /** The stand-in registry the host fronts (with `host.registry`):
@@ -846,7 +827,7 @@ async function arrangeApp(
     hosts.push(host);
     registries.push(registry);
     // Another app's second instance, which this home reaches only by a
-    // sign-in naming it (space-96); its owner closes it.
+    // sign-in naming it (space-83); its owner closes it.
     if (spec.share?.second) {
       if (spec.second) throw new Error("host.share.second and host.second name two second instances");
       hosts.push(spec.share.second);
@@ -872,20 +853,6 @@ async function arrangeApp(
       owned.push(second);
       hosts.push(second);
       registries.push(fronted);
-    }
-    // The third instance, after the second and closed before it, over
-    // the first's Git backend or on one of its own (DR-128).
-    if (spec.third) {
-      if (hosts.length < 2) throw new Error("host.third needs a second instance");
-      const { backend, displayName, person } = spec.third;
-      const third = await startStandinHost({
-        ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-3") }),
-        displayName: displayName ?? THIRD_HOST_NAME,
-        ...(person ? { person } : {}),
-      });
-      owned.push(third);
-      hosts.push(third);
-      registries.push(undefined);
     }
   }
   const closeOwned = async (): Promise<void> => {
@@ -1296,8 +1263,8 @@ export function bareOf(host: StandinHost, key: string): string {
 }
 
 /** The demo project's key as the core reads it now: a sign-in renames
- * your own group's folder and the clones under it (space-59), and a
- * pick moves the clone into its group (space-58). */
+ * the local records folder (space-59), and explicit placement moves
+ * the clone under its Space's folder (space-97, storage-35). */
 export async function refreshProjectKey(app: App): Promise<string | undefined> {
   const projects = await app.core.command("project.list", {});
   const found = projects.find((project) => project.path === app.projectDir);
@@ -1349,13 +1316,9 @@ export function ownSetUp(state: SpaceState, origin: string = state.defaultInstan
   return own !== undefined && own.state !== "local-only" && own.sync.phase !== "running";
 }
 
-/** Pick a group for the demo project's local-only spex repository over
- * the protocol (arrange only), at the stand-in instance named — the
- * home's default instance unless another of `app.hosts` is — in its
- * team group, another group, or with `namespace` the account's
- * namespace there: `<name>-spex` created there and pushed, its clone
- * moving under that instance's folder (space-58, DR-127); the
- * project's key and remote follow it. */
+/** Create and sync the demo project's records in the signed-in account's
+ * namespace at the selected stand-in Space, moving the clone under
+ * that Space's folder (space-97, storage-35). */
 export async function pickPersonalSpace(
   app: App,
   options: { host?: StandinHost; name?: string } = {},
@@ -1378,20 +1341,10 @@ export async function pickPersonalSpace(
   return repositoryOf(state, key);
 }
 
-/** A project beside the demo's (space-85): a Git folder named `name`
- * in the scratch root, registered over the protocol (arrange only), its
- * spex repository local only under your own group (storage-6). */
-export async function registerLocalProject(app: App, name: string): Promise<{ dir: string; key: string }> {
-  const dir = join(dirname(app.dataDir), name);
-  seedDemoProject(dir);
-  const { id } = await app.core.command("project.register", { path: dir });
-  return { dir, key: id };
-}
-
 /**
  * The two-laptop arrangement against the stand-in (space-41, space-43,
- * space-44): this home signed in, its project picked into the team
- * group and pushed with one titled session; a peer pushing to the
+ * space-44): this home signed in, its project picked into the person's Space
+ * and pushed with one titled session; a peer pushing to the
  * stand-in's copy a differing configuration, a second turn in that
  * session and one queued intent; this device then running its own
  * second turn and changing Settings — two conflicts and one incoming
@@ -1611,35 +1564,6 @@ export const test = base.extend<{ app: App; appOptions: AppOptions }>({
     }
   },
 });
-
-/** What the page's sockets carried (`tapSockets`). */
-export interface SocketTap {
-  received: string[];
-  sent: string[];
-  urls: string[];
-  /** Each socket's own frames, in the order the page dialed them. */
-  sockets: { url: string; received: string[]; sent: string[] }[];
-}
-
-/** Every frame the page's sockets carried, each way, from its first
- * load on, with the URLs the page dialed. */
-export function tapSockets(page: Page): SocketTap {
-  const tap: SocketTap = { received: [], sent: [], urls: [], sockets: [] };
-  page.on("websocket", (socket) => {
-    const own = { url: socket.url(), received: [] as string[], sent: [] as string[] };
-    tap.urls.push(own.url);
-    tap.sockets.push(own);
-    socket.on("framereceived", (frame) => {
-      tap.received.push(String(frame.payload));
-      own.received.push(String(frame.payload));
-    });
-    socket.on("framesent", (frame) => {
-      tap.sent.push(String(frame.payload));
-      own.sent.push(String(frame.payload));
-    });
-  });
-  return tap;
-}
 
 /** Open the app at its token URL and wait for the shell to draw. */
 export async function open(page: Page, app: App, path = ""): Promise<void> {

@@ -72,71 +72,80 @@ function pathOf(input: Parameters<typeof fetch>[0]): string {
   return new URL(input instanceof Request ? input.url : String(input)).pathname;
 }
 
-test("space-5, space-29, git-host-23: a cold signed-out Space identifies its separate Git endpoint before accepting an external records remote", async (t) => {
+test("storage-2, git-host-23: a separate Git address stays classified after sign-out and restart without a Space read", async (t) => {
   const backend = await startHost();
   const host = await startHost({ gitBackend: backend });
   assert.notEqual(new URL(host.gitOrigin).origin, host.url);
-  const home = await startHome("cold-record-origin", { host });
+  const home = await startHome("saved-record-origin", { host });
   t.after(() => home.stop());
+  await signIn(home, host);
+  await home.client.waitRepository(0, OWN, (row) => row.sync.phase === "done", 30_000);
   const { key, clone } = await addFolder(home, home.projectDir);
-  const url = `${host.gitOrigin}/unlisted/example-spex.git`;
-  const client = internals(home).hostClient;
-  const inner = client.fetchImpl;
-  const reads: string[] = [];
-  client.fetchImpl = async (input, init) => {
-    reads.push(pathOf(input));
-    return inner(input, init);
-  };
-
-  await home.client.expectError("space.remote.set", { repository: key, url }, "invalid_request", /^Choose that Space as a sync destination$/);
-  assert.deepEqual(reads, ["/api/v1/host"], "classification required only a public description");
-  assert.equal(git(clone, "remote"), "", "the refused URL was not persisted");
-  await home.client.expectOk("space.remote.set", { repository: key, url: `${backend.url}/external/example.git` });
-});
-
-test("space-5, git-host-23: after restart an unclassified Git address stops Check before Git and local external sync stays available", async (t) => {
-  const backend = await startHost();
-  const host = await startHost({ gitBackend: backend });
-  const home = await startHome("record-description", { host });
-  t.after(() => home.stop());
-  const { key, clone } = await addFolder(home, home.projectDir);
-  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  assert.equal(internals(home).store.home.instance(host.url)?.gitOrigin, host.gitOrigin);
+  assert.ok(!JSON.stringify(await home.client.expectOk("space.get", {})).includes(host.gitOrigin), "Space state keeps the backing Git address private");
+  await home.client.expectOk("space.signout", { instance: host.url });
   await home.stop();
 
-  const cold = await startHome("record-description-cold", { host, dataDir: home.dataDir, project: false });
+  const cold = await startHome("saved-record-origin-cold", { host, dataDir: home.dataDir, project: false });
   t.after(() => cold.stop());
   const url = `${host.gitOrigin}/unlisted/example-spex.git`;
   const client = internals(cold).hostClient;
-  const inner = client.fetchImpl;
-  let answer = unavailable();
-  client.fetchImpl = async (input, init) => pathOf(input) === "/api/v1/host" ? answer.clone() : inner(input, init);
-  await cold.client.expectError("space.remote.set", { repository: key, url }, "invalid_request", /^Could not reach /);
-  const synced = await cold.client.settle("space.sync", { repository: key });
-  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  const reads: string[] = [];
+  client.fetchImpl = async (input) => { reads.push(pathOf(input)); return unavailable(); };
+  for (const address of [url, url.replace("/git/", "/%67it/")]) {
+    await cold.client.expectError("space.remote.set", { repository: key, url: address }, "invalid_request", /^Choose that Space as a sync destination$/);
+  }
+  assert.equal(git(clone, "remote"), "", "the refused address was not persisted");
+  await cold.client.expectOk("space.remote.set", { repository: key, url: `${backend.url}/external/example.git` });
 
   git(clone, "config", "remote.origin.url", url);
-  const blocked = await cold.client.settle("space.fetch", { repository: key });
-  assert.equal(blocked.sync.phase, "stopped");
-  assert.equal(blocked.sync.cause, "unreachable");
-  assert.equal(blocked.sync.retry, true);
-
-  // A successful HTTP response still needs to identify a Git endpoint.
-  answer = Response.json({ display_name: "Stand-in Git host", git_origin: "https://[" });
-  const incomplete = await cold.client.settle("space.fetch", { repository: key });
-  assert.equal(incomplete.sync.phase, "stopped");
-  assert.equal(incomplete.sync.cause, "unreachable");
-
-  client.fetchImpl = inner;
-  const identified = await cold.client.settle("space.fetch", { repository: key });
-  assert.equal(identified.sync.phase, "stopped");
-  assert.equal(identified.sync.cause, "gone");
+  await cold.client.expectError("space.fetch", { repository: key }, "invalid_request", /sign in/i);
+  assert.deepEqual(reads, [], "routing and refusal use the same persisted address");
 });
 
-test("space-5, git-host-23: an external records placement checks its effective push destination", async (t) => {
+test("storage-2, git-host-23: a successful Space description survives a failed account read", async (t) => {
+  const { home, host } = await prepared("record-first-description");
+  t.after(() => home.stop());
+  await home.stop();
+  const homeFile = join(home.dataDir, "home.yaml");
+  const original = readFileSync(homeFile, "utf8");
+  const legacy = original.replace(/^    gitOrigin: .*\r?\n/m, "");
+  assert.notEqual(legacy, original);
+  writeFileSync(homeFile, legacy);
+
+  const cold = await startHome("record-first-description-cold", { host, dataDir: home.dataDir, project: false });
+  t.after(() => cold.stop());
+  const core = internals(cold);
+  const inner = core.hostClient.fetchImpl;
+  core.hostClient.fetchImpl = async (input, init) => pathOf(input) === "/api/v1/host/me" ? unavailable() : inner(input, init);
+  assert.equal(core.store.home.instance(host.url)?.gitOrigin, undefined);
+  await assert.rejects(core.space.readHost());
+  assert.equal(core.store.home.instance(host.url)?.gitOrigin, host.gitOrigin);
+});
+
+test("git-host-23: a cold sync of a personal Git address checks its Space immediately", async (t) => {
+  const { home, host } = await prepared("record-personal-cold");
+  t.after(() => home.stop());
+  const repository = host.script.addRepository({ group: "ada", name: "direct-spex" });
+  const { key, clone } = await addFolder(home, gitFolder("direct"));
+  git(clone, "remote", "add", "origin", `${host.gitOrigin}/ada/direct-spex.git`);
+  await home.stop();
+
+  const cold = await startHome("record-personal-restart", { host, dataDir: home.dataDir, project: false });
+  t.after(() => cold.stop());
+  const from = cold.client.mark();
+  await cold.client.expectOk("space.sync", { repository: key });
+  const placed = await cold.client.waitRepository(from, hostKey(host, "ada/direct-spex"), (row) => row.sync.phase === "done", 30_000);
+  assert.equal(placed.id, repository.id);
+});
+
+test("space-136, git-host-23: an external records placement checks its effective push destination", async (t) => {
   const backend = await startHost();
   const host = await startHost({ gitBackend: backend });
   const home = await startHome("record-push-destination", { host });
   t.after(() => home.stop());
+  await signIn(home, host);
+  await home.client.waitRepository(0, OWN, (row) => row.sync.phase === "done", 30_000);
   const { key, clone } = await addFolder(home, home.projectDir);
   const bare = bareRepo();
   await home.client.expectOk("space.remote.set", { repository: key, url: bare });
@@ -153,13 +162,13 @@ test("space-5, git-host-23: an external records placement checks its effective p
   assert.equal(git(bare, "rev-parse", "spex"), saved, "the successful external Check did not publish the saved local work");
 });
 
-test("space-5: an external HTTP records Check does not follow redirects, even with a matching Git setting", async (t) => {
+test("git-host-23: external HTTP records Check follows Git redirects while the default Space is unavailable", async (t) => {
   const host = await startHost();
   const requests: string[] = [];
   const server = createServer((request, response) => {
     requests.push(request.url ?? "");
-    if (request.url?.startsWith("/records.git/")) response.writeHead(302, { location: "/redirected.git/info/refs" });
-    else response.writeHead(404);
+    if (request.url?.startsWith("/records.git/")) response.writeHead(302, { location: request.url.replace("/records.git/", "/redirected.git/") });
+    else response.writeHead(200, { "content-type": "text/plain" });
     response.end();
   });
   server.listen(0, "127.0.0.1");
@@ -173,10 +182,14 @@ test("space-5: an external HTTP records Check does not follow redirects, even wi
   const { key, clone } = await addFolder(home, home.projectDir);
   await home.client.expectOk("space.remote.set", { repository: key, url });
   git(clone, "config", `http.${url}.followRedirects`, "true");
+  const reads: string[] = [];
+  internals(home).hostClient.fetchImpl = async (input) => { reads.push(pathOf(input)); return unavailable(); };
 
-  const blocked = await home.client.settle("space.fetch", { repository: key });
-  assert.equal(blocked.sync.phase, "stopped");
-  assert.deepEqual(requests, ["/records.git/info/refs?service=git-upload-pack"]);
+  const fetched = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(fetched.sync.phase, "idle", "the redirected repository has no spex branch");
+  assert.ok(placementOf(fetched, null).branch?.checkedAt, "the empty repository was checked successfully");
+  assert.deepEqual(requests.slice(0, 2), ["/records.git/info/refs?service=git-upload-pack", "/redirected.git/info/refs?service=git-upload-pack"]);
+  assert.deepEqual(reads, [], "the default Space is never consulted for an external records transfer");
 });
 
 test("git-host-23: Git URL rewrites cannot redirect a verified Space records check, push or join", async (t) => {
@@ -274,7 +287,7 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
     assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), original);
   }
   core.hostClient.fetchImpl = inner;
-  host.script.removeMember(id);
+  host.script.withdrawRepository(id);
   const gone = await home.client.settle("space.sync", { repository: OWN });
   assert.equal(gone.sync.phase, "stopped");
   assert.match(gone.reason ?? "", /no longer available/);
@@ -459,16 +472,23 @@ for (const next of ["signed-out", "another-account"] as const) {
   });
 }
 
-test("git-host-23: a failed first-sync Check stops before transport and a fresh explicit retry can send", async (t) => {
-  const { host, home, core, id } = await prepared("first-check-failure");
+test("space-2, git-host-23: Refresh leaves an unsynced placement alone, and a failed explicit Check stops before transport", async (t) => {
+  const { host, home, core } = await prepared("first-check-failure");
   t.after(() => home.stop());
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
-  const target = host.script.repositories.find((repository) => repository.id === id)!;
-  target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
   const clone = clonePath(home.dataDir, OWN);
   const remoteHead = git(host.bareOf(OWN), "rev-parse", "spex");
   writeFileSync(join(clone, "notes.md"), "Keep the local record through a failed Check.\n");
+  const before = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt ?? 0;
+  const refresh = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(refresh, (state) => {
+    const instance = instanceOf(state, host.url);
+    return instance?.read.phase === "idle" && (instance.readAt ?? 0) > before;
+  }, 30_000);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
+  assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), remoteHead);
   const inner = core.hostClient.fetchImpl;
   let fail = true;
   let catalogReads = 0;

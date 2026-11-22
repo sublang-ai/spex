@@ -115,7 +115,7 @@ function checkPairs(folders: readonly unknown[], file: string): void {
       paths.add(path);
     }
     need(!keys.has(folder.repository), file, i18n._({ id: "records {key} belong to two project folders",
-      comment: "Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path", values: { key: folder.repository } }));
+      comment: "Storage diagnostic: one project's records appear in two pairs of home.yaml; {key} is their path", values: { key: folder.repository } }));
     keys.add(folder.repository);
   }
 }
@@ -357,10 +357,10 @@ export class Home {
     return true;
   }
 
-  /** The instance's display name as last read; false where it is not
-   * listed. */
-  setDisplayName(origin: string, displayName: string | null): boolean {
-    const next = withDisplayName(this.data, origin, displayName);
+  /** The Space's display name and any Git address last reported. False
+   * where it is not listed. */
+  setDisplayName(origin: string, displayName: string | null, gitOrigin?: string): boolean {
+    const next = withDisplayName(this.data, origin, displayName, gitOrigin);
     if (next === null) return false;
     this.data = next;
     return true;

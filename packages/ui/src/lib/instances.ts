@@ -15,12 +15,12 @@ export function instanceOf(state: SpaceState, origin: string | null | undefined)
 }
 
 /** Every instance the home is signed in to, in the home's order
- * (space-1, space-58). */
+ * (space-1). */
 export function signedInInstances(state: SpaceState): InstanceState[] {
   return state.instances.filter((instance) => instance.signedIn);
 }
 
-/** Whether the home is signed in to any instance (space-1, space-58). */
+/** Whether the home is signed in to any instance (space-1). */
 export function anySignedIn(state: SpaceState | undefined): boolean {
   return state?.instances.some((instance) => instance.signedIn) ?? false;
 }
@@ -48,7 +48,7 @@ export function originOf(url: string): string {
   }
 }
 
-/** How the surface names an instance (space-1, space-58): its display
+/** How the surface names an instance (space-1): its display
  * name, its host name until a read names one. */
 export function instanceName(instance: InstanceState): string {
   return instance.displayName ?? instance.host;

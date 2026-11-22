@@ -3,16 +3,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ApprovalDecision, ApprovalOwner, PendingApproval } from "@sublang/spex-core/protocol";
-import { useAppStore, type AppStore } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
 
 const buttonClass = "min-h-8 rounded border border-brand-300 px-3 py-1 text-sm hover:bg-brand-50 disabled:opacity-50 dark:border-brand-700 dark:hover:bg-brand-950";
 
-/** One request, answered at `store`'s core — the core that raised it —
- * with that core's generation; `place` names the place where the page
- * holds several. */
-function ApprovalCard({approval, generation, connected, store}: {approval: PendingApproval; generation: string; connected: boolean; store: AppStore}) {
+/** The core's generation identifies the live request being answered. */
+function ApprovalCard({approval, generation, connected}: {approval: PendingApproval; generation: string; connected: boolean}) {
   const [answering, setAnswering] = useState(false);
   const request = approval.request;
   const title = [request.details?.title, request.details?.displayName].find((value): value is string => typeof value === "string" && value.trim().length > 0);
@@ -20,11 +18,11 @@ function ApprovalCard({approval, generation, connected, store}: {approval: Pendi
   async function answer(decision: ApprovalDecision) {
     setAnswering(true);
     try {
-      await store.getClient().command("approval.respond", {generation, requestId: approval.id, owner: approval.owner, decision});
+      await useAppStore.getClient().command("approval.respond", {generation, requestId: approval.id, owner: approval.owner, decision});
       // Only the core's snapshot removes authority. A reply alone cannot
       // manufacture an executed tool result or remove a different request.
     } catch (cause) {
-      store.setState({approvalError: i18n._("Could not answer {tool} for {actor}: {reason}", {tool: request.toolName, actor: approval.actorId, reason: cause instanceof Error ? cause.message : String(cause)})});
+      useAppStore.setState({approvalError: i18n._("Could not answer {tool} for {actor}: {reason}", {tool: request.toolName, actor: approval.actorId, reason: cause instanceof Error ? cause.message : String(cause)})});
     } finally { setAnswering(false); }
   }
   const headingId = `approval-${approval.id}`;
@@ -48,8 +46,7 @@ function ApprovalCard({approval, generation, connected, store}: {approval: Pendi
 }
 
 /** A conflicting answer can arrive after another client removed the card.
- * Keep the refusal visible without recreating any live authority — each
- * place's own, dismissed at that place. */
+ * Keep the refusal visible after the card has gone. */
 export function ApprovalFeedback() {
   const error = useAppStore((state) => state.approvalError);
   return error ? <div role="alert" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-red-200 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:text-red-300">
@@ -61,12 +58,10 @@ export function ApprovalFeedback() {
 const sameOwner = (a: ApprovalOwner, b: ApprovalOwner): boolean =>
   a.kind === b.kind && a.id === b.id && (a.kind !== "draft" || (b.kind === "draft" && a.instance === b.instance));
 
-/** This notice names only real core requests belonging to this
- * conversation, at the place the conversation is shown at. */
+/** This notice names pending requests belonging to this conversation. */
 export function ApprovalNotice({owner}: {owner: ApprovalOwner}) {
-  const store = useAppStore;
-  const pending = store((state) => state.approvals?.pending);
-  const show = store((state) => state.showApprovals);
+  const pending = useAppStore((state) => state.approvals?.pending);
+  const show = useAppStore((state) => state.showApprovals);
   // A draft's calls are its instance's: a session made again under the
   // id never shows the former's (core-service-96).
   const own = pending?.filter((item) => sameOwner(item.owner, owner)) ?? [];
@@ -76,9 +71,7 @@ export function ApprovalNotice({owner}: {owner: ApprovalOwner}) {
   </div>;
 }
 
-/** Global because authoring drafts are deliberately not session ledger
- * rows, and joined across the places (approvals-5): each place's
- * requests after the one before's, this computer's first. */
+/** The inbox shows pending approvals for both sessions and authoring drafts (approvals-5). */
 export function ApprovalInbox() {
   const approvals = useAppStore((state) => state.approvals);
   const open = useAppStore((state) => state.approvalInboxOpen);
@@ -125,7 +118,7 @@ export function ApprovalInbox() {
     </div>
     {open ? <div id="live-approval-inbox" ref={region} className="grid max-h-[45vh] min-w-0 gap-2 overflow-y-auto" onBlurCapture={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) focusedRequest.current = undefined; }} onFocusCapture={(event) => { const card = (event.target as HTMLElement).closest<HTMLElement>("[data-approval-id]"); focusedRequest.current = card?.dataset.approvalId; }}>
       {!connected ? <p role="status" className="text-sm">{i18n._("Reconnect to answer these requests.")}</p> : null}
-      {pending.map((approval) => <ApprovalCard key={approval.id} approval={approval} generation={approvals.generation} connected={connected} store={useAppStore} />)}
+      {pending.map((approval) => <ApprovalCard key={approval.id} approval={approval} generation={approvals.generation} connected={connected} />)}
     </div> : null}
   </section>;
 }

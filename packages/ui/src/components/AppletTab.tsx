@@ -18,7 +18,6 @@ import type { SpexClient } from "../lib/client.js";
 import type { AppletTab as AppletTabEntry } from "../lib/applets.js";
 import { endpointOrigin } from "../lib/applets.js";
 import { openPackageRow } from "../lib/package-row.js";
-import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 
@@ -43,7 +42,6 @@ export function AppletTab({
   /** Shows the Playbooks surface, where a global package's row stands. */
   onShowGlobal?: () => void;
 }) {
-  const store = useAppStore;
   const [path, setPath] = useState<string>();
   const [error, setError] = useState<string>();
   // Each Reload loads the frame again at a fresh address the core reads
@@ -98,7 +96,6 @@ export function AppletTab({
             title={i18n._({ id: "Open its package", comment: "tooltip of an applet's from-line: shows the package's row on the Packages tab, or on the Playbooks page for a global package" })}
             onClick={() =>
               openPackageRow(
-                store,
                 applet.repository === project ? { projectId: project } : { show: () => onShowGlobal?.() },
                 applet.package,
               )

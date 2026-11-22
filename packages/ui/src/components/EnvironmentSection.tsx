@@ -1263,8 +1263,7 @@ function FolderTab({
   const pathRef = useRef<HTMLInputElement>(null);
   const typed = path.trim().replace(/\/+$/u, "");
   const chosen = typed.length > 0 && `${typed}/` !== PACKAGES_FOLDER ? typed : "";
-  // The shell's picker reads this computer's folders: a remote place's
-  // project is on its server, so none is offered there (run-view-169).
+  // The desktop shell's picker reads this computer's folders (app-shell-4).
   const pickDirectory = window.spexNative?.pickDirectory;
 
   useEffect(() => {

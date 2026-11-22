@@ -261,9 +261,7 @@ export function AuthoringWorkspace({
     add: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
-  // A picked file and a pasted path name this computer's disk: a remote
-  // place's draft is on its server, so neither is offered there
-  // (run-view-169).
+  // Use the shell's file picker when available (playbook-library-5).
   const pickFile = window.spexNative?.pickFile
     ? () => window.spexNative!.pickFile!()
     : undefined;
@@ -525,7 +523,6 @@ export function AuthoringWorkspace({
                   editor={editor}
                   connected={connected}
                   pickFile={pickFile}
-                  pathEntry
                   onMode={forShown((next: Partial<DraftSourceMode>) => setDraftSourceMode(draftId, next))}
                   onEditor={forShown((next: SpecEditorState | undefined) => setDraftEditor(draftId, next))}
                   onWrite={(input) => writeDraftSource(draftId, input)}

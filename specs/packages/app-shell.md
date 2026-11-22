@@ -13,7 +13,7 @@ This spec covers the Spex desktop shell (`apps/desktop`) — the single-window E
 
 #### app-shell-1
 
-Where the host platform is supported [[core-service-89](core-service.md#core-service-89)], when the user launches Spex, the app shall open a single main window whose UI is connected to the in-app core service ([DR-133](../decisions/133-one-desktop-over-several-cores.md)) — without requiring the user to start any separate server or open a browser.
+Where the host platform is supported [[core-service-89](core-service.md#core-service-89)], when the user launches Spex, the app shall open a single main window whose UI is connected to the in-app core service ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)) — without requiring the user to start any separate server or open a browser.
 
 #### app-shell-2
 

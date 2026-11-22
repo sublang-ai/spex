@@ -12,6 +12,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-103](103-the-home-and-its-groups.md) in its principle and its tree: the environment is the code's configuration, not a record, so a project's spex repository no longer holds `spex.yaml` or `spex.lock`, the unit `spex.yaml` with `spex.lock` remains for a group's own spex repository alone, and Spex itself still commits nothing to the code, the reader committing the environment with it.
 
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in the environment's committed files: the specs an install places stand in the code beside `spex.yaml` and `spex.lock`, committed by the reader.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of group environments. Global and project package sources keep their existing roots.
 
 ## Context
 
