@@ -55,6 +55,7 @@ Every skill is keyed by its id — its `name`, or `<name>@<rootId>` for a differ
       "plugin": null,                  // plugin name when scope is "plugin"
       "dir": "/abs/project/.claude/skills/code",
       "file": "/abs/project/.claude/skills/code/SKILL.md",
+      "digest": "9b90c1…",             // SHA-256 (hex) of SKILL.md's bytes; null when it cannot be read
       "copies": [                      // other folders holding this same skill, byte for byte
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
       ],
@@ -110,10 +111,10 @@ A `TagHit`:
 }
 ```
 
-Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter`, `no-steps`.
+Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter`, `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
 
-One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) — is one record listing the others under `copies`.
-A folder too large to list whole (over 5,000 files or 2,000 folders), or holding over 64 MiB, counts as differing.
+One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
+A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
 Only skills of one name whose folders differ are a `duplicate-name`.
 
 ## annotations.json — corrections layered on the scan
@@ -126,6 +127,7 @@ The scan is pattern matching; this file is where a reader who understood the ski
   "version": 1,
   "skills": {
     "code": {
+      "source": { "sha256": "9b90c1…" },   // optional; the `digest` of the SKILL.md this entry was written from
       "summary": "Implements a request as one commit per phase, then has it reviewed once.",
       "steps": [                       // optional; replaces the detected steps entirely
         { "title": "Classify the request", "summary": "New intent or an existing IR?" },
@@ -147,6 +149,8 @@ The scan is pattern matching; this file is where a reader who understood the ski
 - A replaced step has `line` and `endLine` null and its `summary` as its `excerpt`; the tags and links the scan found in the former steps stay on the skill as a whole (`fromStep` null).
 - A tag id absent from `tag-rules.json` is accepted when it has the form `<category>.<slug>`; its label is the slug.
 - An entry naming a skill that is not installed is ignored and reported on stderr.
+- An entry recording a `source` digest other than its skill's `digest` is not applied, its `translations` words included, and is reported as a `stale-annotation` insight: the state folder serves every project, so the entry may have been written for another skill of that name or an earlier text of this one.
+  An entry recording none is applied.
 
 ## workflows.json — how the user organizes skills
 
@@ -169,6 +173,8 @@ The scan is pattern matching; this file is where a reader who understood the ski
 
 - A skill may sit in several phases, and in none (the viewer lists it under Unassigned).
 - An entry is a skill id. One with no installed skill is kept and shown as missing, so a workflow survives an uninstall.
+- The viewer saves with `PUT /api/workflows`, sending in `If-Match` the `ETag` of the version it last read; a save against a file changed since is refused (412) and the stored file stands.
+  The check and the write hold `workflows.json.lock` in the state folder, so of servers sharing the folder only one writes against a version; a lock still held after a second answers 503 (`busy`, save again), and one older than 10 seconds is broken as left by a server that stopped mid-save.
 
 ## Languages
 
@@ -189,7 +195,8 @@ A file's translation is the file beside it with the tag before the extension: `S
   - in JSON, a top-level `"translationOf": { "sha256": "<64 hex>" }`.
 - A translation whose recorded source digest differs from its source's is *stale* (behind its source); a Markdown one whose recorded own digest differs from its own is *edited* (apart from its source, which agents follow); one recording none is neither.
 - `pin` rewrites only the record line and writes nothing where any named translation cannot hold a record; `pin --check` names each translation that is stale, edited or records no digest (or, in Markdown, not its own), and each folder named that holds no translation.
-- A translation under `translations/<skill id>/` whose skill the scan does not report, or whose source that skill lacks, is named and fails both `pin` and `pin --check`; `--state`, `--cwd` and `--root` choose the scan that finds the skills.
+- A folder named that cannot be read whole (over 5,000 files or 2,000 folders, or an entry that cannot be read) is named and fails both `pin` and `pin --check`.
+- A translation under `translations/<skill id>/` whose skill the scan does not report, or whose source that skill lacks, is named and fails both `pin` and `pin --check`; the scan options (`--state`, `--cwd`, `--root`, `--agent`, `--no-user`, `--no-plugins`) choose the scan that finds the skills.
 
 In `atlas.json` every skill carries `translations`, an object keyed by tag (empty when there is none), and each entry of `files` lists the tags it is translated into:
 
@@ -220,13 +227,13 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `unresolved-link` | `name`, `from` |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
-| `missing-description`, `invalid-frontmatter`, `no-steps` | — |
+| `missing-description`, `invalid-frontmatter`, `no-steps`, `stale-annotation` | — (`{}`) |
 | `name-mismatch` | `name`, `folder` |
 | `stale-translation` | `lang`, `files` (relative paths behind their source) |
 | `edited-translation` | `lang`, `files` (relative paths edited apart from their source) |
 | `translation-steps` | `lang`, `steps`, `expected` |
 
-In `annotations.json` a skill's entry may repeat its words per language; they land in the skill's `translations` entry of that tag:
+In `annotations.json` a skill's entry may repeat its words per language; they land in the skill's `translations` entry of that tag, else of a tag of the same language and script (`zh` for `zh-CN`, never `zh-TW`):
 
 ```jsonc
 "code": {
@@ -239,7 +246,7 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 
 ### The server's answers
 
-- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns `{ "language", "path", "stale", "edited", "text" }`: the translation where there is one, a regular file inside its folder, with `"language": "<tag>"` and its own relative path (`SKILL.zh-CN.md`); else the file itself with `"language": null`, its relative path, `"stale": false` and `"edited": false`.
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` returns `{ "language", "path", "stale", "edited", "text" }`: the translation under that tag, else under a tag of the same language and script (`zh` or `zh-Hans` for `zh-CN`, never `zh-TW`), where there is one, a regular file inside its folder, with `"language"` its tag and its own relative path (`SKILL.zh-CN.md`); else the file itself with `"language": null`, its relative path, `"stale": false` and `"edited": false`.
   Without `lang` the answer is the file's plain text.
 - `GET /api/config` adds:
 
@@ -274,8 +281,8 @@ In `annotations.json` a skill's entry may repeat its words per language; they la
 
 Folders scanned:
 
-- Each agent's skill folder in the project and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the project's `.github/skills`, and the project's `skills` where it holds a skill.
-- `--agent <id>` keeps that agent's folders, `.agents/skills` where that agent loads it (every agent but Claude Code does), the project's `skills`, and `--root`'s.
+- Each agent's skill folder in the project and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills` (loaded as `.agents/skills` is), `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills`, the project's `.github/skills`, and the project's `skills` where it holds a skill.
+- `--agent <id>` keeps that agent's folders, `.agents/skills` and `.config/agents/skills` where that agent loads them (every agent but Claude Code does), and `--root`'s; the project's `skills` is left out.
 - A Claude Code plugin's `skills`, where `plugins/installed_plugins.json` records the plugin for the user or for this project and `enabledPlugins` does not set it `false`: the user's `settings.json`, then the project's `.claude/settings.json`, then its `.claude/settings.local.json`, a later file's value for a plugin over an earlier one's.
 - In each folder, a folder or a folder one below it holding `SKILL.md` is a skill; folders whose name starts with a dot, and `node_modules`, are passed over.
 
@@ -298,7 +305,7 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 
 - A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
 - One link is kept per (skill, step, target), `calls` before `mentions`; a skill's link to itself is dropped.
-- A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); ``the `x` skill``; and `Skill(x)`, whatever `x` is.
+- A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); `` `x` skill `` after any word (``the `x` skill``, ``our `x` skill``); and `Skill(x)`, whatever `x` is.
 
 Tags come from `tag-rules.json`: each rule's patterns are tried against every line of the frontmatter description (and the `context` and `agent` keys), the preamble (every body line outside every step) and each step, fenced code included.
 A match negated earlier in its own clause is not evidence: a never, not, no, nor, without, avoid, don't, doesn't, won't, cannot or can't within the 60 characters before it in the same sentence drops it, unless the rule sets `"negatable": false`.

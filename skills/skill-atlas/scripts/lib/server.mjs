@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The local viewer server: 127.0.0.1 only, Host-checked against DNS
-// rebinding, and writing nothing but workflows.json in the state folder.
+// rebinding, and writing nothing but workflows.json (and its lock) in the state folder.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { viewerConfig, readWorkflowsState, validateWorkflows, writeWorkflows, setAsideInvalid } from './state.mjs';
+import { viewerConfig, readWorkflowsState, validateWorkflows, writeWorkflows, setAsideInvalid, withWorkflowsLock, LockBusyError } from './state.mjs';
 import { canonicalTag, findTranslation, translationState } from './translations.mjs';
 
 export const HOST = '127.0.0.1';
@@ -74,31 +74,15 @@ export function startServer(opts) {
       case 'PUT /api/workflows': {
         const body = await readBody(req, res);
         if (body === null) return undefined;
-        const cur = readWorkflowsState(opts.stateDir);
-        const replacing = req.headers[REPLACE_INVALID_HEADER] === '1';
-        if (replacing) {
-          if (cur.valid) return send(res, 409, { error: 'not-invalid', message: 'the stored workflows.json is valid; send If-Match with its ETag instead' }, { headers: { ETag: cur.etag } });
-        } else {
-          if (!cur.valid) return send(res, 409, { error: 'invalid-workflows', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file });
-          const ifMatch = req.headers['if-match'];
-          if (ifMatch === undefined) return send(res, 428, { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/workflows' });
-          if (ifMatch !== cur.etag) return send(res, 412, { error: 'changed', message: 'workflows.json changed since it was read; reload it and apply the change again' }, { headers: { ETag: cur.etag } });
-        }
-        let doc;
+        let answer;
         try {
-          doc = JSON.parse(body);
+          // The check and the write as one step among every server sharing the state folder.
+          answer = withWorkflowsLock(opts.stateDir, () => saveWorkflows(opts.stateDir, body, req.headers));
         } catch (err) {
-          return send(res, 400, { error: 'invalid-body', message: `the body is not valid JSON: ${err.message}` });
+          if (err instanceof LockBusyError) return send(res, 503, { error: 'busy', message: err.message }, { headers: { 'Retry-After': '1' } });
+          return send(res, 500, { error: 'write-failed', message: `cannot save workflows.json in ${opts.stateDir}: ${err.message}` });
         }
-        const checked = validateWorkflows(doc);
-        if (!checked.ok) return send(res, 400, { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` });
-        try {
-          if (replacing && cur.exists) setAsideInvalid(opts.stateDir);
-          const written = writeWorkflows(opts.stateDir, checked.doc);
-          return send(res, 200, written.doc, { headers: { ETag: written.etag } });
-        } catch (err) {
-          return send(res, 500, { error: 'write-failed', message: `cannot write workflows.json in ${opts.stateDir}: ${err.message}` });
-        }
+        return send(res, answer.status, answer.value, { headers: answer.headers ?? {} });
       }
       case 'GET /api/config':
         try {
@@ -131,6 +115,36 @@ export function startServer(opts) {
     };
     listen(opts.port);
   });
+}
+
+// PUT /api/workflows under the lock: check the stored version, then validate
+// and write. Answers `{ status, value, headers }`.
+function saveWorkflows(stateDir, body, reqHeaders) {
+  const cur = readWorkflowsState(stateDir);
+  const replacing = reqHeaders[REPLACE_INVALID_HEADER] === '1';
+  if (replacing) {
+    if (cur.valid) return { status: 409, value: { error: 'not-invalid', message: 'the stored workflows.json is valid; send If-Match with its ETag instead' }, headers: { ETag: cur.etag } };
+  } else {
+    if (!cur.valid) return { status: 409, value: { error: 'invalid-workflows', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file } };
+    const ifMatch = reqHeaders['if-match'];
+    if (ifMatch === undefined) return { status: 428, value: { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/workflows' } };
+    if (ifMatch !== cur.etag) return { status: 412, value: { error: 'changed', message: 'workflows.json changed since it was read; reload it and apply the change again' }, headers: { ETag: cur.etag } };
+  }
+  let doc;
+  try {
+    doc = JSON.parse(body);
+  } catch (err) {
+    return { status: 400, value: { error: 'invalid-body', message: `the body is not valid JSON: ${err.message}` } };
+  }
+  const checked = validateWorkflows(doc);
+  if (!checked.ok) return { status: 400, value: { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` } };
+  try {
+    if (replacing && cur.exists) setAsideInvalid(stateDir);
+    const written = writeWorkflows(stateDir, checked.doc);
+    return { status: 200, value: written.doc, headers: { ETag: written.etag } };
+  } catch (err) {
+    return { status: 500, value: { error: 'write-failed', message: `cannot write workflows.json in ${stateDir}: ${err.message}` } };
+  }
 }
 
 // A skill's file as text. Asked in a language (`lang`), the answer is JSON:

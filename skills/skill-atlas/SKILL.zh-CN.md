@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=da071fbc0d93a99807a524d4415575e9c36f9ed347a06437a74c217926336d54 own=651dfc7ddafc1664cfcf9d45033b85975f5b116131cd36d28160d784f031e8e8 -->
+<!-- skill-atlas:source sha256=aaec85388e6d7f76b103a2000552ea155e5f436a9ec272f0a06e28c5c96f38e9 own=9720f868e3b29d3b90208d9598d632a10c125d705ce2554a29f9b7f41c4a87c3 -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
@@ -96,10 +96,10 @@ node <skill-dir>/scripts/atlas.mjs scan --out atlas.json
 步骤、链接和标签始终取自 `SKILL.md`；译本只提供文字，从不提供结构。
 
 当用户要求以自己的语言阅读没有附带译本的技能时，按照 [references/translate.md](references/translate.zh-CN.md) 翻译它们：只翻译用户点名的技能，未经要求绝不全部翻译。
-然后记录每个译本所依据的源文件（给 `pin` 传入扫描时所用的 `--state`、`--cwd` 和 `--root`），并重新扫描：
+然后记录每个译本所依据的源文件，并重新扫描；`<scan options>` 是扫描时所用的 `--cwd`、`--root`、`--agent`、`--no-user` 和 `--no-plugins`：
 
 ```bash
-node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <translations or folders>
 ```
 
 `pin --check` 不修改任何文件，并列出每个落后于源文件或脱离源文件修改过的译本。
@@ -127,7 +127,7 @@ node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
 | 你如何深读一个技能 | [references/deep-read.md](references/deep-read.zh-CN.md) |
 | 你如何翻译一个技能，或为页面新增一种语言 | [references/translate.md](references/translate.zh-CN.md) |
 
-编辑后请重新扫描。
+编辑标签规则、注释或技能的译本后，请重新扫描；编辑工作流预设、视图设置、名称文件或消息目录后，请重新加载页面。
 
 ## 安全
 

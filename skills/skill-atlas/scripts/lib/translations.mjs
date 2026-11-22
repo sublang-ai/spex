@@ -93,18 +93,23 @@ export function listFiles(dir, limits) {
 /**
  * listFiles, saying whether the listing is whole: `complete` is false where
  * the folder holds more files or folders than the limits let it list.
- * With `every`, dot-entries and node_modules are listed too, and a link
- * leading out of the folder makes the listing incomplete rather than being
- * left out, so a listing that is complete holds every file of the folder.
- * @returns {{ files:string[], complete:boolean }}
+ * With `strict`, an entry that cannot be read makes the listing incomplete
+ * rather than being left out.
+ * With `every`, dot-entries and node_modules are listed too, a link inside
+ * the folder is listed under `links` with its link text and not followed, and
+ * a link leading out of the folder or one that cannot be read makes the
+ * listing incomplete, so a listing that is complete holds every entry of the
+ * folder (`strict` implied).
+ * @returns {{ files:string[], links:{ rel:string, target:string }[], complete:boolean }}
  */
-export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false } = {}) {
+export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WALK_MAX_DIRS, every = false, strict = every } = {}) {
   const out = [];
+  const links = [];
   const seen = new Set();
   let dirs = 0;
   let complete = true;
   let base;
-  try { base = fs.realpathSync(dir); } catch { return { files: out, complete }; }
+  try { base = fs.realpathSync(dir); } catch { return { files: out, links, complete: !strict }; }
   const inside = (real) => {
     const rel = path.relative(base, real);
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
@@ -114,11 +119,11 @@ export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WAL
     if (dirs >= maxDirs) { complete = false; return; }
     dirs++;
     let real;
-    try { real = fs.realpathSync(abs); } catch { if (every) complete = false; return; }
+    try { real = fs.realpathSync(abs); } catch { if (strict) complete = false; return; }
     if (seen.has(real)) return; // a symlink loop
     seen.add(real);
     let entries;
-    try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { if (every) complete = false; return; }
+    try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { if (strict) complete = false; return; }
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const e of entries) {
       if (!complete) return;
@@ -131,19 +136,25 @@ export function listFilesBounded(dir, { maxFiles = WALK_MAX_FILES, maxDirs = WAL
           if (every) { complete = false; return; }
           continue;
         }
+        if (every && e.isSymbolicLink()) {
+          // Two folders alike hold the same links: compared by their text, never followed.
+          if (out.length + links.length >= maxFiles) { complete = false; return; }
+          links.push({ rel: childRel, target: fs.readlinkSync(childAbs) });
+          continue;
+        }
         stat = fs.statSync(childAbs);
       } catch {
-        if (every) { complete = false; return; }
+        if (strict) { complete = false; return; }
         continue;
       }
       if (stat.isDirectory()) { walk(childAbs, childRel); continue; }
       if (!stat.isFile()) continue;
-      if (out.length >= maxFiles) { complete = false; return; }
+      if (out.length + links.length >= maxFiles) { complete = false; return; }
       out.push(childRel);
     }
   };
   walk(dir, '');
-  return { files: out, complete };
+  return { files: out, links, complete };
 }
 
 /** translations/<skill id>/ of the state folder, or null where the id cannot name a folder. */
@@ -171,9 +182,34 @@ export function stateTranslations(stateDir, skillId, skillDir) {
   return out;
 }
 
+// A tag's language and script, its likely script filled in (`zh` -> zh-Hans), or null.
+function languageAndScript(tag) {
+  try {
+    const { language, script } = new Intl.Locale(tag).maximize();
+    return `${language}-${script ?? ''}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The translation of the skill file `rel` into `lang`: the skill folder's,
- * else the state folder's; only a regular file inside its folder counts.
+ * The tag of `tags` that stands for `want`: the same tag, else the first in
+ * name order of the same language and script (`zh`, `zh-Hans` and `zh-SG` for
+ * `zh-CN`, never `zh-TW` or `zh-Hant`); null where none does.
+ */
+export function matchingTag(want, tags) {
+  const exact = tags.find((t) => t.toLowerCase() === String(want).toLowerCase());
+  if (exact !== undefined) return exact;
+  const key = languageAndScript(want);
+  if (!key) return null;
+  return [...tags].sort().find((t) => languageAndScript(t) === key) ?? null;
+}
+
+/**
+ * The translation of the skill file `rel` into `lang`: under that tag, else
+ * under a tag of the same language and script [matchingTag], the skill
+ * folder's before the state folder's at either; only a regular file inside
+ * its folder counts.
  * @returns {{ abs:string, real:string, origin:'skill'|'state', tag:string } | null}
  */
 export function findTranslation(skill, rel, lang, stateDir) {
@@ -185,6 +221,7 @@ export function findTranslation(skill, rel, lang, stateDir) {
   const places = [{ base: skill.dir, origin: 'skill' }];
   const stateDirOfSkill = stateDir ? stateTranslationsDir(stateDir, skill.id) : null;
   if (stateDirOfSkill) places.push({ base: stateDirOfSkill, origin: 'state' });
+  const found = []; // every translation of the file, in the order of places, then names
   for (const { base, origin } of places) {
     let baseReal;
     try { baseReal = fs.realpathSync(base); } catch { continue; }
@@ -193,13 +230,14 @@ export function findTranslation(skill, rel, lang, stateDir) {
     try { entries = fs.readdirSync(folder).sort(); } catch { continue; }
     for (const entry of entries) {
       const parsed = parseTranslationName(entry);
-      if (!parsed || parsed.sourceName !== name || parsed.tag !== want) continue;
+      if (!parsed || parsed.sourceName !== name) continue;
       const abs = path.join(folder, entry);
       const real = fileInside(baseReal, abs);
-      if (real) return { abs, real, origin, tag: parsed.tag };
+      if (real) found.push({ abs, real, origin, tag: parsed.tag });
     }
   }
-  return null;
+  const tag = matchingTag(want, [...new Set(found.map((t) => t.tag))]);
+  return tag === null ? null : found.find((t) => t.tag === tag);
 }
 
 export function sha256Hex(bytes) {

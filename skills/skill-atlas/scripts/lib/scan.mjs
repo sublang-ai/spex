@@ -14,7 +14,7 @@ import { detectSteps } from './steps.mjs';
 import { buildLinkMatcher, findLinks } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
-import { stateTranslations, readTextBounded, translationState, listFilesBounded } from './translations.mjs';
+import { stateTranslations, readTextBounded, translationState, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { findInsights } from './insights.mjs';
 import { warn } from './log.mjs';
@@ -91,7 +91,7 @@ export function scan(opts) {
     for (const st of s.steps) st.calls = [...new Set(edges.filter((e) => e.from === s.id && e.fromStep === st.id).map((e) => e.to))];
     s.tags = mergeHits(s._baseTags, ...s.steps.map((st) => st.tags));
   }
-  const insights = findInsights({ skills, edges, unresolved, roots });
+  const insights = findInsights({ skills, edges, unresolved, roots, scanArgs: scanArgs(opts) });
   for (const s of skills) {
     s.issues = [...new Set(insights.filter((i) => i.skills.includes(s.id)).map((i) => i.kind))];
   }
@@ -121,7 +121,7 @@ function readSkill(dir, root) {
   const file = path.join(dir, 'SKILL.md');
   const s = {
     id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
-    dir, file, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
+    dir, file, digest: null, copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
     _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
     _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(), _listing: null,
   };
@@ -129,7 +129,9 @@ function readSkill(dir, root) {
   try {
     const size = fs.statSync(file).size;
     if (size > SKILL_FILE_MAX_BYTES) throw new Error(`it is ${size} bytes, over the ${SKILL_FILE_MAX_BYTES}-byte limit`);
-    text = fs.readFileSync(file, 'utf8');
+    const bytes = fs.readFileSync(file);
+    s.digest = sha256Hex(bytes); // an annotation written from this text records it
+    text = bytes.toString('utf8');
   } catch (err) {
     s._fmError = `cannot read SKILL.md: ${err.message}`;
     return s;
@@ -186,15 +188,17 @@ function mergeIdenticalCopies(skills) {
 }
 
 // Whether two skill folders hold the same files (same relative paths, same
-// bytes), dot-files and node_modules included: a folder too large to list
-// whole, holding a link that leads out of it or a file that cannot be read,
-// or whose files together exceed COPY_COMPARE_MAX_BYTES, differs.
+// bytes) and the same links (same relative paths, same link text), dot-files
+// and node_modules included: a folder too large to list whole, holding a link
+// that leads out of it or an entry that cannot be read, or whose files
+// together exceed COPY_COMPARE_MAX_BYTES, differs.
 function sameFolder(a, b) {
   const listing = (s) => (s._listing ??= listFilesBounded(s.dir, { every: true }));
   const la = listing(a);
   const lb = listing(b);
-  if (!la.complete || !lb.complete || la.files.length !== lb.files.length) return false;
+  if (!la.complete || !lb.complete || la.files.length !== lb.files.length || la.links.length !== lb.links.length) return false;
   if (la.files.some((rel, n) => rel !== lb.files[n])) return false;
+  if (la.links.some((l, n) => l.rel !== lb.links[n].rel || l.target !== lb.links[n].target)) return false;
   let total = 0;
   for (const rel of la.files) {
     const fa = path.join(a.dir, ...rel.split('/'));
@@ -282,10 +286,12 @@ function readTranslations(s, stateDir) {
     if (!tagsBySource.has(t.sourceRel)) tagsBySource.set(t.sourceRel, new Set());
     tagsBySource.get(t.sourceRel).add(t.tag);
     Object.assign(t, translationState(t.abs, path.join(s.dir, ...t.sourceRel.split('/')), digests));
+    // A repair command names the translation: its path in the skill's folder, or under the state folder's translations/.
+    const target = t.origin === 'state' ? `<state>/${shellWord(`${TRANSLATIONS_DIR}/${s.id}/${t.rel}`)}` : shellWord(t.abs);
     for (const [flag, byLang] of [[t.stale, s._staleByLang], [t.edited, s._editedByLang]]) {
       if (!flag) continue;
       if (!byLang.has(t.tag)) byLang.set(t.tag, []);
-      byLang.get(t.tag).push(t.rel);
+      byLang.get(t.tag).push({ rel: t.rel, target });
     }
   }
   for (const f of s.files) f.translations = [...(tagsBySource.get(f.path) ?? [])].sort();
@@ -326,6 +332,24 @@ function linkLines(s) {
     if (!s._mask[i]) out.push({ line: i + 1, text: scanText(s._lines[i]), step: s._inStep[i] });
   }
   return out;
+}
+
+// The options of this scan as words of a `pin` command, so that its scan finds
+// the same skills from any folder: --cwd always, then each --root, --agent,
+// --no-user and --no-plugins given.
+function scanArgs(opts) {
+  return [
+    '--cwd', shellWord(path.resolve(opts.cwd)),
+    ...(opts.extra ?? []).flatMap((dir) => ['--root', shellWord(path.resolve(dir))]),
+    ...(opts.agents ?? []).flatMap((agent) => ['--agent', shellWord(agent)]),
+    ...(opts.user === false ? ['--no-user'] : []),
+    ...(opts.plugins === false ? ['--no-plugins'] : []),
+  ].join(' ');
+}
+
+// A path as one word of a POSIX shell command: quoted where it holds anything but safe characters.
+function shellWord(p) {
+  return /^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
 }
 
 function publicSkill(s) {

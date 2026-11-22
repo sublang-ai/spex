@@ -5,13 +5,14 @@
 // translates and, in Markdown, its own, or with --check name each translation
 // behind its source, edited apart from it or recording no digest, changing no
 // file (data-model.md "Languages"). A translation in the state folder whose
-// skill or source the scan does not find, and a folder named holding no
-// translation, are named and fail either command.
+// skill or source the scan does not find, a folder named holding no
+// translation, and a folder that cannot be read whole, are named and fail
+// either command.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { UsageError } from './log.mjs';
-import { TRANSLATIONS_DIR, parseTranslationName, sourceRelOf, listFiles, fileInside, recordedDigests, recordsOwn, ownDigest, withRecordedDigest, sha256Hex } from './translations.mjs';
+import { TRANSLATIONS_DIR, parseTranslationName, sourceRelOf, listFilesBounded, fileInside, recordedDigests, recordsOwn, ownDigest, withRecordedDigest, sha256Hex } from './translations.mjs';
 
 /**
  * @param {{ targets:string[], check:boolean, stateDir:string, skills:() => { id:string, dir:string }[] }} opts
@@ -52,6 +53,7 @@ export function pin({ targets, check, stateDir, skills }) {
   const found = new Map(); // real path -> { abs, source }
   const orphans = new Map(); // real path -> { abs, why }: state translations the scan finds no source for
   const empty = []; // { target, why }: folders holding no translation
+  const partial = []; // { target, why }: folders that cannot be listed whole
   for (const target of targets) {
     const abs = path.resolve(target);
     let stat;
@@ -59,7 +61,10 @@ export function pin({ targets, check, stateDir, skills }) {
     if (stat.isDirectory()) {
       let n = 0;
       let named = 0; // files named like a translation with no source beside them
-      for (const rel of listFiles(abs)) {
+      // A partial listing would pass over translations: the folder is named and fails the command.
+      const listing = listFilesBounded(abs, { strict: true });
+      if (!listing.complete) partial.push({ target, why: 'it cannot be read whole: it holds more files or folders than pin lists, or an entry that cannot be read' });
+      for (const rel of listing.files) {
         const file = path.join(abs, ...rel.split('/'));
         if (!parseTranslationName(path.basename(file))) continue;
         const src = sourceOf(file);
@@ -71,7 +76,7 @@ export function pin({ targets, check, stateDir, skills }) {
         found.set(fs.realpathSync(file), { abs: file, source: src.source });
         n++;
       }
-      if (!n) {
+      if (!n && listing.complete) {
         empty.push({
           target,
           why: named
@@ -95,6 +100,7 @@ export function pin({ targets, check, stateDir, skills }) {
     if (check) lines.push(`no skill    ${shown(abs)} (${why})`);
   }
   if (check) for (const { target, why } of empty) lines.push(`none        ${target} (${why})`);
+  if (check) for (const { target, why } of partial) lines.push(`incomplete  ${target} (${why})`);
   let behind = 0;
   let edited = 0;
   let unpinned = 0;
@@ -123,6 +129,7 @@ export function pin({ targets, check, stateDir, skills }) {
   }
   if (!check) for (const { abs, why } of orphans.values()) failures.push(`${abs}: ${why}`);
   if (!check) for (const { target, why } of empty) failures.push(`${target}: ${why}`);
+  if (!check) for (const { target, why } of partial) failures.push(`${target}: ${why}`);
   // Every record is made before any is written, so a refusal changes no file.
   if (failures.length) throw new UsageError(`cannot record the digest in ${failures.join('; ')}; no translation was changed`);
   let pinned = 0;
@@ -140,9 +147,10 @@ export function pin({ targets, check, stateDir, skills }) {
     if (behind || edited || unpinned) parts.push(`${behind} of ${total} translations behind their source, ${edited} edited apart from it, ${unpinned} with no digest; carry the change across, then run pin`);
     if (orphans.size) parts.push(`${orphans.size} in the state folder translating no skill or file the scan finds; pass the --cwd, --root or --state that find it, or remove it`);
     if (empty.length) parts.push(`${empty.length} ${empty.length === 1 ? 'folder holds' : 'folders hold'} no translation`);
+    if (partial.length) parts.push(`${partial.length} ${partial.length === 1 ? 'folder' : 'folders'} not read whole; name the translations in ${partial.length === 1 ? 'it' : 'them'}, or a smaller folder, or make ${partial.length === 1 ? 'it' : 'them'} readable`);
     lines.push(parts.length ? `pin --check: ${parts.join('; ')}` : `pin --check: ${total} translations up to date`);
   } else {
     lines.push(`pin: ${pinned} of ${total} translations recorded`);
   }
-  return { lines, failed: check && (behind + edited + unpinned + orphans.size + empty.length) > 0 };
+  return { lines, failed: check && (behind + edited + unpinned + orphans.size + empty.length + partial.length) > 0 };
 }

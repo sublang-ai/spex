@@ -142,8 +142,8 @@ What was run on the delivered files, and what it showed:
 
 | Check | Result |
 | --- | --- |
-| `node --test scripts/skill-atlas.test.mjs` | 64 tests pass: the scan over fixture skill folders, the server, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
-| `npm run e2e -- skill-atlas` | 13 browser journeys pass against the real server: groupings, steps, links, details, search, filter, focus, insights, markup shown as text, workflows with an edit undone, a save as the page is hidden, the save conflict, the unreadable file, the exported page, the page in Chinese, a language chosen on the page |
+| `node --test scripts/skill-atlas.test.mjs` | 74 tests pass: the scan over fixture skill folders, the server, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
+| `npm run e2e -- skill-atlas` | 18 browser journeys pass against the real server: groupings, steps, links with mentions hidden, details, search, filter, focus, insights, markup shown as text, workflows with an edit undone, notes in two workflows undone apart, a save as the page is hidden, the save conflict, the unreadable file, the exported page, a skill in its original language, the page in Chinese, an annotation written from another text, a translation under a compatible tag, a language chosen on the page |
 | `spex lint` | No errors in the new decision record and packages |
 | A scan of a real machine | 88 skill folders across 8 locations read as 32 skills and 56 identical copies (copies then compared by `SKILL.md` alone); every one of the links reported as a call is a real one, and `code` and `decide` both link to `review` from the step that invokes it |
 | An independent review | Four reviewers (scan and server, page, skill writing and playbook equivalence, specs), each finding then checked by a second agent that tried to refute it. 40 findings survived and were fixed, among them a page that could overwrite a `workflows.json` changed elsewhere, links invented from URL paths, and three claims in this report |

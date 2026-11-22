@@ -99,7 +99,7 @@ function resolve(matcher, name, fromRoot) {
 function strongForms() {
   return [
     new RegExp(String.raw`\x60/(${NAME_CHARS})(?:\s[^\x60]*)?\x60`, 'g'),
-    new RegExp(String.raw`\bthe\s+\x60(${NAME_CHARS})\x60\s+skill\b`, 'gi'),
+    new RegExp(String.raw`\x60(${NAME_CHARS})\x60\s+skill\b`, 'gi'), // "the `x` skill", "our `x` skill", "Invoke `x` skill"
     new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${NAME_CHARS})["'\x60]?\s*[,)]`, 'g'),
   ];
 }
@@ -145,7 +145,7 @@ export function findLinks(matcher, from, lines) {
         if (m[0].startsWith('`/')) {
           // A backticked `/x` is a command only in a sentence saying skill,
           // command, slash or type, and no skill where the agent itself has
-          // that command; `Skill(x)` and "the `x` skill" name a skill whatever x is.
+          // that command; `Skill(x)` and "`x` skill" name a skill whatever x is.
           if (BUILTIN_COMMANDS.has(name) || PATH_LIKE.has(name.toLowerCase()) || !CONTEXT_FOR_UNRESOLVED.test(sentenceAt(text, at))) continue;
         }
         const key = `${step}\0${name}`;

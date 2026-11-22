@@ -8,9 +8,9 @@
 import path from 'node:path';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
-const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'translation-steps'];
+const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'stale-annotation', 'translation-steps'];
 
-export function findInsights({ skills, edges, unresolved, roots }) {
+export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }) {
   const out = [];
   const rootLabel = new Map(roots.map((r) => [r.id, r.label]));
 
@@ -67,17 +67,25 @@ export function findInsights({ skills, edges, unresolved, roots }) {
   for (const s of skills) {
     if (!s.steps.length) out.push({ kind: 'no-steps', skills: [s.id], params: {}, message: `${s.id}: no steps detected; read it to annotate its steps if it matters` });
   }
+  // Each repair gives the scan's own options, so pin's scan finds the skill
+  // from any folder, then names its translations, so the command runs as given.
+  const pinCommand = (found) => [`node <skill-dir>/scripts/atlas.mjs pin --state <state>`, scanArgs, ...found.map((f) => f.target)].filter(Boolean).join(' ');
   for (const s of skills) {
     for (const lang of [...(s._staleByLang?.keys() ?? [])].sort()) {
-      const files = [...s._staleByLang.get(lang)].sort();
-      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run node <skill-dir>/scripts/atlas.mjs pin --state <state>` });
+      const found = [...s._staleByLang.get(lang)].sort((a, b) => a.rel.localeCompare(b.rel));
+      const files = found.map((f) => f.rel);
+      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run ${pinCommand(found)}` });
     }
   }
   for (const s of skills) {
     for (const lang of [...(s._editedByLang?.keys() ?? [])].sort()) {
-      const files = [...s._editedByLang.get(lang)].sort();
-      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run node <skill-dir>/scripts/atlas.mjs pin --state <state>` });
+      const found = [...s._editedByLang.get(lang)].sort((a, b) => a.rel.localeCompare(b.rel));
+      const files = found.map((f) => f.rel);
+      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run ${pinCommand(found)}` });
     }
+  }
+  for (const s of skills) {
+    if (s._staleAnnotation) out.push({ kind: 'stale-annotation', skills: [s.id], params: {}, message: `${s.id}: the annotation was written from another text of this skill, so it is not applied; read the skill again and update or remove its entry in annotations.json` });
   }
   for (const s of skills) {
     for (const lang of [...(s._translationSteps?.keys() ?? [])].sort()) {

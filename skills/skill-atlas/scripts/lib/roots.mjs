@@ -8,6 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { warn } from './log.mjs';
 
+// Every agent but Claude Code loads the shared folders.
+const UNIVERSAL_LOADERS = ['codex', 'gemini-cli', 'kimi-code', 'opencode', 'cursor', 'windsurf', 'roo', 'goose', 'copilot'];
+
 /**
  * One row per skill folder an agent loads.
  * - key: slug used in root ids (`<scope>-<key>`)
@@ -17,12 +20,12 @@ import { warn } from './log.mjs';
  *   (its value stands for the first segment of `dir`, such as `.codex`)
  * - loadedBy: the other agents that load this folder too, kept by `--agent`
  *   for any of them
+ * - noAgent: no `--agent` keeps this folder
  */
 export const AGENT_ROOTS = [
   { key: 'claude', dir: '.claude/skills', agent: 'claude-code', label: 'Claude Code', scopes: ['project', 'user'], env: 'CLAUDE_CONFIG_DIR' },
-  // Every agent but Claude Code loads the shared folder.
-  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'],
-    loadedBy: ['codex', 'gemini-cli', 'kimi-code', 'opencode', 'cursor', 'windsurf', 'roo', 'goose', 'copilot'] },
+  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'], loadedBy: UNIVERSAL_LOADERS },
+  { key: 'agents-config', dir: '.config/agents/skills', agent: 'universal', label: 'Universal', scopes: ['user'], loadedBy: UNIVERSAL_LOADERS },
   { key: 'codex', dir: '.codex/skills', agent: 'codex', label: 'Codex', scopes: ['project', 'user'], env: 'CODEX_HOME' },
   // The skills Codex ships with itself.
   { key: 'codex-system', dir: '.codex/skills/.system', agent: 'codex', label: 'Codex (bundled)', scopes: ['user'], env: 'CODEX_HOME' },
@@ -31,12 +34,16 @@ export const AGENT_ROOTS = [
   { key: 'opencode', dir: '.opencode/skills', agent: 'opencode', label: 'OpenCode', scopes: ['project', 'user'] },
   { key: 'opencode-config', dir: '.config/opencode/skills', agent: 'opencode', label: 'OpenCode', scopes: ['user'] },
   { key: 'copilot', dir: '.github/skills', agent: 'copilot', label: 'GitHub Copilot', scopes: ['project'] },
+  { key: 'copilot-home', dir: '.copilot/skills', agent: 'copilot', label: 'GitHub Copilot', scopes: ['user'] },
   { key: 'kimi', dir: '.kimi/skills', agent: 'kimi-code', label: 'Kimi Code', scopes: ['project', 'user'] },
   { key: 'windsurf', dir: '.windsurf/skills', agent: 'windsurf', label: 'Windsurf', scopes: ['project', 'user'] },
+  { key: 'windsurf-codeium', dir: '.codeium/windsurf/skills', agent: 'windsurf', label: 'Windsurf', scopes: ['user'] },
   { key: 'roo', dir: '.roo/skills', agent: 'roo', label: 'Roo Code', scopes: ['project', 'user'] },
   { key: 'goose', dir: '.goose/skills', agent: 'goose', label: 'Goose', scopes: ['project', 'user'] },
-  // The project's own skill sources; listed only when it holds skills.
-  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true },
+  { key: 'goose-config', dir: '.config/goose/skills', agent: 'goose', label: 'Goose', scopes: ['user'] },
+  // The project's own skill sources; listed only when it holds skills, and
+  // loaded by no agent, so left out under any --agent.
+  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true },
 ];
 
 const SCOPE_LABEL = { project: 'Project', user: 'User', plugin: 'Plugin', extra: 'Extra' };
@@ -54,7 +61,7 @@ export function claudeConfigDir(home = os.homedir()) {
 export function listRoots(opts) {
   const roots = [];
   const wanted = (row) => !opts.agents.length
-    || [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
+    || !row.noAgent && [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
   for (const scope of ['project', 'user']) {
     if (scope === 'user' && !opts.user) continue;
     for (const row of AGENT_ROOTS) {

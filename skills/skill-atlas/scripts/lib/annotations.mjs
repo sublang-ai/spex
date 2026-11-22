@@ -3,13 +3,15 @@
 
 // annotations.json: corrections a reader layers on the scan (data-model.md).
 // Everything added is marked `"source": "annotation"`. A malformed file or
-// entry is reported on stderr and the scan carries on without it.
+// entry is reported on stderr and the scan carries on without it; an entry
+// recording another SKILL.md digest than its skill's is left out and reported
+// as a `stale-annotation` insight.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { warn } from './log.mjs';
 import { tagInfo, mergeHits } from './tags.mjs';
-import { canonicalTag } from './translations.mjs';
+import { canonicalTag, matchingTag } from './translations.mjs';
 
 export const ANNOTATIONS_FILE = 'annotations.json';
 
@@ -55,6 +57,13 @@ export function applyAnnotations(doc, atlas) {
     if (!skill) { warn(`annotations: skill "${key}" is not installed; its entry is ignored`); continue; }
     if (!ann || typeof ann !== 'object') { warn(`annotations: entry for "${key}" is not an object; ignored`); continue; }
     const where = `annotations for "${key}"`;
+    // The state folder serves every project: an entry recording the SKILL.md
+    // it was written from applies only to a skill with that text.
+    if (ann.source !== undefined && ann.source !== null) {
+      const hex = ann.source?.sha256;
+      if (typeof ann.source !== 'object' || typeof hex !== 'string') { warn(`${where}: "source" is not { "sha256": "<64 hex>" }; entry not applied`); continue; }
+      if (hex.toLowerCase() !== skill.digest) { skill._staleAnnotation = true; continue; }
+    }
     const tag = (id, note) => {
       const info = typeof id === 'string' ? tagInfo(id, atlas.catalog) : null;
       if (!info) { warn(`${where}: tag ${JSON.stringify(id)} is not <category>.<slug> with category input, output, tool or human; skipped`); return null; }
@@ -138,9 +147,11 @@ function applyTranslatedWords(skill, value, where) {
   if (value === undefined) return;
   if (!value || typeof value !== 'object' || Array.isArray(value)) { warn(`${where}: "translations" is not a map of language tags; ignored`); return; }
   for (const [rawTag, words] of Object.entries(value)) {
-    const tag = canonicalTag(rawTag);
-    if (!tag) { warn(`${where}: translations key ${JSON.stringify(rawTag)} is not a language tag such as zh-CN; ignored`); continue; }
+    const wanted = canonicalTag(rawTag);
+    if (!wanted) { warn(`${where}: translations key ${JSON.stringify(rawTag)} is not a language tag such as zh-CN; ignored`); continue; }
     if (!words || typeof words !== 'object' || Array.isArray(words)) { warn(`${where}: translations.${rawTag} is not an object; ignored`); continue; }
+    // Words under zh-CN join a SKILL.zh.md translation: the page shows one translation per language and script.
+    const tag = matchingTag(wanted, Object.keys(skill.translations)) ?? wanted;
     const tr = skill.translations[tag] ?? { origin: 'annotation', file: null, frontmatter: null, description: null, summary: null, steps: null, stale: false, edited: false };
     let changed = false;
     if (typeof words.summary === 'string') { tr.summary = words.summary; changed = true; }

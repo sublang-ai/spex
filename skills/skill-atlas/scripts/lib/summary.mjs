@@ -83,7 +83,7 @@ export function summarize(atlas) {
     for (const s of shared) out.push(`  ${named(s.id)}: ${[s.root, ...s.copies.map((c) => c.root)].join(', ')}`);
   }
 
-  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch'];
+  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch', 'stale-annotation'];
   const rest = atlas.insights.filter((i) => other.includes(i.kind));
   if (rest.length) {
     out.push('', 'Other issues:');

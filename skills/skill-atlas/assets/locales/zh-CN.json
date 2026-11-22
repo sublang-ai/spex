@@ -39,6 +39,8 @@
     "Translations whose steps differ": "步骤数不一致的译本",
     "A translation’s steps number otherwise than the skill’s.": "有译本的步骤数与技能本身不一致。",
     "The {language} translation has {n} step where the skill has {expected}; its steps are not shown|The {language} translation has {n} steps where the skill has {expected}; its steps are not shown": "{language}译本有 {n} 个步骤，而技能本身有 {expected} 个；因此不显示译本的步骤",
+    "Annotations written from another text": "依据另一版文本写成的标注",
+    "An annotation was written from another text of this skill; read the skill again and update or remove it.": "有标注是依据此技能的另一版文本写成的；请重新阅读此技能，然后更新或删除该标注。",
     "Phase": "阶段",
     "Workflow": "工作流",
     "Unassigned": "未分配",

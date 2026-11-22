@@ -30,7 +30,7 @@ function skill(project: string, folder: string, name: string, description: strin
 }
 
 // Ten skills: `ship` calls `code`, which calls `review`; `decide` calls
-// `review`; `guide` only mentions `review`; tags of all four categories, a
+// `review`; `guide`'s one step only mentions `review`; tags of all four categories, a
 // human one among them; `notes` has only sections; `lone` links nowhere;
 // the skill in `markup` has markup in its name, description and a step.
 function buildFixture(project: string) {
@@ -46,7 +46,7 @@ function buildFixture(project: string) {
   skill(project, claude, "notes", "Notes on house conventions.",
     "# Notes\n\n## Background\n\nSome context about the house.\n\n## Conventions\n\nSome conventions to keep.\n");
   skill(project, claude, "lone", "Stands alone.", "Just one paragraph of prose with no headings and no links.\n");
-  skill(project, claude, "guide", "Points the way.", "# Guide\n\nSee also the `review` skill for checks.\n");
+  skill(project, claude, "guide", "Points the way.", "# Guide\n\n## Step 1: Point\n\nSee also the `review` skill for checks.\n");
   const markup = join(project, claude, "markup");
   mkdirSync(markup, { recursive: true });
   writeFileSync(join(markup, "SKILL.md"), `---\nname: "${MARKUP}"\ndescription: Shows <script>window.__atlasXss = 2</script> as text.\n---\n# Markup\n\n## Step 1: Echo\n\nPrint it verbatim.\n\n## Step 2: Done\n\nNothing else.\n`);
@@ -216,6 +216,30 @@ test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a lin
   await expect.poll(() => linkEndsOn(page, '.group-card[data-key="links:level-2"]')).toBe(true);
 });
 
+test("skill-atlas-13: with mentions hidden, a step that only mentions a skill shows no chip, no count and no link in the details", async ({ page }) => {
+  await page.goto(url);
+  await groupBy(page, "Links");
+  await cardButton(page, "guide").click();
+  const chips = card(page, "guide").locator(".step[data-step='guide#1'] .call-chip");
+  const panel = details(page);
+  const linksOut = (n: number) => panel.locator("section.d-sec", { has: page.getByRole("heading", { name: `Links out · ${n}` }) });
+  // Shown: the mention is a chip on its step, a count on the card and a link in the details.
+  await expect(chips).toHaveText(["→ review"]);
+  await expect(card(page, "guide").getByLabel("links to 1, linked from 0")).toHaveCount(1);
+  await expect(linksOut(1).getByRole("button", { name: "/review" })).toBeVisible();
+
+  // Hidden: nothing of it shows, on the step, the card, the details or the linked skill's details.
+  await page.getByRole("checkbox", { name: "Mentions" }).uncheck();
+  await expect(chips).toHaveCount(0);
+  await expect(card(page, "guide").locator(".card-meta [aria-label^='links to']")).toHaveCount(0);
+  await expect(linksOut(0)).toContainText("Links to no other skill.");
+  await expect(panel.getByRole("button", { name: "Focus on linked" })).toBeDisabled();
+  await cardButton(page, "review").click();
+  const linksIn = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Links in · 2" }) });
+  await expect(linksIn.getByRole("button")).toHaveCount(2);
+  await expect(linksIn.getByRole("button", { name: "/guide" })).toHaveCount(0);
+});
+
 test("skill-atlas-14: a skill's, a step's and a phase's details with tags and evidence", async ({ page }) => {
   writeWorkflows(FLOW);
   await page.goto(url);
@@ -290,17 +314,17 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
   const search = page.getByRole("searchbox", { name: /Search skills/ });
   await search.fill("which");
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
-  // `decide` by its step's text "Invoke the `review` skill on the decision."
+  // `decide` by its step's text "Invoke the `review` skill on the decision.", `guide` by its step's mention.
   await search.fill("review");
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "review"]);
-  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 1 of 3 skills shown");
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "guide", "review"]);
+  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 2 of 3 skills shown");
 
   // A tag filter, together with the search, then alone.
   await page.getByRole("button", { name: "Filter by tags" }).click();
   await page.getByRole("checkbox", { name: /^Asks the user/ }).check();
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
   await page.getByRole("checkbox", { name: /^Asks the user/ }).uncheck();
-  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "review"]);
+  await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "guide", "review"]);
   await page.keyboard.press("Escape");
   await search.fill("");
   await expect.poll(() => shownSkills(page)).toEqual(all);
@@ -452,6 +476,47 @@ test("skill-atlas-19: an edit saved as the page is hidden, then a further edit s
   expect(stored()).toEqual(expect.arrayContaining(["lone", "guide"]));
 });
 
+test("skill-atlas-19: notes typed in two workflows from one preset undo apart, the reader staying on the workflow shown", async ({ page }) => {
+  await page.goto(url);
+  await page.getByRole("button", { name: /^Software delivery/ }).click();
+  const active = page.getByRole("combobox", { name: "Active workflow" });
+  await expect(active).toHaveValue("wf-software-delivery");
+  // A second workflow from the same preset: its phases take the same ids.
+  await active.selectOption("__new");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Second delivery");
+  await dialog.getByRole("radio", { name: /^Software delivery/ }).check();
+  await dialog.getByRole("button", { name: "Create workflow" }).click();
+  await expect(active).toHaveValue("wf-second-delivery");
+
+  const note = details(page).getByRole("textbox", { name: "Note" });
+  const typeNote = async (text: string) => {
+    await page.getByRole("region", { name: /^Discover,/ }).getByRole("button", { name: "Discover", exact: true }).click();
+    await note.click();
+    await note.pressSequentially(text);
+    await note.press("Escape");
+  };
+  // Typed in the first workflow's Discover, then, after a switch, in the second's.
+  await active.selectOption("wf-software-delivery");
+  await typeNote("first");
+  await active.selectOption("wf-second-delivery");
+  await typeNote("second");
+
+  // Undo reverts the latest typing alone and leaves the reader on the workflow shown.
+  await page.keyboard.press("Control+z");
+  await expect(note).toHaveValue("");
+  await expect(active).toHaveValue("wf-second-delivery");
+  await expect(page.locator("#save-status")).toHaveText("Saved");
+  const notes = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows.map((w: { phases: { note: string }[] }) => w.phases[0]!.note);
+  expect(notes()).toEqual(["first", ""]);
+  // Nothing more to undo: the first workflow's note stands.
+  await page.keyboard.press("Control+z");
+  await active.selectOption("wf-software-delivery");
+  await page.getByRole("region", { name: /^Discover,/ }).getByRole("button", { name: "Discover", exact: true }).click();
+  await expect(note).toHaveValue("first");
+  expect(notes()).toEqual(["first", ""]);
+});
+
 test("skill-atlas-20: a file changed behind the page refuses the next edit and stands", async ({ page }) => {
   writeWorkflows(FLOW);
   await page.goto(url);
@@ -517,6 +582,39 @@ test("skill-atlas-22: an exported file opened from disk keeps a workflow edit af
   await expect(page.getByRole("region", { name: /^Make,/ }).getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
 });
 
+// A skill written in Cyrillic, with a reference written in English.
+const RU = { folder: ".claude/skills", name: "proverka", description: "Проверяет изменения перед слиянием." };
+
+test("skill-atlas-29: a skill in another script than Latin or CJK is marked as in its original on the English page, each file by its own words", async ({ page }) => {
+  skill(project, RU.folder, RU.name, RU.description, "# Проверка\n\n## Шаг 1: Чтение\n\nПрочитать изменения и составить отчёт.\n");
+  const dir = join(project, RU.folder, RU.name);
+  mkdirSync(join(dir, "references"), { recursive: true });
+  writeFileSync(join(dir, "references", "usage.md"), "# Usage\n\nHow the check is run, written in English.\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Links");
+    await card(page, RU.name).locator(".card-main").click();
+    const panel = details(page);
+    await expect(panel.locator(".d-desc")).toHaveText(RU.description);
+    await expect(panel.getByRole("note")).toHaveText("Shown in its original language: there is no English translation.");
+    const dialog = page.getByRole("dialog");
+    await panel.getByRole("button", { name: "View SKILL.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText(RU.description);
+    await expect(dialog.getByRole("note")).toHaveText("Shown in its original language: there is no English translation of this file.");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Its English reference needs no translation on the English page.
+    await panel.getByRole("button", { name: "references/usage.md" }).click();
+    await expect(dialog.locator(".file-pre")).toContainText("written in English");
+    await expect(dialog.getByRole("note")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
 // The page's Chinese, read from the files a reader edits: the catalog for
 // the page's own text, the label files beside the tunable references.
 const ZH = JSON.parse(readFileSync(join(SKILL, "assets", "locales", "zh-CN.json"), "utf8")) as { name: string; messages: Record<string, string> };
@@ -546,10 +644,13 @@ const MIXED = [
   { name: "fanti", description: "檢查技能清單。", body: "# 檢查\n\n## 讀取\n\n讀取每個技能。\n", extra: "metadata:\n  language: zh-Hant\n", marked: true },
 ];
 
+// A skill whose one translation is under `zh`, a tag of the page's language and script.
+const ZH_ONLY = { folder: ".claude/skills", name: "survey", description: "Surveys the findings.", zh: "汇总各项调查结果。", step: "汇总" };
+
 test.describe("in a browser of Chinese", () => {
   test.use({ locale: "zh-CN" });
   test.afterEach(async () => {
-    for (const n of [JA.name, ...MIXED.map((m) => m.name)]) rmSync(join(project, JA.folder, n), { recursive: true, force: true });
+    for (const n of [JA.name, ZH_ONLY.name, ...MIXED.map((m) => m.name)]) rmSync(join(project, JA.folder, n), { recursive: true, force: true });
     await rescan();
   });
 
@@ -665,6 +766,45 @@ test.describe("in a browser of Chinese", () => {
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
     await search.fill("which");
     await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+  });
+
+  test("skill-atlas-29: an annotation written from another text of its skill is reported in Chinese and not applied", async ({ page }) => {
+    const file = join(state, "annotations.json");
+    writeFileSync(file, JSON.stringify({ ...ANNOTATIONS, skills: { ...ANNOTATIONS.skills, lone: { source: { sha256: "0".repeat(64) }, summary: "Written for another text." } } }));
+    try {
+      await rescan();
+      await page.goto(url);
+      await groupBy(page, zh("Links"));
+      await expect(card(page, "lone").locator(".card-desc")).toHaveText("Stands alone.");
+      await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
+      const insights = page.getByRole("group", { name: zh("Insights") });
+      await expect(insights.getByRole("heading", { name: startsWith(zh("Annotations written from another text")) })).toBeVisible();
+      const message = zh("An annotation was written from another text of this skill; read the skill again and update or remove it.");
+      await insights.getByRole("button", { name: startsWith("/lone") }).filter({ hasText: message }).click();
+      await expect(card(page, "lone")).toHaveClass(/\bselected\b/);
+      await expect(page.getByRole("complementary", { name: zh("Details") }).getByRole("list", { name: zh("Issues") }).getByRole("listitem").filter({ hasText: message })).toHaveCount(1);
+    } finally {
+      writeFileSync(file, JSON.stringify(ANNOTATIONS));
+      await rescan();
+    }
+  });
+
+  test("skill-atlas-29: a skill translated only under zh is shown in Chinese on the zh-CN page and found by its Chinese words", async ({ page }) => {
+    skill(project, ZH_ONLY.folder, ZH_ONLY.name, ZH_ONLY.description, "# Survey\n\n## Step 1: Gather\n\nGather the findings.\n");
+    const dir = join(project, ZH_ONLY.folder, ZH_ONLY.name);
+    writeFileSync(join(dir, "SKILL.zh.md"), `---\nname: ${ZH_ONLY.name}\ndescription: ${ZH_ONLY.zh}\n---\n<!-- skill-atlas:source sha256=${sha256(join(dir, "SKILL.md"))} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${ZH_ONLY.zh}\n`);
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, zh("Links"));
+    await cardMain(page, ZH_ONLY.name).click();
+    await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
+    await expect(card(page, ZH_ONLY.name).locator(".step-title")).toHaveText([new RegExp(esc(ZH_ONLY.step))]);
+    const panel = page.getByRole("complementary", { name: zh("Details") });
+    await expect(panel.locator(".d-desc")).toHaveText(ZH_ONLY.zh);
+    await expect(panel.getByRole("note")).toHaveCount(0);
+    const search = page.getByRole("searchbox", { name: zh("Search skills by name, description or step") });
+    await search.fill("调查结果");
+    await expect.poll(() => shownSkills(page)).toEqual([ZH_ONLY.name]);
   });
 });
 

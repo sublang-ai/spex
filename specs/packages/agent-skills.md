@@ -53,15 +53,15 @@ When the `code` skill is given a coding request, the loading agent shall have a 
 
 When the `review` skill is given an intent and a scope of committed work, the loading agent shall run at most three Reviewer rounds, each further round following a Coder's disposition of the round's findings in at most one new commit, and return the evaluated revision with whether a finding is left unsettled:
 
-- a scope that is missing, names nothing committed, or does not end at the checked-out revision is asked of the user first;
-- the checked-out revision is recorded at the start and read again after each role's turn, and one moved other than by a Coder's one commit ends the run as failed;
+- a scope that is missing, names nothing committed, or does not end at the checked-out revision of the checked-out branch is asked of the user first;
+- the checked-out branch and revision are recorded at the start and read again after each role's turn, and a branch changed, or a revision moved other than by a Coder's one commit, ends the run as failed;
 - a Reviewer edits nothing;
 - a Coder accepts or rejects each finding, and commits nothing where it rejects all;
 - findings raised or kept in the third round are returned unsettled.
 
 #### agent-skills-5
 
-When the `decide` skill is given a topic, the loading agent shall take a proposal from a Coder and a Reviewer, at the same time and neither seeing the other's where the roles run as subagents, else in turn with that said in its result, have the Coder commit their synthesis as decision records or spec items in one commit, and invoke the `review` skill over that commit.
+When the `decide` skill is given a topic, the loading agent shall take a proposal from a Coder and a Reviewer, at the same time and neither seeing the other's where the host runs two subagents at once, else in turn with that said in its result, have the Coder commit their synthesis as decision records or spec items in one commit, and invoke the `review` skill over that commit.
 
 #### agent-skills-6
 
@@ -71,7 +71,7 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-7
 
-When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
+When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and, where Markdown, its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
 
 #### agent-skills-8
 

@@ -29,6 +29,8 @@ Record, for each skill:
    Use the ids in [tag-rules.json](tag-rules.json); invent `<category>.<slug>` only when none fits.
 5. **Removals** — a detected tag or link that is wrong, listed under `removeTags` or `removeCalls`.
 
+Copy the skill's `digest` from the scan's `atlas.json` into its entry as `"source": { "sha256": "<digest>" }`, so the entry applies only to the text you read.
+
 ## Judging tags
 
 | Tag when the step | Not when it merely |

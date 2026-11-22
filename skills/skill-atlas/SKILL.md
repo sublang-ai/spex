@@ -93,10 +93,10 @@ A skill is shown translated where a `SKILL.<tag>.md` sits beside its `SKILL.md` 
 Steps, links and tags always come from `SKILL.md`; a translation supplies words, never structure.
 
 When the user asks to read skills in their language that ship no translation, translate them by [references/translate.md](references/translate.md): only the skills they name, never all of them unasked.
-Then record what each translation was made from, giving `pin` the `--state`, `--cwd` and `--root` the scan was given, and rescan:
+Then record what each translation was made from, and rescan; `<scan options>` are the `--cwd`, `--root`, `--agent`, `--no-user` and `--no-plugins` the scan was given:
 
 ```bash
-node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <translations or folders>
 ```
 
 `pin --check` changes nothing and names each translation behind its source or edited apart from it.
@@ -124,7 +124,7 @@ node <skill-dir>/scripts/atlas.mjs pin --state <state> <translations or folders>
 | How you read a skill in depth | [references/deep-read.md](references/deep-read.md) |
 | How you translate a skill, or add a page language | [references/translate.md](references/translate.md) |
 
-Rescan after an edit.
+Rescan after editing tag rules, annotations or a skill's translations; reload the page after editing workflow presets, view settings, label files or catalogs.
 
 ## Safety
 

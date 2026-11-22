@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e2b76db54a3f4d89671db14a1043e96af5a9afb372733e9a68f9043cc99cd341 own=c9820ca606c70f88925ddd916c09e3fea033bd42b3fda3f94cd339172d22112c -->
+<!-- skill-atlas:source sha256=865f9239aa24234491889be66c392668d255778c92b162db57e48138d30c01ec own=3edc699aa21b5bead10bd88b9656902f08850974b96196582d0dcde25bd9ded2 -->
 
 > 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -53,11 +53,12 @@
 ## 记录源文件并重新扫描
 
 ```bash
-node <skill-dir>/scripts/atlas.mjs pin --state <state> <state>/translations/<skill id>
-node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <state>/translations/<skill id>
+node <skill-dir>/scripts/atlas.mjs pin --state <state> <scan options> <state>/translations/<skill id>
+node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <scan options> <state>/translations/<skill id>
 ```
 
-两条命令都传入扫描时所用的 `--state`，如果技能是通过 `--cwd` 或 `--root` 找到的，也传入该选项：`pin` 通过扫描找到译本所属的技能，遇到找不到所属技能的译本时会失败。
+`<scan options>` 是找到该技能的那次扫描所用的 `--cwd`、`--root`、`--agent`、`--no-user` 和 `--no-plugins`：`pin` 通过扫描找到译本所属的技能，遇到找不到所属技能的译本时会失败。
+译本洞察给出的修复命令已经带上这些选项。
 
 `pin` 会在每个译本中写入其所翻译文件的 SHA-256，并在 Markdown 译本中写入它自己的 SHA-256：在 Markdown 中是一行注释，在 JSON 中是一个 `translationOf` 键。
 只在译本完成后再记录哈希值，因为记录过哈希值的译本会被视为最新。

@@ -16,19 +16,9 @@ import { summarize } from './lib/summary.mjs';
 import { startServer } from './lib/server.mjs';
 import { writeExport } from './lib/export.mjs';
 import { BUNDLED, viewerConfig, readWorkflowsState, readLocales } from './lib/state.mjs';
-import { canonicalTag } from './lib/translations.mjs';
+import { canonicalTag, matchingTag } from './lib/translations.mjs';
 import { pin } from './lib/pin.mjs';
 import { UsageError, warn } from './lib/log.mjs';
-
-// The offered tag the page shows for `tag`: the same tag, else one of the same
-// primary subtag and script (`zh` and `zh-SG` -> zh-CN, `zh-TW` -> none), as
-// the page's matchLang does.
-function offeredFor(tag, offered) {
-  const scriptOf = (t) => { try { return new Intl.Locale(t).maximize().script || ''; } catch { return ''; } };
-  const primary = (t) => t.toLowerCase().split('-')[0];
-  return offered.find((o) => o.toLowerCase() === tag.toLowerCase())
-    ?? offered.find((o) => primary(o) === primary(tag) && scriptOf(o) === scriptOf(tag)) ?? null;
-}
 
 const DEFAULT_PORT = 4173;
 const MAX_PORT = 65535;
@@ -53,13 +43,14 @@ Commands:
                        record is rewritten, and nothing is written where one cannot be.
                        --state, --cwd and --root (and --no-user, --no-plugins, --agent)
                        find the skills that translations under <state>/translations/
-                       belong to; one whose skill or source is not found, and a folder
-                       holding no translation, fail the command
+                       belong to; one whose skill or source is not found, a folder
+                       holding no translation, and a folder that cannot be read whole,
+                       fail the command
   pin --check <path>... [--state <dir>] [--cwd <dir>] [--root <dir>]
                        Change no file; name each translation behind its source, edited
                        apart from it, recording no digest, or in the state folder with no
-                       skill or source found, and each folder holding no translation, and
-                       exit 1 where there is one
+                       skill or source found, each folder holding no translation and each
+                       one that cannot be read whole, and exit 1 where there is one
 
 Options:
   --cwd <dir>          Project to scan (default: the current folder)
@@ -174,7 +165,7 @@ async function main(argv) {
   if (opts.lang !== undefined) {
     lang = canonicalTag(opts.lang);
     if (!lang) throw new UsageError(`--lang ${opts.lang} is not a language tag; pass one such as en-US or zh-CN`);
-    if (!offeredFor(lang, ['en-US', ...Object.keys(readLocales(BUNDLED.locales))])) {
+    if (!matchingTag(lang, ['en-US', ...Object.keys(readLocales(BUNDLED.locales))])) {
       warn(`--lang ${lang} has no catalog in assets/locales/; the page shows the browser's language where it is offered, else English`);
     }
   }

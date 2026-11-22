@@ -22,14 +22,14 @@ When a scan runs, the scanner shall report one skill for each real folder holdin
 | `.codex/skills`, or `skills` under `CODEX_HOME` | yes | yes |
 | `.system` under the home folder's Codex skills | no | yes |
 | `.agents/skills`, `.cursor/skills`, `.gemini/skills`, `.opencode/skills`, `.kimi/skills`, `.windsurf/skills`, `.roo/skills`, `.goose/skills` | yes | yes |
-| `.config/opencode/skills` | no | yes |
+| `.config/opencode/skills`, `.config/agents/skills`, `.config/goose/skills`, `.copilot/skills`, `.codeium/windsurf/skills` | no | yes |
 | `.github/skills`, and `skills` where it holds a skill | yes | no |
 | `skills` of each Claude Code plugin recorded as installed for the user or for this project, and enabled by the user's settings, the project's and the project's local ones, the later over the earlier | — | yes |
 | each folder named by `--root` | — | — |
 
-- `--no-user` leaves out the home folder's rows, `--no-plugins` the plugins' row, and `--agent <id>` every row but that agent's, `.agents/skills` where that agent loads it, and `--root`'s;
+- `--no-user` leaves out the home folder's rows, `--no-plugins` the plugins' row, and `--agent <id>` every row but that agent's, `.agents/skills` and the home folder's `.config/agents/skills` where that agent loads them, and `--root`'s;
 - a folder whose name starts with a dot, unless a row names it, and `node_modules`, hold no skill;
-- a folder reached through several links, and folders of one name whose every file is byte for byte the same, are one skill listing the others as copies;
+- a folder reached through several links, and folders of one name whose every file is byte for byte the same and every link inside names the same target, as far as the scan's bounds on a folder let it compare them, are one skill listing the others as copies;
 - the second and later differing skills of one name are reported under `<name>@<root id>`;
 - a `SKILL.md` whose frontmatter cannot be read is reported under its folder's name with an issue.
 
@@ -69,7 +69,7 @@ When a skill is scanned, the scanner shall attach to each step every tag whose r
 
 #### skill-atlas-5
 
-When a scan completes, the scanner shall report as insights each differing skill of a shared name, unresolved link, group of skills calling one another in a cycle with every skill of it, `SKILL.md` over 500 lines, missing description, unreadable frontmatter, name differing from its folder, skill with no steps, translation behind its source, translation edited apart from its source, and translation whose steps number otherwise than its skill's.
+When a scan completes, the scanner shall report as insights each differing skill of a shared name, unresolved link, group of skills calling one another in a cycle with every skill of it, `SKILL.md` over 500 lines, missing description, unreadable frontmatter, name differing from its folder, skill with no steps, translation behind its source, translation edited apart from its source, annotation written from another text of its skill, and translation whose steps number otherwise than its skill's.
 
 #### skill-atlas-6
 
@@ -78,6 +78,7 @@ Where the state folder holds an annotations file, when a scan runs, the scanner 
 - an entry may set a skill's summary, replace its steps, and add or remove tags and links, for the skill or one step;
 - an entry may give its summary and its steps' titles and summaries again under a language's tag;
 - a skill whose steps are replaced keeps the tags and links its former steps held, at the skill;
+- an entry recording the digest of the `SKILL.md` it was written from is applied only to a skill whose `SKILL.md` has that digest, the scan reporting each skill's;
 - an entry naming no reported skill is ignored with a warning;
 - an unreadable file is ignored with a warning.
 
@@ -101,7 +102,7 @@ When the server receives a request, the server shall refuse it unless its `Host`
 
 When the page asks for a file of a skill, the server shall return its text only where the file lies inside that skill's real folder, holds text, and is at most 512 KiB:
 
-- asked in a language, the server returns the file's translation in it [[skill-atlas-27](#skill-atlas-27)] under the same bounds, saying whether it is behind its source or edited apart from it, else the file itself, saying it is the original, and in either case the relative path of the file returned.
+- asked in a language, the server returns the file's translation under that tag, else under a tag of the same language and script, [[skill-atlas-27](#skill-atlas-27)] under the same bounds, saying whether it is behind its source or edited apart from it, else the file itself, saying it is the original, and in either case the relative path of the file returned.
 
 #### skill-atlas-11
 
@@ -112,7 +113,7 @@ When the page asks to rescan, the server shall scan again, reading the rules and
 When the page saves the workflows document, the server shall write it to the state folder only where it has the workflows shape and the stored file is the version the page last read:
 
 - a document of another shape is refused and the stored file stands;
-- a save against a file changed since is refused and the stored file stands;
+- a save against a file changed since is refused and the stored file stands, the check and the write being one step among every server sharing the state folder;
 - a stored file that cannot be read as a workflows document is reported as such, never as empty, and is replaced only on the page's explicit request, the file kept beside it under another name.
 
 ### Page
@@ -127,7 +128,7 @@ While the page shows an atlas, the page shall present groups holding skills hold
 | Links | skills that link out and are linked from none, each further link depth, skills linked only within a cycle, then skills with no link |
 | Source | the scanned folders, a skill under its own and each copy's |
 
-- mentions are drawn, and count as links in the Links grouping, only while the reader keeps them shown.
+- mentions are drawn, listed on steps and in details, counted, and count as links in the Links grouping, only while the reader keeps them shown.
 
 #### skill-atlas-14
 
@@ -198,17 +199,18 @@ When a skill is scanned, the scanner shall report each translation of the skill'
 When `pin` is invoked with translations or folders holding them, the command shall record in each translation the digest of the file it translates, and in a Markdown one its own, in a comment line of a Markdown file and a key of a JSON one:
 
 - `pin --check` changes no file, names each translation that is behind, edited or records no digest, and fails where there is one;
-- a translation in the state folder whose skill the scan does not report, and a folder named holding no translation, are named and fail the command.
+- a translation in the state folder whose skill the scan does not report, a folder named holding no translation, and a folder that cannot be read whole, are named and fail the command.
 
 #### skill-atlas-29
 
 While the page shows an atlas, the page shall present its own text, the labels of tags, categories and presets, and each skill's description, frontmatter values, steps and files in one language — the reader's choice kept in the browser, else `--lang`'s, else the browser's where it is offered, else `en-US`:
 
 - the languages offered are `en-US` and each language with a catalog;
+- a skill's translation in the page's language is the one under its tag, else one under a tag of the same language and script;
 - the page's text in a language is its catalog's entry under the English text, and the English text where the catalog has none;
 - a skill's frontmatter keys are shown as they stand, each value as its translation's where the translation gives that key, else as the original's;
 - a file is shown under the name of the file returned [[skill-atlas-10](#skill-atlas-10)];
-- a skill with no translation in the language is shown in its original, and marked as such where the reader opens it, its language being the one its frontmatter's `metadata.language` names, else Chinese, Japanese or Korean by the script most of its words are in, else English, and another than the page's where their primary subtag or script differs; a translation behind its source or edited apart from it is shown and marked, an edited one as text agents do not follow;
+- a skill with no translation in the language is shown in its original, and marked as such where the reader opens it, its language being the one its frontmatter's `metadata.language` names, else Chinese, Japanese or Korean by the script most of its words are in, else English where they are in Latin script, else unknown and marked in every language, a file's language being told from its own words, and another than the page's where their primary subtag or script differs; a translation behind its source or edited apart from it is shown and marked, an edited one as text agents do not follow;
 - a search matches a skill's text in the language shown and in its original;
 - a workflow's and a phase's name and note are shown as typed.
 
@@ -222,18 +224,18 @@ When the reader chooses a language on the page, the page shall show the atlas in
 
 When the command is run against skill folders built for the test, the test shall assert:
 
-- skills found across agent folders and one folder below, a linked folder and an identical copy once, a copy differing in a bundled file apart, a differing skill of the same name under its second id, `--agent codex` keeping `.agents/skills` and Codex's `.system`, a plugin disabled by the project's settings left out, unreadable frontmatter kept, and no file changed [[skill-atlas-1](#skill-atlas-1)];
+- skills found across agent folders and one folder below, a linked folder and an identical copy once, a copy differing in a bundled file apart, a differing skill of the same name under its second id, `--agent codex` keeping `.agents/skills` and Codex's `.system`, `--agent universal` leaving out the project's `skills`, the home folder's `.config/agents`, `.config/goose`, `.copilot` and `.codeium/windsurf` skills each kept by its agents, a link in one copy alone or of another text keeping copies apart, a plugin disabled by the project's settings left out, unreadable frontmatter kept, and no file changed [[skill-atlas-1](#skill-atlas-1)];
 - steps for each of the three texts, a heading inside fenced code ignored, and a list opening the body after a quoted note [[skill-atlas-2](#skill-atlas-2)];
-- calls and mentions with their step and line, a path, a URL and a bare word yielding none, two skills in one sentence the one steered away from, first or second, as a mention and the other as a call, a call from a copy's folder resolved to its sibling, each unresolved form, and `Skill(…)` naming an agent's command unresolved [[skill-atlas-3](#skill-atlas-3)];
+- calls and mentions with their step and line, a path, a URL and a bare word yielding none, two skills in one sentence the one steered away from, first or second, as a mention and the other as a call, a call from a copy's folder resolved to its sibling, each unresolved form, a backticked name before the word skill unresolved after any word, and `Skill(…)` naming an agent's command unresolved [[skill-atlas-3](#skill-atlas-3)];
 - tags with evidence from rules, from `allowed-tools` and from an MCP tool name, rolled up to the skill, a negated match left out, and an edited rules file taking effect on the next scan [[skill-atlas-4](#skill-atlas-4)];
 - each insight kind, a cycle's naming every skill of its group [[skill-atlas-5](#skill-atlas-5)];
-- an annotation's summary, steps, tags and links applied and marked, replaced steps' tags kept, and an unknown name and an unreadable file warned of [[skill-atlas-6](#skill-atlas-6)];
+- an annotation's summary, steps, tags and links applied and marked, replaced steps' tags kept, an entry recording another `SKILL.md` digest not applied with its words under a language, and an unknown name and an unreadable file warned of [[skill-atlas-6](#skill-atlas-6)];
 - the digest's sections [[skill-atlas-7](#skill-atlas-7)];
 - steps from Chinese headings [[skill-atlas-2](#skill-atlas-2)];
 - a translation in the skill's folder and one in the state folder reported with frontmatter, description and steps, the folder's first, one with other steps reported without them, one behind its source and one edited apart from it each marked, none listed as a file or a skill, and tags and links unchanged by them [[skill-atlas-27](#skill-atlas-27)];
-- an annotation's summary and step titles under a language's tag [[skill-atlas-6](#skill-atlas-6)];
-- insights for a translation behind its source, for one edited apart from it and for one of other steps [[skill-atlas-5](#skill-atlas-5)];
-- `pin` recording a digest in a Markdown and a JSON translation, a Markdown one's own digest recorded, `pin --check` failing on one behind, on one edited and on one with none, changing no file, and both commands failing on one in the state folder of a skill not reported, on one there under no skill's folder and on a folder holding none [[skill-atlas-28](#skill-atlas-28)].
+- an annotation's summary and step titles under a language's tag, joining a translation under a tag of the same language and script [[skill-atlas-6](#skill-atlas-6)];
+- insights for a translation behind its source, for one edited apart from it, each repair command run as given from another folder for a skill found through `--root` with a translation's path holding a space, and for one of other steps [[skill-atlas-5](#skill-atlas-5)];
+- `pin` recording a digest in a Markdown and a JSON translation, a Markdown one's own digest recorded, `pin --check` failing on one behind, on one edited and on one with none, changing no file, and both commands failing on one in the state folder of a skill not reported, on one there under no skill's folder, on a folder holding none and on a folder not read whole [[skill-atlas-28](#skill-atlas-28)].
 
 #### skill-atlas-25
 
@@ -241,9 +243,9 @@ When the server is started on a free port by the test, the test shall assert:
 
 - the printed URL answering with the atlas [[skill-atlas-8](#skill-atlas-8)];
 - a foreign `Host` and a change without the header refused [[skill-atlas-9](#skill-atlas-9)];
-- a skill's file returned, a path outside its folder refused, and a file asked in a language returned as its translation from the skill's folder, as the state folder's, and as the original where there is none, each with its path [[skill-atlas-10](#skill-atlas-10)];
+- a skill's file returned, a path outside its folder refused, and a file asked in a language returned as its translation from the skill's folder, as the state folder's, as one under a tag of the same language and script and never of another script, and as the original where there is none, each with its path [[skill-atlas-10](#skill-atlas-10)];
 - a skill added after the start reported by a rescan [[skill-atlas-11](#skill-atlas-11)];
-- a saved document returned and standing in the state folder, a malformed one and one against a changed file refused with the stored file standing, and an unreadable stored file reported and replaced only on request with the file kept [[skill-atlas-12](#skill-atlas-12)];
+- a saved document returned and standing in the state folder, a malformed one and one against a changed file refused with the stored file standing, and an unreadable stored file reported and replaced only on request with the file kept, of two servers' saves against one version one written and one refused, a held lock refusing a save and a stale one broken, and of three servers' saves against one version over a stale lock one written [[skill-atlas-12](#skill-atlas-12)];
 - an exported file holding the atlas, the catalogs and `--lang`'s language with no text able to close its data element and a value holding `$&` kept as written [[skill-atlas-22](#skill-atlas-22)];
 - an edited presets file, an edited label file and an edited catalog returned by the next read of the settings [[skill-atlas-23](#skill-atlas-23)];
 - every text the page looks up present in the `zh-CN` catalog [[skill-atlas-29](#skill-atlas-29)].

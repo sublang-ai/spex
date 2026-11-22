@@ -44,7 +44,7 @@ Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)
 ## Consequences
 
 - A reader can correct the page's Chinese, or add a language, by editing a file in the installed skill.
-- A change to a shipped skill's text or to its translation fails the repository's tests until the other is brought in line.
+- A change to a shipped skill's text or to its Markdown translation fails the repository's tests until the other is brought in line; a label file's own edit passes, as it takes effect as it stands.
 - An edit to a translation changes nothing an agent does until it is carried into the source; the page says so where the reader would otherwise assume it had.
 - Considered and declined: an agent loading the translation where its user writes Chinese — two loadable texts drift into two skills, and which one ran would depend on the language of a request.
 - A tag's evidence quotes the line it was matched on, in the skill's original language.

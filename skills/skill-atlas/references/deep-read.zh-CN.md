@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=9b90c178dd6983afbcb08869666bf835206ede82f11798e57a967e7881038b24 own=f3ae5439723187901240ac91cce343cf5e9a14ff7e6c7f62d18795ba7b249a7c -->
+<!-- skill-atlas:source sha256=485f16fedeff60d8bfe0c7b0ed2cf10bd9fe860b25544d97581c986ee06e2970 own=a9f8db4a8c3d8a78ccaa8ef30855a669510618140b6d02f2eeb4b3422c860dc8 -->
 
 > 本文件是 `deep-read.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -31,6 +31,8 @@
 4. **标签**：每个步骤读入什么、留下什么、使用哪些工具、在哪里需要用户参与。
    使用 [tag-rules.json](tag-rules.zh-CN.json) 中的 id；只有在没有合适的 id 时，才自拟 `<category>.<slug>`。
 5. **删除**：检测出的错误标签或链接，列在 `removeTags` 或 `removeCalls` 下。
+
+把扫描结果 `atlas.json` 中该技能的 `digest` 复制到它的条目中，写作 `"source": { "sha256": "<digest>" }`，使条目只应用于你读过的那版文本。
 
 ## 判断标签
 

@@ -569,6 +569,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       issue: () => t('A translation was edited apart from its source, which agents follow.'),
       message: (p) => (p.lang == null ? null : t('The {language} translation was edited apart from its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
     },
+    'stale-annotation': {
+      title: () => t('Annotations written from another text'),
+      issue: () => t('An annotation was written from another text of this skill; read the skill again and update or remove it.'),
+      message: () => t('An annotation was written from another text of this skill; read the skill again and update or remove it.'),
+    },
     'translation-steps': {
       title: () => t('Translations whose steps differ'),
       issue: () => t('A translation’s steps number otherwise than the skill’s.'),
@@ -896,13 +901,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return out;
   }
 
-  // Edges currently shown plus adjacency over them.
+  // Edges currently shown plus adjacency over them, and each step's shown links by kind: the one
+  // set every drawing, count, list, chip, focus and grouping reads [skill-atlas-13].
   function derive(idx, showMentions) {
     const shown = idx.edges.filter((e) => showMentions || e.kind === 'calls');
-    const out = new Map(), inc = new Map();
+    const out = new Map(), inc = new Map(), stepKind = new Map();
     for (const s of idx.skills) { out.set(s.id, new Set()); inc.set(s.id, new Set()); }
-    for (const e of shown) { if (e.from === e.to) continue; out.get(e.from).add(e.to); inc.get(e.to).add(e.from); }
-    return { shown, out, inc, layers: computeLayers(idx.skills, out, inc) };
+    for (const e of shown) {
+      if (e.fromStep) { const k = e.fromStep + '\u0000' + e.to; if (stepKind.get(k) !== 'calls') stepKind.set(k, e.kind); }
+      if (e.from === e.to) continue;
+      out.get(e.from).add(e.to); inc.get(e.to).add(e.from);
+    }
+    return { shown, out, inc, stepKind, layers: computeLayers(idx.skills, out, inc) };
   }
 
   // Link-depth layers over the condensation of the shown links (each cycle collapsed to one node):
@@ -972,7 +982,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const vis = new Set();
     for (const s of idx.skills) {
       if (focus && !focus.has(s.id)) continue;
-      const hay = own(s._trSearch, i18n.lang) ? s._search + '\n' + s._trSearch[i18n.lang] : s._search;
+      const tr = trTag(s);
+      const hay = tr && own(s._trSearch, tr) ? s._search + '\n' + s._trSearch[tr] : s._search;
       if (words.some((w) => !hay.includes(w))) continue;
       if (tags.some((x) => !s._tagIds.has(x))) continue;
       vis.add(s.id);
@@ -1490,11 +1501,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   // The latest edit alone can be undone, whichever edit it was, until the next: its snapshot is
   // kept here, apart from any notice, and both Ctrl/Cmd+Z and a notice's Undo restore it.
-  // `key` names a run of edits that undo as one (a phase's note typed in one go).
+  // `key` names a run of edits that undo as one (a phase's note typed in one go); switching the
+  // workflow ends the run. `active` is the workflow shown once the edit was made: switching
+  // workflows is no edit, so an undo after a switch leaves the reader where they are.
   let latestEdit = null;
   function recordEdit(before, key) {
-    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null };
+    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null, active: state.workflows.active };
   }
+  function endEditRun() { if (latestEdit) latestEdit.key = null; }
   function clearLatestEdit() { latestEdit = null; dismissUndos(); }
   // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
@@ -1509,12 +1523,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     invalidate('chrome', 'canvas', 'details');
     return before;
   }
-  // Restore the latest edit's snapshot; undoing clears it (there is no redo).
+  // Restore the latest edit's snapshot; undoing clears it (there is no redo). Where the reader
+  // switched workflows since the edit, the one they view stays shown while it still exists.
   function undoLatest() {
     if (!latestEdit || !canEdit()) return false;
-    const { before } = latestEdit;
+    const { before, active } = latestEdit;
     latestEdit = null;
-    state.workflows = normalizeWorkflows(before);
+    const viewing = state.workflows.active;
+    const stay = viewing !== active && arr(before.workflows).some((w) => w && str(w.id) === viewing);
+    state.workflows = normalizeWorkflows(stay ? { ...before, active: viewing } : before);
     if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
     markDirty();
     invalidate('chrome', 'canvas', 'details');
@@ -1827,33 +1844,55 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   // ---------- a skill's words in the shown language ----------
   // A translation supplies words only: steps, links and tags are always those of SKILL.md.
+  // The tag of the skill's translation in the page's language: the page's own tag, else one of the
+  // same language and script (matchLang: `zh` and `zh-Hans` serve zh-CN, `zh-TW` does not), or
+  // null. Every read of a skill's translated words, its search text and its translation insights
+  // goes through this one tag; a file is still asked for under the page's tag (the server matches alike).
+  function trTag(s) {
+    const c = s._trTag;
+    if (c && c.lang === i18n.lang) return c.tag;
+    const tag = matchLang(i18n.lang, Object.keys(s.translations));
+    s._trTag = { lang: i18n.lang, tag };
+    return tag;
+  }
   function skillTr(s) {
-    const tr = own(s.translations, i18n.lang) ? s.translations[i18n.lang] : null;
+    const tag = trTag(s);
+    const tr = tag ? s.translations[tag] : null;
     return tr && typeof tr === 'object' ? tr : null;
   }
-  // The language a skill is written in: its frontmatter's `metadata.language` where it names one,
-  // else read from the script most of its words are in. Han, kana and hangul letters, each weighing
-  // as much as three Latin letters, outweighing the Latin ones make it Japanese where kana are at
-  // least a tenth of the Han and kana, Korean where hangul are most, else Chinese; else English. So
-  // an English skill quoting a Chinese or Japanese example stays English. The skill's details and its
-  // file dialog both ask this one function.
+  // The language a text is written in, read from the script most of its letters are in. Han, kana
+  // and hangul letters, each weighing as much as three letters of another script, outweighing the
+  // Latin ones make it Japanese where kana are at least a tenth of the Han and kana, Korean where
+  // hangul are most, else Chinese; Latin letters most make it English; letters of any other script
+  // (Cyrillic, Arabic, Greek, Devanagari...) most make it unknown, `und`, which no page's language
+  // is. So an English skill quoting a Chinese or Japanese example stays English.
   const HAN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
   const KANA = /[\u3041-\u3096\u30A1-\u30FA\u31F0-\u31FF\uFF66-\uFF9D]/g; // letters only: no '・' or 'ー'
   const HANGUL = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/g;
-  const LATIN = /[A-Za-z\u00C0-\u024F]/g;
+  const LATIN = /\p{Script=Latin}/gu;
+  const OTHER = /[^\P{L}\p{Script=Latin}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Common}\p{Script=Inherited}]/gu;
   const CJK_WEIGHT = 3;
   const count = (text, re) => (text.match(re) || []).length;
-  function originalLang(s) {
-    const meta = s.frontmatter && s.frontmatter.metadata;
-    const declared = meta && typeof meta === 'object' ? str(meta.language).trim() : '';
-    if (/^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(declared)) return declared;
-    const words = [s.name, s.description, s.summary, ...s.steps.map((st) => st.title + '\n' + st.excerpt)].join('\n');
-    const han = count(words, HAN);
-    const kana = count(words, KANA);
-    const hangul = count(words, HANGUL);
-    if (CJK_WEIGHT * (han + kana + hangul) <= count(words, LATIN)) return 'en';
+  function textLang(text) {
+    const han = count(text, HAN);
+    const kana = count(text, KANA);
+    const hangul = count(text, HANGUL);
+    const cjk = CJK_WEIGHT * (han + kana + hangul), latin = count(text, LATIN), other = count(text, OTHER);
+    if (other > latin && other > cjk) return 'und';
+    if (cjk <= latin) return 'en';
     if (hangul > han + kana) return 'ko';
     return kana * 10 >= han + kana ? 'ja' : 'zh';
+  }
+  // The language SKILL.md names in its frontmatter's `metadata.language`, or ''.
+  function declaredLang(s) {
+    const meta = s.frontmatter && s.frontmatter.metadata;
+    const declared = meta && typeof meta === 'object' ? str(meta.language).trim() : '';
+    return /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(declared) ? declared : '';
+  }
+  // The language a skill is written in: the one its SKILL.md declares, else its words'. The skill's
+  // details ask this; the file dialog asks textLang of the file it shows [skill-atlas-29].
+  function originalLang(s) {
+    return declaredLang(s) || textLang([s.name, s.description, s.summary, ...s.steps.map((st) => st.title + '\n' + st.excerpt)].join('\n'));
   }
   // Whether two tags name one language: one primary subtag and one script (`zh-Hant` is not `zh-CN`'s).
   const sameLanguage = (a, b) => primary(a) === primary(b) && scriptOf(a) === scriptOf(b);
@@ -1866,7 +1905,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return sameLanguage(originalLang(s), i18n.lang) ? 'same' : 'original';
   }
   // Whether the scan found the translation's steps numbering otherwise than the skill's.
-  const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && i.params.lang === i18n.lang);
+  const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && trTag(s) != null && i.params.lang === trTag(s));
   const shownDesc = (s) => { const tr = skillTr(s); return (tr && str(tr.description)) || s.description; };
   const shownSummary = (s) => { const tr = skillTr(s); return (tr && str(tr.summary)) || s.summary; };
   function trSteps(s) {
@@ -2041,12 +2080,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         h('span', { class: 'step-idx', text: fmtNum(st.index) }),
         h('span', { class: 'step-title', title: words.title, text: words.title }),
         h('span', { class: 'step-tags' }, pillsFor(stepCats, { bare: true }))));
-      if (st.calls.length) {
+      // A link the reader hides (a mention, with Mentions off) shows no chip.
+      const shownCalls = st.calls.filter((to) => { const k = st.id + '\u0000' + to; return state.derived.stepKind.has(k) || !state.idx.stepEdgeKind.has(k); });
+      if (shownCalls.length) {
         const calls = h('span', { class: 'step-calls' });
-        for (const to of st.calls) {
+        for (const to of shownCalls) {
           const target = state.idx.byId.get(to);
           if (target) {
-            const kind = state.idx.stepEdgeKind.get(st.id + '\u0000' + to) || 'calls';
+            const kind = state.derived.stepKind.get(st.id + '\u0000' + to) || 'calls';
             const tip = kind === 'mentions' ? t('Mentions {skill} — go there', { skill: '/' + target.name }) : t('Calls {skill} — go there', { skill: '/' + target.name });
             calls.append(h('button', { type: 'button', class: 'call-chip' + (kind === 'mentions' ? ' mention' : ''), 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: tip }, `→ ${target.name}`));
           } else {
@@ -2390,7 +2431,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (fm.length) {
       const order = ['allowed-tools', 'model', 'license', 'compatibility'];
       fm.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99) || a[0].localeCompare(b[0]));
-      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? i18n.lang : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
+      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? trTag(s) : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
     }
 
     if (s.tags.length || s._tagIds.size) {
@@ -2678,7 +2719,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       // Asked in the page's language: the file's translation in it where there is one, else the file itself.
       const res = await fetch(`/api/file?skill=${encodeURIComponent(skillId)}&path=${encodeURIComponent(path)}&lang=${encodeURIComponent(lang)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
-      let text = '', language = null, stale = false, edited = false;
+      let text = '', language = null, stale = false, edited = false, shown = null;
       if (/^application\/json\b/i.test(res.headers.get('Content-Type') || '')) {
         const body = await res.json();
         text = str(body && (body.text != null ? body.text : body.content));
@@ -2686,7 +2727,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         stale = !!(body && body.stale);
         edited = !!(body && body.edited);
         // The title names the file shown: its translation's name where one is shown.
-        const shown = body && typeof body.path === 'string' && body.path ? body.path : null;
+        shown = body && typeof body.path === 'string' && body.path ? body.path : null;
         const title = shown && pre.closest('dialog') ? pre.closest('dialog').querySelector('.dlg-head h2') : null;
         if (title) title.textContent = `/${s.name} · ${shown}`;
       } else text = await res.text();
@@ -2695,7 +2736,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const languageShown = languageName(lang);
       if (language && stale) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language: languageShown }) }));
       if (language && edited) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow the original, not this text.', { language: languageShown }) }));
-      if (!language && !sameLanguage(originalLang(s), lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
+      // The original's language is told from its own words; SKILL.md's frontmatter declares SKILL.md's alone.
+      const original = language ? null : ((shown || path) === 'SKILL.md' && declaredLang(s)) || textLang(text);
+      if (original && !sameLanguage(original, lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
     } catch (err) {
       pre.textContent = err && err.message ? t('Couldn’t read {path} ({error}).', { path, error: err.message }) : t('Couldn’t read {path}.', { path });
     }
@@ -2982,6 +3025,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (v === '__new') { els.wfSelect.value = state.workflows.active || ''; newWorkflowDialog(); return; }
       if (v && v !== state.workflows.active && canEdit()) {
         state.workflows.active = v;
+        endEditRun();
         if (state.selection && state.selection.type === 'phase') state.selection = null;
         markDirty();
         invalidate('chrome', 'canvas', 'details');
@@ -3133,8 +3177,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const p = findPhase(tgt.dataset.phase);
       if (!p || !canEdit()) return;
       // A note typed with no other edit between is one edit to undo; the details are not
-      // re-rendered under the reader's typing, so this is not a mutate().
-      const key = 'note:' + p.id;
+      // re-rendered under the reader's typing, so this is not a mutate(). Phase ids repeat across
+      // workflows made from one preset, so the run is keyed by both.
+      const key = 'note:' + state.workflows.active + '\u0000' + p.id;
       const before = latestEdit && latestEdit.key === key ? null : clone(state.workflows);
       p.note = tgt.value;
       markDirty();

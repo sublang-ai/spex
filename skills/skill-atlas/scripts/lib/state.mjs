@@ -229,6 +229,87 @@ export function writeWorkflows(stateDir, doc) {
   return { doc, etag: etagOf(bytes) };
 }
 
+export const WORKFLOWS_LOCK_FILE = `${WORKFLOWS_FILE}.lock`;
+const LOCK_WAIT_MS = 1000; // a save holds the lock for milliseconds
+const LOCK_RETRY_MS = 20;
+export const LOCK_STALE_MS = 10_000; // a lock this old was left by a server that stopped mid-save
+
+/** Thrown when another process holds the workflows lock past the wait. */
+export class LockBusyError extends Error {
+  constructor(file) {
+    super(`another skill-atlas server sharing this state folder is saving workflows.json (${file} is held); save again in a moment`);
+    this.code = 'ELOCKBUSY';
+  }
+}
+
+/**
+ * Run `fn` holding workflows.json.lock in the state folder, so that the
+ * version check and the write are one step among every process sharing it.
+ * Waits up to LOCK_WAIT_MS while another holds it, breaks a lock older than
+ * LOCK_STALE_MS, and throws LockBusyError when it cannot be taken.
+ */
+export function withWorkflowsLock(stateDir, fn) {
+  fs.mkdirSync(stateDir, { recursive: true, mode: STATE_DIR_MODE });
+  const file = path.join(stateDir, WORKFLOWS_LOCK_FILE);
+  const token = `${process.pid}.${crypto.randomBytes(8).toString('hex')}`;
+  const body = JSON.stringify({ pid: process.pid, time: new Date().toISOString(), token });
+  const sleeper = new Int32Array(new SharedArrayBuffer(4));
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      fs.writeFileSync(file, body, { flag: 'wx', mode: 0o600 });
+      break;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+    if (breakStaleLock(file)) continue;
+    if (Date.now() >= deadline) throw new LockBusyError(file);
+    Atomics.wait(sleeper, 0, 0, LOCK_RETRY_MS); // sleep without spinning
+  }
+  try {
+    return fn();
+  } finally {
+    // Removed only while it is still this holder's: a lock broken as stale may be another's now.
+    try { if (JSON.parse(fs.readFileSync(file, 'utf8')).token === token) fs.rmSync(file, { force: true }); } catch { /* gone or another's */ }
+  }
+}
+
+// Remove a lock older than LOCK_STALE_MS; true where it is gone. A live lock
+// is never moved or removed: breakers take turns through a second file made
+// with 'wx', and the one whose turn it is checks the lock again and removes it
+// only while it is still stale. Only a holder removes its own lock, and only a
+// breaker a stale one, so a lock seen stale in a turn is the one removed, and a
+// lock another takes after that removal is seen fresh by every later turn.
+function breakStaleLock(file) {
+  if (!isStale(file)) return !fs.existsSync(file);
+  const breaker = `${file}.break`;
+  try {
+    fs.writeFileSync(breaker, String(process.pid), { flag: 'wx', mode: 0o600 });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    // Another breaks it now; a breaker's turn lasts microseconds, so one this
+    // old was left by a process that stopped inside its turn.
+    if (isStale(breaker)) fs.rmSync(breaker, { force: true });
+    return false;
+  }
+  try {
+    if (!isStale(file)) return !fs.existsSync(file);
+    fs.rmSync(file, { force: true });
+    return true;
+  } finally {
+    fs.rmSync(breaker, { force: true });
+  }
+}
+
+// Whether `file` exists and was last written over LOCK_STALE_MS ago.
+function isStale(file) {
+  try {
+    return Date.now() - fs.statSync(file).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
 /** Move an invalid workflows.json aside as workflows.invalid-<n>.json (first free n). */
 export function setAsideInvalid(stateDir) {
   const file = path.join(stateDir, WORKFLOWS_FILE);

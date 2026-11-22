@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=171be56f87ab49f2ddeb8672d105b7f8e8d6d1dd8cfadecb8af2e62a4db062e2 own=fa21fc5936dd477dd32b40730ec6ba51f846e36e54f437384dafac644b0cfc97 -->
+<!-- skill-atlas:source sha256=9470270b20af9eef13907d36feecd96dc7a913c8fe6610e44c427032a5008eac own=8b6aac052be694d8b4929878ef4be4f6de033d49127a20742f9c6c1b6eb3ddbd -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -58,6 +58,7 @@
       "plugin": null,                  // scope 为 "plugin" 时的插件名
       "dir": "/abs/project/.claude/skills/code",
       "file": "/abs/project/.claude/skills/code/SKILL.md",
+      "digest": "9b90c1…",             // SKILL.md 字节的 SHA-256（十六进制）；无法读取时为 null
       "copies": [                      // 存放同一技能（逐字节相同）的其他文件夹
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
       ],
@@ -113,10 +114,10 @@
 }
 ```
 
-洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`、`no-steps`。
+洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
-为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内）是一条记录，其他位置列在 `copies` 下。
-大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）或总大小超过 64 MiB 的文件夹，算作不同。
+为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
+大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
 只有同名而文件夹不同的技能才是 `duplicate-name`。
 
 ## annotations.json — 叠加在扫描之上的修正
@@ -129,6 +130,7 @@
   "version": 1,
   "skills": {
     "code": {
+      "source": { "sha256": "9b90c1…" },   // 可选；写此条目时所依据的 SKILL.md 的 `digest`
       "summary": "Implements a request as one commit per phase, then has it reviewed once.",
       "steps": [                       // 可选；完全取代检测出的步骤
         { "title": "Classify the request", "summary": "New intent or an existing IR?" },
@@ -150,6 +152,8 @@
 - 被替换的步骤，其 `line` 和 `endLine` 为 null，其 `summary` 作为 `excerpt`；扫描在原步骤中找到的标签和链接保留在整个技能上（`fromStep` 为 null）。
 - 不在 `tag-rules.json` 中的标签 id，只要形如 `<category>.<slug>` 就会被接受；其显示名称就是 slug。
 - 指向未安装技能的条目会被忽略，并在 stderr 上报告。
+- 记录的 `source` 哈希值与其技能的 `digest` 不同的条目不会被应用，其 `translations` 中的文字也不会，并报告为 `stale-annotation` 洞察：状态目录为所有项目共用，这样的条目可能是为另一个同名技能或本技能的早先文本写的。
+  没有记录哈希值的条目照常应用。
 
 ## workflows.json — 用户如何整理技能
 
@@ -172,6 +176,8 @@
 
 - 一个技能可以位于多个阶段，也可以不在任何阶段（视图把它列在“未分配”下）。
 - 每一项是一个技能 id。没有对应已安装技能的项会被保留并显示为缺失，因此卸载技能后工作流依然完好。
+- 视图用 `PUT /api/workflows` 保存，并在 `If-Match` 中发送它上次读取的版本的 `ETag`；针对此后已被修改的文件的保存会被拒绝（412），所存文件保持不变。
+  检查与写入期间持有状态目录中的 `workflows.json.lock`，因此在共享该目录的服务器中，针对同一版本只有一个会写入；一秒后锁仍被持有时回答 503（`busy`，请稍后再次保存），超过 10 秒的锁会被视为中途停止的服务器留下的而被打破。
 
 ## 语言
 
@@ -192,7 +198,8 @@
   - 在 JSON 中，是一个顶层的 `"translationOf": { "sha256": "<64 hex>" }`。
 - 所记录的源文件哈希值与源文件不符的译本是*过时的*（落后于源文件）；所记录的自身哈希值与自身不符的 Markdown 译本是*脱离源文件修改过的*（代理遵循的是源文件）；没有记录哈希值的译本两者都不是。
 - `pin` 只改写记录行；只要有一个指定的译本无法写入记录，就不写入任何文件；`pin --check` 列出每个过时、脱离源文件修改过或没有记录哈希值（Markdown 译本则包括没有记录自身哈希值）的译本，以及每个指定的、不含任何译本的文件夹。
-- 位于 `translations/<skill id>/` 下、其技能未被扫描报告或该技能缺少其源文件的译本，会被列出，并使 `pin` 和 `pin --check` 都失败；`--state`、`--cwd` 和 `--root` 决定用来找到这些技能的扫描。
+- 无法完整读取（超过 5,000 个文件或 2,000 个文件夹，或含有无法读取的条目）的指定文件夹会被列出，并使 `pin` 和 `pin --check` 都失败。
+- 位于 `translations/<skill id>/` 下、其技能未被扫描报告或该技能缺少其源文件的译本，会被列出，并使 `pin` 和 `pin --check` 都失败；扫描选项（`--state`、`--cwd`、`--root`、`--agent`、`--no-user`、`--no-plugins`）决定用来找到这些技能的扫描。
 
 在 `atlas.json` 中，每个技能都带有 `translations`，一个以标签为键的对象（没有译本时为空），`files` 的每一项都列出它被翻译成的标签：
 
@@ -223,13 +230,13 @@
 | `unresolved-link` | `name`、`from` |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
-| `missing-description`、`invalid-frontmatter`、`no-steps` | — |
+| `missing-description`、`invalid-frontmatter`、`no-steps`、`stale-annotation` | —（`{}`） |
 | `name-mismatch` | `name`、`folder` |
 | `stale-translation` | `lang`、`files`（落后于源文件的相对路径） |
 | `edited-translation` | `lang`、`files`（脱离源文件修改过的相对路径） |
 | `translation-steps` | `lang`、`steps`、`expected` |
 
-在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；它们会进入该技能 `translations` 中对应标签的条目：
+在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；它们会进入该技能 `translations` 中对应标签的条目，否则进入语言和书写系统都相同的标签的条目（`zh-CN` 对应 `zh`，绝不对应 `zh-TW`）：
 
 ```jsonc
 "code": {
@@ -242,7 +249,7 @@
 
 ### 服务器的应答
 
-- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` 返回 `{ "language", "path", "stale", "edited", "text" }`：有译本（其文件夹内的普通文件）时为译本，并带有 `"language": "<tag>"` 和译本自己的相对路径（`SKILL.zh-CN.md`）；否则为文件本身，并带有 `"language": null`、它的相对路径、`"stale": false` 和 `"edited": false`。
+- `GET /api/file?skill=<id>&path=<relative path>&lang=<tag>` 返回 `{ "language", "path", "stale", "edited", "text" }`：有该标签下的译本，否则有同一语言和文字的标签下的译本（对 `zh-CN` 而言为 `zh` 或 `zh-Hans`，绝不是 `zh-TW`），且为其文件夹内的普通文件时，返回译本，并带有其标签作为 `"language"` 和译本自己的相对路径（`SKILL.zh-CN.md`）；否则为文件本身，并带有 `"language": null`、它的相对路径、`"stale": false` 和 `"edited": false`。
   不带 `lang` 时，答复是文件的纯文本。
 - `GET /api/config` 增加：
 
@@ -277,8 +284,8 @@
 
 扫描的文件夹：
 
-- 项目和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，项目的 `.github/skills`，以及项目中含有技能的 `skills`。
-- `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills`（除 Claude Code 外的代理都加载它）、项目的 `skills`，以及 `--root` 指定的文件夹。
+- 项目和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`，项目的 `.github/skills`，以及项目中含有技能的 `skills`。
+- `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills` 和 `.config/agents/skills`（除 Claude Code 外的代理都加载它们），以及 `--root` 指定的文件夹；项目的 `skills` 不保留。
 - Claude Code 插件的 `skills`：`plugins/installed_plugins.json` 记录该插件为用户或本项目安装，且 `enabledPlugins` 没有把它设为 `false`；依次读取用户的 `settings.json`、项目的 `.claude/settings.json` 和项目的 `.claude/settings.local.json`，对同一插件，后读的文件的值优先于先读的。
 - 在每个文件夹中，含有 `SKILL.md` 的子文件夹或其下一级文件夹是一个技能；名称以点开头的文件夹和 `node_modules` 会被跳过。
 
@@ -301,7 +308,7 @@
 
 - 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。
 - 每个（技能、步骤、目标）只保留一条链接，`calls` 优先于 `mentions`；技能指向自身的链接被丢弃。
-- 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；``the `x` skill``；以及 `Skill(x)`，无论 `x` 是什么。
+- 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；任意词之后的 `` `x` skill ``（``the `x` skill``、``our `x` skill``）；以及 `Skill(x)`，无论 `x` 是什么。
 
 标签来自 `tag-rules.json`：每条规则的模式会与 frontmatter 描述（以及 `context` 和 `agent` 键）、前言（所有步骤之外的每一行正文）和每个步骤的每一行逐一匹配，围栏代码也包括在内。
 在其所在子句中先前被否定的匹配不算证据：同一句中它之前 60 个字符以内出现 never、not、no、nor、without、avoid、don't、doesn't、won't、cannot 或 can't 时，该匹配被丢弃，除非规则设置了 `"negatable": false`。
