@@ -1216,6 +1216,15 @@ test('a --root or CLAUDE_CONFIG_DIR naming a project folder below the repository
   assert.deepEqual(ids(['--no-user', '--root', path.join(app, '.claude', 'skills')]), plain, 'the --root naming it changes no id');
   assert.deepEqual(ids([], { CLAUDE_CONFIG_DIR: path.join(app, '.claude') }), plain, 'CLAUDE_CONFIG_DIR naming it changes no id');
   assert.deepEqual(ids(['--no-user'], { CLAUDE_CONFIG_DIR: path.join(app, '.claude') }), plain);
+  // A project's folder that is a link to a shared one keeps its id when a --root names it, by either path.
+  const shared = path.join(tmp, 'alias-roots-shared');
+  writeSkill(path.join(shared, 'foo'), `${fm('foo', 'The shared foo.')}\nText.\n`);
+  fs.mkdirSync(path.join(app, '.agents'), { recursive: true });
+  fs.symlinkSync(shared, path.join(app, '.agents', 'skills'), 'junction');
+  const linked = ids(['--no-user']);
+  assert.ok(linked.some((x) => x.endsWith(' project-agents.packages.app')), linked.join(', '));
+  assert.deepEqual(ids(['--no-user', '--root', path.join(app, '.agents', 'skills')]), linked, 'a --root naming the link changes no id');
+  assert.deepEqual(ids(['--no-user', '--root', shared]), linked, 'nor one naming the folder it leads to');
 });
 
 test('a second skill of a name is named by its own name, root and folder in it, and a name no folder can hold by its digest (skill-atlas-1)', () => {

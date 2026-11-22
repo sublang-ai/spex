@@ -56,12 +56,13 @@ export function scan(opts) {
   const idOrder = new Map(byIdOrder.map((r, n) => [r.id, n]));
   // A folder reached by several roots (--cwd the home folder, a --root or
   // CLAUDE_CONFIG_DIR naming a project's folder, or one folder's skills linked
-  // to another's) is scanned once, as the root reaching it through no link of
-  // its own, of those a project's before the home folder's, the plugins' and
-  // --root's, each then in id order: the project's rows depend on --cwd alone,
-  // so the alias changes no root's or skill's id.
+  // to another's) is scanned once, as a project's root before the home
+  // folder's, a plugin's and a --root's, of one kind the root reaching it
+  // through no link of its own, each then in id order: a root never yields to
+  // one of a later kind, so naming a folder again changes no root's or
+  // skill's id.
   const scannedAs = new Map(); // real folder -> the root it is scanned as
-  const before = (a, b) => (a.linked !== b.linked ? !a.linked : (a.scope === 'project') !== (b.scope === 'project') ? a.scope === 'project' : false);
+  const before = (a, b) => (a.scope !== b.scope ? scopeRank[a.scope] < scopeRank[b.scope] : a.linked !== b.linked ? !a.linked : false);
   for (const root of byIdOrder) {
     if (!isDir(root.path)) continue;
     const real = realOr(root.path);

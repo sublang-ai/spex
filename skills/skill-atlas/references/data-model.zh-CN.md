@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=01733953a6b9fd03ec92115a03ab7585540a9a559a0705ab506d5e50f9758ce6 own=124b27a8bc54ce68f331804467132e4aee2267f339f7d5bc9902f6ec56ec79b8 -->
+<!-- skill-atlas:source sha256=e76cb06deed8182511f2f2f6f921460a038e547b26022508534e018668713979 own=e887051ca31936b64525021ebaa5e16a708270a809ad2a767b4c58a6a715551c -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -320,7 +320,7 @@
   同名（不计大小写）而内容不同的技能中，按其第一个文件夹排在最前的那个——先按在仓库根目录以下的深度（根目录自己的文件夹和项目之外的文件夹深度为零，较浅的在先），再是项目的行先于主文件夹的、插件的和 `--root` 的行，项目和主文件夹的各行按扫描器固定的代理顺序（`scripts/lib/roots.mjs` 中的 `AGENT_ROOTS`），插件和 `--root` 按其 id，然后按其在根中的文件夹路径逐字符比较——以名称本身为 id，因此不带限定的 id 取决于安装了哪些同名技能，排在最前的那个被移除时由下一个取得；其余每个的 id 只取决于它自己的名称、根和文件夹：`<name>@<rootId>`，其在根中的文件夹路径不是其名称时再加上 `@` 和按上述规则处理的该路径（`a/foo` 对应 `foo@project-agents@a.foo`）。
   含有 `@`、`#`、`/`、`\` 或控制字符的名称，以及 `.` 或 `..`，在 id 中写作其短名加 `_` 和其 SHA-256 的八位十六进制数字。
   任何两个 id 都不会只在大小写上不同，因此在任何文件系统上，每个 id 都指明状态目录 `translations/` 下它自己的文件夹：两个只在大小写上不同的名称，第二个按上述规则加以限定。
-  被多行到达的同一文件夹（`--cwd` 即主文件夹，`--root` 或 `CLAUDE_CONFIG_DIR` 指向项目的某个文件夹，或一个文件夹的技能链接到另一个的）只扫描一次，取不经自身链接到达它的那一行，其中项目的行先于主文件夹的、插件的和 `--root` 的行，各自再取 id 顺序中的第一行，因此另一行不会改变任何 id。
+  被多行到达的同一文件夹（`--cwd` 即主文件夹，`--root` 或 `CLAUDE_CONFIG_DIR` 指向项目的某个文件夹，或一个文件夹的技能链接到另一个的）只扫描一次，项目的行先于主文件夹的、插件的和 `--root` 的行，同一类中取不经自身链接到达它的那一行，各自再取 id 顺序中的第一行，因此另一行不会改变任何 id。
   其显示名称带有该路径：`Project (packages/ui) · Universal`。
 - 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及每个项目文件夹中含有技能的 `skills`。
 - `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills` 和 `.config/agents/skills`（除 Claude Code 外的代理都加载它们），以及 `--root` 指定的文件夹；项目的 `skills` 不保留。

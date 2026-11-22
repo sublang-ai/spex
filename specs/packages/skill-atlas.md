@@ -28,7 +28,7 @@ When a scan runs, the scanner shall report one skill for each real folder holdin
 | each folder named by `--root` | — | — |
 
 - the project is `--cwd`'s folder and each folder above its real place up to the root of its repository, the nearer first, each scanned folder's id a function of that folder alone — its place in the repository, its plugin's install or its `--root` folder however spelled or reached — never of another folder, install or option or their order, and no other folder's;
-- a folder reached by several rows is scanned once, under the id of the row reaching it through no link of its own, of those a project's row before the home folder's, the plugins' and `--root`'s;
+- a folder reached by several rows is scanned once, under the id of a project's row before the home folder's, a plugin's and a `--root`'s, of one kind the row reaching it through no link of its own;
 - the home folder's `.config` is `XDG_CONFIG_HOME` where that is set;
 - `--no-user` leaves out the home folder's rows, `--no-plugins` the plugins' row, and `--agent <id>` every row but that agent's, `.agents/skills` and the home folder's `.config/agents/skills` where that agent loads them, and `--root`'s;
 - a folder whose name starts with a dot, unless a row names it, and `node_modules`, hold no skill;
