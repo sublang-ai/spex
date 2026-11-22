@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { parseTranslationName, canonicalTag } from './translations.mjs';
+import { warn } from './log.mjs';
 
 // The skill folder, found from this file (scripts/lib/), never from the cwd.
 export const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -15,6 +17,7 @@ export const BUNDLED = {
   presets: path.join(SKILL_DIR, 'references', 'workflow-presets.json'),
   view: path.join(SKILL_DIR, 'references', 'view-settings.json'),
   viewer: path.join(SKILL_DIR, 'assets', 'viewer.html'),
+  locales: path.join(SKILL_DIR, 'assets', 'locales'),
 };
 export const WORKFLOWS_FILE = 'workflows.json';
 export const EMPTY_WORKFLOWS = Object.freeze({ version: 1, active: null, workflows: [] });
@@ -28,11 +31,112 @@ function readJson(file, what) {
   }
 }
 
-/** The viewer config, re-read on each call so edits apply on reload. */
-export function viewerConfig(stateDir, isStatic) {
+/**
+ * The viewer config, re-read on each call so edits apply on reload: the
+ * presets and view settings, the language the command names, every catalog
+ * in assets/locales/, and the labels of the label files beside the presets,
+ * the view settings and the tag rules (data-model.md "Languages").
+ * @param {{ stateDir:string, isStatic:boolean, lang?:string|null, rulesFile?:string }} opts
+ */
+export function viewerConfig({ stateDir, isStatic, lang = null, rulesFile = BUNDLED.rules }) {
   const presets = readJson(BUNDLED.presets, 'workflow presets');
   const view = readJson(BUNDLED.view, 'view settings');
-  return { presets: Array.isArray(presets?.presets) ? presets.presets : [], view, static: isStatic, stateDir };
+  return {
+    presets: Array.isArray(presets?.presets) ? presets.presets : [],
+    view,
+    static: isStatic,
+    stateDir,
+    lang: lang ?? null,
+    locales: readLocales(BUNDLED.locales),
+    labels: readLabels({ presets: BUNDLED.presets, view: BUNDLED.view, rules: rulesFile }),
+  };
+}
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isStr = (v) => typeof v === 'string';
+
+/** The catalogs: `{ <tag>: { name, messages } }`, one per readable assets/locales/<tag>.json. */
+export function readLocales(dir) {
+  const out = {};
+  let names;
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return out; }
+  for (const n of names) {
+    const file = path.join(dir, n);
+    const tag = canonicalTag(n.slice(0, -'.json'.length));
+    if (!tag) { warn(`catalog ${file} is not named <language tag>.json; skipped`); continue; }
+    let doc;
+    try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) { warn(`cannot read catalog ${file} (${err.message}); skipped`); continue; }
+    if (!isObj(doc) || !isObj(doc.messages)) { warn(`catalog ${file} has no "messages" map; skipped`); continue; }
+    const messages = {};
+    for (const [k, v] of Object.entries(doc.messages)) if (isStr(v)) messages[k] = v;
+    out[tag] = { name: isStr(doc.name) && doc.name ? doc.name : tag, messages };
+  }
+  return out;
+}
+
+/** Tags of the label files `<name>.<tag>.json` beside `file`, with their paths. */
+export function labelFiles(file) {
+  const dir = path.dirname(file);
+  const sourceName = path.basename(file);
+  let names;
+  try { names = fs.readdirSync(dir).sort(); } catch { return []; }
+  return names
+    .map((n) => ({ n, parsed: parseTranslationName(n) }))
+    .filter(({ parsed }) => parsed && parsed.ext === '.json' && parsed.sourceName === sourceName)
+    .map(({ n, parsed }) => ({ tag: parsed.tag, file: path.join(dir, n) }));
+}
+
+/**
+ * The labels per language, reduced to what the page reads: the title, a
+ * category's label by key, a tag's label by id, and a preset's name,
+ * description and phase names by id, its phases by position.
+ */
+export function readLabels(sources) {
+  const out = {};
+  const entry = (tag) => (out[tag] ??= { title: null, categories: {}, tags: {}, presets: {} });
+  const read = (file) => {
+    try {
+      const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (isObj(doc)) return doc;
+      warn(`label file ${file} is not a JSON object; skipped`);
+    } catch (err) {
+      warn(`cannot read label file ${file} (${err.message}); skipped`);
+    }
+    return null;
+  };
+  for (const { tag, file } of labelFiles(sources.view)) {
+    const doc = read(file);
+    if (!doc) continue;
+    const e = entry(tag);
+    if (isStr(doc.title)) e.title = doc.title;
+    if (isObj(doc.categories)) {
+      for (const [key, c] of Object.entries(doc.categories)) {
+        if (isStr(c?.label)) e.categories[key] = c.label;
+      }
+    }
+  }
+  for (const { tag, file } of labelFiles(sources.rules)) {
+    const doc = read(file);
+    if (!doc) continue;
+    const e = entry(tag);
+    for (const t of Array.isArray(doc.tags) ? doc.tags : []) {
+      if (isStr(t?.id) && isStr(t?.label)) e.tags[t.id] = t.label;
+    }
+  }
+  for (const { tag, file } of labelFiles(sources.presets)) {
+    const doc = read(file);
+    if (!doc) continue;
+    const e = entry(tag);
+    for (const p of Array.isArray(doc.presets) ? doc.presets : []) {
+      if (!isStr(p?.id)) continue;
+      const preset = {};
+      if (isStr(p.name)) preset.name = p.name;
+      if (isStr(p.description)) preset.description = p.description;
+      if (Array.isArray(p.phases)) preset.phases = p.phases.map((ph) => (isStr(ph?.name) ? ph.name : null));
+      e.presets[p.id] = preset;
+    }
+  }
+  return out;
 }
 
 /**

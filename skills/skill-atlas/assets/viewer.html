@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -133,6 +133,8 @@ select { padding-right: 4px; cursor: pointer; }
 .save-status { font-size: 12px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .save-status.error { color: var(--danger); }
 .save-status .linkish { color: var(--danger); font-weight: 600; text-decoration: underline; }
+.lang { display: inline-flex; align-items: center; }
+.lang select { max-width: 140px; }
 
 /* ---------- layout ---------- */
 .main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; }
@@ -350,6 +352,8 @@ button.col-name:hover { background: var(--surface-3); }
 .tag-row:first-of-type { border-top: 0; }
 .tag-row .who { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; }
 .src-badge { font-size: 10.5px; color: var(--text-3); }
+.tr-note { margin: 0; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-2); overflow-wrap: anywhere; }
+.tr-note.stale { background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
 
 /* ---------- popovers, dialogs, toasts ---------- */
 .popover { position: fixed; z-index: 50; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-pop); max-height: min(70vh, 560px); overflow: auto; overscroll-behavior: contain; }
@@ -436,10 +440,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     </div>
     <div class="spacer"></div>
     <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
-    <button id="btn-insights" class="btn" type="button" aria-haspopup="true" aria-expanded="false">Insights <span class="badge" id="insights-n">0</span></button>
+    <button id="btn-insights" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="insights">Insights</span> <span class="badge" id="insights-n">0</span></button>
     <button id="btn-rescan" class="btn" type="button" hidden>Rescan</button>
     <button id="btn-download" class="btn" type="button" hidden>Download workflows.json</button>
     <button id="btn-details" class="btn" type="button" aria-controls="details" aria-expanded="true">Details</button>
+    <span class="lang">
+      <label class="sr-only" for="lang-select" id="lang-label">Language</label>
+      <select id="lang-select"><option value="en-US">English</option></select>
+    </span>
   </div>
   <div class="bar-row">
     <span class="seg-label" id="seg-label">Group by</span>
@@ -449,7 +457,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <button type="button" role="radio" data-g="source" aria-checked="false">Source</button>
     </div>
     <div class="wf-tools" id="wf-tools">
-      <label class="sr-only" for="wf-select">Active workflow</label>
+      <label class="sr-only" for="wf-select" id="wf-label">Active workflow</label>
       <select id="wf-select"></select>
       <button id="wf-menu" class="icon-btn" type="button" aria-label="Workflow actions" aria-haspopup="true" aria-expanded="false"></button>
     </div>
@@ -457,8 +465,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <input id="search" type="search" placeholder="Search skills" aria-label="Search skills by name, description or step" autocomplete="off" spellcheck="false">
       <kbd aria-hidden="true">/</kbd>
     </div>
-    <button id="btn-tags" class="btn" type="button" aria-haspopup="true" aria-expanded="false">Tags <span class="badge" id="tags-n" hidden></span></button>
-    <label class="check"><input type="checkbox" id="chk-mentions"> Mentions</label>
+    <button id="btn-tags" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="tags">Tags</span> <span class="badge" id="tags-n" hidden></span></button>
+    <label class="check"><input type="checkbox" id="chk-mentions"> <span data-i18n="mentions">Mentions</span></label>
     <span id="focus-chip"></span>
     <div class="spacer"></div>
     <button id="btn-expand" class="btn ghost" type="button">Expand all</button>
@@ -491,25 +499,89 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Constants
   // ===================================================================
   const CATS = ['input', 'output', 'tool', 'human'];
+  // Labels here are the page's own fallbacks, looked up in the reader's language when shown.
   const DEFAULT_VIEW = {
-    title: 'Skill Atlas', defaultGrouping: 'workflow', showMentions: true, maxTagsPerCard: 6,
+    title: '', defaultGrouping: 'workflow', showMentions: true, maxTagsPerCard: 6,
     categories: {
-      input: { label: 'Data in', color: '#2f7d6d' },
-      output: { label: 'Data out', color: '#b4621b' },
-      tool: { label: 'Tools', color: '#4b63c9' },
-      human: { label: 'Human', color: '#b03a78' },
+      input: { label: '', color: '#2f7d6d' },
+      output: { label: '', color: '#b4621b' },
+      tool: { label: '', color: '#4b63c9' },
+      human: { label: '', color: '#b03a78' },
     },
   };
-  const INSIGHTS = {
-    'duplicate-name': { title: 'Installed more than once', issue: 'Another skill with the same name is installed, so an agent may load either copy.' },
-    'unresolved-link': { title: 'Links to skills that are not installed', issue: 'Links to a skill that is not installed.' },
-    'cycle': { title: 'Skills that link to each other in a loop', issue: 'Is part of a loop of skills that link back to each other.' },
-    'oversized': { title: 'Longer than 500 lines', issue: 'SKILL.md is longer than 500 lines; detail could move into bundled reference files.' },
-    'missing-description': { title: 'No description', issue: 'Has no description, so an agent cannot tell when to use it.' },
-    'name-mismatch': { title: 'Name differs from its folder', issue: 'The name in its frontmatter differs from its folder name.' },
-    'invalid-frontmatter': { title: 'Frontmatter could not be read', issue: 'Its frontmatter could not be parsed, so its name, description or settings may be missing or wrong.' },
-    'no-steps': { title: 'No steps detected', issue: 'No steps or sections were found in SKILL.md.' },
+  const DEFAULT_CATEGORY = {
+    input: () => t('Data in'),
+    output: () => t('Data out'),
+    tool: () => t('Tools'),
+    human: () => t('Human'),
   };
+  // Each insight kind's heading, the issue line a skill shows, and its message built from `params`
+  // (null where the scan sent no params: the page then shows the scan's own English message).
+  const INSIGHTS = {
+    'duplicate-name': {
+      title: () => t('Installed more than once'),
+      issue: () => t('Another skill with the same name is installed, so an agent may load either copy.'),
+      message: (p, ins) => (p.name == null ? null : t('“{name}” is defined differently in {n} folders; an agent loading several of them sees only one.', { name: p.name, n: arr(ins.skills).length })),
+    },
+    'unresolved-link': {
+      title: () => t('Links to skills that are not installed'),
+      issue: () => t('Links to a skill that is not installed.'),
+      message: (p) => (p.name == null ? null : t('{from} links to “{name}”, which is not installed', { from: str(p.from), name: p.name })),
+    },
+    'cycle': {
+      title: () => t('Skills that link to each other in a loop'),
+      issue: () => t('Is part of a loop of skills that link back to each other.'),
+      message: (p) => (!Array.isArray(p.path) ? null : t('Calls form a cycle: {path}', { path: [...p.path, p.path[0]].map(str).join(' → ') })),
+    },
+    'oversized': {
+      title: () => t('Longer than 500 lines'),
+      issue: () => t('SKILL.md is longer than 500 lines; detail could move into bundled reference files.'),
+      message: (p) => (p.lines == null ? null : t('SKILL.md has {lines} lines (over 500); consider moving detail into reference files', { lines: p.lines })),
+    },
+    'missing-description': {
+      title: () => t('No description'),
+      issue: () => t('Has no description, so an agent cannot tell when to use it.'),
+      message: () => t('Has no description, so an agent cannot tell when to use it.'),
+    },
+    'name-mismatch': {
+      title: () => t('Name differs from its folder'),
+      issue: () => t('The name in its frontmatter differs from its folder name.'),
+      message: (p) => (p.name == null ? null : t('The frontmatter name “{name}” differs from its folder “{folder}”', { name: p.name, folder: str(p.folder) })),
+    },
+    'invalid-frontmatter': {
+      title: () => t('Frontmatter could not be read'),
+      issue: () => t('Its frontmatter could not be parsed, so its name, description or settings may be missing or wrong.'),
+      message: () => t('Its frontmatter could not be read; the folder name is used as its name'),
+    },
+    'no-steps': {
+      title: () => t('No steps detected'),
+      issue: () => t('No steps or sections were found in SKILL.md.'),
+      message: () => t('No steps detected; read it to annotate its steps if it matters'),
+    },
+    'stale-translation': {
+      title: () => t('Translations behind their source'),
+      issue: () => t('A translation may be behind its source.'),
+      message: (p) => (p.lang == null ? null : t('The {language} translation may be behind its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+    },
+    'edited-translation': {
+      title: () => t('Translations edited apart from their source'),
+      issue: () => t('A translation was edited apart from its source, which agents follow.'),
+      message: (p) => (p.lang == null ? null : t('The {language} translation was edited apart from its source: {files}', { language: languageName(p.lang), files: list(arr(p.files).map(str)) })),
+    },
+    'translation-steps': {
+      title: () => t('Translations whose steps differ'),
+      issue: () => t('A translation’s steps number otherwise than the skill’s.'),
+      message: (p) => (p.lang == null ? null : t('The {language} translation has {n} step where the skill has {expected}; its steps are not shown|The {language} translation has {n} steps where the skill has {expected}; its steps are not shown', { language: languageName(p.lang), n: Number(p.steps) || 0, expected: p.expected })),
+    },
+  };
+  const insightTitle = (kind) => (INSIGHTS[kind] ? INSIGHTS[kind].title() : kind);
+  const insightIssue = (kind) => (INSIGHTS[kind] ? INSIGHTS[kind].issue() : kind);
+  function insightMessage(ins) {
+    const def = INSIGHTS[ins.kind];
+    const p = ins.params && typeof ins.params === 'object' ? ins.params : null;
+    const m = def ? def.message(p || {}, ins) : null;
+    return m != null ? m : str(ins.message);
+  }
   // Trusted, static icon markup only; never interpolate data into these.
   const ICONS = {
     input: '<path d="M8 2v7.5M4.8 6.4 8 9.6l3.2-3.2M2.5 11v2.5h11V11"/>',
@@ -570,7 +642,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   const arr = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => (v == null ? '' : String(v));
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
   const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let uid = 0;
   function lsGet(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; } }
@@ -579,6 +650,116 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function slugify(s) { return str(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'x'; }
   function uniqueId(base, taken) { let id = base, n = 2; while (taken.has(id)) id = `${base}-${n++}`; return id; }
   const clone = (v) => JSON.parse(JSON.stringify(v));
+  const own = (o, k) => !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
+
+  // ===================================================================
+  // Languages: the page's text is English in this file; every other language is a catalog
+  // (assets/locales/<tag>.json) keyed by the English text. See references/data-model.md, "Languages".
+  // ===================================================================
+  const SOURCE_LANG = 'en-US';
+  const LANG_KEY = 'skill-atlas:lang';
+  const i18n = { lang: SOURCE_LANG, messages: null, locales: {}, labels: {}, rules: new Map(), nums: new Map() };
+  const pluralRules = (lang) => {
+    let r = i18n.rules.get(lang);
+    if (!r) { try { r = new Intl.PluralRules(lang); } catch { r = new Intl.PluralRules(SOURCE_LANG); } i18n.rules.set(lang, r); }
+    return r;
+  };
+  function fmtNum(n) {
+    let f = i18n.nums.get(i18n.lang);
+    if (!f) { try { f = new Intl.NumberFormat(i18n.lang); } catch { f = new Intl.NumberFormat(SOURCE_LANG); } i18n.nums.set(i18n.lang, f); }
+    return f.format(n);
+  }
+  function fmtDate(v) {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return '';
+    try { return new Intl.DateTimeFormat(i18n.lang, { dateStyle: 'medium', timeStyle: 'short' }).format(d); } catch { return d.toISOString(); }
+  }
+  function list(items) {
+    try { return new Intl.ListFormat(i18n.lang, { style: 'narrow', type: 'conjunction' }).format(items); } catch { return items.join(', '); }
+  }
+  // The page's text in the reader's language: the catalog's entry under the English text, else
+  // the English text. `{name}` placeholders take params (numbers formatted for the language);
+  // a placeholder with no param is left for withNodes. An English text "one|other" has two
+  // forms chosen by params.n; its translation gives one form, or one per plural category of the
+  // language in the order Intl.PluralRules lists them.
+  function t(text, params) {
+    const msgs = i18n.messages;
+    const entry = own(msgs, text) && typeof msgs[text] === 'string' && msgs[text] ? msgs[text] : null;
+    let out = entry != null ? entry : text;
+    if (text.includes('|')) {
+      const forms = out.split('|');
+      const n = params && Number.isFinite(Number(params.n)) ? Number(params.n) : 0;
+      if (entry == null) out = forms[pluralRules(SOURCE_LANG).select(n) === 'one' ? 0 : forms.length - 1];
+      else if (forms.length === 1) out = forms[0];
+      else {
+        const cats = pluralRules(i18n.lang).resolvedOptions().pluralCategories;
+        const i = cats.indexOf(pluralRules(i18n.lang).select(n));
+        out = forms[i >= 0 && i < forms.length ? i : forms.length - 1];
+      }
+    }
+    if (!params) return out;
+    return out.replace(/\{(\w+)\}/g, (m, k) => {
+      if (!own(params, k) || params[k] == null || params[k] instanceof Node) return m;
+      const v = params[k];
+      return typeof v === 'number' ? fmtNum(v) : String(v);
+    });
+  }
+  // A translated text with nodes put where its remaining {name} placeholders stand.
+  function withNodes(text, nodes) {
+    return text.split(/(\{\w+\})/).filter((part) => part !== '').map((part) => {
+      const m = /^\{(\w+)\}$/.exec(part);
+      return m && own(nodes, m[1]) ? nodes[m[1]] : part;
+    });
+  }
+  const offeredLangs = () => [SOURCE_LANG, ...Object.keys(i18n.locales).filter((k) => k !== SOURCE_LANG)];
+  const primary = (tag) => str(tag).toLowerCase().split('-')[0];
+  // A tag's script, written or likely (`zh-TW` -> Hant, `zh` -> Hans), or '' where unknown.
+  const scriptOf = (tag) => { try { return new Intl.Locale(str(tag)).maximize().script || ''; } catch { return ''; } };
+  // The offered tag the given tag names: the same tag, else one sharing its primary subtag and
+  // its script, so `zh` and `zh-SG` name zh-CN while `zh-TW` names none (atlas.mjs matches alike).
+  function matchLang(tag, offered) {
+    if (!tag) return null;
+    const low = str(tag).toLowerCase();
+    return offered.find((o) => o.toLowerCase() === low) || offered.find((o) => primary(o) === primary(low) && scriptOf(o) === scriptOf(tag)) || null;
+  }
+  // The reader's choice kept in the browser, else the command's --lang, else the browser's, else en-US.
+  function resolveLang(cmdLang) {
+    const offered = offeredLangs();
+    let stored = null;
+    try { stored = localStorage.getItem(LANG_KEY); } catch { stored = null; }
+    if (stored && offered.includes(stored)) return stored;
+    const fromCmd = matchLang(cmdLang, offered);
+    if (fromCmd) return fromCmd;
+    for (const b of arr(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language])) {
+      const m = matchLang(b, offered);
+      if (m) return m;
+    }
+    return SOURCE_LANG;
+  }
+  function languageName(tag) {
+    if (tag === SOURCE_LANG) return 'English';
+    const loc = i18n.locales[tag];
+    return loc && loc.name ? loc.name : str(tag);
+  }
+  function setupLanguages(config) {
+    const locales = {};
+    const given = config && config.locales && typeof config.locales === 'object' ? config.locales : {};
+    for (const [tag, loc] of Object.entries(given)) {
+      if (!loc || typeof loc !== 'object' || !loc.messages || typeof loc.messages !== 'object') continue;
+      locales[tag] = { name: str(loc.name) || tag, messages: loc.messages };
+    }
+    i18n.locales = locales;
+    i18n.labels = config && config.labels && typeof config.labels === 'object' ? config.labels : {};
+    applyLang(resolveLang(config ? config.lang : null));
+  }
+  function applyLang(tag) {
+    i18n.lang = tag;
+    i18n.messages = tag === SOURCE_LANG ? null : (i18n.locales[tag] || {}).messages || null;
+    document.documentElement.lang = tag;
+  }
+  // The label file entries of the shown language (references/<name>.<tag>.json, served under config.labels).
+  const labels = () => { const l = i18n.labels[i18n.lang]; return l && typeof l === 'object' ? l : {}; };
+  const labelText = (v) => (typeof v === 'string' ? v : v && typeof v === 'object' ? str(v.label || v.name) : '');
 
   // ===================================================================
   // State
@@ -606,6 +787,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     wfBlocked: null,            // null | {kind:'invalid', path, message} | {kind:'unavailable', message} | {kind:'conflict'}
     visible: null,              // Set of visible skill ids, or null for all
     derived: null,
+    rescanning: false,
   };
   const els = {
     title: $('#title'), summary: $('#summary'), saveStatus: $('#save-status'),
@@ -614,6 +796,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     search: $('#search'), tagsBtn: $('#btn-tags'), tagsN: $('#tags-n'), mentions: $('#chk-mentions'), focusChip: $('#focus-chip'),
     expandAll: $('#btn-expand'), collapseAll: $('#btn-collapse'), main: $('#main'), canvas: $('#canvas'), board: $('#board'),
     svg: $('#links'), layer: $('#link-layer'), details: $('#details'), toasts: $('#toasts'), banner: $('#banner'),
+    lang: $('#lang-select'), langWrap: $('.lang'),
   };
   els.wfMenu.append(icon('dots'));
   els.search.parentNode.prepend(icon('search'));
@@ -626,7 +809,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return {
       version: a.version || 1, generatedAt: a.generatedAt || null, cwd: str(a.cwd),
       roots: arr(a.roots).filter((r) => r && r.id != null),
-      tagCatalog: arr(a.tagCatalog).filter((t) => t && t.id),
+      tagCatalog: arr(a.tagCatalog).filter((x) => x && x.id),
       skills: arr(a.skills).filter((s) => s && typeof s.id === 'string'),
       edges: arr(a.edges).filter((e) => e && e.from && e.to),
       unresolved: arr(a.unresolved).filter((u) => u && u.from && u.name),
@@ -638,36 +821,47 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function buildIndex(atlas) {
     const byId = new Map(), byName = new Map(), rootById = new Map(), stepById = new Map(), tagById = new Map();
     for (const r of atlas.roots) rootById.set(r.id, r);
-    const addTag = (t) => {
-      if (!t || !t.id || tagById.has(t.id)) return;
-      tagById.set(t.id, { id: t.id, category: CATS.includes(t.category) ? t.category : catOf(t.id), label: str(t.label) || str(t.id).split('.').slice(1).join('.') || t.id });
+    const addTag = (tg) => {
+      if (!tg || !tg.id || tagById.has(tg.id)) return;
+      tagById.set(tg.id, { id: tg.id, category: CATS.includes(tg.category) ? tg.category : catOf(tg.id), label: str(tg.label) || str(tg.id).split('.').slice(1).join('.') || tg.id });
     };
     atlas.tagCatalog.forEach(addTag);
-    const normTags = (list) => arr(list).filter((t) => t && t.id).map((t) => ({
-      ...t, category: CATS.includes(t.category) ? t.category : catOf(t.id), evidence: arr(t.evidence).filter((e) => e && typeof e === 'object'),
+    const normTags = (list) => arr(list).filter((tg) => tg && tg.id).map((tg) => ({
+      ...tg, category: CATS.includes(tg.category) ? tg.category : catOf(tg.id), evidence: arr(tg.evidence).filter((e) => e && typeof e === 'object'),
     }));
     const skills = [];
     for (const raw of atlas.skills) {
       if (byId.has(raw.id)) continue;
       const steps = arr(raw.steps).filter((st) => st && st.id != null).map((st, i) => ({
-        ...st, id: String(st.id), index: Number.isFinite(st.index) ? st.index : i + 1, title: str(st.title) || `Step ${i + 1}`,
+        ...st, id: String(st.id), index: Number.isFinite(st.index) ? st.index : i + 1, title: str(st.title), _pos: i,
         excerpt: str(st.excerpt), tags: normTags(st.tags), calls: arr(st.calls).map(String),
       }));
+      // Words per language (references/data-model.md, "Languages"); structure stays SKILL.md's.
+      const translations = {};
+      if (raw.translations && typeof raw.translations === 'object') {
+        for (const [lang, tr] of Object.entries(raw.translations)) if (tr && typeof tr === 'object') translations[lang] = tr;
+      }
       const s = {
         ...raw, name: str(raw.name) || raw.id, description: str(raw.description), summary: raw.summary ? str(raw.summary) : '',
         steps, tags: normTags(raw.tags), files: arr(raw.files).filter((f) => f && f.path), issues: arr(raw.issues).map(String),
         copies: arr(raw.copies).filter((c) => c && c.root != null).map((c) => ({ root: String(c.root), dir: str(c.dir) })),
         frontmatter: raw.frontmatter && typeof raw.frontmatter === 'object' ? raw.frontmatter : {},
         stepKind: ['step', 'section', 'none'].includes(raw.stepKind) ? raw.stepKind : (steps.length ? 'step' : 'none'),
+        translations,
       };
       // Roll tags up from the skill and every step so a partial scan still shows them.
       const tagMap = new Map();
-      for (const t of s.tags) tagMap.set(t.id, t);
-      for (const st of steps) for (const t of st.tags) if (!tagMap.has(t.id)) tagMap.set(t.id, t);
-      for (const t of tagMap.values()) addTag(t);
+      for (const tg of s.tags) tagMap.set(tg.id, tg);
+      for (const st of steps) for (const tg of st.tags) if (!tagMap.has(tg.id)) tagMap.set(tg.id, tg);
+      for (const tg of tagMap.values()) addTag(tg);
       s._tagIds = new Set(tagMap.keys());
       s._cats = rollupIds(s._tagIds, tagById);
+      // A search matches the skill's original words and those of the language shown.
       s._search = [s.name, s.description, s.summary, ...steps.map((st) => st.title)].join('\n').toLowerCase();
+      s._trSearch = {};
+      for (const [lang, tr] of Object.entries(translations)) {
+        s._trSearch[lang] = [tr.description, tr.summary, ...arr(tr.steps).map((w) => (w && typeof w === 'object' ? w.title : ''))].map(str).join('\n').toLowerCase();
+      }
       for (const st of steps) stepById.set(st.id, { step: st, skill: s });
       byId.set(s.id, s);
       skills.push(s);
@@ -695,7 +889,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   function rollupIds(tagIds, tagById) {
     const out = { input: [], output: [], tool: [], human: [] };
-    for (const id of tagIds) { const t = tagById.get(id); out[t ? t.category : catOf(id)].push(id); }
+    for (const id of tagIds) { const tg = tagById.get(id); out[tg ? tg.category : catOf(id)].push(id); }
     return out;
   }
 
@@ -775,8 +969,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const vis = new Set();
     for (const s of idx.skills) {
       if (focus && !focus.has(s.id)) continue;
-      if (words.some((w) => !s._search.includes(w))) continue;
-      if (tags.some((t) => !s._tagIds.has(t))) continue;
+      const hay = own(s._trSearch, i18n.lang) ? s._search + '\n' + s._trSearch[i18n.lang] : s._search;
+      if (words.some((w) => !hay.includes(w))) continue;
+      if (tags.some((x) => !s._tagIds.has(x))) continue;
       vis.add(s.id);
     }
     return vis;
@@ -809,9 +1004,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const pid = uniqueId(str(p.id) || 'p-' + slugify(p.name), pIds); pIds.add(pid);
         const skills = [];
         for (const s of arr(p.skills)) { const v = str(s); if (v && !skills.includes(v)) skills.push(v); }
-        return { ...p, id: pid, name: str(p.name) || 'Phase', note: str(p.note), skills };
+        return { ...p, id: pid, name: str(p.name) || t('Phase'), note: str(p.note), skills };
       });
-      return { ...w, id, name: str(w.name) || 'Workflow', phases };
+      return { ...w, id, name: str(w.name) || t('Workflow'), phases };
     });
     let active = doc.active != null ? str(doc.active) : null;
     if (!workflows.some((w) => w.id === active)) active = workflows.length ? workflows[0].id : null;
@@ -864,7 +1059,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         return { id: p.id, kind: 'phase', title: p.name, ids, missing, phase: p, phaseIndex: i };
       });
       const un = idx.skills.filter((s) => !inPhase.has(s.id)).map((s) => s.id);
-      groups.push({ id: '__unassigned', kind: 'unassigned', title: 'Unassigned', ids: un, missing: [], wide: un.length > 12 });
+      groups.push({ id: '__unassigned', kind: 'unassigned', title: t('Unassigned'), ids: un, missing: [], wide: un.length > 12 });
       return groups;
     }
     if (state.grouping === 'links') {
@@ -877,18 +1072,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         byDepth.get(d).push(s.id);
       }
       const groups = [];
-      if (byDepth.has(0)) groups.push({ id: 'entry', kind: 'level', title: 'Entry points', hint: 'Link out, nothing links to them', ids: byDepth.get(0) });
-      for (let d = 1; d <= L.maxDepth; d++) if (byDepth.has(d)) groups.push({ id: 'level-' + d, kind: 'level', title: d === 1 ? 'Linked' : `Linked · level ${d}`, hint: plural(d, 'link') + ' from an entry point or a loop', ids: byDepth.get(d) });
-      if (L.loops.length) groups.push({ id: 'loops', kind: 'level', title: 'In a loop', hint: 'Linked only within a cycle that nothing else links to', ids: idx.skills.filter((s) => L.loops.includes(s.id)).map((s) => s.id) });
+      if (byDepth.has(0)) groups.push({ id: 'entry', kind: 'level', title: t('Entry points'), hint: t('Link out, nothing links to them'), ids: byDepth.get(0) });
+      for (let d = 1; d <= L.maxDepth; d++) if (byDepth.has(d)) groups.push({ id: 'level-' + d, kind: 'level', title: d === 1 ? t('Linked') : t('Linked · level {n}', { n: d }), hint: t('{n} link from an entry point or a loop|{n} links from an entry point or a loop', { n: d }), ids: byDepth.get(d) });
+      if (L.loops.length) groups.push({ id: 'loops', kind: 'level', title: t('In a loop'), hint: t('Linked only within a cycle that nothing else links to'), ids: idx.skills.filter((s) => L.loops.includes(s.id)).map((s) => s.id) });
       const sa = idx.skills.filter((s) => L.standalone.includes(s.id)).map((s) => s.id);
-      if (sa.length) groups.push({ id: 'standalone', kind: 'standalone', title: 'Standalone', hint: 'No links', ids: sa, wide: sa.length > 6 });
+      if (sa.length) groups.push({ id: 'standalone', kind: 'standalone', title: t('Standalone'), hint: t('No links'), ids: sa, wide: sa.length > 6 });
       return groups;
     }
     // A skill installed in several roots (see `copies`) is listed under each of them.
     const inRoot = (s, rid) => s.root === rid || s.copies.some((c) => c.root === rid);
-    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: str(r.label) || str(r.id), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
+    const groups = idx.roots.map((r) => ({ id: 'root:' + r.id, kind: 'root', title: rootName(r), hint: str(r.path), root: r, ids: idx.skills.filter((s) => inRoot(s, r.id)).map((s) => s.id) }));
     const other = idx.skills.filter((s) => !idx.rootById.has(s.root)).map((s) => s.id);
-    if (other.length) groups.push({ id: 'root:__other', kind: 'root', title: 'Other', ids: other });
+    if (other.length) groups.push({ id: 'root:__other', kind: 'root', title: t('Other'), ids: other });
     for (const g of groups) g.wide = g.ids.length > 16;
     return groups;
   }
@@ -899,7 +1094,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
   function rollupSkills(ids) {
     const sets = { input: new Set(), output: new Set(), tool: new Set(), human: new Set() };
-    for (const id of ids) { const s = state.idx.byId.get(id); if (!s) continue; for (const c of CATS) for (const t of s._cats[c]) sets[c].add(t); }
+    for (const id of ids) { const s = state.idx.byId.get(id); if (!s) continue; for (const c of CATS) for (const x of s._cats[c]) sets[c].add(x); }
     return { input: [...sets.input], output: [...sets.output], tool: [...sets.tool], human: [...sets.human] };
   }
 
@@ -911,7 +1106,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   async function fetchWorkflows() {
     let res;
     try { res = await fetch('/api/workflows', { headers: { Accept: 'application/json' }, cache: 'no-store' }); } catch {
-      return { doc: null, etag: null, blocked: { kind: 'unavailable', message: 'The server did not answer.' } };
+      return { doc: null, etag: null, blocked: { kind: 'unavailable', message: '', status: 0 } };
     }
     let body = null;
     try { body = await res.json(); } catch { body = null; }
@@ -920,7 +1115,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (res.status === 409 && body && body.error === 'invalid-workflows') {
       return { doc: null, etag: null, blocked: { kind: 'invalid', path: str(body.path), message: str(body.message) } };
     }
-    return { doc: null, etag: null, blocked: { kind: 'unavailable', message: str(body && (body.message || body.error)) || `The server answered ${res.status}.` } };
+    return { doc: null, etag: null, blocked: { kind: 'unavailable', message: str(body && (body.message || body.error)), status: res.status } };
   }
   async function getJSON(url) {
     const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
@@ -935,24 +1130,26 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     let atlas, workflows, config;
     if (raw) {
       let doc;
-      try { doc = JSON.parse(raw); } catch { return fatal('The atlas embedded in this page could not be read.', 'Generate the page again with the Skill Atlas script.'); }
+      try { doc = JSON.parse(raw); } catch {
+        setupLanguages({});
+        return fatal(t('The atlas embedded in this page could not be read.'), t('Generate the page again with the Skill Atlas script.'));
+      }
       state.mode = 'static';
       atlas = doc.atlas; config = doc.config || {}; workflows = doc.workflows;
     } else {
+      const configP = getJSON('/api/config').catch(() => ({}));
       let wfResult;
       try {
-        [atlas, wfResult, config] = await Promise.all([
-          getJSON('/api/atlas'),
-          fetchWorkflows(),
-          getJSON('/api/config').catch(() => ({})),
-        ]);
+        [atlas, wfResult, config] = await Promise.all([getJSON('/api/atlas'), fetchWorkflows(), configP]);
       } catch (err) {
-        return fatal('This page needs the Skill Atlas server.', 'Start it with node scripts/atlas.mjs serve, or open a static page made with the export command.', true);
+        setupLanguages(await configP);
+        return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
       }
       workflows = wfResult.doc;
       save.etag = wfResult.etag;
       state.wfBlocked = wfResult.blocked;
     }
+    setupLanguages(config);
     applyConfig(config);
     setAtlas(atlas);
     if (state.mode === 'static') {
@@ -966,6 +1163,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     restorePrefs();
     recompute();
+    renderStaticText();
     bindEvents();
     invalidate('chrome', 'canvas', 'details');
   }
@@ -983,7 +1181,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       return [d[0], d[1], d[2]];
     } catch { return null; }
   }
-  const mixRgb = (a, b, t) => a.map((v, i) => v * (1 - t) + b[i] * t);
+  const mixRgb = (a, b, k) => a.map((v, i) => v * (1 - k) + b[i] * k);
   function luminance(rgb) {
     const ch = rgb.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
     return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
@@ -1002,8 +1200,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const [name, th] of Object.entries(THEMES)) {
       const bgs = th.bgs.map((bg) => mixRgb(bg, c, 0.13));
       let pick = th.text;
-      for (let t = 0; t <= 1.0001; t += 0.02) {
-        const fg = mixRgb(c, th.text, t);
+      for (let k = 0; k <= 1.0001; k += 0.02) {
+        const fg = mixRgb(c, th.text, k);
         if (bgs.every((bg) => contrast(fg, bg) >= 4.6)) { pick = fg; break; }
       }
       out[name] = `rgb(${pick.map((v) => Math.round(v)).join(' ')})`;
@@ -1017,13 +1215,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const cats = {};
     for (const c of CATS) {
       const given = v.categories && v.categories[c] ? v.categories[c] : {};
-      cats[c] = { label: str(given.label) || DEFAULT_VIEW.categories[c].label, color: given.color && CSS.supports('color', given.color) ? given.color : DEFAULT_VIEW.categories[c].color };
+      cats[c] = { label: str(given.label), color: given.color && CSS.supports('color', given.color) ? given.color : DEFAULT_VIEW.categories[c].color };
       document.documentElement.style.setProperty('--c-' + c, cats[c].color);
       const tc = categoryTextColors(cats[c].color);
       if (tc) { document.documentElement.style.setProperty(`--ct-${c}-l`, tc.light); document.documentElement.style.setProperty(`--ct-${c}-d`, tc.dark); }
     }
     state.view = {
-      title: str(v.title) || DEFAULT_VIEW.title,
+      title: str(v.title),
       defaultGrouping: ['workflow', 'links', 'source'].includes(v.defaultGrouping) ? v.defaultGrouping : 'workflow',
       showMentions: v.showMentions !== false,
       maxTagsPerCard: Number.isFinite(v.maxTagsPerCard) ? Math.max(0, v.maxTagsPerCard) : 6,
@@ -1032,8 +1230,75 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     state.config = { presets: arr(config.presets).filter((p) => p && arr(p.phases).length >= 0 && p.name), static: !!config.static, stateDir: config.stateDir || null };
     state.grouping = state.view.defaultGrouping;
     state.showMentions = state.view.showMentions;
-    document.title = state.view.title;
-    els.title.textContent = state.view.title;
+  }
+
+  // ---------- labels in the shown language ----------
+  // The label file's entry, else the source file's text, else the page's own fallback.
+  const pageTitle = () => labelText(labels().title) || state.view.title || t('Skill Atlas');
+  const catLabel = (c) => labelText((labels().categories || {})[c]) || state.view.categories[c].label || DEFAULT_CATEGORY[c]();
+  function presetLabels(p) {
+    const all = labels().presets;
+    const l = all && typeof all === 'object' && p && p.id != null && all[p.id] && typeof all[p.id] === 'object' ? all[p.id] : {};
+    return l;
+  }
+  const presetName = (p) => labelText(presetLabels(p).name) || str(p.name);
+  const presetDescription = (p) => labelText(presetLabels(p).description) || str(p.description);
+  function presetPhaseName(p, i) {
+    const names = arr(presetLabels(p).phases);
+    return labelText(names[i]) || str(arr(p.phases)[i] && arr(p.phases)[i].name);
+  }
+  const SCOPE_NAMES = { project: () => t('Project'), user: () => t('User'), plugin: () => t('Plugin'), extra: () => t('Extra') };
+  const WHERE_NAMES = { Universal: () => t('Universal'), source: () => t('source') };
+  // A scanned folder's label, composed in the shown language from its scope and its agent's name
+  // (product names, plugin names and paths stay as they are).
+  function rootName(r) {
+    const label = str(r.label) || str(r.id);
+    const m = /^(Project|User|Plugin|Extra) \u00B7 (.*)$/.exec(label);
+    if (!m || !SCOPE_NAMES[r.scope]) return label;
+    const where = own(WHERE_NAMES, m[2]) ? WHERE_NAMES[m[2]]() : m[2];
+    return t('{scope} · {where}', { scope: SCOPE_NAMES[r.scope](), where });
+  }
+
+  // The page's own text outside what renders: set again whenever the language changes.
+  function renderStaticText() {
+    document.title = pageTitle();
+    els.title.textContent = pageTitle();
+    $('[data-i18n="insights"]').textContent = t('Insights');
+    els.rescan.textContent = state.rescanning ? t('Rescanning…') : t('Rescan');
+    els.download.textContent = t('Download workflows.json');
+    els.detailsBtn.textContent = t('Details');
+    $('#lang-label').textContent = t('Language');
+    $('#seg-label').textContent = t('Group by');
+    const groupingNames = { workflow: t('Workflow'), links: t('Links'), source: t('Source') };
+    for (const b of els.seg.querySelectorAll('button[data-g]')) b.textContent = groupingNames[b.dataset.g];
+    $('#wf-label').textContent = t('Active workflow');
+    els.wfMenu.setAttribute('aria-label', t('Workflow actions'));
+    els.search.placeholder = t('Search skills');
+    els.search.setAttribute('aria-label', t('Search skills by name, description or step'));
+    $('[data-i18n="tags"]').textContent = t('Tags');
+    $('[data-i18n="mentions"]').textContent = t('Mentions');
+    els.expandAll.textContent = t('Expand all');
+    els.collapseAll.textContent = t('Collapse all');
+    els.toasts.setAttribute('aria-label', t('Notifications'));
+    els.canvas.setAttribute('aria-label', t('Skills canvas'));
+    els.details.setAttribute('aria-label', t('Details'));
+    const sel = els.lang;
+    sel.replaceChildren(...offeredLangs().map((tag) => h('option', { value: tag, lang: tag }, languageName(tag))));
+    sel.value = i18n.lang;
+    els.langWrap.hidden = offeredLangs().length < 2;
+    setSaveStatus(save.status);
+  }
+
+  // The reader's choice: kept in the browser and applied at once, keeping what is open, selected,
+  // filtered and unsaved (all of which live in `state`, not in the rendered page).
+  function chooseLanguage(tag) {
+    if (!offeredLangs().includes(tag) || tag === i18n.lang) return;
+    try { localStorage.setItem(LANG_KEY, tag); } catch { /* the choice holds for this visit */ }
+    closePopover(false);
+    applyLang(tag);
+    renderStaticText();
+    recompute();
+    invalidate('chrome', 'canvas', 'details');
   }
 
   function setAtlas(atlas) {
@@ -1044,7 +1309,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const id of [...state.openSteps]) if (!state.idx.stepById.has(id)) state.openSteps.delete(id);
     if (state.selection && state.selection.type === 'skill' && !has(state.selection.id)) state.selection = null;
     if (state.focus && !has(state.focus)) state.focus = null;
-    for (const t of [...state.tagFilter]) if (!state.idx.tagById.has(t)) state.tagFilter.delete(t);
+    for (const x of [...state.tagFilter]) if (!state.idx.tagById.has(x)) state.tagFilter.delete(x);
   }
 
   function recompute() {
@@ -1055,7 +1320,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function fatal(title, body, retry) {
     document.querySelector('.topbar').hidden = true;
     els.main.replaceChildren(h('div', { class: 'fatal' }, h('h2', { text: title }), h('p', { text: body }),
-      retry ? h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again') : null));
+      retry ? h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, t('Try again')) : null));
   }
 
   // ---------- view preferences (this browser only) ----------
@@ -1156,7 +1421,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       save.saved = save.version;
       if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
       setSaveStatus('idle');
-      toast('Reloaded the workflows');
+      toast(t('Reloaded the workflows'));
     } else setSaveStatus('idle');
     invalidate('chrome', 'canvas', 'details');
   }
@@ -1173,9 +1438,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       state.wfBlocked = null;
       save.saved = save.version;
       setSaveStatus('saved');
-      toast('Started fresh — the unreadable file was kept as a backup');
+      toast(t('Started fresh — the unreadable file was kept as a backup'));
     } catch {
-      toast('Couldn\u2019t replace the file — is the Skill Atlas server still running?');
+      toast(t('Couldn’t replace the file — is the Skill Atlas server still running?'));
     }
     invalidate('chrome', 'canvas', 'details');
   }
@@ -1185,11 +1450,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     el.classList.toggle('error', st === 'error');
     el.replaceChildren();
     const local = state.mode === 'static';
-    if (st === 'pending' || st === 'saving') el.append('Saving…');
-    else if (st === 'saved') el.append(local ? 'Saved in this browser' : 'Saved');
+    if (st === 'pending' || st === 'saving') el.append(t('Saving…'));
+    else if (st === 'saved') el.append(local ? t('Saved in this browser') : t('Saved'));
     else if (st === 'error') {
-      el.append(local ? 'Couldn\u2019t save in this browser — ' : 'Couldn\u2019t save — ');
-      el.append(h('button', { type: 'button', class: 'linkish', onclick: () => { save.version++; flushSave(); } }, local ? 'Try again' : 'Retry'));
+      el.append(local ? t('Couldn’t save in this browser — ') : t('Couldn’t save — '));
+      el.append(h('button', { type: 'button', class: 'linkish', onclick: () => { save.version++; flushSave(); } }, local ? t('Try again') : t('Retry')));
     }
   }
   window.addEventListener('beforeunload', (e) => {
@@ -1209,7 +1474,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
     if (!canEdit()) {
-      toast(state.wfBlocked.kind === 'conflict' ? 'Reload the workflows before editing them again' : 'Workflows can\u2019t be edited until the stored file can be read');
+      toast(state.wfBlocked.kind === 'conflict' ? t('Reload the workflows before editing them again') : t('Workflows can’t be edited until the stored file can be read'));
       return null;
     }
     const before = clone(state.workflows);
@@ -1230,22 +1495,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function moveSkill(sid, fromPid, toPid) {
     if (fromPid === toPid) return;
     const name = skillLabel(sid);
-    const toName = toPid ? findPhase(toPid)?.name : 'Unassigned';
+    const toName = toPid ? findPhase(toPid)?.name : t('Unassigned');
     const fromName = fromPid ? findPhase(fromPid)?.name : '';
     const before = mutate(() => {
       if (fromPid) { const f = findPhase(fromPid); if (f) f.skills = f.skills.filter((x) => x !== sid); }
-      if (toPid) { const t = findPhase(toPid); if (t && !t.skills.includes(sid)) t.skills.push(sid); }
+      if (toPid) { const to = findPhase(toPid); if (to && !to.skills.includes(sid)) to.skills.push(sid); }
     });
     if (!before) return;
     // A skill still in another phase is not unassigned: say what actually happened.
-    const msg = !toPid && phasesOf(sid).length ? `Removed ${name} from ${fromName}` : `Moved ${name} to ${toName}`;
-    toast(msg, { label: 'Undo', run: () => restoreWorkflows(before) });
+    const msg = !toPid && phasesOf(sid).length ? t('Removed {skill} from {phase}', { skill: name, phase: fromName }) : t('Moved {skill} to {phase}', { skill: name, phase: toName });
+    toast(msg, { label: t('Undo'), run: () => restoreWorkflows(before) });
   }
   function addPhase() {
     const wf = activeWorkflow();
     if (!wf) return;
     const names = new Set(wf.phases.map((p) => p.name));
-    const name = uniqueId('New phase', names).replace(/-(\d+)$/, ' $1');
+    const name = uniqueId(t('New phase'), names).replace(/-(\d+)$/, ' $1');
     const id = uniqueId('p-' + slugify(name), new Set(wf.phases.map((p) => p.id)));
     if (mutate(() => { wf.phases.push({ id, name, note: '', skills: [] }); })) state.renaming = id;
   }
@@ -1269,20 +1534,25 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = findPhase(pid);
     if (!wf || !p) return;
     if (p.skills.length) {
-      const ok = await confirmDialog({ title: `Delete phase “${p.name}”?`, body: `Its ${plural(p.skills.length, 'skill')} will go back to Unassigned. Nothing is uninstalled.`, confirm: 'Delete phase', danger: true });
+      const ok = await confirmDialog({ title: t('Delete phase “{name}”?', { name: p.name }), body: t('Its {n} skill will go back to Unassigned. Nothing is uninstalled.|Its {n} skills will go back to Unassigned. Nothing is uninstalled.', { n: p.skills.length }), confirm: t('Delete phase'), danger: true });
       if (!ok) return;
     }
     const before = mutate(() => { wf.phases = wf.phases.filter((x) => x.id !== pid); });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase' && state.selection.id === pid) state.selection = null;
-    toast(`Deleted phase ${p.name}`, { label: 'Undo', run: () => restoreWorkflows(before) });
+    toast(t('Deleted phase {name}', { name: p.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
   }
   function createWorkflow(name, preset, place) {
     const doc = state.workflows;
     const id = uniqueId('wf-' + slugify(name), new Set(doc.workflows.map((w) => w.id)));
-    const presetPhases = preset ? arr(preset.phases) : [{ name: 'Phase 1', keywords: [] }];
+    // A preset's phases take their names in the shown language; the keywords stay the source's.
+    const presetPhases = preset ? arr(preset.phases) : [{ name: t('Phase {n}', { n: 1 }), keywords: [] }];
     const pIds = new Set();
-    const phases = presetPhases.map((p) => { const pid = uniqueId('p-' + slugify(p.name), pIds); pIds.add(pid); return { id: pid, name: str(p.name) || 'Phase', note: '', skills: [] }; });
+    const phases = presetPhases.map((p, i) => {
+      const pname = (preset ? presetPhaseName(preset, i) : str(p.name)) || t('Phase');
+      const pid = uniqueId('p-' + slugify(str(p.name) || pname), pIds); pIds.add(pid);
+      return { id: pid, name: pname, note: '', skills: [] };
+    });
     const wf = { id, name, phases };
     if (!mutate((d) => { d.workflows.push(wf); d.active = id; })) return;
     state.grouping = 'workflow';
@@ -1292,35 +1562,35 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (count) {
         const before = mutate(() => { placed.forEach((ids, i) => { phases[i].skills = ids.slice(); }); });
         if (!before) return;
-        toast(`Placed ${plural(count, 'skill')} by keyword`, { label: 'Undo', run: () => restoreWorkflows(before) });
+        toast(t('Placed {n} skill by keyword|Placed {n} skills by keyword', { n: count }), { label: t('Undo'), run: () => restoreWorkflows(before) });
       } else {
-        toast('No skill matched this preset’s keywords — drag skills into phases');
+        toast(t('No skill matched this preset’s keywords — drag skills into phases'));
       }
     }
   }
   async function renameWorkflow() {
     const wf = activeWorkflow();
     if (!wf) return;
-    const name = await promptDialog({ title: 'Rename workflow', label: 'Name', value: wf.name, confirm: 'Rename' });
+    const name = await promptDialog({ title: t('Rename workflow'), label: t('Name'), value: wf.name, confirm: t('Rename') });
     if (name && name !== wf.name) mutate(() => { wf.name = name; });
   }
   function duplicateWorkflow() {
     const wf = activeWorkflow();
     if (!wf) return;
     const names = new Set(state.workflows.workflows.map((w) => w.name));
-    const name = uniqueId(wf.name + ' copy', names).replace(/-(\d+)$/, ' $1');
+    const name = uniqueId(t('{name} copy', { name: wf.name }), names).replace(/-(\d+)$/, ' $1');
     const id = uniqueId('wf-' + slugify(name), new Set(state.workflows.workflows.map((w) => w.id)));
-    if (mutate((d) => { const c = clone(wf); c.id = id; c.name = name; d.workflows.splice(d.workflows.indexOf(wf) + 1, 0, c); d.active = id; })) toast(`Duplicated as ${name}`);
+    if (mutate((d) => { const c = clone(wf); c.id = id; c.name = name; d.workflows.splice(d.workflows.indexOf(wf) + 1, 0, c); d.active = id; })) toast(t('Duplicated as {name}', { name }));
   }
   async function deleteWorkflow() {
     const wf = activeWorkflow();
     if (!wf) return;
-    const ok = await confirmDialog({ title: `Delete workflow “${wf.name}”?`, body: `Its ${plural(wf.phases.length, 'phase')} and their placements are removed. Skills are not affected.`, confirm: 'Delete workflow', danger: true });
+    const ok = await confirmDialog({ title: t('Delete workflow “{name}”?', { name: wf.name }), body: t('Its {n} phase and its placements are removed. Skills are not affected.|Its {n} phases and their placements are removed. Skills are not affected.', { n: wf.phases.length }), confirm: t('Delete workflow'), danger: true });
     if (!ok) return;
     const before = mutate((d) => { d.workflows = d.workflows.filter((w) => w.id !== wf.id); d.active = d.workflows.length ? d.workflows[0].id : null; });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase') state.selection = null;
-    toast(`Deleted workflow ${wf.name}`, { label: 'Undo', run: () => restoreWorkflows(before) });
+    toast(t('Deleted workflow {name}', { name: wf.name }), { label: t('Undo'), run: () => restoreWorkflows(before) });
   }
 
   // ===================================================================
@@ -1351,7 +1621,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const idx = state.idx;
     const staticMode = state.mode === 'static';
     const nLinks = state.derived.shown.length;
-    els.summary.textContent = `${plural(idx.skills.length, 'skill')} · ${plural(idx.roots.length, 'source')} · ${plural(nLinks, 'link')}`;
+    els.summary.textContent = [t('{n} skill|{n} skills', { n: idx.skills.length }), t('{n} source|{n} sources', { n: idx.roots.length }), t('{n} link|{n} links', { n: nLinks })].join(' · ');
+    const scanned = state.atlas.generatedAt ? fmtDate(state.atlas.generatedAt) : '';
+    if (scanned) els.summary.title = t('Scanned {time}', { time: scanned }); else els.summary.removeAttribute('title');
     for (const b of els.seg.querySelectorAll('button')) {
       const on = b.dataset.g === state.grouping;
       b.setAttribute('aria-checked', String(on));
@@ -1361,36 +1633,37 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const sel = els.wfSelect;
     sel.replaceChildren();
     const wfs = state.workflows.workflows;
-    if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, 'No workflows yet'));
+    if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, t('No workflows yet')));
     for (const w of wfs) sel.append(h('option', { value: w.id, selected: w.id === state.workflows.active ? true : null }, w.name));
-    sel.append(h('option', { value: '__new' }, 'New workflow…'));
+    sel.append(h('option', { value: '__new' }, t('New workflow…')));
     sel.value = state.workflows.active || '';
     const blocked = state.wfBlocked;
     sel.disabled = !!blocked;
     els.wfMenu.disabled = !wfs.length || !!blocked;
     const conflict = !!blocked && blocked.kind === 'conflict';
-    if (conflict !== !els.banner.hidden) {
+    if (conflict !== !els.banner.hidden || els.banner.dataset.lang !== i18n.lang) {
       els.banner.hidden = !conflict;
+      els.banner.dataset.lang = i18n.lang;
       els.banner.replaceChildren();
       if (conflict) {
-        els.banner.append(h('span', { text: 'Workflows were changed elsewhere — your last edit was not saved.' }),
-          h('button', { type: 'button', class: 'btn small', 'data-act': 'reload-workflows' }, 'Reload'));
+        els.banner.append(h('span', { text: t('Workflows were changed elsewhere — your last edit was not saved.') }),
+          h('button', { type: 'button', class: 'btn small', 'data-act': 'reload-workflows' }, t('Reload')));
       }
     }
     const nTags = state.tagFilter.size;
     els.tagsN.hidden = !nTags;
-    els.tagsN.textContent = String(nTags);
+    els.tagsN.textContent = fmtNum(nTags);
     els.tagsBtn.classList.toggle('active', nTags > 0);
-    els.tagsBtn.setAttribute('aria-label', nTags ? `Tags, ${nTags} selected` : 'Filter by tags');
+    els.tagsBtn.setAttribute('aria-label', nTags ? t('Tags, {n} selected', { n: nTags }) : t('Filter by tags'));
     els.mentions.checked = state.showMentions;
     els.focusChip.replaceChildren();
     if (state.focus && idx.byId.has(state.focus)) {
       const s = idx.byId.get(state.focus);
-      els.focusChip.append(h('span', { class: 'chip-focus' }, 'Focused on ', h('b', { text: '/' + s.name }),
-        h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Clear focus on /${s.name}`, 'data-act': 'clear-focus' }, icon('x'))));
+      els.focusChip.append(h('span', { class: 'chip-focus' }, withNodes(t('Focused on {skill}'), { skill: h('b', { text: '/' + s.name }) }),
+        h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Clear focus on {skill}', { skill: '/' + s.name }), 'data-act': 'clear-focus' }, icon('x'))));
     }
     const nIns = idx.insights.length;
-    els.insightsN.textContent = String(nIns);
+    els.insightsN.textContent = fmtNum(nIns);
     els.insights.disabled = !nIns;
     els.rescan.hidden = staticMode;
     els.download.hidden = !staticMode;
@@ -1404,11 +1677,17 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Anchors recorded during render, consumed by drawLinks: skill id -> instances.
   let anchors = new Map();
 
+  let renderingBoard = false;
   function renderCanvas() {
     const board = els.board;
     const active = document.activeElement;
     const fk = active && board.contains(active) && active.closest('[data-fk]') ? active.closest('[data-fk]').dataset.fk : null;
-    for (const n of [...board.children]) if (n !== els.svg) n.remove();
+    // A phase name being typed survives a re-render (a language change among them).
+    const oldRename = board.querySelector('input.col-rename');
+    const renameDraft = oldRename && state.renaming === oldRename.dataset.phase ? { value: oldRename.value, focused: oldRename === active, start: oldRename.selectionStart, end: oldRename.selectionEnd } : null;
+    // Removing a focused rename input fires focusout, which must not commit the draft kept above.
+    renderingBoard = true;
+    try { for (const n of [...board.children]) if (n !== els.svg) n.remove(); } finally { renderingBoard = false; }
     anchors = new Map();
     const idx = state.idx;
     if (!idx.skills.length) { board.append(renderNoSkills()); return; }
@@ -1424,7 +1703,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     board.append(frag);
     if (state.renaming) {
       const input = board.querySelector('input.col-rename');
-      if (input) { input.focus(); input.select(); }
+      if (input && renameDraft) {
+        input.value = renameDraft.value;
+        if (renameDraft.focused) { input.focus({ preventScroll: true }); try { input.setSelectionRange(renameDraft.start, renameDraft.end); } catch { /* not a text input */ } }
+      } else if (input) { input.focus(); input.select(); }
     } else if (fk) {
       const el = board.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
       if (el) el.focus({ preventScroll: true });
@@ -1439,47 +1721,48 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function renderNoSkills() {
     const roots = state.idx.roots;
     return h('div', { class: 'empty' },
-      h('h2', { text: 'No skills found' }),
-      h('p', { text: roots.length ? 'The scan looked for folders containing a SKILL.md in these places and found none:' : 'The scan had no folders to look in.' }),
-      roots.length ? h('ul', null, roots.map((r) => h('li', null, h('code', { text: str(r.path) || str(r.id) }), r.label ? ` — ${r.label}` : ''))) : null,
-      state.mode === 'live' ? h('p', { style: 'margin-top:14px' }, 'Install a skill, then use ', h('b', { text: 'Rescan' }), '.') : null);
+      h('h2', { text: t('No skills found') }),
+      h('p', { text: roots.length ? t('The scan looked for folders containing a SKILL.md in these places and found none:') : t('The scan had no folders to look in.') }),
+      roots.length ? h('ul', null, roots.map((r) => h('li', null, h('code', { text: str(r.path) || str(r.id) }), r.label ? ` — ${rootName(r)}` : ''))) : null,
+      state.mode === 'live' ? h('p', { style: 'margin-top:14px', text: t('Install a skill, then use Rescan.') }) : null);
   }
 
   function renderWorkflowBlocked(b) {
     if (b.kind === 'invalid') {
-      return h('div', { class: 'empty notice', role: 'region', 'aria-label': 'Workflows file unreadable' },
-        h('h2', { text: 'The workflows file can\u2019t be read' }),
+      return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Workflows file unreadable') },
+        h('h2', { text: t('The workflows file can’t be read') }),
         h('p', null, h('code', { text: b.path || 'workflows.json' })),
         b.message ? h('p', { class: 'notice-msg', text: b.message }) : null,
-        h('p', { text: 'Workflows can\u2019t be edited until it is fixed or replaced. Fix the file and reload, or start fresh.' }),
+        h('p', { text: t('Workflows can’t be edited until it is fixed or replaced. Fix the file and reload, or start fresh.') }),
         h('div', { class: 'd-actions' },
-          h('button', { type: 'button', class: 'btn primary', 'data-act': 'start-fresh' }, 'Start fresh (the unreadable file is kept as a backup)'),
-          h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, 'Reload')));
+          h('button', { type: 'button', class: 'btn primary', 'data-act': 'start-fresh' }, t('Start fresh (the unreadable file is kept as a backup)')),
+          h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, t('Reload'))));
     }
-    return h('div', { class: 'empty notice', role: 'region', 'aria-label': 'Workflows unavailable' },
-      h('h2', { text: 'Workflows couldn\u2019t be loaded' }),
-      b.message ? h('p', { class: 'notice-msg', text: b.message }) : null,
-      h('div', { class: 'd-actions' }, h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, 'Try again')));
+    const msg = b.message || (b.status ? t('The server answered {status}.', { status: String(b.status) }) : t('The server did not answer.'));
+    return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Workflows unavailable') },
+      h('h2', { text: t('Workflows couldn’t be loaded') }),
+      h('p', { class: 'notice-msg', text: msg }),
+      h('div', { class: 'd-actions' }, h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, t('Try again'))));
   }
 
   function renderWorkflowEmpty() {
     const presets = state.config.presets.filter((p) => p.id !== 'blank');
     const blank = state.config.presets.find((p) => p.id === 'blank');
     return h('div', { class: 'empty', style: 'max-width:760px' },
-      h('h2', { text: 'Organize your skills into a workflow' }),
-      h('p', { text: 'A workflow arranges skills into the phases of how you work — say Decide, Build, Verify, Ship — so you can see what runs when and how work passes between phases.' }),
+      h('h2', { text: t('Organize your skills into a workflow') }),
+      h('p', { text: t('A workflow arranges skills into the phases of how you work — say Decide, Build, Verify, Ship — so you can see what runs when and how work passes between phases.') }),
       presets.length ? h('div', { class: 'presets' }, presets.map((p) => h('button', { type: 'button', class: 'preset-btn', 'data-act': 'preset-start', 'data-preset': p.id },
-        h('b', { text: p.name }), p.description ? h('span', { text: p.description }) : null,
-        h('span', { class: 'phases', text: arr(p.phases).map((x) => x.name).join(' → ') })))) : null,
+        h('b', { text: presetName(p) }), presetDescription(p) ? h('span', { text: presetDescription(p) }) : null,
+        h('span', { class: 'phases', text: arr(p.phases).map((x, i) => presetPhaseName(p, i)).join(' → ') })))) : null,
       h('div', { class: 'd-actions' },
-        h('button', { type: 'button', class: 'btn', 'data-act': 'blank-start', 'data-preset': blank ? 'blank' : '' }, icon('plus'), 'Start blank'),
-        presets.length ? h('span', { class: 'muted', style: 'align-self:center;font-size:12px' }, 'Presets place skills by keyword; you can move anything afterwards.') : null));
+        h('button', { type: 'button', class: 'btn', 'data-act': 'blank-start', 'data-preset': blank ? 'blank' : '' }, icon('plus'), t('Start blank')),
+        presets.length ? h('span', { class: 'muted', style: 'align-self:center;font-size:12px', text: t('Presets place skills by keyword; you can move anything afterwards.') }) : null));
   }
 
   function renderAddPhase() {
     if (state.grouping !== 'workflow' || !canEdit()) return null;
     return h('div', { class: 'add-phase-col' },
-      h('button', { type: 'button', class: 'add-phase', 'data-act': 'add-phase', 'data-fk': 'add-phase' }, icon('plus'), 'Add phase'));
+      h('button', { type: 'button', class: 'add-phase', 'data-act': 'add-phase', 'data-fk': 'add-phase' }, icon('plus'), t('Add phase')));
   }
 
   function pillsFor(cats, opts = {}) {
@@ -1487,24 +1770,84 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const c of CATS) {
       const ids = cats[c];
       if (!ids.length) continue;
-      const names = ids.map((id) => tagLabel(id)).join(', ');
-      const label = `${state.view.categories[c].label}: ${names}`;
-      wrap.append(h('span', { class: `pill cat-${c}${opts.bare ? ' bare' : ''}`, role: 'img', 'aria-label': label, title: label }, icon(c), opts.bare ? null : String(ids.length)));
+      const label = t('{category}: {tags}', { category: catLabel(c), tags: list(ids.map((id) => tagLabel(id))) });
+      wrap.append(h('span', { class: `pill cat-${c}${opts.bare ? ' bare' : ''}`, role: 'img', 'aria-label': label, title: label }, icon(c), opts.bare ? null : fmtNum(ids.length)));
     }
     return wrap;
   }
-  const tagLabel = (id) => { const t = state.idx.tagById.get(id); return t ? t.label : id; };
+  // A tag's label in the shown language: its label file's, else the rules', else, for a tag the
+  // scan made from an MCP server's name, the page's own phrase.
+  function tagLabel(id) {
+    const own_ = labelText((labels().tags || {})[id]);
+    if (own_) return own_;
+    const tg = state.idx.tagById.get(id);
+    // The server's name as the scan wrote it in the label; the id has it lowercased.
+    const m = /^tool\.mcp-/.test(str(id)) && tg ? /^MCP: (.+)$/.exec(str(tg.label)) : null;
+    if (m) return t('MCP: {server}', { server: m[1] });
+    return tg ? tg.label : id;
+  }
   // A name shared by several installed skills carries its folder's label, so the copies read apart.
   const isShared = (s) => (state.idx.byName.get(s.name) || []).length > 1;
-  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? str(r.label) || str(r.id) : str(s.root); };
+  const rootLabel = (s) => { const r = state.idx.rootById.get(s.root); return r ? rootName(r) : str(s.root); };
   const skillLabel = (id) => { const s = state.idx.byId.get(id); return s ? '/' + s.name + (isShared(s) ? ' · ' + rootLabel(s) : '') : '/' + id; };
+
+  // ---------- a skill's words in the shown language ----------
+  // A translation supplies words only: steps, links and tags are always those of SKILL.md.
+  function skillTr(s) {
+    const tr = own(s.translations, i18n.lang) ? s.translations[i18n.lang] : null;
+    return tr && typeof tr === 'object' ? tr : null;
+  }
+  // The language a skill is written in is not recorded; Han script in its own words reads as Chinese.
+  const HAN = /[㐀-䶿一-鿿豈-﫿]/;
+  const originalLang = (s) => (HAN.test([s.name, s.description, ...s.steps.slice(0, 3).map((st) => st.title)].join(' ')) ? 'zh' : 'en');
+  // translated | original (no translation of its words: shown in its original, another language) |
+  // same (no translation needed, as far as can be told). Words from annotations alone, with no
+  // translated description, leave the skill in its original.
+  function trState(s) {
+    const tr = skillTr(s);
+    if (tr && (str(tr.description) || (!str(s.description) && tr.origin !== 'annotation'))) return 'translated';
+    return primary(originalLang(s)) === primary(i18n.lang) ? 'same' : 'original';
+  }
+  // Whether the scan found the translation's steps numbering otherwise than the skill's.
+  const trStepsDiffer = (s) => state.idx.insights.some((i) => i.kind === 'translation-steps' && arr(i.skills).includes(s.id) && i.params && i.params.lang === i18n.lang);
+  const shownDesc = (s) => { const tr = skillTr(s); return (tr && str(tr.description)) || s.description; };
+  const shownSummary = (s) => { const tr = skillTr(s); return (tr && str(tr.summary)) || s.summary; };
+  function trSteps(s) {
+    const tr = skillTr(s);
+    return tr && Array.isArray(tr.steps) && tr.steps.length === s.steps.length ? tr.steps : null;
+  }
+  function stepWords(s, st) {
+    const steps = trSteps(s);
+    const w = steps && steps[st._pos] && typeof steps[st._pos] === 'object' ? steps[st._pos] : null;
+    return {
+      title: (w && str(w.title)) || st.title || t('Step {n}', { n: st.index }),
+      excerpt: (w && str(w.excerpt || w.summary)) || st.excerpt,
+    };
+  }
+  // The marks a reader sees where a skill is opened: shown in its original, a translation behind its
+  // source, or one edited apart from it, which agents do not follow.
+  function trNotes(s) {
+    const st = trState(s);
+    const out = [];
+    const language = languageName(i18n.lang);
+    const tr = skillTr(s);
+    if (st === 'original') out.push(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation.', { language }) }));
+    if (st === 'translated' && tr.stale) out.push(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language }) }));
+    if (st === 'translated' && tr.edited) out.push(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow SKILL.md, not this text.', { language }) }));
+    if (st === 'translated' && s.steps.length && !trSteps(s)) {
+      out.push(trStepsDiffer(s)
+        ? h('p', { class: 'tr-note', role: 'note', 'data-tr': 'steps', text: t('Steps are shown in the original: the translation’s steps do not match the skill’s.') })
+        : h('p', { class: 'tr-note', role: 'note', 'data-tr': 'steps', text: t('Steps are shown in their original language.') }));
+    }
+    return out;
+  }
 
   function renderGroup(g, colIndex) {
     const key = groupKey(g);
     const collapsed = state.collapsed.has(key);
     const visIds = g.ids.filter(isVisible);
-    const countText = filtering() ? `${visIds.length} of ${g.ids.length}` : String(g.ids.length);
-    const countLabel = filtering() ? `${visIds.length} of ${plural(g.ids.length, 'skill')} shown` : plural(g.ids.length, 'skill');
+    const countText = filtering() ? t('{shown} of {n}', { shown: visIds.length, n: g.ids.length }) : fmtNum(g.ids.length);
+    const countLabel = filtering() ? t('{shown} of {n} skill shown|{shown} of {n} skills shown', { shown: visIds.length, n: g.ids.length }) : t('{n} skill|{n} skills', { n: g.ids.length });
     const cats = rollupSkills(visIds);
     const isPhase = g.kind === 'phase';
     const editable = canEdit();
@@ -1512,34 +1855,34 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const col = h('section', {
       class: 'col' + (collapsed ? ' collapsed' : '') + (!collapsed && g.wide ? ' wide' : '') + (isPhase ? ' phase' : ''),
       'data-group': key, 'data-gid': g.id, 'data-phase': isPhase ? g.id : null, 'data-drop': droppable ? (isPhase ? g.id : '__unassigned') : null,
-      'aria-label': `${g.title}, ${countLabel}`,
+      'aria-label': t('{group}, {count}', { group: g.title, count: countLabel }),
     });
     if (collapsed) {
-      const card = h('button', { type: 'button', class: 'group-card', 'data-act': 'group-expand', 'data-key': key, 'data-fk': 'gc|' + key, 'aria-expanded': 'false', title: `Show the skills in ${g.title}` },
+      const card = h('button', { type: 'button', class: 'group-card', 'data-act': 'group-expand', 'data-key': key, 'data-fk': 'gc|' + key, 'aria-expanded': 'false', title: t('Show the skills in {group}', { group: g.title }) },
         h('span', { class: 'gc-top' }, icon('chevronRight'), h('span', { class: 'gc-name', text: g.title }), h('span', { class: 'col-count', 'aria-label': countLabel, text: countText })),
         pillsFor(cats),
-        h('span', { class: 'gc-hint', text: isPhase && g.phase.note ? g.phase.note : (g.ids.length ? `Show ${plural(visIds.length, 'skill')}` : 'No skills') }));
+        h('span', { class: 'gc-hint', text: isPhase && g.phase.note ? g.phase.note : (g.ids.length ? t('Show {n} skill|Show {n} skills', { n: visIds.length }) : t('No skills')) }));
       col.append(card);
       for (const id of visIds) pushAnchor(id, { el: card, group: true, col: colIndex });
       return col;
     }
     const head = h('header', { class: 'col-head', draggable: isPhase && editable ? 'true' : null, 'data-phase': isPhase ? g.id : null });
-    head.append(h('button', { type: 'button', class: 'icon-btn', 'data-act': 'group-toggle', 'data-key': key, 'data-fk': 'gt|' + key, 'aria-expanded': 'true', 'aria-label': `Collapse ${g.title}` }, icon('chevronDown')));
+    head.append(h('button', { type: 'button', class: 'icon-btn', 'data-act': 'group-toggle', 'data-key': key, 'data-fk': 'gt|' + key, 'aria-expanded': 'true', 'aria-label': t('Collapse {group}', { group: g.title }) }, icon('chevronDown')));
     const title = h('div', { class: 'col-title' });
     if (isPhase && state.renaming === g.id) {
-      title.append(h('input', { type: 'text', class: 'col-rename', value: g.title, 'aria-label': 'Phase name', 'data-phase': g.id, maxlength: '80' }));
+      title.append(h('input', { type: 'text', class: 'col-rename', value: g.title, 'aria-label': t('Phase name'), 'data-phase': g.id, maxlength: '80' }));
     } else if (isPhase) {
-      title.append(h('button', { type: 'button', class: 'col-name', 'data-act': 'phase-select', 'data-phase': g.id, 'data-fk': 'pn|' + g.id, title: `${g.title} — show phase details` }, g.title));
+      title.append(h('button', { type: 'button', class: 'col-name', 'data-act': 'phase-select', 'data-phase': g.id, 'data-fk': 'pn|' + g.id, title: t('{phase} — show phase details', { phase: g.title }) }, g.title));
     } else {
-      title.append(h('span', { class: 'col-name', title: g.hint ? `${g.title} — ${g.hint}` : g.title, text: g.title }));
+      title.append(h('span', { class: 'col-name', title: g.hint ? t('{group} — {hint}', { group: g.title, hint: g.hint }) : g.title, text: g.title }));
     }
     title.append(h('span', { class: 'col-count', 'aria-label': countLabel, text: countText }));
     head.append(title);
     const actions = h('div', { class: 'col-actions' });
     if (isPhase && editable && state.renaming !== g.id) {
       actions.append(
-        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'phase-rename', 'data-phase': g.id, 'data-fk': 'pr|' + g.id, 'aria-label': `Rename phase ${g.title}`, title: 'Rename' }, icon('pencil')),
-        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'phase-menu', 'data-phase': g.id, 'data-fk': 'pm|' + g.id, 'aria-label': `Actions for phase ${g.title}`, 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')));
+        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'phase-rename', 'data-phase': g.id, 'data-fk': 'pr|' + g.id, 'aria-label': t('Rename phase {phase}', { phase: g.title }), title: t('Rename') }, icon('pencil')),
+        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'phase-menu', 'data-phase': g.id, 'data-fk': 'pm|' + g.id, 'aria-label': t('Actions for phase {phase}', { phase: g.title }), 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')));
     }
     head.append(actions);
     head.append(h('div', { class: 'col-tags' }, pillsFor(cats)));
@@ -1549,9 +1892,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const id of visIds) body.append(renderCard(state.idx.byId.get(id), g, colIndex));
     if (!filtering()) for (const name of g.missing || []) body.append(renderMissing(name, g));
     if (!visIds.length && !(g.missing || []).length) {
-      body.append(h('div', { class: 'col-empty', text: filtering() ? 'No matches' : (isPhase && editable ? 'Drag skills here, or use a card\u2019s ⋯ menu' : 'No skills') }));
+      body.append(h('div', { class: 'col-empty', text: filtering() ? t('No matches') : (isPhase && editable ? t('Drag skills here, or use a card’s ⋯ menu') : t('No skills')) }));
     } else if (!visIds.length && filtering()) {
-      body.append(h('div', { class: 'col-empty', text: 'No matches' }));
+      body.append(h('div', { class: 'col-empty', text: t('No matches') }));
     }
     col.append(body);
     return col;
@@ -1561,15 +1904,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return h('article', { class: 'card missing', 'data-missing': name },
       h('div', { class: 'card-main' },
         h('span', { class: 'card-top' }, h('span', { class: 'card-name', title: name, text: '/' + name })),
-        h('span', { class: 'card-desc', text: 'Not installed — kept in this workflow' })),
+        h('span', { class: 'card-desc', text: t('Not installed — kept in this workflow') })),
       canEdit() && h('div', { class: 'card-tools' },
-        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'missing-remove', 'data-phase': g.id, 'data-name': name, 'data-fk': `mr|${g.id}|${name}`, 'aria-label': `Remove missing /${name} from ${g.title}`, title: 'Remove from phase' }, icon('x'))));
+        h('button', { type: 'button', class: 'icon-btn', 'data-act': 'missing-remove', 'data-phase': g.id, 'data-name': name, 'data-fk': `mr|${g.id}|${name}`, 'aria-label': t('Remove missing {skill} from {phase}', { skill: '/' + name, phase: g.title }), title: t('Remove from phase') }, icon('x'))));
   }
 
-  function stepNoun(s, n) {
-    if (s.stepKind === 'section') return plural(n, 'section');
-    return plural(n, 'step');
-  }
+  const stepNoun = (s, n) => (s.stepKind === 'section' ? t('{n} section|{n} sections', { n }) : t('{n} step|{n} steps', { n }));
+  const stepsHeading = (s) => (s.stepKind === 'section' ? t('Sections · {n}', { n: s.steps.length }) : t('Steps · {n}', { n: s.steps.length }));
 
   function renderCard(s, g, colIndex) {
     const key = groupKey(g);
@@ -1582,40 +1923,42 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const dup = isShared(s);
     const card = h('article', { class: 'card' + (expanded ? ' expanded' : '') + (inPhase && editable ? ' in-phase' : ''), 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, draggable: draggable ? 'true' : null });
     const stepsId = 'st-' + (++uid);
-    const issueText = s.issues.map((k) => (INSIGHTS[k] ? INSIGHTS[k].issue : k)).join(' ');
+    const issueText = s.issues.map((k) => insightIssue(k)).join(' ');
+    const desc = shownDesc(s), summary = shownSummary(s);
+    const n = s.copies.length + 1;
     const main = h('button', {
       type: 'button', class: 'card-main', 'data-act': 'card', 'data-skill': s.id, 'data-fk': `card|${key}|${s.id}`,
       'aria-expanded': String(expanded), 'aria-controls': expanded ? stepsId : null,
     },
       h('span', { class: 'card-top' },
         h('span', { class: 'card-name', title: s.id === s.name ? '/' + s.name : `/${s.name} (${s.id})`, text: '/' + s.name }),
-        dup ? h('span', { class: 'card-src', title: `${rootLabel(s)} — id ${s.id}`, text: rootLabel(s) }) : null,
-        s.copies.length ? h('span', { class: 'card-copies', title: `Installed in ${s.copies.length + 1} places`, 'aria-label': `installed in ${s.copies.length + 1} places` }, `×${s.copies.length + 1}`) : null,
-        s.issues.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': 'Has issues: ' + issueText, title: issueText }) : null),
-      h('span', { class: 'card-desc', title: s.description || null, text: s.summary || s.description || 'No description' }),
+        dup ? h('span', { class: 'card-src', title: t('{source} — id {id}', { source: rootLabel(s), id: s.id }), text: rootLabel(s) }) : null,
+        s.copies.length ? h('span', { class: 'card-copies', title: t('Installed in {n} places', { n }), 'aria-label': t('installed in {n} places', { n }) }, '×' + fmtNum(n)) : null,
+        s.issues.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': t('Has issues: {issues}', { issues: issueText }), title: issueText }) : null),
+      h('span', { class: 'card-desc', title: desc || null, text: summary || desc || t('No description') }),
       h('span', { class: 'card-foot' },
         pillsFor(s._cats),
         h('span', { class: 'card-meta' },
-          h('span', { text: s.stepKind === 'none' ? 'no steps' : stepNoun(s, s.steps.length) }),
-          outN || inN ? h('span', { 'aria-label': `links to ${outN}, linked from ${inN}`, title: `Links to ${outN} · linked from ${inN}` }, [outN ? `→${outN}` : '', inN ? `←${inN}` : ''].filter(Boolean).join(' ')) : null)));
+          h('span', { text: s.stepKind === 'none' ? t('no steps') : stepNoun(s, s.steps.length) }),
+          outN || inN ? h('span', { 'aria-label': t('links to {out}, linked from {in}', { out: outN, in: inN }), title: t('Links to {out} · linked from {in}', { out: outN, in: inN }) }, [outN ? '→' + fmtNum(outN) : '', inN ? '←' + fmtNum(inN) : ''].filter(Boolean).join(' ')) : null)));
     card.append(main);
     const tools = h('div', { class: 'card-tools' },
-      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-menu', 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, 'data-fk': `cm|${key}|${s.id}`, 'aria-label': `Actions for /${s.name}`, 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')),
-      inPhase && editable ? h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-remove', 'data-skill': s.id, 'data-phase': g.id, 'data-fk': `cr|${key}|${s.id}`, 'aria-label': `Remove /${s.name} from ${g.title}`, title: `Remove from ${g.title}` }, icon('x')) : null);
+      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-menu', 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, 'data-fk': `cm|${key}|${s.id}`, 'aria-label': t('Actions for {skill}', { skill: '/' + s.name }), 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')),
+      inPhase && editable ? h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-remove', 'data-skill': s.id, 'data-phase': g.id, 'data-fk': `cr|${key}|${s.id}`, 'aria-label': t('Remove {skill} from {phase}', { skill: '/' + s.name, phase: g.title }), title: t('Remove from {phase}', { phase: g.title }) }, icon('x')) : null);
     card.append(tools);
     const inst = { el: card, card, group: false, col: colIndex, steps: new Map() };
     if (expanded) {
       const maxT = state.view.maxTagsPerCard;
       if (maxT > 0 && s._tagIds.size) {
-        const list = h('div', { class: 'card-taglist' });
+        const tagList = h('div', { class: 'card-taglist' });
         const ids = CATS.flatMap((c) => s._cats[c]);
         for (const id of ids.slice(0, maxT)) {
-          const t = state.idx.tagById.get(id);
-          const c = t ? t.category : catOf(id);
-          list.append(h('span', { class: `tagchip cat-${c}`, title: `${state.view.categories[c].label}: ${tagLabel(id)}` }, icon(c), tagLabel(id)));
+          const tg = state.idx.tagById.get(id);
+          const c = tg ? tg.category : catOf(id);
+          tagList.append(h('span', { class: `tagchip cat-${c}`, title: t('{category}: {tags}', { category: catLabel(c), tags: tagLabel(id) }) }, icon(c), tagLabel(id)));
         }
-        if (ids.length > maxT) list.append(h('span', { class: 'muted', style: 'font-size:11.5px;align-self:center' }, `+${ids.length - maxT} more`));
-        card.append(list);
+        if (ids.length > maxT) tagList.append(h('span', { class: 'muted', style: 'font-size:11.5px;align-self:center', text: t('+{n} more', { n: ids.length - maxT }) }));
+        card.append(tagList);
       }
       card.append(renderSteps(s, key, stepsId, inst));
     }
@@ -1626,20 +1969,20 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function renderSteps(s, key, stepsId, inst) {
     const wrap = h('div', { class: 'steps', id: stepsId });
     if (s.stepKind === 'none' || !s.steps.length) {
-      wrap.append(h('div', { class: 'steps-none', text: 'No steps detected' }));
+      wrap.append(h('div', { class: 'steps-none', text: t('No steps detected') }));
       return wrap;
     }
-    const noun = s.stepKind === 'section' ? 'Sections' : 'Steps';
-    wrap.append(h('div', { class: 'steps-head', text: `${noun} · ${s.steps.length}` }));
+    wrap.append(h('div', { class: 'steps-head', text: stepsHeading(s) }));
     for (const st of s.steps) {
       const open = state.openSteps.has(st.id);
       const bodyId = 'sb-' + (++uid);
-      const stepCats = rollupIds(new Set(st.tags.map((t) => t.id)), state.idx.tagById);
+      const words = stepWords(s, st);
+      const stepCats = rollupIds(new Set(st.tags.map((tg) => tg.id)), state.idx.tagById);
       const row = h('div', { class: 'step' + (open ? ' open' : ''), 'data-step': st.id });
       const line = h('div', { class: 'step-line' });
       line.append(h('button', { type: 'button', class: 'step-main', 'data-act': 'step', 'data-step': st.id, 'data-fk': `step|${key}|${st.id}`, 'aria-expanded': String(open), 'aria-controls': open ? bodyId : null },
-        h('span', { class: 'step-idx', text: String(st.index) }),
-        h('span', { class: 'step-title', title: st.title, text: st.title }),
+        h('span', { class: 'step-idx', text: fmtNum(st.index) }),
+        h('span', { class: 'step-title', title: words.title, text: words.title }),
         h('span', { class: 'step-tags' }, pillsFor(stepCats, { bare: true }))));
       if (st.calls.length) {
         const calls = h('span', { class: 'step-calls' });
@@ -1647,36 +1990,40 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
           const target = state.idx.byId.get(to);
           if (target) {
             const kind = state.idx.stepEdgeKind.get(st.id + '\u0000' + to) || 'calls';
-            calls.append(h('button', { type: 'button', class: 'call-chip' + (kind === 'mentions' ? ' mention' : ''), 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: `${kind === 'mentions' ? 'Mentions' : 'Calls'} /${target.name} — go there` }, `→ ${target.name}`));
+            const tip = kind === 'mentions' ? t('Mentions {skill} — go there', { skill: '/' + target.name }) : t('Calls {skill} — go there', { skill: '/' + target.name });
+            calls.append(h('button', { type: 'button', class: 'call-chip' + (kind === 'mentions' ? ' mention' : ''), 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: tip }, `→ ${target.name}`));
           } else {
-            calls.append(h('span', { class: 'call-chip unresolved', title: `${to} is not installed` }, `→ ${to}`));
+            calls.append(h('span', { class: 'call-chip unresolved', title: t('{skill} is not installed', { skill: to }) }, `→ ${to}`));
           }
         }
         line.append(calls);
       }
       row.append(line);
-      if (open) row.append(renderStepBody(st, bodyId));
+      if (open) row.append(renderStepBody(st, words, bodyId));
       wrap.append(row);
       inst.steps.set(st.id, line);
     }
     return wrap;
   }
 
-  function renderStepBody(st, bodyId) {
+  function renderStepBody(st, words, bodyId) {
     const body = h('div', { class: 'step-body', id: bodyId });
-    if (st.line) body.append(h('div', { class: 'lines', text: st.endLine && st.endLine !== st.line ? `Lines ${st.line}–${st.endLine}` : `Line ${st.line}` }));
-    if (st.excerpt) body.append(h('p', { class: 'excerpt', text: st.excerpt }));
-    for (const t of st.tags) body.append(renderTagEvidence(t));
-    if (!st.excerpt && !st.tags.length) body.append(h('span', { class: 'muted', text: 'No text or tags in this step.' }));
+    if (st.line) body.append(h('div', { class: 'lines', text: st.endLine && st.endLine !== st.line ? t('Lines {from}–{to}', { from: st.line, to: st.endLine }) : t('Line {n}', { n: st.line }) }));
+    if (words.excerpt) body.append(h('p', { class: 'excerpt', text: words.excerpt }));
+    for (const tg of st.tags) body.append(renderTagEvidence(tg));
+    if (!words.excerpt && !st.tags.length) body.append(h('span', { class: 'muted', text: t('No text or tags in this step.') }));
     return body;
   }
 
-  function renderTagEvidence(t) {
-    const c = CATS.includes(t.category) ? t.category : catOf(t.id);
+  const TAG_SOURCES = { frontmatter: () => t('from frontmatter'), annotation: () => t('from annotation') };
+  // A tag with its evidence: the lines it was matched on, quoted from SKILL.md as they stand.
+  function renderTagEvidence(tg) {
+    const c = CATS.includes(tg.category) ? tg.category : catOf(tg.id);
+    const from = tg.source && tg.source !== 'rule' ? (own(TAG_SOURCES, tg.source) ? TAG_SOURCES[tg.source]() : t('from {source}', { source: str(tg.source) })) : '';
     return h('div', { class: 'ev-tag' },
-      h('span', null, h('span', { class: `tagchip cat-${c}`, title: state.view.categories[c].label }, icon(c), str(t.label) || tagLabel(t.id)),
-        t.source && t.source !== 'rule' ? h('span', { class: 'src-badge', text: ` from ${t.source}` }) : null),
-      t.evidence.length ? h('ul', { class: 'ev' }, t.evidence.map((e) => h('li', null, h('span', { class: 'ln', text: e.line ? `L${e.line}` : '' }), h('span', { class: 'tx', text: str(e.text) })))) : null);
+      h('span', null, h('span', { class: `tagchip cat-${c}`, title: catLabel(c) }, icon(c), tagLabel(tg.id) || str(tg.label)),
+        from ? h('span', { class: 'src-badge', text: ' ' + from }) : null),
+      tg.evidence.length ? h('ul', { class: 'ev' }, tg.evidence.map((e) => h('li', null, h('span', { class: 'ln', text: e.line ? t('L{n}', { n: e.line }) : '' }), h('span', { class: 'tx', text: str(e.text) })))) : null);
   }
 
   // ===================================================================
@@ -1715,11 +2062,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       for (const s of srcs) {
         const sEl = !s.group && e.fromStep && state.expanded.has(e.from) && s.steps.get(e.fromStep) ? s.steps.get(e.fromStep) : s.el;
         const a = rectOf(sEl);
-        for (const t of tgts) {
-          if (t.el === s.el) continue;
-          const b = rectOf(t.el);
+        for (const tt of tgts) {
+          if (tt.el === s.el) continue;
+          const b = rectOf(tt.el);
           const dist = Math.abs((a.l + a.r) / 2 - (b.l + b.r) / 2) + Math.abs(a.cy - b.cy) * 0.35 + (b.l < a.l ? 40 : 0);
-          if (dist < bestD) { bestD = dist; best = { sEl, tEl: t.el }; }
+          if (dist < bestD) { bestD = dist; best = { sEl, tEl: tt.el }; }
         }
       }
       if (!best || best.sEl === best.tEl) continue;
@@ -1798,10 +2145,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const txt = '×' + L.n, w = 8 + txt.length * 6;
         const r = document.createElementNS(NS, 'rect');
         r.setAttribute('x', mx - w / 2); r.setAttribute('y', my - 8); r.setAttribute('width', w); r.setAttribute('height', 16); r.setAttribute('rx', 8);
-        const t = document.createElementNS(NS, 'text');
-        t.setAttribute('x', mx); t.setAttribute('y', my + 3.5); t.setAttribute('text-anchor', 'middle');
-        t.textContent = txt;
-        label.append(r, t);
+        const te = document.createElementNS(NS, 'text');
+        te.setAttribute('x', mx); te.setAttribute('y', my + 3.5); te.setAttribute('text-anchor', 'middle');
+        te.textContent = txt;
+        label.append(r, te);
         g.append(label);
       }
       frag.append(g);
@@ -1862,7 +2209,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!idx.byId.has(id)) return;
     if (!isVisible(id)) {
       setSearch(''); state.tagFilter.clear(); state.focus = null; recompute();
-      toast(`Cleared filters to show ${skillLabel(id)}`);
+      toast(t('Cleared filters to show {skill}', { skill: skillLabel(id) }));
     }
     if (state.grouping === 'workflow' && !activeWorkflow()) state.grouping = 'links';
     const groups = computeGroups() || [];
@@ -1908,26 +2255,28 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function detailsHead(kicker, title, mono) {
     return h('div', { class: 'd-head' },
       h('div', { style: 'flex:1;min-width:0' }, h('div', { class: 'd-kicker', text: kicker }), h('h2', { class: mono ? 'mono' : null, tabindex: '-1', text: title })),
-      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'close-details', 'aria-label': 'Close details', title: 'Close (Esc clears the selection)' }, icon('x')));
+      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'close-details', 'aria-label': t('Close details'), title: t('Close (Esc clears the selection)') }, icon('x')));
   }
   const sec = (title, ...kids) => h('section', { class: 'd-sec' }, h('h3', null, title), ...kids);
 
   function renderDetailsEmpty() {
-    const cats = state.view.categories;
+    const key = (k, what) => h('li', null, h('b', { text: k }), ' ', what);
     return [
-      detailsHead('Details', 'Nothing selected'),
+      detailsHead(t('Details'), t('Nothing selected')),
       h('div', { class: 'd-body' },
-        h('p', { class: 'd-desc', style: 'color:var(--text-2)', text: 'Select a skill to see its steps, tags and links. Select a phase name to see what flows through it.' }),
-        sec('Legend', h('div', { class: 'legend' },
-          CATS.map((c) => h('div', { class: 'row' }, h('span', { class: `pill cat-${c}` }, icon(c), '2'), h('span', { text: cats[c].label }))),
-          h('div', { class: 'row' }, legendLine(false), h('span', { text: 'Calls — one skill runs another' })),
-          h('div', { class: 'row' }, legendLine(true), h('span', { text: 'Mentions — named without running it' })),
-          h('div', { class: 'row' }, h('span', { class: 'issue-dot' }), h('span', { text: 'Has an issue worth a look' })))),
-        sec('Keys', h('ul', { class: 'd-list', style: 'font-size:12px;color:var(--text-2)' },
-          h('li', null, h('b', { text: '/' }), ' search · ', h('b', { text: 'Esc' }), ' close or clear selection'),
-          h('li', null, h('b', { text: 'F6' }), ' move between the canvas and these details · ', h('b', { text: 'Ctrl/⌘ Z' }), ' undo the latest edit'),
-          h('li', { text: 'Click a card to open it; click a call chip to follow the link.' }),
-          state.grouping === 'workflow' ? h('li', { text: 'Drag cards between phases, or use a card’s ⋯ menu.' }) : null))),
+        h('p', { class: 'd-desc', style: 'color:var(--text-2)', text: t('Select a skill to see its steps, tags and links. Select a phase name to see what flows through it.') }),
+        sec(t('Legend'), h('div', { class: 'legend' },
+          CATS.map((c) => h('div', { class: 'row' }, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(2)), h('span', { text: catLabel(c) }))),
+          h('div', { class: 'row' }, legendLine(false), h('span', { text: t('Calls — one skill runs another') })),
+          h('div', { class: 'row' }, legendLine(true), h('span', { text: t('Mentions — named without running it') })),
+          h('div', { class: 'row' }, h('span', { class: 'issue-dot' }), h('span', { text: t('Has an issue worth a look') })))),
+        sec(t('Keys'), h('ul', { class: 'd-list', style: 'font-size:12px;color:var(--text-2)' },
+          key('/', t('Search')),
+          key('Esc', t('Close a menu or clear the selection')),
+          key('F6', t('Move between the canvas and these details')),
+          key('Ctrl/⌘ Z', t('Undo the latest edit')),
+          h('li', { text: t('Click a card to open it; click a call chip to follow the link.') }),
+          state.grouping === 'workflow' ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null))),
     ];
   }
   function legendLine(dashed) {
@@ -1935,110 +2284,122 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     tpl.innerHTML = `<svg class="line" viewBox="0 0 40 10" aria-hidden="true"><path d="M2 5 H32" fill="none" stroke="var(--link)" stroke-width="1.5" ${dashed ? 'stroke-dasharray="4 3"' : ''}/><path d="M31 1.5 L38 5 L31 8.5 z" fill="var(--link)"/></svg>`;
     return tpl.content.firstChild;
   }
+  const EDGE_KINDS = { calls: () => t('calls'), mentions: () => t('mentions') };
+  const FILE_KINDS = { reference: () => t('reference'), script: () => t('script'), asset: () => t('asset'), other: () => t('other') };
+  const edgeKind = (k) => (own(EDGE_KINDS, k) ? EDGE_KINDS[k]() : str(k));
+  const fileKind = (k) => (own(FILE_KINDS, k) ? FILE_KINDS[k]() : str(k) || t('file'));
 
   function renderSkillDetails(s) {
     const idx = state.idx;
     const root = idx.rootById.get(s.root);
     const body = h('div', { class: 'd-body' });
-    body.append(h('p', { class: 'd-desc', text: s.description || 'No description.' }));
-    if (s.summary) body.append(h('p', { class: 'd-summary', text: s.summary }));
-    if (s.issues.length) body.append(h('ul', { class: 'issues', 'aria-label': 'Issues' }, s.issues.map((k) => h('li', { text: INSIGHTS[k] ? INSIGHTS[k].issue : k }))));
+    const desc = shownDesc(s), summary = shownSummary(s);
+    body.append(...trNotes(s));
+    body.append(h('p', { class: 'd-desc', text: desc || t('No description.') }));
+    if (summary) body.append(h('p', { class: 'd-summary', text: summary }));
+    if (s.issues.length) body.append(h('ul', { class: 'issues', 'aria-label': t('Issues') }, s.issues.map((k) => h('li', { text: insightIssue(k) }))));
     const actions = h('div', { class: 'd-actions' },
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'focus', 'data-skill': s.id, disabled: !(state.derived.out.get(s.id).size || state.derived.inc.get(s.id).size) ? true : null }, 'Focus on linked'),
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'toggle-expand', 'data-skill': s.id }, state.expanded.has(s.id) ? 'Hide steps on canvas' : 'Show steps on canvas'),
-      state.mode === 'live' ? h('button', { type: 'button', class: 'btn small', 'data-act': 'view-file', 'data-skill': s.id, 'data-path': 'SKILL.md' }, 'View SKILL.md') : null);
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'focus', 'data-skill': s.id, disabled: !(state.derived.out.get(s.id).size || state.derived.inc.get(s.id).size) ? true : null }, t('Focus on linked')),
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'toggle-expand', 'data-skill': s.id }, state.expanded.has(s.id) ? t('Hide steps on canvas') : t('Show steps on canvas')),
+      state.mode === 'live' ? h('button', { type: 'button', class: 'btn small', 'data-act': 'view-file', 'data-skill': s.id, 'data-path': 'SKILL.md' }, t('View SKILL.md')) : null);
     body.append(actions);
 
     const wf = state.wfBlocked && state.wfBlocked.kind !== 'conflict' ? null : activeWorkflow();
     if (wf) {
       const checks = h('div', { class: 'phase-checks' });
-      if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: 'This workflow has no phases yet.' }));
+      if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: t('This workflow has no phases yet.') }));
       for (const p of wf.phases) {
         checks.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', 'data-act': 'phase-check', 'data-phase': p.id, 'data-skill': s.id, checked: p.skills.includes(s.id), disabled: !canEdit() }), p.name));
       }
-      body.append(sec(`Phases in ${wf.name}`, checks));
+      body.append(sec(t('Phases in {workflow}', { workflow: wf.name }), checks));
     }
 
-    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? str(root.label) || str(root.id) : str(s.root) || 'Unknown source', s.plugin ? h('span', { class: 'muted', text: ` · plugin ${s.plugin}` }) : null)];
-    if (s.file) srcKids.push(h('div', { class: 'd-path' }, h('code', { text: str(s.file) }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': str(s.file), 'aria-label': 'Copy file path', title: 'Copy path' }, icon('copy'))));
-    if (s.lines) srcKids.push(h('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px', text: `${s.lines} lines` }));
-    body.append(sec('Source', ...srcKids));
+    const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootName(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
+    if (s.file) srcKids.push(h('div', { class: 'd-path' }, h('code', { text: str(s.file) }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': str(s.file), 'aria-label': t('Copy file path'), title: t('Copy path') }, icon('copy'))));
+    if (s.lines) srcKids.push(h('div', { class: 'muted', style: 'font-size:11.5px;margin-top:4px', text: t('{n} line|{n} lines', { n: s.lines }) }));
+    body.append(sec(t('Source'), ...srcKids));
     if (s.copies.length) {
-      body.append(sec(`Also installed in · ${s.copies.length}`, h('ul', { class: 'd-list' }, s.copies.map((c) => {
+      body.append(sec(t('Also installed in · {n}', { n: s.copies.length }), h('ul', { class: 'd-list' }, s.copies.map((c) => {
         const r = idx.rootById.get(c.root);
-        return h('li', null, h('div', { text: r ? str(r.label) || str(r.id) : c.root }),
-          c.dir ? h('div', { class: 'd-path' }, h('code', { text: c.dir }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': c.dir, 'aria-label': 'Copy folder path', title: 'Copy path' }, icon('copy'))) : null);
+        return h('li', null, h('div', { text: r ? rootName(r) : c.root }),
+          c.dir ? h('div', { class: 'd-path' }, h('code', { text: c.dir }), h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': c.dir, 'aria-label': t('Copy folder path'), title: t('Copy path') }, icon('copy'))) : null);
       }))));
     }
 
-    const fm = Object.entries(s.frontmatter).filter(([k]) => k !== 'name' && k !== 'description');
+    // Keys stay SKILL.md's; each value is the translation's where it gives that key, else the original's.
+    const trFm = (() => { const tr = skillTr(s); return tr && tr.frontmatter && typeof tr.frontmatter === 'object' && !Array.isArray(tr.frontmatter) ? tr.frontmatter : null; })();
+    const trHas = (k) => !!trFm && own(trFm, k) && trFm[k] != null;
+    const fm = Object.entries(s.frontmatter).filter(([k]) => k !== 'name' && k !== 'description').map(([k, v]) => [k, trHas(k) ? trFm[k] : v]);
     if (fm.length) {
       const order = ['allowed-tools', 'model', 'license', 'compatibility'];
       fm.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99) || a[0].localeCompare(b[0]));
-      body.append(sec('Frontmatter', h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
+      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? i18n.lang : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
     }
 
     if (s.tags.length || s._tagIds.size) {
-      const tagSec = sec('Tags');
+      const tagSec = sec(t('Tags'));
       const byCat = new Map(CATS.map((c) => [c, []]));
       const seen = new Set();
-      for (const t of s.tags) { byCat.get(CATS.includes(t.category) ? t.category : catOf(t.id)).push(t); seen.add(t.id); }
-      for (const st of s.steps) for (const t of st.tags) if (!seen.has(t.id)) { seen.add(t.id); byCat.get(t.category).push(t); }
+      for (const tg of s.tags) { byCat.get(CATS.includes(tg.category) ? tg.category : catOf(tg.id)).push(tg); seen.add(tg.id); }
+      for (const st of s.steps) for (const tg of st.tags) if (!seen.has(tg.id)) { seen.add(tg.id); byCat.get(tg.category).push(tg); }
       for (const c of CATS) {
-        const list = byCat.get(c);
-        if (!list.length) continue;
-        tagSec.append(h('h4', { class: `cat-${c}` }, h('span', { class: `pill cat-${c}` }, icon(c), String(list.length)), state.view.categories[c].label));
-        for (const t of list) tagSec.append(h('div', { class: 'tag-row' }, renderTagEvidence(t)));
+        const tagsOf = byCat.get(c);
+        if (!tagsOf.length) continue;
+        tagSec.append(h('h4', { class: `cat-${c}` }, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(tagsOf.length)), catLabel(c)));
+        for (const tg of tagsOf) tagSec.append(h('div', { class: 'tag-row' }, renderTagEvidence(tg)));
       }
       body.append(tagSec);
     }
 
     if (s.steps.length) {
-      const noun = s.stepKind === 'section' ? 'Sections' : 'Steps';
-      body.append(sec(`${noun} · ${s.steps.length}`, h('ol', { class: 'step-list' }, s.steps.map((st) => h('li', null,
+      body.append(sec(stepsHeading(s), h('ol', { class: 'step-list' }, s.steps.map((st) => h('li', null,
         h('button', { type: 'button', 'data-act': 'goto-step', 'data-skill': s.id, 'data-step': st.id },
-          h('span', { class: 'n', text: String(st.index) }), h('span', { class: 't', text: st.title }), st.line ? h('span', { class: 'l', text: `L${st.line}` }) : null))))));
+          h('span', { class: 'n', text: fmtNum(st.index) }), h('span', { class: 't', text: stepWords(s, st).title }), st.line ? h('span', { class: 'l', text: t('L{n}', { n: st.line }) }) : null))))));
     } else {
-      body.append(sec('Steps', h('span', { class: 'muted', text: 'No steps detected.' })));
+      body.append(sec(t('Steps'), h('span', { class: 'muted', text: t('No steps detected.') })));
     }
 
     const outE = state.derived.shown.filter((e) => e.from === s.id && e.to !== s.id);
     const inE = state.derived.shown.filter((e) => e.to === s.id && e.from !== s.id);
-    body.append(sec(`Links out · ${new Set(outE.map((e) => e.to)).size}`, linkList(outE, 'to', s)));
-    body.append(sec(`Links in · ${new Set(inE.map((e) => e.from)).size}`, linkList(inE, 'from', s)));
+    body.append(sec(t('Links out · {n}', { n: new Set(outE.map((e) => e.to)).size }), linkList(outE, 'to', s)));
+    body.append(sec(t('Links in · {n}', { n: new Set(inE.map((e) => e.from)).size }), linkList(inE, 'from', s)));
 
     const unres = idx.unresolvedBy.get(s.id) || [];
     if (unres.length) {
-      body.append(sec('Unresolved links', h('ul', { class: 'd-list' }, unres.map((u) => h('li', { class: 'link-item' },
-        h('span', null, 'Links to ', h('code', { class: 'mono', text: str(u.name) }), ', which is not installed', u.fromStep && idx.stepById.get(u.fromStep) ? ` (step ${idx.stepById.get(u.fromStep).step.index})` : ''),
-        u.evidence ? h('span', { class: 'sub', text: `line ${u.evidence.line}: ${str(u.evidence.text)}` }) : null)))));
+      body.append(sec(t('Unresolved links'), h('ul', { class: 'd-list' }, unres.map((u) => {
+        const at = u.fromStep && idx.stepById.get(u.fromStep) ? idx.stepById.get(u.fromStep).step.index : null;
+        const name = h('code', { class: 'mono', text: str(u.name) });
+        return h('li', { class: 'link-item' },
+          h('span', null, withNodes(at != null ? t('Links to {name}, which is not installed (step {n})', { n: at }) : t('Links to {name}, which is not installed'), { name })),
+          u.evidence ? h('span', { class: 'sub', text: t('line {n}: {text}', { n: u.evidence.line, text: str(u.evidence.text) }) }) : null);
+      }))));
     }
 
     if (s.files.length) {
       const live = state.mode === 'live';
-      body.append(sec(`Bundled files · ${s.files.length}`, h('ul', { class: 'd-list files' }, s.files.map((f) => h('li', null,
+      body.append(sec(t('Bundled files · {n}', { n: s.files.length }), h('ul', { class: 'd-list files' }, s.files.map((f) => h('li', null,
         live ? h('button', { type: 'button', class: 'linkish', 'data-act': 'view-file', 'data-skill': s.id, 'data-path': str(f.path) }, str(f.path)) : h('span', { class: 'fname', text: str(f.path) }),
-        h('span', { class: 'kind', text: str(f.kind) || 'file' }),
-        f.linked === false ? h('span', { class: 'muted', style: 'font-size:11px', text: 'not linked from SKILL.md' }) : null)))));
+        h('span', { class: 'kind', text: fileKind(f.kind) }),
+        f.linked === false ? h('span', { class: 'muted', style: 'font-size:11px', text: t('not linked from SKILL.md') }) : null)))));
     }
 
-    return [detailsHead(isShared(s) ? `Skill · ${rootLabel(s)}` : 'Skill', '/' + s.name, true), body];
+    return [detailsHead(isShared(s) ? t('Skill · {source}', { source: rootLabel(s) }) : t('Skill'), '/' + s.name, true), body];
   }
 
   function linkList(edges, side, s) {
-    if (!edges.length) return h('span', { class: 'muted', text: side === 'to' ? 'Links to no other skill.' : 'No other skill links here.' });
+    if (!edges.length) return h('span', { class: 'muted', text: side === 'to' ? t('Links to no other skill.') : t('No other skill links here.') });
     const byOther = new Map();
     for (const e of edges) { const o = e[side]; if (!byOther.has(o)) byOther.set(o, []); byOther.get(o).push(e); }
-    return h('ul', { class: 'd-list' }, [...byOther].map(([o, list]) => {
-      const kinds = [...new Set(list.map((e) => e.kind))];
-      const ev = list.find((e) => e.evidence) || null;
+    return h('ul', { class: 'd-list' }, [...byOther].map(([o, links]) => {
+      const kinds = [...new Set(links.map((e) => e.kind))];
+      const ev = links.find((e) => e.evidence) || null;
       const stepOf = (e) => e.fromStep && state.idx.stepById.get(e.fromStep) ? state.idx.stepById.get(e.fromStep).step : null;
-      const st = stepOf(list[0]);
+      const st = stepOf(links[0]);
       return h('li', { class: 'link-item' },
         h('span', { class: 'top' }, h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': o, text: skillLabel(o) }),
-          kinds.map((k) => h('span', { class: 'kind', text: k })),
-          st ? h('span', { class: 'muted', style: 'font-size:11.5px', text: side === 'to' ? `from step ${st.index}` : `in its step ${st.index}` }) : null),
-        ev && ev.evidence ? h('span', { class: 'sub', text: `line ${ev.evidence.line}: ${str(ev.evidence.text)}` }) : null);
+          kinds.map((k) => h('span', { class: 'kind', text: edgeKind(k) })),
+          st ? h('span', { class: 'muted', style: 'font-size:11.5px', text: side === 'to' ? t('from step {n}', { n: st.index }) : t('in its step {n}', { n: st.index }) }) : null),
+        ev && ev.evidence ? h('span', { class: 'sub', text: t('line {n}: {text}', { n: ev.evidence.line, text: str(ev.evidence.text) }) }) : null);
     }));
   }
 
@@ -2049,30 +2410,30 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const body = h('div', { class: 'd-body' });
     const ro = !canEdit();
     if (!ro) body.append(h('div', { class: 'd-actions' },
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-rename', 'data-phase': p.id }, icon('pencil'), 'Rename'),
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-left', 'data-phase': p.id, disabled: i === 0 ? true : null, 'aria-label': 'Move phase left' }, '◀ Move left'),
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-right', 'data-phase': p.id, disabled: i === wf.phases.length - 1 ? true : null, 'aria-label': 'Move phase right' }, 'Move right ▶'),
-      h('button', { type: 'button', class: 'btn small danger', 'data-act': 'phase-delete', 'data-phase': p.id }, 'Delete')));
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-rename', 'data-phase': p.id }, icon('pencil'), t('Rename')),
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-left', 'data-phase': p.id, disabled: i === 0 ? true : null, 'aria-label': t('Move phase left') }, t('◀ Move left')),
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-right', 'data-phase': p.id, disabled: i === wf.phases.length - 1 ? true : null, 'aria-label': t('Move phase right') }, t('Move right ▶')),
+      h('button', { type: 'button', class: 'btn small danger', 'data-act': 'phase-delete', 'data-phase': p.id }, t('Delete'))));
     const noteId = 'note-' + p.id;
-    body.append(h('section', { class: 'd-sec' }, h('h3', null, h('label', { for: noteId, text: 'Note' })),
-      h('textarea', { id: noteId, 'data-act': 'phase-note', 'data-phase': p.id, readonly: ro, placeholder: 'What happens in this phase, who owns it, when it is done…', rows: '3' }, p.note)));
+    body.append(h('section', { class: 'd-sec' }, h('h3', null, h('label', { for: noteId, text: t('Note') })),
+      h('textarea', { id: noteId, 'data-act': 'phase-note', 'data-phase': p.id, readonly: ro, placeholder: t('What happens in this phase, who owns it, when it is done…'), rows: '3' }, p.note)));
     const ids = p.skills.filter((id) => idx.byId.has(id));
     const missing = p.skills.filter((id) => !idx.byId.has(id));
-    body.append(sec(`Skills · ${p.skills.length}`, p.skills.length ? h('ul', { class: 'd-list' },
-      ids.map((id) => h('li', null, h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': id, text: skillLabel(id) }), h('div', { class: 'sub', text: idx.byId.get(id).description }))),
-      missing.map((n) => h('li', null, h('span', { class: 'mono muted', text: '/' + n }), h('span', { class: 'sub', text: ' — not installed' })))) : h('span', { class: 'muted', text: 'No skills yet. Drag cards here or tick this phase in a skill’s details.' })));
+    body.append(sec(t('Skills · {n}', { n: p.skills.length }), p.skills.length ? h('ul', { class: 'd-list' },
+      ids.map((id) => h('li', null, h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': id, text: skillLabel(id) }), h('div', { class: 'sub', text: shownDesc(idx.byId.get(id)) }))),
+      missing.map((n) => h('li', null, h('span', { class: 'mono muted', text: '/' + n }), h('span', { class: 'sub', text: ' — ' + t('not installed') })))) : h('span', { class: 'muted', text: t('No skills yet. Drag cards here or tick this phase in a skill’s details.') })));
 
     // Tags with the skills contributing each one.
     const contrib = new Map();
-    for (const id of ids) for (const t of idx.byId.get(id)._tagIds) { if (!contrib.has(t)) contrib.set(t, []); contrib.get(t).push(id); }
+    for (const id of ids) for (const tid of idx.byId.get(id)._tagIds) { if (!contrib.has(tid)) contrib.set(tid, []); contrib.get(tid).push(id); }
     if (contrib.size) {
-      const tagSec = sec('Tags');
+      const tagSec = sec(t('Tags'));
       for (const c of CATS) {
-        const list = [...contrib].filter(([t]) => (idx.tagById.get(t) || { category: catOf(t) }).category === c);
-        if (!list.length) continue;
-        tagSec.append(h('h4', null, h('span', { class: `pill cat-${c}` }, icon(c), String(list.length)), state.view.categories[c].label));
-        for (const [t, who] of list) {
-          tagSec.append(h('div', { class: 'tag-row' }, h('span', null, h('span', { class: `tagchip cat-${c}` }, tagLabel(t))),
+        const inCat = [...contrib].filter(([tid]) => (idx.tagById.get(tid) || { category: catOf(tid) }).category === c);
+        if (!inCat.length) continue;
+        tagSec.append(h('h4', null, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(inCat.length)), catLabel(c)));
+        for (const [tid, who] of inCat) {
+          tagSec.append(h('div', { class: 'tag-row' }, h('span', null, h('span', { class: `tagchip cat-${c}` }, tagLabel(tid))),
             h('div', { class: 'who' }, who.map((id) => h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': id, text: skillLabel(id) })))));
         }
       }
@@ -2087,7 +2448,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const fromIn = p.skills.includes(e.from), toIn = p.skills.includes(e.to);
       if (fromIn === toIn) continue;
       const others = phaseOf.get(fromIn ? e.to : e.from) || [];
-      const otherNames = others.length ? others.map((q) => q.name) : ['Unassigned'];
+      const otherNames = others.length ? others.map((q) => q.name) : [t('Unassigned')];
       for (const on of otherNames) {
         const label = fromIn ? `${p.name} → ${on}` : `${on} → ${p.name}`;
         if (!crossings.has(label)) crossings.set(label, { out: fromIn, pairs: [] });
@@ -2096,13 +2457,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (!entry.pairs.some((x) => x.from === e.from && x.to === e.to)) entry.pairs.push({ text: pair, from: e.from, to: e.to, kind: e.kind });
       }
     }
-    const crossList = [...crossings].sort((a, b) => (a[1].out === b[1].out ? a[0].localeCompare(b[0]) : a[1].out ? 1 : -1));
-    body.append(sec('Links to other phases', crossList.length ? h('ul', { class: 'd-list' }, crossList.map(([label, v]) => h('li', { class: 'link-item' },
+    const crossList = [...crossings].sort((a, b) => (a[1].out === b[1].out ? a[0].localeCompare(b[0], i18n.lang) : a[1].out ? 1 : -1));
+    body.append(sec(t('Links to other phases'), crossList.length ? h('ul', { class: 'd-list' }, crossList.map(([label, v]) => h('li', { class: 'link-item' },
       h('b', { text: label }),
       h('span', { class: 'top' }, v.pairs.map((pp, j) => [j ? h('span', { class: 'muted', text: '·' }) : null,
-        h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, title: pp.kind, text: pp.text })]))))) :
-      h('span', { class: 'muted', text: 'No links cross into other phases.' })));
-    return [detailsHead(`Phase ${i + 1} of ${wf.phases.length} · ${wf.name}`, p.name), body];
+        h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, title: edgeKind(pp.kind), text: pp.text })]))))) :
+      h('span', { class: 'muted', text: t('No links cross into other phases.') })));
+    return [detailsHead(t('Phase {i} of {n} · {workflow}', { i: i + 1, n: wf.phases.length, workflow: wf.name }), p.name), body];
   }
 
   // ===================================================================
@@ -2185,7 +2546,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         resolve(v);
       };
       form.append(h('div', { class: 'dlg-head' }, h('h2', { id: tid, text: titleText }),
-        h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => finish(null) }, icon('x'))));
+        h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Close'), onclick: () => finish(null) }, icon('x'))));
       form.append(h('div', { class: 'dlg-body' }, bodyKids));
       if (buttons.length) {
         const foot = h('div', { class: 'dlg-foot' });
@@ -2207,44 +2568,44 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     });
   }
   function confirmDialog({ title, body, confirm, danger }) {
-    return modal(title, [h('p', { text: body })], [{ label: 'Cancel', value: false }, { label: confirm || 'OK', value: true, primary: true, danger }]).then((v) => v === true);
+    return modal(title, [h('p', { text: body })], [{ label: t('Cancel'), value: false }, { label: confirm || t('OK'), value: true, primary: true, danger }]).then((v) => v === true);
   }
   function promptDialog({ title, label, value, confirm }) {
     const input = h('input', { type: 'text', value: value || '', maxlength: '80', required: true });
     const err = h('div', { class: 'err-text', 'aria-live': 'polite' });
-    return modal(title, [h('label', { class: 'field' }, label, input), err], [{ label: 'Cancel', value: null }, { label: confirm || 'Save', primary: true }], {
-      onSubmit: () => { const v = input.value.trim(); if (!v) { err.textContent = 'Enter a name.'; input.focus(); return undefined; } return v; },
+    return modal(title, [h('label', { class: 'field' }, label, input), err], [{ label: t('Cancel'), value: null }, { label: confirm || t('Save'), primary: true }], {
+      onSubmit: () => { const v = input.value.trim(); if (!v) { err.textContent = t('Enter a name.'); input.focus(); return undefined; } return v; },
       initialFocus: () => { setTimeout(() => input.select(), 0); return input; },
     });
   }
   function newWorkflowDialog(defaultPreset) {
     const presets = state.config.presets;
-    const name = h('input', { type: 'text', value: '', maxlength: '80', placeholder: 'e.g. Delivery' });
+    const name = h('input', { type: 'text', value: '', maxlength: '80', placeholder: t('e.g. Delivery') });
     const err = h('div', { class: 'err-text', 'aria-live': 'polite' });
-    const list = h('div', { class: 'radio-list', role: 'radiogroup', 'aria-label': 'Start from' });
+    const radios = h('div', { class: 'radio-list', role: 'radiogroup', 'aria-label': t('Start from') });
     const group = 'preset-' + (++uid);
-    const opts = presets.map((p) => ({ id: p.id, name: p.name, sub: arr(p.phases).map((x) => x.name).join(' → ') || p.description || 'No phases' }));
-    if (!presets.some((p) => p.id === 'blank')) opts.push({ id: '__blank', name: 'Blank', sub: 'One empty phase to rename' });
+    const opts = presets.map((p) => ({ id: p.id, name: presetName(p), sub: arr(p.phases).map((x, i) => presetPhaseName(p, i)).join(' → ') || presetDescription(p) || t('No phases') }));
+    if (!presets.some((p) => p.id === 'blank')) opts.push({ id: '__blank', name: t('Blank'), sub: t('One empty phase to rename') });
     const initial = defaultPreset && opts.some((o) => o.id === defaultPreset) ? defaultPreset : opts[0].id;
-    for (const o of opts) list.append(h('label', null, h('input', { type: 'radio', name: group, value: o.id, checked: o.id === initial }), h('span', null, h('div', { class: 'rl-name', text: o.name }), h('div', { class: 'rl-sub', text: o.sub }))));
+    for (const o of opts) radios.append(h('label', null, h('input', { type: 'radio', name: group, value: o.id, checked: o.id === initial }), h('span', null, h('div', { class: 'rl-name', text: o.name }), h('div', { class: 'rl-sub', text: o.sub }))));
     const placeChk = h('input', { type: 'checkbox', checked: true });
-    const place = h('label', { class: 'check' }, placeChk, 'Place skills into phases by keyword');
+    const place = h('label', { class: 'check' }, placeChk, t('Place skills into phases by keyword'));
     const syncName = () => {
-      const pid = (list.querySelector('input:checked') || {}).value;
+      const pid = (radios.querySelector('input:checked') || {}).value;
       const pr = presets.find((p) => p.id === pid);
-      if (!name.dataset.touched) name.value = pr && pr.id !== 'blank' ? pr.name : 'Workflow';
+      if (!name.dataset.touched) name.value = pr && pr.id !== 'blank' ? presetName(pr) : t('Workflow');
       place.hidden = !pr || !arr(pr.phases).some((x) => arr(x.keywords).length);
     };
     name.addEventListener('input', () => { name.dataset.touched = '1'; });
-    list.addEventListener('change', syncName);
+    radios.addEventListener('change', syncName);
     syncName();
-    return modal('New workflow', [h('label', { class: 'field' }, 'Name', name), h('div', { class: 'field' }, h('div', { style: 'font-weight:600;font-size:12px;margin-bottom:4px', text: 'Start from' }), list), place, err],
-      [{ label: 'Cancel', value: null }, { label: 'Create workflow', primary: true }], {
+    return modal(t('New workflow'), [h('label', { class: 'field' }, t('Name'), name), h('div', { class: 'field' }, h('div', { style: 'font-weight:600;font-size:12px;margin-bottom:4px', text: t('Start from') }), radios), place, err],
+      [{ label: t('Cancel'), value: null }, { label: t('Create workflow'), primary: true }], {
         returnFocus: () => els.wfSelect.isConnected && !els.wfTools.hidden ? els.wfSelect : null,
         onSubmit: () => {
           const v = name.value.trim();
-          if (!v) { err.textContent = 'Enter a name.'; name.focus(); return undefined; }
-          const pid = (list.querySelector('input:checked') || {}).value;
+          if (!v) { err.textContent = t('Enter a name.'); name.focus(); return undefined; }
+          const pid = (radios.querySelector('input:checked') || {}).value;
           return { name: v, preset: presets.find((p) => p.id === pid) || null, place: !place.hidden && placeChk.checked };
         },
       }).then((r) => { if (r) createWorkflow(r.name, r.preset, r.place); });
@@ -2252,15 +2613,36 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   async function fileDialog(skillId, path) {
     const s = state.idx.byId.get(skillId);
     if (!s) return;
-    const pre = h('pre', { class: 'file-pre', tabindex: '0', text: 'Loading…' });
-    const p = modal(`/${s.name} · ${path}`, [pre], [], { wide: true, initialFocus: () => pre });
+    const lang = i18n.lang;
+    const note = h('div', { class: 'file-note', hidden: true });
+    const pre = h('pre', { class: 'file-pre', tabindex: '0', text: t('Loading…') });
+    const p = modal(`/${s.name} · ${path}`, [note, pre], [], { wide: true, initialFocus: () => pre });
     try {
-      const res = await fetch(`/api/file?skill=${encodeURIComponent(skillId)}&path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+      // Asked in the page's language: the file's translation in it where there is one, else the file itself.
+      const res = await fetch(`/api/file?skill=${encodeURIComponent(skillId)}&path=${encodeURIComponent(path)}&lang=${encodeURIComponent(lang)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
-      pre.textContent = await res.text();
+      let text = '', language = null, stale = false, edited = false;
+      if (/^application\/json\b/i.test(res.headers.get('Content-Type') || '')) {
+        const body = await res.json();
+        text = str(body && (body.text != null ? body.text : body.content));
+        language = body && body.language ? str(body.language) : null;
+        stale = !!(body && body.stale);
+        edited = !!(body && body.edited);
+        // The title names the file shown: its translation's name where one is shown.
+        const shown = body && typeof body.path === 'string' && body.path ? body.path : null;
+        const title = shown && pre.closest('dialog') ? pre.closest('dialog').querySelector('.dlg-head h2') : null;
+        if (title) title.textContent = `/${s.name} · ${shown}`;
+      } else text = await res.text();
+      pre.textContent = text;
+      if (language) pre.lang = language;
+      const languageShown = languageName(lang);
+      if (language && stale) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'stale', text: t('The {language} translation may be behind its source.', { language: languageShown }) }));
+      if (language && edited) note.append(h('p', { class: 'tr-note stale', role: 'note', 'data-tr': 'edited', text: t('The {language} translation was edited apart from its source; agents follow the original, not this text.', { language: languageShown }) }));
+      if (!language && primary(originalLang(s)) !== primary(lang)) note.append(h('p', { class: 'tr-note', role: 'note', 'data-tr': 'original', text: t('Shown in its original language: there is no {language} translation of this file.', { language: languageShown }) }));
     } catch (err) {
-      pre.textContent = `Couldn’t read ${path}${err && err.message ? ` (${err.message})` : ''}.`;
+      pre.textContent = err && err.message ? t('Couldn’t read {path} ({error}).', { path, error: err.message }) : t('Couldn’t read {path}.', { path });
     }
+    note.hidden = !note.childNodes.length;
     return p;
   }
 
@@ -2275,50 +2657,50 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return true;
   }
   function toast(msg, action) {
-    const t = h('div', { class: 'toast' }, h('span', { text: msg }));
+    const el = h('div', { class: 'toast' }, h('span', { text: msg }));
     let timer = 0, gone = false;
     const entry = action ? { dismiss: () => dismiss(), run: () => { dismiss(); action.run(); } } : null;
     const dismiss = () => {
       if (gone) return;
       gone = true;
       clearTimeout(timer);
-      const hadFocus = t.contains(document.activeElement);
-      t.remove();
+      const hadFocus = el.contains(document.activeElement);
+      el.remove();
       if (entry) undoToasts = undoToasts.filter((u) => u !== entry);
       if (hadFocus) (focusBeforeToasts && focusBeforeToasts.isConnected ? focusBeforeToasts : els.canvas).focus({ preventScroll: true });
     };
-    if (action) t.append(h('button', { type: 'button', class: 'linkish', 'aria-keyshortcuts': 'Control+Z Meta+Z', onclick: () => entry.run() }, action.label));
-    t.append(h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Dismiss', onclick: dismiss }, icon('x')));
-    els.toasts.append(t);
+    if (action) el.append(h('button', { type: 'button', class: 'linkish', 'aria-keyshortcuts': 'Control+Z Meta+Z', onclick: () => entry.run() }, action.label));
+    el.append(h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Dismiss'), onclick: dismiss }, icon('x')));
+    els.toasts.append(el);
     if (entry) undoToasts.push(entry);
-    t._dismiss = dismiss;
+    el._dismiss = dismiss;
     while (els.toasts.children.length > 3) els.toasts.firstChild._dismiss();
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(dismiss, ms); };
     arm(action ? 8000 : 4500);
     const hold = () => clearTimeout(timer);
-    t.addEventListener('mouseenter', hold);
-    t.addEventListener('focusin', hold);
-    t.addEventListener('mouseleave', () => { if (!t.contains(document.activeElement)) arm(3000); });
-    t.addEventListener('focusout', (e) => { if (!t.contains(e.relatedTarget)) arm(3000); });
+    el.addEventListener('mouseenter', hold);
+    el.addEventListener('focusin', hold);
+    el.addEventListener('mouseleave', () => { if (!el.contains(document.activeElement)) arm(3000); });
+    el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) arm(3000); });
   }
 
   function tagPopover(anchor) {
     const idx = state.idx;
     const counts = new Map();
-    for (const s of idx.skills) for (const t of s._tagIds) counts.set(t, (counts.get(t) || 0) + 1);
-    const wrap = h('div', { class: 'tagpop', role: 'group', 'aria-label': 'Filter by tags' });
-    wrap.append(h('div', { class: 'tp-head' }, h('span', { class: 'muted', style: 'font-size:12px', text: 'Show skills having every checked tag' }),
-      h('button', { type: 'button', class: 'linkish', style: 'font-size:12px', onclick: () => { state.tagFilter.clear(); refilter(); for (const c of wrap.querySelectorAll('input')) c.checked = false; } }, 'Clear')));
+    for (const s of idx.skills) for (const tid of s._tagIds) counts.set(tid, (counts.get(tid) || 0) + 1);
+    const wrap = h('div', { class: 'tagpop', role: 'group', 'aria-label': t('Filter by tags') });
+    wrap.append(h('div', { class: 'tp-head' }, h('span', { class: 'muted', style: 'font-size:12px', text: t('Show skills having every checked tag') }),
+      h('button', { type: 'button', class: 'linkish', style: 'font-size:12px', onclick: () => { state.tagFilter.clear(); refilter(); for (const c of wrap.querySelectorAll('input')) c.checked = false; } }, t('Clear'))));
     for (const c of CATS) {
-      const tags = [...counts.keys()].filter((t) => (idx.tagById.get(t) || { category: catOf(t) }).category === c).sort((a, b) => tagLabel(a).localeCompare(tagLabel(b)));
+      const tags = [...counts.keys()].filter((tid) => (idx.tagById.get(tid) || { category: catOf(tid) }).category === c).sort((a, b) => tagLabel(a).localeCompare(tagLabel(b), i18n.lang));
       if (!tags.length) continue;
-      wrap.append(h('h3', { class: `cat-${c}` }, h('span', { class: `pill cat-${c} bare` }, icon(c)), state.view.categories[c].label));
-      for (const t of tags) {
-        wrap.append(h('label', null, h('input', { type: 'checkbox', value: t, checked: state.tagFilter.has(t), onchange: (e) => { if (e.target.checked) state.tagFilter.add(t); else state.tagFilter.delete(t); refilter(); } }),
-          h('span', { text: tagLabel(t) }), h('span', { class: 'n', text: String(counts.get(t)) })));
+      wrap.append(h('h3', { class: `cat-${c}` }, h('span', { class: `pill cat-${c} bare` }, icon(c)), catLabel(c)));
+      for (const tid of tags) {
+        wrap.append(h('label', null, h('input', { type: 'checkbox', value: tid, checked: state.tagFilter.has(tid), onchange: (e) => { if (e.target.checked) state.tagFilter.add(tid); else state.tagFilter.delete(tid); refilter(); } }),
+          h('span', { text: tagLabel(tid) }), h('span', { class: 'n', text: fmtNum(counts.get(tid)) })));
       }
     }
-    if (!counts.size) wrap.append(h('p', { class: 'muted', text: 'No tags were detected.' }));
+    if (!counts.size) wrap.append(h('p', { class: 'muted', text: t('No tags were detected.') }));
     openPopover(anchor, wrap, '');
   }
 
@@ -2326,16 +2708,17 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const idx = state.idx;
     const byKind = new Map();
     for (const i of idx.insights) { if (!byKind.has(i.kind)) byKind.set(i.kind, []); byKind.get(i.kind).push(i); }
-    const wrap = h('div', { class: 'inspop', role: 'group', 'aria-label': 'Insights' });
+    const wrap = h('div', { class: 'inspop', role: 'group', 'aria-label': t('Insights') });
     const kinds = [...byKind.keys()].sort((a, b) => (Object.keys(INSIGHTS).indexOf(a) + 1 || 99) - (Object.keys(INSIGHTS).indexOf(b) + 1 || 99));
     for (const k of kinds) {
-      const list = byKind.get(k);
-      wrap.append(h('h3', null, INSIGHTS[k] ? INSIGHTS[k].title : k, h('span', { class: 'muted', text: String(list.length) })));
-      for (const ins of list) {
+      const ofKind = byKind.get(k);
+      wrap.append(h('h3', null, insightTitle(k), h('span', { class: 'muted', text: fmtNum(ofKind.length) })));
+      for (const ins of ofKind) {
         const ids = arr(ins.skills).map(String);
         const names = ids.map((id) => (idx.byId.has(id) ? '/' + idx.byId.get(id).name : id));
+        const message = insightMessage(ins);
         wrap.append(h('button', { type: 'button', onclick: () => { closePopover(false); showInsight(ids); } },
-          h('b', { text: names.join(', ') || '—' }), ins.message ? h('div', { text: str(ins.message) }) : null));
+          h('b', { text: names.length ? list(names) : '—' }), message ? h('div', { text: message }) : null));
       }
     }
     openPopover(anchor, wrap, '');
@@ -2354,32 +2737,32 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!s) return;
     const wf = canEdit() ? activeWorkflow() : null;
     const items = [
-      { label: 'Open details', run: () => select({ type: 'skill', id: sid }) },
-      { label: state.expanded.has(sid) ? 'Hide steps' : 'Show steps', run: () => toggleExpand(sid) },
-      { label: 'Focus on linked', disabled: !(state.derived.out.get(sid).size || state.derived.inc.get(sid).size), run: () => setFocus(sid) },
+      { label: t('Open details'), run: () => select({ type: 'skill', id: sid }) },
+      { label: state.expanded.has(sid) ? t('Hide steps') : t('Show steps'), run: () => toggleExpand(sid) },
+      { label: t('Focus on linked'), disabled: !(state.derived.out.get(sid).size || state.derived.inc.get(sid).size), run: () => setFocus(sid) },
     ];
     if (wf) {
       const member = new Set(phasesOf(sid).map((p) => p.id));
       if (state.grouping === 'workflow') {
         const moveTargets = wf.phases.filter((p) => p.id !== fromPid && !(fromPid === null && member.has(p.id)));
         if (moveTargets.length || fromPid) {
-          items.push({ sep: true }, { heading: fromPid ? 'Move to…' : 'Add to…' });
+          items.push({ sep: true }, { heading: fromPid ? t('Move to…') : t('Add to…') });
           for (const p of moveTargets) items.push({ label: p.name, run: () => moveSkill(sid, fromPid, p.id) });
-          if (fromPid) items.push({ label: 'Unassigned', run: () => moveSkill(sid, fromPid, null) });
+          if (fromPid) items.push({ label: t('Unassigned'), run: () => moveSkill(sid, fromPid, null) });
         }
         if (fromPid) {
           const also = wf.phases.filter((p) => !member.has(p.id));
           if (also.length) {
-            items.push({ heading: 'Also add to…' });
-            for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(`Added /${s.name} to ${p.name}`); } });
+            items.push({ heading: t('Also add to…') });
+            for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: p.name })); } });
           }
-          items.push({ sep: true }, { label: `Remove from ${findPhase(fromPid)?.name || 'phase'}`, danger: true, run: () => removeWithUndo(fromPid, sid) });
+          items.push({ sep: true }, { label: t('Remove from {phase}', { phase: findPhase(fromPid)?.name || t('phase') }), danger: true, run: () => removeWithUndo(fromPid, sid) });
         }
       } else {
         const also = wf.phases.filter((p) => !member.has(p.id));
         if (also.length) {
-          items.push({ sep: true }, { heading: `Add to ${wf.name}…` });
-          for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(`Added /${s.name} to ${p.name}`); } });
+          items.push({ sep: true }, { heading: t('Add to {workflow}…', { workflow: wf.name }) });
+          for (const p of also) items.push({ label: p.name, run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: p.name })); } });
         }
       }
     }
@@ -2389,7 +2772,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = findPhase(pid);
     const before = mutate(() => { if (p) p.skills = p.skills.filter((x) => x !== sid); });
     if (!before) return;
-    toast(`Removed ${state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid} from ${p ? p.name : 'phase'}`, { label: 'Undo', run: () => restoreWorkflows(before) });
+    toast(t('Removed {skill} from {phase}', { skill: state.idx.byId.has(sid) ? skillLabel(sid) : '/' + sid, phase: p ? p.name : t('phase') }), { label: t('Undo'), run: () => restoreWorkflows(before) });
   }
   function phaseMenu(anchor) {
     const pid = anchor.dataset.phase;
@@ -2397,21 +2780,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const i = wf ? wf.phases.findIndex((p) => p.id === pid) : -1;
     if (i < 0) return;
     openMenu(anchor, [
-      { label: 'Phase details', run: () => select({ type: 'phase', id: pid }) },
-      { label: 'Rename', run: () => startRename(pid, anchor.dataset.fk) },
-      { label: '◀ Move left', disabled: i === 0, run: () => movePhase(pid, i - 1) },
-      { label: 'Move right ▶', disabled: i === wf.phases.length - 1, run: () => movePhase(pid, i + 1) },
+      { label: t('Phase details'), run: () => select({ type: 'phase', id: pid }) },
+      { label: t('Rename'), run: () => startRename(pid, anchor.dataset.fk) },
+      { label: t('◀ Move left'), disabled: i === 0, run: () => movePhase(pid, i - 1) },
+      { label: t('Move right ▶'), disabled: i === wf.phases.length - 1, run: () => movePhase(pid, i + 1) },
       { sep: true },
-      { label: 'Delete phase', danger: true, run: () => deletePhase(pid) },
+      { label: t('Delete phase'), danger: true, run: () => deletePhase(pid) },
     ]);
   }
   function workflowMenu(anchor) {
     openMenu(anchor, [
-      { label: 'New workflow…', run: () => newWorkflowDialog() },
-      { label: 'Rename…', run: renameWorkflow },
-      { label: 'Duplicate', run: duplicateWorkflow },
+      { label: t('New workflow…'), run: () => newWorkflowDialog() },
+      { label: t('Rename…'), run: renameWorkflow },
+      { label: t('Duplicate'), run: duplicateWorkflow },
       { sep: true },
-      { label: 'Delete workflow…', danger: true, run: deleteWorkflow },
+      { label: t('Delete workflow…'), danger: true, run: deleteWorkflow },
     ]);
   }
 
@@ -2441,7 +2824,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function setFocus(id) {
     state.focus = id;
     refilter();
-    toast(`Showing ${skillLabel(id)} and every skill linked to or from it`);
+    toast(t('Showing {skill} and every skill linked to or from it', { skill: skillLabel(id) }));
   }
   let renameReturn = null;
   function startRename(pid, returnFk) {
@@ -2488,19 +2871,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   async function rescan() {
     els.rescan.disabled = true;
-    els.rescan.textContent = 'Rescanning…';
+    state.rescanning = true;
+    els.rescan.textContent = t('Rescanning…');
     try {
       const res = await fetch('/api/rescan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skill-Atlas': '1' }, body: '{}' });
       if (!res.ok) throw new Error(String(res.status));
       setAtlas(await res.json());
       recompute();
       invalidate('chrome', 'canvas', 'details');
-      toast(`Rescanned · ${plural(state.idx.skills.length, 'skill')}`);
+      toast(t('Rescanned · {n} skill|Rescanned · {n} skills', { n: state.idx.skills.length }));
     } catch {
-      toast('Rescan failed — is the Skill Atlas server still running?');
+      toast(t('Rescan failed — is the Skill Atlas server still running?'));
     } finally {
       els.rescan.disabled = false;
-      els.rescan.textContent = 'Rescan';
+      state.rescanning = false;
+      els.rescan.textContent = t('Rescan');
     }
   }
   function downloadWorkflows() {
@@ -2520,7 +2905,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       try { ok = document.execCommand('copy'); } catch { ok = false; }
       ta.remove();
     }
-    toast(ok ? 'Path copied' : 'Couldn’t copy — select the path and copy it');
+    toast(ok ? t('Path copied') : t('Couldn’t copy — select the path and copy it'));
     if (btn) btn.focus();
   }
 
@@ -2551,6 +2936,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
     });
     els.wfMenu.addEventListener('click', () => { if (popoverOpenFor(els.wfMenu)) closePopover(); else workflowMenu(els.wfMenu); });
+    els.lang.addEventListener('change', () => chooseLanguage(els.lang.value));
     // The box is the source of truth: state.search only follows it, so nothing can put old text back.
     els.search.addEventListener('input', () => {
       clearTimeout(searchTimer);
@@ -2580,8 +2966,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousedown', (e) => { if (pop && !pop.el.contains(e.target) && !pop.anchor.contains(e.target)) closePopover(false); }, true);
     document.addEventListener('focusout', (e) => {
-      const t = e.target;
-      if (t.matches && t.matches('input.col-rename') && state.renaming === t.dataset.phase) finishRename(t, true);
+      const tgt = e.target;
+      if (renderingBoard) return; // the board is re-rendering, keeping the draft
+      if (tgt.matches && tgt.matches('input.col-rename') && state.renaming === tgt.dataset.phase) finishRename(tgt, true);
     });
 
     // Hover emphasis: only class toggles.
@@ -2609,11 +2996,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function onClick(e) {
-    const t = e.target.closest('[data-act]');
-    if (!t || t.disabled) return;
-    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
-    const act = t.dataset.act;
-    const sid = t.dataset.skill, pid = t.dataset.phase;
+    const tgt = e.target.closest('[data-act]');
+    if (!tgt || tgt.disabled) return;
+    if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA') return;
+    const act = tgt.dataset.act;
+    const sid = tgt.dataset.skill, pid = tgt.dataset.phase;
     switch (act) {
       case 'card': {
         const wasSelected = state.selection && state.selection.type === 'skill' && state.selection.id === sid;
@@ -2624,18 +3011,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         invalidate('chrome', 'canvas', 'details');
         break;
       }
-      case 'card-menu': if (popoverOpenFor(t)) closePopover(); else cardMenu(t); break;
+      case 'card-menu': if (popoverOpenFor(tgt)) closePopover(); else cardMenu(tgt); break;
       case 'card-remove': removeWithUndo(pid, sid); break;
-      case 'missing-remove': removeWithUndo(pid, t.dataset.name); break;
+      case 'missing-remove': removeWithUndo(pid, tgt.dataset.name); break;
       case 'step': {
-        const st = t.dataset.step;
+        const st = tgt.dataset.step;
         if (state.openSteps.has(st)) state.openSteps.delete(st); else state.openSteps.add(st);
         invalidate('canvas');
         break;
       }
-      case 'follow': e.stopPropagation(); follow(t.dataset.to); break;
+      case 'follow': e.stopPropagation(); follow(tgt.dataset.to); break;
       case 'group-toggle': case 'group-expand': {
-        const key = t.dataset.key;
+        const key = tgt.dataset.key;
         if (state.collapsed.has(key)) state.collapsed.delete(key); else state.collapsed.add(key);
         savePrefs();
         invalidate('canvas');
@@ -2647,11 +3034,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
       case 'phase-select': {
         const already = state.selection && state.selection.type === 'phase' && state.selection.id === pid;
-        if (already) startRename(pid, t.dataset.fk); else select({ type: 'phase', id: pid });
+        if (already) startRename(pid, tgt.dataset.fk); else select({ type: 'phase', id: pid });
         break;
       }
-      case 'phase-rename': startRename(pid, t.dataset.fk); break;
-      case 'phase-menu': if (popoverOpenFor(t)) closePopover(); else phaseMenu(t); break;
+      case 'phase-rename': startRename(pid, tgt.dataset.fk); break;
+      case 'phase-menu': if (popoverOpenFor(tgt)) closePopover(); else phaseMenu(tgt); break;
       case 'phase-left': { const wf = activeWorkflow(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) - 1); break; }
       case 'phase-right': { const wf = activeWorkflow(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) + 1); break; }
       case 'phase-delete': deletePhase(pid); break;
@@ -2659,41 +3046,41 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       case 'reload-workflows': reloadWorkflows(); break;
       case 'start-fresh': startFresh(); break;
       case 'preset-start': {
-        const p = state.config.presets.find((x) => x.id === t.dataset.preset);
-        if (p) createWorkflow(p.name, p, true);
+        const p = state.config.presets.find((x) => x.id === tgt.dataset.preset);
+        if (p) createWorkflow(presetName(p), p, true);
         break;
       }
       case 'blank-start': {
         const p = state.config.presets.find((x) => x.id === 'blank');
-        createWorkflow('Workflow', p || null, false);
+        createWorkflow(t('Workflow'), p || null, false);
         break;
       }
       case 'close-details': state.detailsOpen = false; savePrefs(); invalidate('chrome', 'links'); els.detailsBtn.focus(); break;
       case 'focus': setFocus(sid); break;
       case 'toggle-expand': toggleExpand(sid); flush(); follow(sid); break;
-      case 'goto-step': follow(sid, { expand: true, openStep: t.dataset.step }); break;
-      case 'view-file': fileDialog(sid, t.dataset.path); break;
-      case 'copy': copyText(t.dataset.text, t); break;
+      case 'goto-step': follow(sid, { expand: true, openStep: tgt.dataset.step }); break;
+      case 'view-file': fileDialog(sid, tgt.dataset.path); break;
+      case 'copy': copyText(tgt.dataset.text, tgt); break;
       default: break;
     }
   }
 
   function onChange(e) {
-    const t = e.target;
-    if (t.dataset && t.dataset.act === 'phase-check') {
-      const p = findPhase(t.dataset.phase);
+    const tgt = e.target;
+    if (tgt.dataset && tgt.dataset.act === 'phase-check') {
+      const p = findPhase(tgt.dataset.phase);
       if (!p) return;
-      if (t.checked) addToPhase(p.id, t.dataset.skill); else removeFromPhase(p.id, t.dataset.skill);
+      if (tgt.checked) addToPhase(p.id, tgt.dataset.skill); else removeFromPhase(p.id, tgt.dataset.skill);
     }
   }
 
   let noteTimer = 0;
   function onInput(e) {
-    const t = e.target;
-    if (t.dataset && t.dataset.act === 'phase-note') {
-      const p = findPhase(t.dataset.phase);
+    const tgt = e.target;
+    if (tgt.dataset && tgt.dataset.act === 'phase-note') {
+      const p = findPhase(tgt.dataset.phase);
       if (!p || !canEdit()) return;
-      p.note = t.value;
+      p.note = tgt.value;
       markDirty();
       clearTimeout(noteTimer);
       noteTimer = setTimeout(() => invalidate('canvas'), 600);
@@ -2701,15 +3088,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function onKeyDown(e) {
-    const t = e.target;
-    if (t.matches && t.matches('input.col-rename')) {
-      if (e.key === 'Enter') { e.preventDefault(); finishRename(t, true); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishRename(t, false); }
+    const tgt = e.target;
+    if (tgt.matches && tgt.matches('input.col-rename')) {
+      if (e.key === 'Enter') { e.preventDefault(); finishRename(tgt, true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishRename(tgt, false); }
       return;
     }
     if (document.querySelector('dialog[open]')) return;
-    const typing = t.closest && t.closest('input, textarea, select, [contenteditable="true"]');
-    if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !(typing && t.matches('input[type="text"], input[type="search"], textarea'))) {
+    const typing = tgt.closest && tgt.closest('input, textarea, select, [contenteditable="true"]');
+    if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !(typing && tgt.matches('input[type="text"], input[type="search"], textarea'))) {
       if (runLatestUndo()) e.preventDefault();
       return;
     }
@@ -2717,7 +3104,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); els.search.focus(); els.search.select(); return; }
     if (e.key === 'Escape') {
       if (pop) { e.preventDefault(); closePopover(true); return; }
-      if (typing && t.tagName === 'TEXTAREA') { t.blur(); return; }
+      if (typing && tgt.tagName === 'TEXTAREA') { tgt.blur(); return; }
       if (state.selection || state.highlight.size) {
         const sel = state.selection;
         state.selection = null;

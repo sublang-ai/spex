@@ -2,19 +2,20 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Insights over the whole atlas (data-model.md), plus `invalid-frontmatter`
-// for a SKILL.md whose frontmatter could not be read.
+// for a SKILL.md whose frontmatter could not be read. Each carries `params`,
+// the values its English message is built from, for the page to phrase.
 
 import path from 'node:path';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
-const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps'];
+const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'translation-steps'];
 
 export function findInsights({ skills, edges, unresolved, roots }) {
   const out = [];
   const rootLabel = new Map(roots.map((r) => [r.id, r.label]));
 
   for (const s of skills) {
-    if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], message: `${s.id}: ${s._fmError}; the folder name is used as its name` });
+    if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: {}, message: `${s.id}: ${s._fmError}; the folder name is used as its name` });
   }
 
   const byName = new Map();
@@ -28,6 +29,7 @@ export function findInsights({ skills, edges, unresolved, roots }) {
     out.push({
       kind: 'duplicate-name',
       skills: copies.map((c) => c.id),
+      params: { name },
       message: `"${name}" is defined differently in ${copies.length} folders: ${where}. An agent loading several of these folders sees only one of them.`,
     });
   }
@@ -37,28 +39,46 @@ export function findInsights({ skills, edges, unresolved, roots }) {
     const key = `${u.from}\0${u.name}`;
     if (seenUnresolved.has(key)) continue;
     seenUnresolved.add(key);
-    out.push({ kind: 'unresolved-link', skills: [u.from], message: `${u.from} links to "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
+    out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from }, message: `${u.from} links to "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
   }
 
   for (const cycle of callCycles(skills, edges)) {
-    out.push({ kind: 'cycle', skills: [...cycle], message: `calls form a cycle: ${[...cycle, cycle[0]].join(' \u2192 ')}` });
+    out.push({ kind: 'cycle', skills: [...cycle], params: { path: [...cycle] }, message: `calls form a cycle: ${[...cycle, cycle[0]].join(' \u2192 ')}` });
   }
 
   for (const s of skills) {
-    if (s.lines > OVERSIZED_LINES) out.push({ kind: 'oversized', skills: [s.id], message: `${s.id}: SKILL.md has ${s.lines} lines (over ${OVERSIZED_LINES}); consider moving detail into reference files` });
+    if (s.lines > OVERSIZED_LINES) out.push({ kind: 'oversized', skills: [s.id], params: { lines: s.lines }, message: `${s.id}: SKILL.md has ${s.lines} lines (over ${OVERSIZED_LINES}); consider moving detail into reference files` });
   }
   for (const s of skills) {
-    if (!s.description.trim()) out.push({ kind: 'missing-description', skills: [s.id], message: `${s.id} has no description, so an agent cannot tell when to use it` });
+    if (!s.description.trim()) out.push({ kind: 'missing-description', skills: [s.id], params: {}, message: `${s.id} has no description, so an agent cannot tell when to use it` });
   }
   for (const s of skills) {
     const declared = s.frontmatter?.name;
     const folder = path.basename(s.dir);
     if (!s._fmError && declared !== undefined && declared !== null && String(declared).trim() && String(declared).trim() !== folder) {
-      out.push({ kind: 'name-mismatch', skills: [s.id], message: `${s.id}: frontmatter name "${String(declared).trim()}" differs from its folder "${folder}"` });
+      out.push({ kind: 'name-mismatch', skills: [s.id], params: { name: String(declared).trim(), folder }, message: `${s.id}: frontmatter name "${String(declared).trim()}" differs from its folder "${folder}"` });
     }
   }
   for (const s of skills) {
-    if (!s.steps.length) out.push({ kind: 'no-steps', skills: [s.id], message: `${s.id}: no steps detected; read it to annotate its steps if it matters` });
+    if (!s.steps.length) out.push({ kind: 'no-steps', skills: [s.id], params: {}, message: `${s.id}: no steps detected; read it to annotate its steps if it matters` });
+  }
+  for (const s of skills) {
+    for (const lang of [...(s._staleByLang?.keys() ?? [])].sort()) {
+      const files = [...s._staleByLang.get(lang)].sort();
+      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; translate the change and run atlas.mjs pin` });
+    }
+  }
+  for (const s of skills) {
+    for (const lang of [...(s._editedByLang?.keys() ?? [])].sort()) {
+      const files = [...s._editedByLang.get(lang)].sort();
+      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run atlas.mjs pin` });
+    }
+  }
+  for (const s of skills) {
+    for (const lang of [...(s._translationSteps?.keys() ?? [])].sort()) {
+      const { steps, expected } = s._translationSteps.get(lang);
+      out.push({ kind: 'translation-steps', skills: [s.id], params: { lang, steps, expected }, message: `${s.id}: the ${lang} translation of SKILL.md has ${steps} steps where the skill has ${expected}, so its steps are not shown` });
+    }
   }
   return out.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
 }

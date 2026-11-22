@@ -69,8 +69,8 @@ Each row names a guideline and where to see it.
 | --- | --- |
 | **The description decides whether a skill is ever used**: third person, what it does and when, the words a user would say | Every description says what the skill does, then `Use when…` with the phrases a user would say. The three workflow skills add `Not for…`: `code` and `decide` point at each other and at `review`, which keeps three related skills from stealing each other's requests |
 | **Name**: lowercase, hyphens, equal to the folder | `skill-atlas`, `code`, `review`, `decide`; checked by a test |
-| **Concise: the context window is shared** — say only what the model does not already know | The four `SKILL.md` files are 76 to 113 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
-| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` and the deep-read procedure in `references/deep-read.md`; the workflow skills keep every relayed prompt in `references/`. An agent answering "open the atlas" reads 113 lines |
+| **Concise: the context window is shared** — say only what the model does not already know | The four `SKILL.md` files are 76 to 133 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
+| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` the deep-read procedure in `references/deep-read.md` and the translation procedure in `references/translate.md`; the workflow skills keep every relayed prompt in `references/`. An agent answering "open the atlas" reads 133 lines |
 | **References one level deep** | Every reference file is linked from `SKILL.md` itself; none is reachable only through another. Checked by a test |
 | **A table of contents on longer reference files** | `data-model.md`, `reviewer-round.md` and `coder-phases.md` open with one |
 | **Match freedom to fragility** | Fragile, exact operations are a script (`atlas.mjs`) or a verbatim prompt; judgment calls ("decide from what the reply establishes, never from its format") are stated as principles with the reason |
@@ -102,6 +102,21 @@ Every skill has a *Customizing* section naming plain files under `references/`.
 
 The split is deliberate: `SKILL.md` holds the procedure, which should rarely change, and `references/` holds the wording and thresholds, which every team has opinions about.
 A user who edits a prompt cannot break the control flow, and an update to the procedure does not overwrite a team's wording unless they take it.
+
+## Languages
+
+The page and the shipped skills read in English (US) and Simplified Chinese ([DR-245](../specs/decisions/245-skills-and-the-atlas-in-the-readers-language.md)).
+The page follows the reader's choice in its header, else `--lang`, else the browser; a reader studies a skill's text more than the page's, so a skill's description, steps and files switch with it.
+
+| What | Where its Chinese lives |
+| --- | --- |
+| The page's own text | `assets/locales/zh-CN.json`, keyed by the English text |
+| Tag, category and preset labels, the title | `references/<name>.zh-CN.json` beside each tunable file |
+| A shipped skill's Markdown | `SKILL.zh-CN.md` and `references/<file>.zh-CN.md` beside each source |
+| A skill someone else wrote | `translations/<skill id>/` in the state folder, written by the agent on request by `references/translate.md` |
+
+`SKILL.md` stays the one file an agent loads; a translation says it is for readers, and supplies words only — steps, links and tags still come from the source.
+Each translation records the SHA-256 of the source it was made from and, in Markdown, its own (`atlas.mjs pin`), so the page marks one behind its source or edited apart from it, and a test fails a change to a shipped skill or its translation until the two match again.
 
 ## How the three workflow skills match their playbooks
 

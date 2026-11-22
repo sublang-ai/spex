@@ -165,7 +165,10 @@ ships Agent Skills for any coding agent: `skill-atlas` maps the skills
 you have installed — which call which, what each step reads, writes,
 runs and asks — and lets you sort them into workflow phases on a local
 page; `code`, `review` and `decide` carry the built-in playbooks'
-procedure as plain skills. Install one with
+procedure as plain skills. Each ships in English and Simplified
+Chinese, and the atlas's page shows a skill in the reader's language
+wherever it has a translation.
+Install one with
 `npx skills add sublang-ai/spex --skill skill-atlas`
 ([about the skills](docs/skills.md)).
 

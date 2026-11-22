@@ -8,6 +8,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { viewerConfig, readWorkflowsState, validateWorkflows, writeWorkflows, setAsideInvalid } from './state.mjs';
+import { canonicalTag, findTranslation, translationState } from './translations.mjs';
 
 export const HOST = '127.0.0.1';
 export const BODY_MAX_BYTES = 1024 * 1024; // 1 MiB: far above any workflows document
@@ -17,8 +18,9 @@ const REPLACE_INVALID_HEADER = 'x-skill-atlas-replace-invalid';
 
 /**
  * Start the server.
- * @param {{ port:number, strictPort:boolean, stateDir:string, viewerFile:string, rescan:() => object, atlas:object }} opts
- *   strictPort: fail when the port is busy instead of taking a free one
+ * @param {{ port:number, strictPort:boolean, stateDir:string, viewerFile:string, rescan:() => object, atlas:object,
+ *   lang?:string|null, rulesFile?:string }} opts
+ *   strictPort: fail when the port is busy instead of taking a free one; lang: the --lang the page opens in
  * @returns {Promise<{ server: http.Server, port: number }>}
  */
 export function startServer(opts) {
@@ -100,12 +102,12 @@ export function startServer(opts) {
       }
       case 'GET /api/config':
         try {
-          return send(res, 200, viewerConfig(opts.stateDir, false));
+          return send(res, 200, viewerConfig({ stateDir: opts.stateDir, isStatic: false, lang: opts.lang ?? null, rulesFile: opts.rulesFile }));
         } catch (err) {
           return send(res, 500, { error: err.message });
         }
       case 'GET /api/file':
-        return serveSkillFile(res, atlas, url.searchParams.get('skill'), url.searchParams.get('path') ?? 'SKILL.md');
+        return serveSkillFile(res, atlas, url.searchParams.get('skill'), url.searchParams.get('path') ?? 'SKILL.md', url.searchParams.get('lang'), opts.stateDir);
       default:
         if (['/', '/index.html', '/api/atlas', '/api/rescan', '/api/workflows', '/api/config', '/api/file'].includes(url.pathname)) {
           return send(res, 405, { error: `${req.method} is not supported on ${url.pathname}` });
@@ -131,10 +133,18 @@ export function startServer(opts) {
   });
 }
 
-function serveSkillFile(res, atlas, skillId, rel) {
+// A skill's file as text. Asked in a language (`lang`), the answer is JSON:
+// `{ language, path, stale, edited, text }` with the translation where there is one
+// (data-model.md "Languages"), else the file itself with `language` null.
+function serveSkillFile(res, atlas, skillId, rel, lang, stateDir) {
   const skill = atlas.skills.find((s) => s.id === skillId);
   if (!skill) return send(res, 404, { error: `no skill "${skillId ?? ''}"` });
   if (!rel || rel.includes('\0')) return send(res, 400, { error: 'path is required' });
+  let want = null;
+  if (lang !== null && lang !== '') {
+    want = canonicalTag(lang);
+    if (!want) return send(res, 400, { error: `lang "${lang}" is not a language tag such as zh-CN` });
+  }
   let base;
   let real;
   try {
@@ -147,13 +157,36 @@ function serveSkillFile(res, atlas, skillId, rel) {
   if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {
     return send(res, 403, { error: 'the path leaves the skill folder' });
   }
+  const insidePosix = inside.split(path.sep).join('/');
+  let isFile = false;
+  try { isFile = fs.statSync(real).isFile(); } catch { /* answered below */ }
+  if (want && isFile) {
+    const found = findTranslation(skill, inside, want, stateDir);
+    if (found) {
+      const translated = readBoundedText(found.real, path.basename(found.abs), skillId);
+      if (translated.error) return send(res, translated.status, { error: translated.error });
+      const { stale, edited } = translationState(found.real, real);
+      // The file shown, by its path in the skill's folder (or under translations/<skill id>/).
+      const shown = path.posix.join(path.posix.dirname(insidePosix), path.basename(found.abs));
+      return send(res, 200, { language: found.tag, path: shown, stale, edited, text: translated.text });
+    }
+  }
+  const source = readBoundedText(real, rel, skillId);
+  if (source.error) return send(res, source.status, { error: source.error });
+  if (want) return send(res, 200, { language: null, path: insidePosix, stale: false, edited: false, text: source.text });
+  return sendText(res, 200, source.text, 'text/plain; charset=utf-8');
+}
+
+// A file's text under the bounds every served file meets: a regular file of
+// at most FILE_MAX_BYTES holding no NUL byte.
+function readBoundedText(real, rel, skillId) {
   let stat;
-  try { stat = fs.statSync(real); } catch { return send(res, 404, { error: `no file "${rel}" in ${skillId}` }); }
-  if (!stat.isFile()) return send(res, 404, { error: `"${rel}" is not a file` });
-  if (stat.size > FILE_MAX_BYTES) return send(res, 415, { error: `"${rel}" is over ${FILE_MAX_BYTES / 1024} KiB` });
+  try { stat = fs.statSync(real); } catch { return { status: 404, error: `no file "${rel}" in ${skillId}` }; }
+  if (!stat.isFile()) return { status: 404, error: `"${rel}" is not a file` };
+  if (stat.size > FILE_MAX_BYTES) return { status: 415, error: `"${rel}" is over ${FILE_MAX_BYTES / 1024} KiB` };
   const buf = fs.readFileSync(real);
-  if (buf.includes(0)) return send(res, 415, { error: `"${rel}" is a binary file` });
-  return sendText(res, 200, buf.toString('utf8'), 'text/plain; charset=utf-8');
+  if (buf.includes(0)) return { status: 415, error: `"${rel}" is a binary file` };
+  return { text: buf.toString('utf8') };
 }
 
 // Resolves to the body text, or null after answering 413.
