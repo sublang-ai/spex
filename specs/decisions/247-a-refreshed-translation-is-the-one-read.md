@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-246: A Refreshed Translation Is the One Read
+# DR-247: A Refreshed Translation Is the One Read
 
 ## Status
 

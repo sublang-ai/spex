@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package lets a person with many agent skills see what each does, how they link, and where each sits in their work, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), in the reader's language per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md) as amended by [DR-246](../decisions/246-a-refreshed-translation-is-the-one-read.md).
+This package lets a person with many agent skills see what each does, how they link, and where each sits in their work, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), in the reader's language per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md) as amended by [DR-247](../decisions/247-a-refreshed-translation-is-the-one-read.md).
 It owns the `skill-atlas` skill's scan, its served page and its state files, not the skills it reads.
 
 ## External Behavior
