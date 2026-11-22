@@ -12,6 +12,8 @@ Proposed (2026-11-21), together with [DR-243](243-guards-protect-critical-behavi
 A correct model can describe a faulty service.
 Teams have found that the hard part is connecting model events to observations of running code [[1]] [[2]].
 Spex therefore checks the code through an interface the project already uses.
+A counterexample gives reviewers a trace to inspect, while a clean search asks them to trust the engine that explored the cases.
+Spex relies on established engines with an independent track record and checks the translations it owns.
 
 ## Decision
 
@@ -47,26 +49,25 @@ Replay reproduces the failure when the binding controls the relevant schedule an
 
 ### Which tools to use
 
-Adopt the techniques in this order, using established tools for generation, model search, rule analysis and proof.
+Adopt the techniques below in order, starting with fast-check because it exercises the real interface without an extra runtime.
+For finite model search, TLC supplies counterexample traces with Java alone [[4]].
+P offers log monitors useful at a later stage, but adopting it for the first model search would also require .NET [[5]].
 Only a named checker, solver or prover can establish a bounded result, an item conflict or a proof.
 
 | Technique | What Spex checks |
 | --- | --- |
 | Generated runs with fast-check | Drive the real code through the binding and shrink a failing sequence for replay. |
 | Finite model search with TLA+ and TLC | Explore the model within the chosen bounds. Run each counterexample and a sample of permitted sequences on the code and compare their effects with the assertion and model. |
-| Rule analysis with Z3 | Look for contradictory outcomes or a missing decision where the items require one. |
+| Rule analysis with Z3 | Ask the solver for an input on which the rules require incompatible outcomes or leave a required decision open. |
 | Recorded runs | Check the same assertion against observed events. A claim about a missing event requires a log complete for that event. |
 | External proofs | Import a checked proof for a component. Record its prover, target and assumptions, including what the prover trusts. |
 
 ### Checking the evidence
 
-When Spex translates a guard for a tool, a clean result counts only if that tool correctly classifies every approved example using the same definitions, assertion, assumptions and bounds as the actual check.
-A permitted example must reach its stated effect.
-A forbidden example must reach the legal steps preceding the forbidden action or effect under its stated conditions, and the assertion must reject the offending step.
-For example, an author can request approval of their own submission, but a grant to that author must fail the assertion.
-If the items require a response, the model must also admit a permitted response to that request.
-A search may neither assume its conclusion nor use the assertion under test to prune the behavior it explores.
-For a solver, examples are separate queries over the same rules as the conflict query.
+When Spex translates a guard, the tool must check every approved example against the same translated rules, assertion, assumptions and bounds as its main question.
+Permitted examples must reach their stated effects.
+For a forbidden example, the tool must admit the legal steps from the stated initial conditions, allow a permitted response if one is required, and reject the offending step by the assertion.
+The search must neither assume its conclusion nor use that assertion to exclude cases.
 Failure to validate the translation is inconclusive unless the underlying evidence independently establishes a violation or an item conflict.
 
 Recorded evidence identifies the events checked, their order and the code revision that produced them.
@@ -91,3 +92,5 @@ Replacing a tool changes every guard that uses it.
 [1]: https://arxiv.org/abs/2006.00915 "Davis et al. — eXtreme Modelling in Practice"
 [2]: https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3 "Bornholt et al. — Using Lightweight Formal Methods to Validate a Key-Value Storage Node in Amazon S3"
 [3]: https://cs.stanford.edu/~trippel/pubs/mendoza_ICSE26.pdf "Mendoza et al. — Automating Requirements Formalization"
+[4]: https://docs.tlapl.us/using:tlc:start "TLA+ — TLC Model Checker"
+[5]: https://p-org.github.io/P/getstarted/install/ "P — Installing P"

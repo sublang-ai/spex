@@ -13,19 +13,19 @@ Proposed (2026-11-21) as an extension to the CLI in [DR-165](165-one-package-man
 Agents can change code faster than people can review it.
 Teams have caught defects by testing production code against a few important properties [[1]] [[2]].
 A weak property can survive every test, especially when the agent writing it has already seen the faulty code [[3]].
-GEARS gives the person who owns the behavior a way to say what matters and recognize a failure.
+Tools such as Kiro already use a solver and concrete examples to help people settle requirements before coding [[4]].
 
 ## Decision
 
 ### What a person approves
 
-A **guard** checks one property on every change that reaches it.
-A GEARS test item states the assertion and cites the behavior item it protects.
+A **guard** checks one property on every affected change, has demonstrated that it catches a fault in the code, and requires a person's approval to change.
+A GEARS test item states that property and cites the behavior item it protects.
 Several guards can cover different properties of the same item.
 Spex presents selective formal verification as “protect critical behavior on every change” and names the assertion each guard checks.
-People own guards entirely in GEARS.
 
-A person approves at least one permitted and one forbidden example per guard.
+A person approves the guard's meaning through GEARS examples alone, so anyone who knows the behavior can review it without learning the derived notation.
+Each guard needs at least one approved permitted example and one approved forbidden example.
 Each example is a GEARS test item that belongs to that guard and cites its behavior item.
 One permitted example must show the protected behavior happening.
 If plausible readings disagree, the person decides by example and records the intended meaning and any assumptions in the items.
@@ -55,6 +55,7 @@ An observed effect that the assertion forbids on the project's code always takes
 
 ### What a result means
 
+Spex omits a generic “verified” verdict because it hides what was checked and how far the evidence reaches.
 Each result names its tool and version, code revision, bounds and assumptions.
 Model and implementation results are reported separately.
 
@@ -79,11 +80,9 @@ A violation from a required check blocks, as does a violation any check observes
 All other optional results are advisory.
 
 A rerun can settle an inconclusive check.
-A violation keeps its item ID, initial conditions, actions, observed effect and local replay command.
-After a relevant code or approved guard change, Spex can close it by replaying the original sequence under controlled conditions and observing that the assertion now holds.
-A change to search settings alone or a failure to reproduce under uncontrolled conditions leaves it open.
-A person can close an uncontrolled finding or a misreport demonstrated on the original evidence with a corrected check.
-Closed findings remain in the record.
+A violation keeps its item ID, initial conditions, actions, observed effect and local replay command even after closure.
+Spex closes it automatically only when a code change or an approved change to the guard corrects the failure and a controlled replay of the original sequence confirms it.
+Only a person can close an uncontrolled finding or a misreport demonstrated by a corrected check on the original evidence.
 
 ## Consequences
 
@@ -97,3 +96,4 @@ Examples and kept faults give reviewers evidence of what a guard catches, within
 [1]: https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3 "Bornholt et al. — Using Lightweight Formal Methods to Validate a Key-Value Storage Node in Amazon S3"
 [2]: https://arxiv.org/abs/2407.01688 "How We Built Cedar: A Verification-Guided Approach"
 [3]: https://arxiv.org/abs/2610.32053 "Wang et al. — Are LLM-Generated Formal Specifications Faithful to Their Requirements?"
+[4]: https://kiro.dev/blog/deep-spec-analysis/ "Kiro — Requirements analysis: catching requirement bugs before they become code"
