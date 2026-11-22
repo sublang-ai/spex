@@ -91,11 +91,14 @@ export function labelFiles(file) {
 /**
  * The labels per language, reduced to what the page reads: the title, a
  * category's label by key, a tag's label by id, and a preset's name,
- * description and phase names by id, its phases by position.
+ * description and phase names by id, its phases by position. A tag holds the
+ * fields of the label files it has alone (`title` and `categories` from the
+ * view settings', `tags` from the tag rules', `presets` from the presets'), so
+ * the page chooses each file's tag on its own.
  */
 export function readLabels(sources) {
   const out = {};
-  const entry = (tag) => (out[tag] ??= { title: null, categories: {}, tags: {}, presets: {} });
+  const entry = (tag) => (out[tag] ??= {});
   const read = (file) => {
     try {
       const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -110,7 +113,9 @@ export function readLabels(sources) {
     const doc = read(file);
     if (!doc) continue;
     const e = entry(tag);
+    e.title ??= null;
     if (isStr(doc.title)) e.title = doc.title;
+    e.categories ??= {};
     if (isObj(doc.categories)) {
       for (const [key, c] of Object.entries(doc.categories)) {
         if (isStr(c?.label)) e.categories[key] = c.label;
@@ -121,6 +126,7 @@ export function readLabels(sources) {
     const doc = read(file);
     if (!doc) continue;
     const e = entry(tag);
+    e.tags ??= {};
     for (const t of Array.isArray(doc.tags) ? doc.tags : []) {
       if (isStr(t?.id) && isStr(t?.label)) e.tags[t.id] = t.label;
     }
@@ -129,6 +135,7 @@ export function readLabels(sources) {
     const doc = read(file);
     if (!doc) continue;
     const e = entry(tag);
+    e.presets ??= {};
     for (const p of Array.isArray(doc.presets) ? doc.presets : []) {
       if (!isStr(p?.id)) continue;
       const preset = {};

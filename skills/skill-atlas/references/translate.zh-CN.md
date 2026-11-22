@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=93cfaed015d75dbe6d3d012124f6b5de1db78d030d74c5ceb1d3582a50a60958 own=e66183cdb1a098ff7d64599c4c95ad50915fdd95d8274e8c67a9617eb4684c79 -->
+<!-- skill-atlas:source sha256=2e3f5ef64e95277edd88a29bf4f10bcf21b2ca12fd9ca44cd70a836ecf37280c own=6631842ebf579d33b9ee378cb0a2f1bf660c6ef4b60aa1f1828c6f90ce350d4b -->
 
 > 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -65,6 +65,7 @@ node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <scan options> <s
 
 `pin` 会在每个译本中写入其所翻译文件的 SHA-256，并在 Markdown 译本中写入它自己的 SHA-256：在 Markdown 中是一行注释，在 JSON 中是一个 `translationOf` 键。
 只在译本完成后再记录哈希值，因为记录过哈希值的译本会被视为最新。
+每个译本都写成一个独立的文件，绝不链接到某个技能的另一个文件：如果一个译本通过任何链接与其技能或另一个技能中某个并非其源文件之译本的文件是同一文件，`pin` 会拒绝它，并列出这两个文件；有一个在它读取的任何文件夹中都找不到的硬链接的译本，它也会拒绝。
 然后重新扫描，确认该技能没有 `translation-steps` 洞察；如果有，就让译本的步骤标题与源文件一致，再记录一次。
 
 被标记为落后于源文件的译本，要在源文件改动之处重新翻译，然后重新记录哈希值，使其恢复为最新。

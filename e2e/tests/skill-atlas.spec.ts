@@ -866,6 +866,20 @@ test.describe("in a browser of Chinese", () => {
     await expect(dialog.getByRole("note")).toHaveText(zh("The {language} translation was edited apart from its source; agents follow the original, not this text.", { language: ZH.name }));
     await page.keyboard.press("Escape");
 
+    // The insights say where each refresh is written, what may be brought in line instead, and the command pinning it.
+    await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
+    const insights = page.getByRole("group", { name: zh("Insights") });
+    const pinCommand = /^node <skill-dir>\/scripts\/atlas\.mjs pin --state <state> .*SKILL\.zh-CN\.md$/;
+    // The words around each placeholder, as the catalog gives them.
+    const words = (en: string) => new RegExp(zh(en).split(/\{\w+\}/).map((part) => esc(part.trim())).filter(Boolean).join(".*"));
+    const stale = insights.locator(".ins-repair").filter({ has: page.locator("li", { hasText: words("Write {file}, brought up to date, to {target}.") }) }).first();
+    await expect(stale.locator("li").first()).toContainText("<state>/translations/");
+    await expect(stale.locator("p")).toHaveText(words("Then run {command}"));
+    await expect(stale.locator("p code")).toHaveText(pinCommand);
+    const edited = insights.locator(".ins-repair").filter({ has: page.locator("p", { hasText: words("Carry each edit across, then run {command}") }) }).first();
+    await expect(edited.locator("p code")).toHaveText(pinCommand);
+    await page.keyboard.press("Escape");
+
     // A search finds the skill by its Chinese words and by its original ones.
     const search = page.getByRole("searchbox", { name: zh("Search skills by name, description or step") });
     await search.fill("实现");
@@ -890,10 +904,12 @@ test.describe("in a browser of Chinese", () => {
       await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
       const insights = page.getByRole("group", { name: zh("Insights") });
       await expect(insights.getByRole("heading", { name: startsWith(zh("Annotations written from another text")) })).toBeVisible();
-      const message = zh("An annotation was written from another text of this skill; read the skill again and update or remove it.");
+      // The insight names the entry to update; the skill's issue line says what is wrong.
+      const message = zh("An annotation was written from another text of this skill; read the skill again and update or remove its entry in annotations.json.");
       await insights.getByRole("button", { name: startsWith("/lone") }).filter({ hasText: message }).click();
       await expect(card(page, "lone")).toHaveClass(/\bselected\b/);
-      await expect(page.getByRole("complementary", { name: zh("Details") }).getByRole("list", { name: zh("Issues") }).getByRole("listitem").filter({ hasText: message })).toHaveCount(1);
+      const issue = zh("An annotation was written from another text of this skill; read the skill again and update or remove it.");
+      await expect(page.getByRole("complementary", { name: zh("Details") }).getByRole("list", { name: zh("Issues") }).getByRole("listitem").filter({ hasText: issue })).toHaveCount(1);
     } finally {
       writeFileSync(file, JSON.stringify(ANNOTATIONS));
       await rescan();

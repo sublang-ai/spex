@@ -4,12 +4,11 @@
 // annotations.json: corrections a reader layers on the scan (data-model.md).
 // Everything added is marked `"source": "annotation"`. A malformed file or
 // entry is reported on stderr and the scan carries on without it. A name holds
-// one entry or a list of them: of those recording its skill's SKILL.md digest
-// (and that of each other file they list under `source.files`), the one
-// listing the most files applies, the later on a tie, else one recording
-// none; an entry recording the digests of another skill of that name applies
-// to that one; a skill none applies to, for which an entry was written, is
-// reported as a `stale-annotation` insight [entriesFor].
+// one entry or a list of them: of those recording a skill's SKILL.md digest
+// the last is that skill's, applied where each other file it lists under
+// `source.files` has its digest and otherwise reported as a
+// `stale-annotation` insight, no earlier entry revived [entriesFor]; skills of
+// one name sharing their SKILL.md are told apart by keys of their own ids.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,11 +52,13 @@ export function applyAnnotations(doc, atlas) {
   const byKey = new Map();
   const byName = new Map(); // name -> every scanned skill of it, the first first
   for (const s of atlas.skills) {
-    if (!byKey.has(s.name)) byKey.set(s.name, s);
-    byKey.set(s.id, s); // `<name>@<rootId>` addresses a duplicate copy
     if (!byName.has(s.name)) byName.set(s.name, []);
     byName.get(s.name).push(s);
   }
+  // A name is the key of the skill reported under it (its id holding no `@`),
+  // else of the first of the name; an id is its own skill's key.
+  for (const [name, list] of byName) byKey.set(name, list.find((s) => !s.id.includes('@')) ?? list[0]);
+  for (const s of atlas.skills) byKey.set(s.id, s);
   const resolveSkill = (ref) => (typeof ref === 'string' ? byKey.get(ref) ?? null : null);
 
   for (const [key, value] of Object.entries(doc.skills)) {
@@ -159,18 +160,16 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
 }
 
 // The entries a key applies, as [skill, { ann, where }] pairs, `where` being
-// the words its warnings name it by. A key holds one entry or a list of them,
-// each written from another text of its skill (the state folder serves every
-// project). An entry recording a source matches a skill whose SKILL.md has
-// that digest and whose every file listed under `source.files` has its digest
-// [filesMatch]. To a skill applies, of the entries matching it, the one
-// listing the most files, the later on a tie (an entry corrected after reading
-// a file the skill links is added after the one it corrects); else, to the
-// key's skill alone, the first recording none. Each skill of the name
-// (`others` besides the key's) is judged on its own: one that no entry
-// applies to has a stale annotation where an entry recording a source was
-// written for it, its SKILL.md digest being that skill's, or that of no skill
-// of the name (`sameName`), which could be any of them.
+// the words its warnings name it by. A key holds one entry or a list of them;
+// the `SKILL.md` digest an entry records tells which skill of the name it was
+// written for (the state folder serves every project). Of the entries
+// recording a skill's digest the last is its annotation, superseding the
+// earlier ones outright: it applies where every file it lists under
+// `source.files` has its digest [filesMatch], else the skill's annotation is
+// stale and no earlier entry stands in. A skill no entry records the digest of
+// is given, the key's skill alone, the last entry recording none; else it is
+// stale where an entry records a digest no skill of the name (`sameName`) has,
+// written for an earlier text of any of them.
 function entriesFor(skill, others, sameName, value, where) {
   const many = Array.isArray(value);
   const entries = [];
@@ -188,15 +187,18 @@ function entriesFor(skill, others, sameName, value, where) {
     entries.push({ ann, where: at, hex: hex.toLowerCase(), files: files ?? null });
   }
   const digestCache = new Map(); // a listed file's real path -> its digest, read once
-  const matches = (e, s) => e.hex !== null && !!s.digest && e.hex === s.digest && filesMatch(e.files, s, digestCache);
-  const listed = (e) => (e.files ? Object.keys(e.files).length : 0);
-  const recording = (s) => entries.reduce((best, e) => (matches(e, s) && (!best || listed(e) >= listed(best)) ? e : best), null);
-  const writtenFor = (e, s) => e.hex !== null && (e.hex === s.digest || !sameName.some((o) => o.digest === e.hex));
+  const lastOf = (list) => list[list.length - 1] ?? null;
   const out = [];
   for (const s of [skill, ...others]) {
-    const e = recording(s) ?? (s === skill ? entries.find((x) => x.hex === null) : null);
-    if (e) out.push([s, e]);
-    else if (entries.some((x) => writtenFor(x, s))) s._staleAnnotation = true;
+    const own = lastOf(entries.filter((e) => e.hex !== null && !!s.digest && e.hex === s.digest));
+    if (own) {
+      if (filesMatch(own.files, s, digestCache)) out.push([s, own]);
+      else s._staleAnnotation = true;
+      continue;
+    }
+    const undated = s === skill ? lastOf(entries.filter((e) => e.hex === null)) : null;
+    if (undated) out.push([s, undated]);
+    else if (entries.some((e) => e.hex !== null && !sameName.some((o) => o.digest === e.hex))) s._staleAnnotation = true;
   }
   return out;
 }

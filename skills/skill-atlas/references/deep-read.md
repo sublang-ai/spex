@@ -32,7 +32,8 @@ Record, for each skill:
 Copy the skill's `digest` from the scan's `atlas.json` into its entry as `"source": { "sha256": "<digest>" }`, so the entry applies only to the text you read.
 Where a step's content came from a linked file, record that file too under `"files": { "<path in the skill>": "<digest>" }` in `source`, its digest printed by `node <skill-dir>/scripts/atlas.mjs digest <file>`.
 Where the name already has an entry recording another digest, keep it and add yours beside it, making the value a list of entries; never replace it, since it may serve another project's skill of that name.
-To correct your entry after reading a file the skill links, add the corrected entry after it, recording that file too: of the entries matching a skill, the one recording the most files applies, the later on a tie.
+Keep separate entries only for skills of one name whose `SKILL.md` differ; for skills of one name whose `SKILL.md` are the same and whose other files differ, key the entry by the skill's own `id` from `atlas.json` (`<name>@<rootId>`), since under the name the last entry recording that digest is each one's.
+To correct an annotation, such as after reading a file the skill links, replace the entry recording that digest, or add the corrected one after it: of the entries recording a skill's digest the last supersedes the earlier ones outright, and where a file it lists has changed the skill is reported stale rather than an earlier entry applied.
 
 ## Judging tags
 

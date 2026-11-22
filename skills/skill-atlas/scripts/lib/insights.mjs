@@ -72,20 +72,24 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
   // Each repair gives the scan's own options, so pin's scan finds the skill
   // from any folder, then names its translations, so the command runs as given.
   const pinCommand = (found) => [`node <skill-dir>/scripts/atlas.mjs pin --state <state>`, scanArgs, ...found.map((f) => f.target)].filter(Boolean).join(' ');
+  // The repair as data, for the page to phrase: each file, where in the state
+  // folder to write it (null for one edited in the skill's folder), and the
+  // file itself where it lies in the skill's folder.
+  const repairs = (found) => found.map((f) => ({ file: f.rel, writeTo: f.writeTo, own: f.own }));
   for (const s of skills) {
     for (const lang of [...(s._staleByLang?.keys() ?? [])].sort()) {
       const found = [...s._staleByLang.get(lang)].sort((a, b) => a.rel.localeCompare(b.rel));
       const files = found.map((f) => f.rel);
       const local = found.map((f) => f.local).filter(Boolean);
       const instead = local.length ? `, or, where the skill's folder is the user's own to edit, bring ${local.join(', ')} in line with ${local.length > 1 ? 'their sources' : 'its source'} there and pin ${local.length > 1 ? 'them' : 'it'} instead` : '';
-      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; write ${files.length > 1 ? 'each' : 'it'}, brought up to date, to ${found.map((f) => f.target).join(', ')} and run ${pinCommand(found)}${instead}` });
+      out.push({ kind: 'stale-translation', skills: [s.id], params: { lang, files, repairs: repairs(found), command: pinCommand(found) }, message: `${s.id}: the ${lang} translation ${files.join(', ')} is behind its source; write ${files.length > 1 ? 'each' : 'it'}, brought up to date, to ${found.map((f) => f.target).join(', ')} and run ${pinCommand(found)}${instead}` });
     }
   }
   for (const s of skills) {
     for (const lang of [...(s._editedByLang?.keys() ?? [])].sort()) {
       const found = [...s._editedByLang.get(lang)].sort((a, b) => a.rel.localeCompare(b.rel));
       const files = found.map((f) => f.rel);
-      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run ${pinCommand(found)}` });
+      out.push({ kind: 'edited-translation', skills: [s.id], params: { lang, files, repairs: repairs(found), command: pinCommand(found) }, message: `${s.id}: the ${lang} translation ${files.join(', ')} was edited apart from its source, which agents follow; carry the edit across and run ${pinCommand(found)}` });
     }
   }
   for (const s of skills) {

@@ -21,7 +21,10 @@
 //             the sentence says "skill" or N has a hyphen.
 // A sentence is read over every name in it, installed or not, and only then
 // is each name kept where it names a skill: whether a name is installed never
-// changes how the names around it read.
+// changes how the names around it read. Sentences are read over the visible
+// text of a paragraph or list item, its soft-wrapped lines joined and a
+// Markdown link read as its text [proseUnits], so a link's form never depends
+// on where a line breaks or on whether a name is linked.
 
 import { clipText } from './markdown.mjs';
 
@@ -91,16 +94,16 @@ export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
   const forms = [
     { kind: 'calls', re: new RegExp(String.raw`${before}${PATH_LEAD}/(${ALT})${NAME_END}`, 'g'), slash: true },
     { kind: 'calls', re: new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${ALT})["'\x60]?\s*[,)]`, 'g') },
-    { kind: 'calls', re: new RegExp(String.raw`(?:^\s*(?:-\s+)?|[{,]\s*)["']?skill["']?\s*:\s*["'\x60]?(${ALT})${NAME_END}`, 'g') },
+    { kind: 'calls', re: new RegExp(String.raw`(?:^\s*(?:-\s+)?|[{,]\s*)["']?skill["']?\s*:\s*["'\x60]?(${ALT})${NAME_END}`, 'gm') },
     // `$N` after a verb of use in its clause (no `,` between), as Codex writes a skill's name; never inside a path or URL.
     // Each `$N` joined to it after that one verb ("run $a, $b or $c", "run $a, not $b", "run $a and never $b") is a call too [chain], steered where its joining words steer.
     // Both read every `$N`, a skill's or not, so a name no skill has neither hides nor joins the names after it [findLinks].
-    { kind: 'calls', re: new RegExp(String.raw`(?<![\w$/.~:@-])[\x60"']?(?=\$)(?<=\b(?:${VERBS})\b[^.!?;,\n]{0,41})\$(${ALT}|${NAME_CHARS})${NAME_END}`, 'gi'),
+    { kind: 'calls', re: new RegExp(String.raw`(?<![\w$/.~:@-])[\x60"']?(?=\$)(?<=\b(?:${VERBS})\b[^.!?;,]{0,41})\$(${ALT}|${NAME_CHARS})${NAME_END}`, 'gi'),
       chain: new RegExp(String.raw`[\x60"']?(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s*,\s*(?:not|never)\s+|\s*,?\s+(?:and|but)\s+(?:not|never)\s+)[\x60"']?\$(${ALT}|${NAME_CHARS})${NAME_END}`, 'iy') },
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])[\x60"']?/?(${ALT})[\x60"']?\s+(?:${NOUNS})s?\b`, 'gi') },
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?\b(?:${NOUNS})\s+[\x60"']?/?(${ALT})${NAME_END}`, 'gi') },
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?(?<![\w/.:-])(?:\x60/?|/)(${ALT})\x60?\s+commands?\b`, 'gi') },
-    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;\n]{0,40}?\bcommands?\s+(?:\x60/?|/)(${ALT})${NAME_END}`, 'gi') },
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?(?<![\w/.:-])[\x60"']?/?(${ALT})[\x60"']?\s+(?:${NOUNS})s?\b`, 'gi') },
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?\b(?:${NOUNS})\s+[\x60"']?/?(${ALT})${NAME_END}`, 'gi') },
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?(?<![\w/.:-])(?:\x60/?|/)(${ALT})\x60?\s+commands?\b`, 'gi') },
+    { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?\bcommands?\s+(?:\x60/?|/)(${ALT})${NAME_END}`, 'gi') },
     { kind: 'mentions', re: new RegExp(String.raw`\x60/?(${ALT})\x60`, 'g'), needsSkillWord: true },
   ];
   return { targets, forms, strong: strongForms() };
@@ -123,30 +126,112 @@ function strongForms() {
   ];
 }
 
+const LIST_ITEM = /^\s*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
+// The start of an HTML block that can end a paragraph, as CommonMark has it
+// (kinds 1 to 6): raw text, a comment, a declaration and a block-level tag.
+// An inline tag or an autolink (`<kbd>`, `<https://example.com>`) is text of its paragraph.
+const HTML_BLOCK = new RegExp(String.raw`^\s{0,3}<(?:(?:script|pre|style|textarea)(?:[\s>]|$)|!--|\?|![A-Za-z]|!\[CDATA\[|\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s>]|\/>|$))`, 'i');
+// Lines that are a unit of their own: a heading, a table row, an HTML block's
+// start, and a rule or a setext heading's underline.
+const ALONE = new RegExp(String.raw`^\s{0,3}#{1,6}(?:[ \t]|$)|^\s*\||${HTML_BLOCK.source}|^\s*(?:[-*_=][ \t]*){3,}$`, 'i');
+const QUOTE = /^\s*>/;
+const QUOTE_LEAD = /^\s*(?:>[ \t]?)*[ \t]*/;
+// An inline or reference Markdown link or image, read as its visible text.
+const MD_LINK = /!?\[([^[\]\n]*)\](?:\((?:[^()\s]|\([^()\s]*\))*(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\s*\)|\[[^[\]\n]*\])/g;
+
 /**
- * Find links in a skill's lines.
+ * Prose lines as the texts their sentences are read over: each paragraph or
+ * list item one text, its consecutive lines of one step joined by a line
+ * break with their indent (and a quote's `>`) left out, a line without `>`
+ * continuing a quote's paragraph as Markdown reads it, and every Markdown
+ * link or image as its visible text. A blank line, a heading, a list item's
+ * start, a table row, an HTML block's start, a rule and a gap left by fenced
+ * code each end a text, however long it is. Each text keeps where its
+ * characters came from, so a link is quoted from and numbered by its own
+ * line [locate].
+ * @param {{ line:number, text:string, step:string|null }[]} lines in order
+ * @param {{ whole?:boolean }} [opts] whole: only blank lines end a text (a frontmatter value)
+ * @returns {{ text:string, step:string|null, pieces:{ at:number, col:number, line:number, src:string }[] }[]}
+ */
+export function proseUnits(lines, { whole = false } = {}) {
+  const units = [];
+  let cur = null;
+  for (const l of lines) {
+    if (!l.text.trim()) { cur = null; continue; }
+    const alone = !whole && ALONE.test(l.text);
+    const quote = !whole && QUOTE.test(l.text);
+    const joins = cur && !cur.alone && !alone && !(!whole && LIST_ITEM.test(l.text)) && cur.last === l.line - 1
+      && cur.step === l.step && (cur.quote === quote || cur.quote);
+    if (joins) {
+      const lead = (quote ? QUOTE_LEAD : /^\s*/).exec(l.text)[0].length;
+      cur.text += '\n';
+      readVisible(cur, l, lead);
+    } else {
+      cur = { text: '', step: l.step, pieces: [], alone, quote, last: l.line };
+      units.push(cur);
+      readVisible(cur, l, 0);
+    }
+    cur.last = l.line;
+  }
+  return units.map(({ text, step, pieces }) => ({ text, step, pieces }));
+}
+
+// Append line `l` from column `from` to the unit, each Markdown link as its visible text.
+function readVisible(unit, l, from) {
+  const copy = (start, end) => {
+    if (end <= start) return;
+    unit.pieces.push({ at: unit.text.length, col: start, line: l.line, src: l.text });
+    unit.text += l.text.slice(start, end);
+  };
+  let pos = from;
+  MD_LINK.lastIndex = from;
+  for (let m; (m = MD_LINK.exec(l.text));) {
+    copy(pos, m.index);
+    const open = m.index + m[0].indexOf('[') + 1;
+    copy(open, open + m[1].length);
+    pos = m.index + m[0].length;
+  }
+  copy(pos, l.text.length);
+}
+
+// The source line and its column of offset `at` in a unit's text.
+function locate(unit, at) {
+  const { pieces } = unit;
+  let lo = 0;
+  for (let hi = pieces.length - 1; lo < hi;) {
+    const mid = (lo + hi + 1) >> 1;
+    if (pieces[mid].at <= at) lo = mid; else hi = mid - 1;
+  }
+  const p = pieces[lo];
+  return { line: p.line, src: p.src, col: p.col + (at - p.at) };
+}
+
+/**
+ * Find links in a skill's prose.
  * @param {object} matcher from buildLinkMatcher
  * @param {{ id:string, root:string }} from the skill scanned
- * @param {{ line:number, text:string, step:string|null }[]} lines prose lines (fenced code removed)
+ * @param {ReturnType<typeof proseUnits>} units prose (fenced code removed) as proseUnits reads it
  * @returns {{ edges: object[], unresolved: object[] }}
  */
-export function findLinks(matcher, from, lines) {
+export function findLinks(matcher, from, units) {
   const fromId = from.id;
   const best = new Map(); // keepLink's key -> edge
   const unresolved = new Map();
-  for (const { line, text, step } of lines) {
+  for (const unit of units) {
+    const { text, step } = unit;
     if (!text.trim()) continue;
+    const where = (i) => { const loc = locate(unit, i); return { line: loc.line, text: evidence(loc.src, loc.col) }; };
+    const sentences = sentencesOf(text);
     // The name found at `at` by `form`, kept as a link unless its sentence rules it out.
     const consider = (form, name, at) => {
       const to = resolve(matcher, name, from.root);
       if (!to || to === fromId) return; // no skill's (or case differs, in a case-insensitive form), or a self-link
-      const span = sentenceSpan(text, at);
-      const sentence = text.slice(span.start, span.end);
+      const sentence = sentences.at(at);
       let kind = form.kind;
-      if (form.needsSkillWord && !SAYS_SKILL.test(sentence) && !name.includes('-')) return;
-      if (form.slash && PATH_LIKE.has(name.toLowerCase()) && !SAYS_COMMAND.test(sentence)) return;
-      if (steeredAway(text.slice(span.start, at)) || STEER_AWAY_SENTENCE.test(sentence)) kind = 'mentions';
-      keepLink(best, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: { line, text: evidence(text, at) } });
+      if (form.needsSkillWord && !sentence.says(SAYS_SKILL) && !name.includes('-')) return;
+      if (form.slash && PATH_LIKE.has(name.toLowerCase()) && !sentence.says(SAYS_COMMAND)) return;
+      if (steeredAway(text.slice(Math.max(sentence.start, at - STEER_REACH), at)) || sentence.says(STEER_AWAY_SENTENCE)) kind = 'mentions';
+      keepLink(best, { from: fromId, fromStep: step, to, kind, source: 'scan', evidence: where(at) });
     };
     for (const form of matcher.forms) {
       form.re.lastIndex = 0;
@@ -172,10 +257,10 @@ export function findLinks(matcher, from, lines) {
           // A backticked `/x` is a command only in a sentence saying skill,
           // command, slash or type, and no skill where the agent itself has
           // that command; `Skill(x)` and "`x` skill" name a skill whatever x is.
-          if (BUILTIN_COMMANDS.has(name) || PATH_LIKE.has(name.toLowerCase()) || !CONTEXT_FOR_UNRESOLVED.test(sentenceAt(text, at))) continue;
+          if (BUILTIN_COMMANDS.has(name) || PATH_LIKE.has(name.toLowerCase()) || !sentences.at(at).says(CONTEXT_FOR_UNRESOLVED)) continue;
         }
         const key = `${step}\0${name}`;
-        if (!unresolved.has(key)) unresolved.set(key, { from: fromId, fromStep: step, name, evidence: { line, text: evidence(text, at) } });
+        if (!unresolved.has(key)) unresolved.set(key, { from: fromId, fromStep: step, name, evidence: where(at) });
       }
     }
   }
@@ -214,21 +299,33 @@ function steeredAway(before) {
   return !CLAUSE_OF_USE.test(before.slice(last.index + last[0].length));
 }
 
-// The sentence of `text` around index `at` (sentences end at . ! ? ; before a space).
-function sentenceAt(text, at) {
-  const { start, end } = sentenceSpan(text, at);
-  return text.slice(start, end);
-}
+// How far before a name its sentence is searched for steering words, so a
+// text with no sentence end costs a bounded read per name.
+const STEER_REACH = 4000;
 
-// The [start, end) offsets of that sentence in `text`.
-function sentenceSpan(text, at) {
-  const ends = /[.!?;](?=\s|$)/g;
-  let start = 0;
-  for (const m of text.matchAll(ends)) {
-    if (m.index >= at) return { start, end: m.index + 1 };
-    start = m.index + 1;
-  }
-  return { start, end: text.length };
+// The sentences of `text` (each ending at . ! ? ; before a space), found
+// once: `at(i)` gives the one holding offset `i`, its start and whether it
+// says what a pattern matches, each pattern tried once per sentence.
+function sentencesOf(text) {
+  const ends = [];
+  for (const m of text.matchAll(/[.!?;](?=\s|$)/g)) ends.push(m.index);
+  const cache = new Map();
+  return {
+    at(i) {
+      let lo = 0;
+      for (let hi = ends.length; lo < hi;) { const mid = (lo + hi) >> 1; if (ends[mid] >= i) hi = mid; else lo = mid + 1; }
+      if (!cache.has(lo)) {
+        const start = lo ? ends[lo - 1] + 1 : 0;
+        const end = lo < ends.length ? ends[lo] + 1 : text.length;
+        const said = new Map();
+        cache.set(lo, {
+          start,
+          says(re) { if (!said.has(re)) said.set(re, re.test(text.slice(start, end))); return said.get(re); },
+        });
+      }
+      return cache.get(lo);
+    },
+  };
 }
 
 function evidence(text, at) {

@@ -7,11 +7,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { listRoots, skillDirs, isDir, realOr } from './roots.mjs';
+import { listRoots, skillDirs, isDir, realOr, placeId, idWord } from './roots.mjs';
 import { splitFrontmatter } from './frontmatter.mjs';
 import { fenceMask, clipText } from './markdown.mjs';
 import { detectSteps } from './steps.mjs';
-import { buildLinkMatcher, findLinks } from './links.mjs';
+import { buildLinkMatcher, findLinks, proseUnits } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
 import { stateTranslations, readTextBounded, chooseTranslation, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
@@ -23,13 +23,16 @@ import { warn } from './log.mjs';
 export const ATLAS_VERSION = 1;
 const SKILL_FILE_MAX_BYTES = 4 * 1024 * 1024; // a SKILL.md this large is not a skill an agent could load; skip its content
 const COPY_COMPARE_MAX_BYTES = 64 * 1024 * 1024; // folders holding more are not read to tell copies apart
-// Frontmatter keys whose lines are matched by tag rules: the description,
-// and Claude Code's `context`/`agent` (a `context: fork` skill runs as a subagent).
-// Link and tag detection read at most this many characters of a line: evidence
-// shows 160 and excerpts 400, and a minified line must not make a scan quadratic.
+// Link and tag detection read at most this many characters of a line:
+// evidence shows 160 and excerpts 400, and a minified line must not make a
+// scan quadratic.
 export const LINE_SCAN_MAX = 4000;
 const scanText = (line) => (line.length > LINE_SCAN_MAX ? line.slice(0, LINE_SCAN_MAX) : line);
+// Frontmatter keys whose lines are matched by tag rules: the description,
+// and Claude Code's `context`/`agent` (a `context: fork` skill runs as a subagent).
 const TAGGED_FRONTMATTER_KEYS = ['description', 'context', 'agent'];
+// A name holding one of these stands in an id as its slug and digest [assignIds].
+const UNSAFE_NAME = /[@#/\\\u0000-\u001f\u007f]/;
 
 /**
  * @param {{ cwd:string, home:string, user:boolean, plugins:boolean, extra:string[], agents:string[], rulesFile:string, stateDir:string }} opts
@@ -40,8 +43,16 @@ export function scan(opts) {
   let skills = [];
   const byReal = new Map(); // real folder -> its record
   const listed = listRoots(opts);
-  // The order ids are given in: the roots by their depth below the repository's root, else as listed.
-  const byIdOrder = listed.map((r, n) => [r, n]).sort(([a, m], [b, n]) => (a.depth ?? 0) - (b.depth ?? 0) || m - n).map(([r]) => r);
+  // The order ids are given in, a fixed precedence no option's order or other
+  // install changes: the roots by their depth below the repository's root
+  // (the root's own and those outside the project none), then the project's
+  // before the home folder's, the plugins' and --root's, the project's and the
+  // home folder's rows in AGENT_ROOTS order, the plugins' and --root's by id.
+  const scopeRank = { project: 0, user: 1, plugin: 2, extra: 3 };
+  const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const byIdOrder = listed.map((r, n) => [r, n]).sort(([a, m], [b, n]) => (a.depth ?? 0) - (b.depth ?? 0)
+    || scopeRank[a.scope] - scopeRank[b.scope]
+    || (a.scope === 'plugin' || a.scope === 'extra' ? byId(a, b) : m - n)).map(([r]) => r);
   const idOrder = new Map(byIdOrder.map((r, n) => [r.id, n]));
   // A folder reached by several roots (--cwd the home folder, a --root or
   // CLAUDE_CONFIG_DIR naming a project's folder, or one folder's skills linked
@@ -81,13 +92,13 @@ export function scan(opts) {
   }
   skills = mergeIdenticalCopies(skills);
 
-  assignIds(skills, idOrder);
+  assignIds(skills, idOrder, new Map(listed.map((r) => [r.id, r.path])));
   const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
   let edges = [];
   let unresolved = [];
   for (const s of skills) {
     analyze(s, rules, catalog);
-    const found = findLinks(matcher, s, linkLines(s));
+    const found = findLinks(matcher, s, linkUnits(s));
     edges.push(...found.edges);
     unresolved.push(...found.unresolved);
     readTranslations(s, opts.stateDir);
@@ -232,25 +243,32 @@ function sameFolder(a, b) {
   return true;
 }
 
-// id = name; the 2nd+ differing skill of a name gets `<name>@<rootId>`.
-// Ids are given in idOrder, a skill by the first of its folders, copies
-// included, and in one folder by its path: the folders of the repository's
-// root and those outside the project come before any below the root, the
-// shallower first. The folders
-// two scans from one repository both cover come first in both, so a skill in
-// one of them keeps its id from wherever in the repository the scan runs,
-// while the skills list itself stays in preference order, the nearer first.
-function assignIds(skills, idOrder) {
+// A skill's id. Of the differing skills of one name, letter case aside, the
+// first in idOrder (by the first of its folders, copies included, then in
+// one root by its folder's path there, compared by code unit) has the name
+// itself: the folders of the repository's root and those outside the project
+// come before any below the root, the shallower first, so the folders two
+// scans from one repository both cover come first in both. Every other's id
+// is a function of its own name, folder and root alone: `<name>@<rootId>`,
+// and `@` and its folder's path in the root [placeId] where that path is not
+// its name as an id word. A name holding `@`, `#`, `/`, `\` or a control
+// character, or `.` or `..`, stands in an id as its slug and digest [idWord],
+// so an id names one skill, a folder and a URL can hold it, and `@` parts it;
+// no two ids differ in letter case alone, so a folder under the state
+// folder's translations/ names one skill on any file system. The skills list
+// itself stays in preference order, the nearer first.
+function assignIds(skills, idOrder, rootPath) {
   const rank = (root) => idOrder.get(root) ?? Infinity;
-  const first = (s) => [{ root: s.root, dir: s.dir }, ...s.copies].reduce((a, b) => (rank(b.root) < rank(a.root) ? b : a));
-  const naming = skills.map((s) => ({ s, ...first(s) }))
-    .sort((a, b) => rank(a.root) - rank(b.root) || a.dir.localeCompare(b.dir));
+  const inRoot = (p) => path.relative(rootPath.get(p.root), p.dir).split(path.sep).join('/');
+  const cmp = (a, b) => rank(a.root) - rank(b.root) || (inRoot(a) < inRoot(b) ? -1 : inRoot(a) > inRoot(b) ? 1 : 0);
+  const first = (s) => [{ root: s.root, dir: s.dir }, ...s.copies].reduce((a, b) => (cmp(b, a) < 0 ? b : a));
+  const naming = skills.map((s) => ({ s, ...first(s) })).sort(cmp);
   const taken = new Set();
-  for (const { s, root } of naming) {
-    let id = taken.has(s.name) ? `${s.name}@${root}` : s.name;
-    for (let n = 2; taken.has(id); n++) id = `${s.name}@${root}-${n}`;
-    taken.add(id);
-    s.id = id;
+  for (const { s, root, dir } of naming) {
+    const word = UNSAFE_NAME.test(s.name) || s.name === '.' || s.name === '..' ? idWord(s.name) : s.name;
+    if (!taken.has(word.toLowerCase())) { taken.add(word.toLowerCase()); s.id = word; continue; }
+    const rel = inRoot({ root, dir });
+    s.id = `${word}@${root}${rel === s.name && placeId(rel) === rel ? '' : `@${placeId(rel)}`}`;
   }
 }
 
@@ -324,14 +342,18 @@ function readTranslations(s, stateDir) {
     // writes it, and that file is pinned; one in the skill's folder may be
     // brought in line there instead (`local`), where that folder is the
     // user's own. An edited one is pinned where it is.
-    const inState = `<state>/${shellWord(`${TRANSLATIONS_DIR}/${s.id}/${t.rel}`)}`;
+    // `writeTo` and `own` are the same files as data: the state folder's,
+    // under `<state>` as the command names that folder, and the skill folder's.
+    const stateRel = `${TRANSLATIONS_DIR}/${s.id}/${t.rel}`;
+    const inState = `<state>/${shellWord(stateRel)}`;
     const here = t.origin === 'state' ? inState : shellWord(t.abs);
+    const own = t.origin === 'state' ? null : t.abs;
     const add = (byLang, entry) => {
       if (!byLang.has(t.tag)) byLang.set(t.tag, []);
       byLang.get(t.tag).push(entry);
     };
-    if (t.stale) add(s._staleByLang, { rel: t.rel, target: inState, local: t.origin === 'state' ? null : here });
-    if (t.edited) add(s._editedByLang, { rel: t.rel, target: here });
+    if (t.stale) add(s._staleByLang, { rel: t.rel, target: inState, local: own && here, writeTo: `<state>/${stateRel}`, own });
+    if (t.edited) add(s._editedByLang, { rel: t.rel, target: here, writeTo: own ? null : `<state>/${stateRel}`, own });
   }
   for (const f of s.files) f.translations = [...(tagsBySource.get(f.path) ?? [])].sort();
   const skillTranslations = chosen.filter((t) => t.sourceRel === 'SKILL.md').sort((a, b) => a.tag.localeCompare(b.tag));
@@ -362,15 +384,17 @@ function readSkillTranslation(s, t) {
   return out;
 }
 
-// Lines searched for links: the description, then the body outside fenced code.
-function linkLines(s) {
-  const out = [];
+// Prose searched for links: the description, then the body outside fenced
+// code, each paragraph or list item read whole [proseUnits].
+function linkUnits(s) {
+  const desc = [];
   const span = s._keyLines.description;
-  if (span) for (let i = span.start; i <= span.end; i++) out.push({ line: i + 1, text: scanText(s._lines[i]), step: null });
+  if (span) for (let i = span.start; i <= span.end; i++) desc.push({ line: i + 1, text: scanText(s._lines[i]), step: null });
+  const body = [];
   for (let i = s._bodyStart; i < s._lines.length; i++) {
-    if (!s._mask[i]) out.push({ line: i + 1, text: scanText(s._lines[i]), step: s._inStep[i] });
+    if (!s._mask[i]) body.push({ line: i + 1, text: scanText(s._lines[i]), step: s._inStep[i] });
   }
-  return out;
+  return [...proseUnits(desc, { whole: true }), ...proseUnits(body)];
 }
 
 // The options of this scan as words of a `pin` command, so that its scan finds

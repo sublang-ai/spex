@@ -88,11 +88,13 @@ function projectPlaces(cwd) {
 
 /**
  * The roots to scan, in preference order (project, nearer folders first,
- * user, plugins, extra). A root's id names its place in the repository, the
- * same from every working folder in it: the rows of the repository's root
- * (or, with no repository, of --cwd's folder) keep ids such as
- * `project-agents`; those of a folder below it add its path from the
- * repository's root, `project-agents-packages-ui` [placeSlug].
+ * user, plugins, extra). A root's id is a function of its own folder alone,
+ * never of what else is installed or of the order of the options: the rows of
+ * the repository's root (or, with no repository, of --cwd's folder) keep ids
+ * such as `project-agents`; those of a folder below it add `.` and its path
+ * from the repository's root [placeId], `project-agents.packages.ui-kit`; a
+ * --root's is `extra-` and its folder's name and real path [extraId]; a
+ * plugin's names its install [pluginId].
  * @param {{ cwd:string, home:string, user:boolean, plugins:boolean, extra:string[], agents:string[] }} opts
  */
 export function listRoots(opts) {
@@ -107,9 +109,9 @@ export function listRoots(opts) {
   });
   if (opts.user) places.push({ scope: 'user', base: opts.home, rel: '' });
   for (const { scope, base, rel } of places) {
-    // How far below the repository's root the folder lies; ids are given in
-    // this order [scan.mjs assignIds], so a folder only some scans cover never
-    // takes a name from one every scan covers.
+    // How far below the repository's root the folder lies; plain skill ids
+    // are given in this order [scan.mjs assignIds], so a folder only some
+    // scans cover never takes a name from one every scan covers.
     const depth = rel ? rel.split('/').length : 0;
     for (const row of AGENT_ROOTS) {
       if (!row.scopes.includes(scope) || !wanted(row)) continue;
@@ -121,7 +123,7 @@ export function listRoots(opts) {
       else { from = base; segs = [configDir, ...rest]; }
       const dir = path.join(from, ...segs);
       roots.push({
-        id: `${scope}-${row.key}${rel ? `-${placeSlug(repo, rel)}` : ''}`,
+        id: `${scope}-${row.key}${rel ? `.${placeId(rel)}` : ''}`,
         path: dir,
         scope,
         agent: row.agent,
@@ -135,8 +137,13 @@ export function listRoots(opts) {
     }
   }
   if (opts.plugins && wanted({ agent: 'claude-code' })) roots.push(...pluginRoots(opts.cwd));
-  opts.extra.forEach((dir, n) => {
-    roots.push({ id: `extra-${n + 1}`, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, linked: false });
+  // One folder named twice, however spelled, is one root under one id [extraId].
+  const extras = new Set();
+  opts.extra.forEach((dir) => {
+    const id = extraId(path.resolve(dir));
+    if (extras.has(id)) return;
+    extras.add(id);
+    roots.push({ id, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, linked: false });
   });
   return roots;
 }
@@ -152,41 +159,50 @@ function linkedBelow(from, segs) {
 // real paths, so a folder is named by its own place, however it was reached
 // (every folder of the project lies at or below the root's real path).
 function placeIn(repo, base) {
-  return path.relative(realOr(repo), realOr(base)).split(path.sep).join('/');
+  return path.relative(realSpelling(repo), realSpelling(base)).split(path.sep).join('/');
 }
 
-// A folder's path from the repository's root as an id's words [placeWords],
-// the same from whichever folder the scan runs. Where another folder of the
-// repository has the same words (`packages/ui-kit` and `packages/ui/kit`),
-// each adds `.` and a short digest of its own path, so no two folders share
-// an id: the words never hold a `.`.
-function placeSlug(repo, rel) {
-  const words = placeWords(rel);
-  return foldersWithWords(realOr(repo), words) > 1 ? `${words}.${hash8(rel)}` : words;
-}
+/**
+ * A path, `/`-separated, as words of an id, one to one: its segments joined by
+ * `.`, each kept as it is where it is lowercase letters and digits in runs
+ * joined by single hyphens, else its slug, `_` and eight hex digits of the
+ * SHA-256 of the segment itself (`packages/ui-kit` is `packages.ui-kit`,
+ * `packages/UI kit` `packages.ui-kit_<hex>`). A kept segment holds no `.` or
+ * `_`, and a digested one ends in `_` and its digest, so no two paths share words.
+ */
+export function placeId(rel) { return rel.split('/').map(idWord).join('.'); }
 
-// Each segment lowercased, every run of characters other than a-z and 0-9
-// one hyphen, and a segment holding none of those named by a short digest of
-// itself. No segment's words are empty, so of the folders above --cwd, each
-// a prefix of the next, no two share words.
-function placeWords(rel) { return rel.split('/').map(segmentWords).join('-'); }
-function segmentWords(seg) { return slug(seg, '') || `x${hash8(seg)}`; }
+/** One segment, or a skill's name, as a word of an id [placeId]. */
+export function idWord(seg) { return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(seg) ? seg : `${slug(seg, '')}_${hash8(seg)}`; }
 function hash8(s) { return crypto.createHash('sha256').update(s).digest('hex').slice(0, 8); }
 
-// How many folders below `dir`, links not followed, have `words` as their
-// path's words, counted up to two: only the entries whose words begin them are opened.
-function foldersWithWords(dir, words) {
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
-  let n = 0;
-  for (const e of entries) {
-    if (!e.isDirectory()) continue;
-    const w = segmentWords(e.name);
-    if (w === words) n++;
-    else if (words.startsWith(`${w}-`)) n += foldersWithWords(path.join(dir, e.name), words.slice(w.length + 1));
-    if (n > 1) return n;
+// A --root's id: the name and `_` and eight hex digits of the SHA-256 of its
+// folder's real path as the file system spells it, so the same however the
+// folder is spelled or reached and whatever other --root is given in whatever order.
+function extraId(dir) {
+  const real = realSpelling(dir);
+  return `extra-${idWord(path.basename(real) || 'root')}_${hash8(real)}`;
+}
+
+// A plugin install's id: `plugin-`, its name and marketplace as the file's key
+// gives them [idWord], and, for an install recorded for a project, its scope
+// and eight hex digits of the SHA-256 of that project's path, all read from
+// the install's own record, so no other install changes it.
+function pluginId(key, inst) {
+  const at = key.indexOf('@');
+  const name = at < 0 ? key : key.slice(0, at);
+  const market = at < 0 ? null : key.slice(at + 1);
+  const words = [idWord(name), ...(market !== null ? [idWord(market)] : [])];
+  if (typeof inst.projectPath === 'string' && inst.projectPath) {
+    const scope = typeof inst.scope === 'string' && inst.scope ? inst.scope : 'project';
+    words.push(`${idWord(scope)}_${hash8(path.resolve(inst.projectPath))}`);
   }
-  return n;
+  return `plugin-${words.join('.')}`;
+}
+
+// A real path as the file system spells it, letter case included.
+function realSpelling(p) {
+  try { return fs.realpathSync.native(p); } catch { return realOr(p); }
 }
 
 /** Skill folders of Claude Code plugins that are installed and enabled for this project. */
@@ -210,12 +226,11 @@ function pluginRoots(cwd) {
     const name = key.split('@')[0];
     for (const inst of Array.isArray(installs) ? installs : []) {
       if (!inst || typeof inst.installPath !== 'string') continue;
-      // Ids are given over every install the file records, in its order, so
-      // an install keeps its id whichever others this project enables.
-      let id = `plugin-${slug(name)}`;
-      for (let n = 2; used.has(id); n++) id = `plugin-${slug(name)}-${n}`;
-      used.add(id);
+      const id = pluginId(key, inst);
       if (enabled.get(key) === false) continue;
+      // Two records of one plugin for one place are one install: the first stands.
+      if (used.has(id)) { warn(`${file} records ${key} twice for one place; the first record is used`); continue; }
+      used.add(id);
       if (inst.projectPath) {
         const project = realOr(path.resolve(inst.projectPath));
         const rel = path.relative(project, realCwd);
@@ -309,4 +324,4 @@ export function realOr(p) {
   }
 }
 
-function slug(s, empty = 'plugin') { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || empty; }
+function slug(s, empty = '') { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || empty; }

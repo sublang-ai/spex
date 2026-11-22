@@ -62,6 +62,7 @@ A translation insight's repair command already gives them.
 
 `pin` writes into each translation the SHA-256 of the file it translates, and into a Markdown one its own: a comment line in Markdown, a `translationOf` key in JSON.
 Pin only after the translation is complete, since a pinned translation reads as up to date.
+Write each translation as a file of its own, never a link to another file of a skill: `pin` refuses one that is, through any link, the same file as a file of its skill or of another skill other than a translation of its source, naming both, or that has a hard link it finds in no folder it reads.
 Then rescan and confirm the skill has no `translation-steps` insight; if it has one, match the source's step headings and pin again.
 
 A translation marked behind its source is brought up to date by translating the source again where it changed, then pinning it.
