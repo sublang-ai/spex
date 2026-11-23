@@ -218,8 +218,11 @@ test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a dep
 test("skill-atlas-13: a card reads what it depends on and what uses it, and a step that only mentions a skill shows no chip and no dependency", async ({ page }) => {
   await page.goto(url);
   await groupBy(page, "Dependencies");
-  await expect(card(page, "code").locator(".card-deps")).toHaveText("Depends on 1 · used by 1");
-  await expect(card(page, "review").locator(".card-deps")).toHaveText("Depends on 0 · used by 2");
+  // Only the counts that are not zero, and a step count only where the skill has steps.
+  await expect(card(page, "code").locator(".card-meta span")).toHaveText(["3 steps", "Depends on 1 · Used by 1"]);
+  await expect(card(page, "review").locator(".card-deps")).toHaveText("Used by 2");
+  await expect(card(page, "ship").locator(".card-deps")).toHaveText("Depends on 1");
+  await expect(card(page, "lone").locator(".card-meta span")).toHaveCount(0);
   await cardButton(page, "guide").click();
   const panel = details(page);
   const section = (heading: string) => panel.locator("section.d-sec", { has: page.getByRole("heading", { name: heading }) });
@@ -232,6 +235,252 @@ test("skill-atlas-13: a card reads what it depends on and what uses it, and a st
   const usedBy = section("Used by · 2");
   await expect(usedBy.getByRole("button")).toHaveCount(2);
   await expect(usedBy.getByRole("button", { name: "/guide" })).toHaveCount(0);
+});
+
+test("skill-atlas-13: a card's tag categories show only those it has, each named with its count", async ({ page }) => {
+  await page.goto(url);
+  await groupBy(page, "Dependencies");
+  const counts = (id: string) => card(page, id).locator(".card-foot .pill");
+  await expect(counts("decide")).toHaveCount(2);
+  for (const name of ["Data in: 1", "Human: 1"]) {
+    await expect(card(page, "decide").getByRole("img", { name, exact: true })).toHaveAttribute("title", name);
+  }
+  await expect(counts("decide")).toHaveText(["1", "1"]);
+  await expect(counts("lone")).toHaveCount(0);
+});
+
+test("skill-atlas-13: a skill installed in several folders says in how many, by its tooltip and its name alike", async ({ page }) => {
+  const copy = join(project, ".claude", "skills", "research");
+  mkdirSync(copy, { recursive: true });
+  writeFileSync(join(copy, "SKILL.md"), readFileSync(join(project, ".agents", "skills", "research", "SKILL.md")));
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Dependencies");
+    const places = card(page, "research").getByRole("img", { name: "Installed in 2 folders", exact: true });
+    await expect(places).toHaveText("2 places");
+    await expect(places).toHaveAttribute("title", "Installed in 2 folders");
+    await expect(cardButton(page, "research")).toHaveAccessibleName(/Installed in 2 folders/);
+    await expect(card(page, "code").locator(".card-copies")).toHaveCount(0);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
+test("skill-atlas-37: one control opens or closes the shown cards' steps, never the groups", async ({ page }) => {
+  await page.goto(url);
+  await groupBy(page, "Dependencies");
+  const control = page.locator("#btn-steps");
+  const open = () => page.locator("#board .card.expanded").evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")).sort());
+  await page.getByRole("button", { name: "Collapse Called · level 2" }).click();
+  await expect(control).toHaveText("Expand steps");
+  await control.click();
+  // Every shown card with steps opened; `lone` has none, the closed group stays closed.
+  await expect.poll(open).toEqual([MARKUP, "code", "decide", "guide", "lint-docs", "notes", "research", "ship"]);
+  await expect(card(page, "review")).toHaveCount(0);
+  await expect(control).toHaveText("Collapse steps");
+  await control.click();
+  await expect.poll(open).toEqual([]);
+  // One card opened by hand: the control closes it.
+  await cardButton(page, "code").click();
+  await expect(control).toHaveText("Collapse steps");
+  await control.click();
+  await expect.poll(open).toEqual([]);
+  await expect(control).toHaveText("Expand steps");
+  // A card with no steps, opened by hand, is open too: the control closes it.
+  await cardButton(page, "lone").click();
+  await expect.poll(open).toEqual(["lone"]);
+  await expect(control).toHaveText("Collapse steps");
+  await control.click();
+  await expect.poll(open).toEqual([]);
+  // With no shown card having steps, there is nothing to open.
+  await page.getByRole("searchbox", { name: /Search skills/ }).fill("Stands alone");
+  await expect.poll(() => shownSkills(page)).toEqual(["lone"]);
+  await expect(control).toBeDisabled();
+});
+
+test("skill-atlas-13, skill-atlas-14, skill-atlas-17: problems mark their skills and are counted, notes listed after them and marking none", async ({ page }) => {
+  const atlas = await (await fetch(new URL("/api/atlas", url))).json() as { insights: { kind: string; level: string; skills: string[] }[] };
+  const problems = atlas.insights.filter((i) => i.level === "problem");
+  const notes = atlas.insights.filter((i) => i.level === "note");
+  expect(problems.length && notes.length).toBeTruthy();
+  await page.goto(url);
+  await groupBy(page, "Dependencies");
+  const opener = page.getByRole("button", { name: /^Insights/ });
+  await expect(page.locator("#insights-n")).toHaveText(String(problems.length));
+  await expect(opener).toHaveAccessibleName(`Insights, ${problems.length} problem${problems.length === 1 ? "" : "s"}`);
+  // A skill with a problem is marked; one with only a note is not, its details still telling it.
+  const noted = notes.flatMap((i) => i.skills).find((id) => !problems.some((p) => p.skills.includes(id)))!;
+  const flagged = problems.flatMap((i) => i.skills)[0]!;
+  await expect(card(page, flagged).locator(".issue-dot")).toHaveCount(1);
+  await expect(card(page, noted).locator(".issue-dot")).toHaveCount(0);
+  await card(page, noted).locator(".card-main").click();
+  await expect(details(page).getByRole("list", { name: "Notes" }).getByRole("listitem")).not.toHaveCount(0);
+  // The problems by kind first, then the notes under a heading of their own.
+  await opener.click();
+  const headings = await page.getByRole("group", { name: "Insights" }).getByRole("heading").allTextContents();
+  const at = headings.indexOf("Notes");
+  expect(at).toBeGreaterThan(0);
+  expect(headings.slice(0, at).some((h) => h.startsWith("Name differs from its folder"))).toBe(false);
+  expect(headings.slice(at).some((h) => h.startsWith("Name differs from its folder"))).toBe(true);
+  expect(headings.slice(0, at).some((h) => h.startsWith("Translations behind their source"))).toBe(true);
+
+  // With notes alone, nothing is counted and the notes lead the panel, no divider above them.
+  await page.route((u) => u.pathname === "/api/atlas", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    body.insights = body.insights.filter((i: { level: string }) => i.level === "note");
+    await route.fulfill({ response: res, json: body });
+  });
+  await page.reload();
+  await expect(page.locator("#insights-n")).toBeHidden();
+  await expect(opener).toHaveAccessibleName("Insights");
+  await opener.click();
+  const lead = page.getByRole("group", { name: "Insights" }).locator(":scope > :first-child");
+  await expect(lead).toHaveText("Notes");
+  await expect(lead).toHaveCSS("border-top-width", "0px");
+});
+
+test("skill-atlas-35: a selected or focused skill's dependencies drawn at full strength and the others dimmed, hovering changing nothing, in both themes", async ({ page }) => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto(url);
+    await groupBy(page, "Dependencies");
+    const lines = page.locator("#link-layer .lk");
+    const hot = page.locator("#link-layer .lk.hot");
+    const dim = page.locator("#links.emph .lk:not(.hot)");
+    await expect(lines).toHaveCount(3);
+    // Nothing selected: every line as drawn.
+    await expect(page.locator("#links")).not.toHaveClass(/\bemph\b/);
+    await card(page, "decide").hover();
+    await expect(page.locator("#links")).not.toHaveClass(/\bemph\b/);
+    // Selected: its two dependencies at full strength, the third dimmed.
+    await cardButton(page, "code").click();
+    await expect(hot).toHaveCount(2);
+    await expect(dim).toHaveCount(1);
+    expect(await dim.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(1);
+    expect(await hot.first().evaluate((el) => Number(getComputedStyle(el).opacity))).toBe(1);
+    // Nothing selected, a card holding focus: its one dependency alone.
+    await page.keyboard.press("Escape");
+    await page.locator("#canvas").focus();
+    await expect(page.locator("#links")).not.toHaveClass(/\bemph\b/);
+    await card(page, "decide").locator(".card-main").focus();
+    await expect(hot).toHaveCount(1);
+    await expect(dim).toHaveCount(2);
+  }
+});
+
+test("skill-atlas-14: a property holding fields shows each on a row of its own, never as JSON", async ({ page }) => {
+  skill(project, ".claude/skills", "owned", "Has an owner.", "# Owned\n\n## Step 1: Own\n\nKeep it.\n", "metadata:\n  owner: team\n  tags: [a, b]\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Dependencies");
+    await card(page, "owned").locator(".card-main").click();
+    const props = details(page).locator("section.d-sec", { has: page.getByRole("heading", { name: "Properties", exact: true }) });
+    await expect(props.locator(":scope > dl > dt")).toHaveText(["metadata"]);
+    await expect(props.locator(":scope > dl > dd > dl > dt")).toHaveText(["owner", "tags"]);
+    await expect(props.locator(":scope > dl > dd > dl > dd")).toHaveText(["team", "a, b"]);
+    await expect(props).not.toContainText("{");
+  } finally {
+    rmSync(join(project, ".claude", "skills", "owned"), { recursive: true, force: true });
+    await rescan();
+  }
+});
+
+test("skill-atlas-14: the details open on a selection alone and close by their Close and by Escape, focus back on what was selected", async ({ page }) => {
+  writeWorkflows(FLOW);
+  await page.goto(url);
+  // No control opens the details: with nothing selected they are closed.
+  await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveCount(0);
+  await expect(details(page)).toBeHidden();
+  // A skill selected opens them; their Close closes them, focus back on its card.
+  await groupBy(page, "Dependencies");
+  const main = card(page, "code").locator(".card-main");
+  await main.click();
+  await expect(details(page).getByRole("heading", { name: "/code" })).toBeVisible();
+  await details(page).getByRole("button", { name: "Close details" }).click();
+  await expect(details(page)).toBeHidden();
+  await expect(main).toBeFocused();
+  // F6 moves between the canvas and the open details, and does nothing with none open.
+  await page.keyboard.press("F6");
+  await expect(main).toBeFocused();
+  await main.click();
+  await page.keyboard.press("F6");
+  await expect(details(page).getByRole("heading", { name: "/code" })).toBeFocused();
+  // Escape from inside them closes them, focus back on the card.
+  await page.keyboard.press("Escape");
+  await expect(details(page)).toBeHidden();
+  await expect(main).toBeFocused();
+  // A phase selected opens them; Escape closes them, focus back on its name.
+  await groupBy(page, "Workflow");
+  const plan = page.getByRole("region", { name: /^Plan,/ }).getByRole("button", { name: "Plan", exact: true });
+  await plan.click();
+  await expect(details(page).getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
+  await details(page).getByRole("button", { name: "Close details" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(details(page)).toBeHidden();
+  await expect(plan).toBeFocused();
+  // An insight's skills open them.
+  await page.getByRole("button", { name: /^Insights/ }).click();
+  await page.locator(".inspop > button").first().click();
+  await expect(details(page)).toBeVisible();
+});
+
+test("skill-atlas-36, skill-atlas-38: Help shows the legend and the keys, closed by Escape and by its Close with focus back on Help, and by a click elsewhere", async ({ page }) => {
+  await page.goto(url);
+  const help = page.getByRole("button", { name: "Help", exact: true });
+  await expect(help).toHaveAttribute("title", "Help");
+  await expect(help).toHaveAttribute("aria-haspopup", "dialog");
+  await help.click();
+  const panel = page.getByRole("dialog", { name: "Help" });
+  await expect(panel.getByRole("heading", { name: "Legend" })).toBeVisible();
+  await expect(panel.locator(".legend .row")).toHaveCount(6);
+  await expect(panel.locator(".legend")).toContainText("Dependency — one skill calls another");
+  await expect(panel.locator(".legend")).toContainText("Has a problem to act on");
+  await expect(panel.getByRole("heading", { name: "Keys" })).toBeVisible();
+  await expect(panel.locator("kbd")).toHaveText(["/", "Esc", "F6", "Ctrl/⌘ Z"]);
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(help).toBeFocused();
+  await expect(help).toHaveAttribute("aria-expanded", "false");
+  await help.click();
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(help).toBeFocused();
+  await help.click();
+  await page.locator("#canvas").click({ position: { x: 5, y: 5 } });
+  await expect(panel).toHaveCount(0);
+});
+
+test("skill-atlas-38: the toolbar's Rescan is an icon named Rescan and busy while it scans", async ({ page }) => {
+  await page.goto(url);
+  // Held until the test lets the scan answer, so its busy state can be seen.
+  let release = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  await page.route((u) => u.pathname === "/api/rescan", async (route) => { await held; await route.continue(); });
+  const rescanButton = page.getByRole("button", { name: "Rescan", exact: true });
+  await expect(rescanButton).toHaveAttribute("title", "Rescan");
+  await expect(rescanButton).toHaveText("");
+  await rescanButton.click();
+  const busy = page.getByRole("button", { name: "Rescanning…", exact: true });
+  await expect(busy).toHaveAttribute("aria-busy", "true");
+  release();
+  await expect(page.locator(".toast", { hasText: /^Rescanned/ })).toBeVisible();
+  await expect(rescanButton).toHaveAttribute("aria-busy", "false");
+});
+
+test("skill-atlas-39: at a phone's width the toolbar wraps, every control at least 24 pixels, and the page never scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(url);
+  await groupBy(page, "Dependencies");
+  for (const id of ["btn-insights", "btn-rescan", "btn-help", "btn-lang", "btn-tags", "btn-steps"]) {
+    const box = (await page.locator(`#${id}`).boundingBox())!;
+    expect(box.x >= 0 && box.x + box.width <= 375, id).toBe(true);
+    expect(Math.min(box.width, box.height), id).toBeGreaterThanOrEqual(24);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("skill-atlas-14: a skill's, a step's and a phase's details with tags and evidence", async ({ page }) => {
@@ -437,7 +686,7 @@ test("skill-atlas-14, skill-atlas-34: a skill overriding another of its name, th
   try {
     await page.goto(started.url);
     await groupBy(page, "Dependencies");
-    await expect(page.locator("#insights-n")).toHaveText("0");
+    await expect(page.locator("#insights-n")).toBeHidden();
     await expect(page.locator("#board .issue-dot")).toHaveCount(0);
     const cards = page.locator('#board .card[data-skill^="solo"]');
     await expect(cards).toHaveCount(2);
@@ -790,10 +1039,23 @@ test("skill-atlas-22: an exported file opened from disk is read-only: its workfl
   await expect(panel.getByRole("button", { name: /Rename|Move|Delete/ })).toHaveCount(0);
   await expect(panel.getByRole("textbox")).toHaveCount(0);
 
-  // Viewing still works: grouping, search and details.
+  // Viewing still works: grouping, steps, search and details.
   await groupBy(page, "Dependencies");
+  const steps = page.locator("#btn-steps");
+  await expect(steps).toHaveText("Collapse steps");
+  await steps.click();
+  await expect(steps).toHaveText("Expand steps");
+  await steps.click();
+  await expect(card(page, "code")).toHaveClass(/\bexpanded\b/);
   await page.getByRole("searchbox", { name: /Search skills/ }).fill("which");
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
+
+  // Its help names no key and no gesture that edits.
+  await page.getByRole("button", { name: "Help", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "Help" });
+  await expect(help.locator("kbd")).toHaveText(["/", "Esc", "F6"]);
+  await expect(help).not.toContainText("Undo");
+  await expect(help).not.toContainText("Drag");
 });
 
 // A skill written in Cyrillic, with a reference written in English.
@@ -898,7 +1160,7 @@ test("skill-atlas-13: a project's folder above the working folder is a source of
     // Each folder is named by its place in the repository: the root's by its scope alone, the working
     // folder's with its path from the root; in Chinese, the words in Chinese and the place kept.
     await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith("Project (sub) · Universal"));
-    await page.getByRole("combobox", { name: "Language" }).selectOption("zh-CN");
+    await chooseLanguage(page, "EN, Language", ZH.name);
     const where = zh("Universal");
     const here = zh("{scope} ({place}) · {where}", { scope: zh("Project"), place: "sub", where });
     await expect(groups(page).filter({ has: page.locator('.card[data-skill="here"]') })).toHaveAttribute("aria-label", startsWith(here));
@@ -911,7 +1173,7 @@ test("skill-atlas-13: a project's folder above the working folder is a source of
 
 // The page's Chinese, read from the files a reader edits: the catalog for
 // the page's own text, the label files beside the tunable references.
-const ZH = JSON.parse(readFileSync(join(SKILL, "assets", "locales", "zh-CN.json"), "utf8")) as { name: string; messages: Record<string, string> };
+const ZH = JSON.parse(readFileSync(join(SKILL, "assets", "locales", "zh-CN.json"), "utf8")) as { name: string; short: string; messages: Record<string, string> };
 const zh = (en: string, params: Record<string, string> = {}) => {
   const text = ZH.messages[en];
   expect(text, `the zh-CN catalog has "${en}"`).toBeTruthy();
@@ -922,6 +1184,12 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const startsWith = (s: string) => new RegExp(`^${esc(s)}`);
 // A card's own button, whatever language its accessible name is in.
 const cardMain = (page: Page, id: string) => card(page, id).locator(".card-main");
+
+// Choose a language from the page's language menu, its control named `control` in the page's language.
+async function chooseLanguage(page: Page, control: string, language: string) {
+  await page.getByRole("button", { name: control, exact: true }).click();
+  await page.getByRole("menuitemradio", { name: language }).click();
+}
 
 // Ask the running server to scan again, as the page's Rescan does.
 async function rescan() {
@@ -957,7 +1225,7 @@ test.describe("in a browser of Chinese", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
     await expect(page.getByRole("button", { name: zh("Rescan"), exact: true })).toBeVisible();
     await expect(page.getByRole("radio", { name: zh("Dependencies") })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: zh("Language") })).toHaveValue("zh-CN");
+    await expect(page.getByRole("button", { name: zh("{language}, Language", { language: ZH.short }), exact: true })).toHaveText(ZH.short);
     await expect(page.getByRole("heading", { name: zh("Organize your skills into a workflow") })).toBeVisible();
     const sdlc = zhLabels("workflow-presets.zh-CN.json").presets.find((p: { id: string }) => p.id === "sdlc");
     const phases: string[] = sdlc.phases.map((p: { name: string }) => p.name);
@@ -992,7 +1260,7 @@ test.describe("in a browser of Chinese", () => {
     await expect(tags.getByRole("heading", { name: new RegExp(esc(humanZh)) })).toBeVisible();
     await expect(tags.locator(".ev-tag", { hasText: tagZh("human.question") }).locator(".ev li")).toContainText("Ask the user which branch to use.");
     // Frontmatter keys as they stand, each value the translation's where it gives one, else the original's.
-    const frontmatter = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: zh("Frontmatter"), exact: true }) });
+    const frontmatter = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: zh("Properties"), exact: true }) });
     await expect(frontmatter.locator("dt")).toHaveText(["license", "compatibility"]);
     await expect(frontmatter.locator("dd")).toHaveText(["MIT", CODE_ZH.compatibility]);
     await panel.getByRole("button", { name: zh("View SKILL.md") }).click();
@@ -1222,7 +1490,7 @@ test.describe("in a browser of Chinese", () => {
   });
 });
 
-test("skill-atlas-30: a language chosen on the page applies at once, keeping the open skill, the selection and the filter, and stands after a reload", async ({ page }) => {
+test("skill-atlas-30, skill-atlas-38: a language chosen on the page applies at once, keeping the open skill, the selection and the filter, and stands after a reload", async ({ page }) => {
   await page.goto(url);
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
   await groupBy(page, "Dependencies");
@@ -1232,8 +1500,31 @@ test("skill-atlas-30: a language chosen on the page applies at once, keeping the
   await search.fill("Implements");
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
 
-  await page.getByRole("combobox", { name: "Language" }).selectOption("zh-CN");
+  // The language control: a menu of every offered language in its own name, the shown one checked,
+  // worked by the keyboard, Escape and a click elsewhere closing it.
+  // Its name begins with the short name it shows, so it can be spoken as seen.
+  const control = page.getByRole("button", { name: "EN, Language", exact: true });
+  await expect(control).toHaveText("EN");
+  await expect(control).toHaveAttribute("title", "Language");
+  await control.focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitemradio")).toHaveText(["English", ZH.name]);
+  await expect(menu.getByRole("menuitemradio", { name: "English" })).toHaveAttribute("aria-checked", "true");
+  await expect(menu.getByRole("menuitemradio", { name: ZH.name })).toHaveAttribute("aria-checked", "false");
+  await expect(menu.getByRole("menuitemradio", { name: "English" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(control).toBeFocused();
+  await control.click();
+  await page.locator("#board").click({ position: { x: 5, y: 5 } });
+  await expect(menu).toHaveCount(0);
+  await control.click();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitemradio", { name: ZH.name })).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.getByRole("button", { name: zh("{language}, Language", { language: ZH.short }), exact: true })).toHaveText(ZH.short);
   await expect(page.getByRole("button", { name: zh("Rescan"), exact: true })).toBeVisible();
   // What was open, selected and filtered stands, now in Chinese.
   await expect(card(page, "code").locator(".step-title")).toHaveText(CODE_ZH.steps.map((s) => new RegExp(esc(s))));
@@ -1248,6 +1539,7 @@ test("skill-atlas-30: a language chosen on the page applies at once, keeping the
   // The choice is kept in the browser.
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("combobox", { name: zh("Language") })).toHaveValue("zh-CN");
+  await page.getByRole("button", { name: zh("{language}, Language", { language: ZH.short }), exact: true }).click();
+  await expect(page.getByRole("menuitemradio", { name: ZH.name })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("button", { name: zh("Rescan"), exact: true })).toBeVisible();
 });

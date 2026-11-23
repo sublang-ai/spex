@@ -89,12 +89,14 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
 .btn.danger { color: var(--danger); }
 .btn.primary.danger { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
-.btn.ghost { border-color: transparent; background: transparent; }
-.btn.ghost:hover { background: var(--surface-3); }
 .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
 .btn .badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--surface-3); color: var(--text-2); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
 .btn.active { border-color: var(--accent); color: var(--accent); }
 .btn.active .badge { background: var(--accent); color: var(--on-accent); }
+.btn.icon-only { width: 28px; padding: 0; justify-content: center; }
+.btn[aria-busy="true"] { cursor: progress; color: var(--accent); }
+.btn[aria-busy="true"] svg.i { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
   border: 0; border-radius: 5px; background: transparent; color: var(--text-3); cursor: pointer; flex: none;
@@ -111,10 +113,10 @@ select { padding-right: 4px; cursor: pointer; }
 /* ---------- top bar ---------- */
 .topbar { flex: none; background: var(--surface); border-bottom: 1px solid var(--border); padding: 6px 12px; display: flex; flex-direction: column; gap: 6px; }
 .bar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand { flex: 1 1 auto; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand h1 { font-size: 14px; margin: 0; font-weight: 650; white-space: nowrap; }
 .brand .summary { color: var(--text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.spacer { flex: 1 1 0; }
+.bar-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .seg { display: inline-flex; border: 1px solid var(--border-2); border-radius: 6px; padding: 2px; background: var(--surface-2); }
 .seg button { height: 22px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12.5px; }
 .seg button[aria-checked="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-2); }
@@ -131,10 +133,10 @@ select { padding-right: 4px; cursor: pointer; }
 .chip-focus { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 10px; border-radius: 13px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--text); font-size: 12.5px; white-space: nowrap; }
 .chip-focus b { font-family: var(--mono); font-weight: 600; }
 .save-status { font-size: 12px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.save-status:empty { display: none; }
 .save-status.error { color: var(--danger); }
 .save-status .linkish { color: var(--danger); font-weight: 600; text-decoration: underline; }
-.lang { display: inline-flex; align-items: center; }
-.lang select { max-width: 140px; }
+#lang-short { font-size: 12px; font-weight: 600; }
 
 /* ---------- layout ---------- */
 .main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; }
@@ -237,7 +239,7 @@ button.col-name:hover { background: var(--surface-3); }
 .card:not(.in-phase) .card-top { padding-right: 24px; }
 .card-name { font-family: var(--mono); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .card-src { flex: 0 1 auto; min-width: 40px; font-size: 10.5px; color: var(--text-2); border: 1px solid var(--border-2); border-radius: 3px; padding: 0 4px; line-height: 15px; max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-copies { flex: none; font-size: 10.5px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.card-copies { flex: none; font-size: 10.5px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .issue-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
 .card-desc { color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; justify-content: space-between; min-height: 18px; margin-top: 2px; }
@@ -282,7 +284,7 @@ button.col-name:hover { background: var(--surface-3); }
 .lk path.ln { fill: none; stroke: var(--link); stroke-width: 1.3; marker-end: url(#ar); }
 #links .ah { fill: var(--link); }
 #links .ah-hot { fill: var(--accent); }
-#links.emph .lk { opacity: .13; }
+#links.emph .lk { opacity: .3; }
 #links.emph .lk.hot { opacity: 1; }
 .lk.hot path.ln { stroke: var(--accent); stroke-width: 2; marker-end: url(#ar-hot); }
 .lk .cnt rect { fill: var(--surface); stroke: var(--border-2); }
@@ -325,7 +327,10 @@ button.col-name:hover { background: var(--surface-3); }
 .kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 10px; margin: 0; font-size: 12px; }
 .kv dt { color: var(--text-3); font-family: var(--mono); font-size: 11.5px; }
 .kv dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; }
+.kv .nest { grid-column: 1 / -1; }
+.kv dd.nest { padding-left: 12px; }
 .issues { margin: 0; padding: 8px 10px 8px 26px; border-radius: 6px; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); color: var(--text); font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.issues.notes { background: var(--surface-2); border-color: var(--border); color: var(--text-2); }
 .phase-checks { display: flex; flex-direction: column; gap: 4px; }
 .phase-checks .check { color: var(--text); }
 .step-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -360,6 +365,8 @@ button.col-name:hover { background: var(--surface-3); }
 .menu-i:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .menu-i:disabled { color: var(--text-3); cursor: default; background: none; }
 .menu-i.danger { color: var(--danger); }
+.menu-i .mi-check { visibility: hidden; color: var(--accent); }
+.menu-i[aria-checked="true"] .mi-check { visibility: visible; }
 .menu-h { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 8px 10px 2px; font-weight: 600; }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
 .tagpop { width: 320px; padding: 8px 12px 12px; }
@@ -368,9 +375,16 @@ button.col-name:hover { background: var(--surface-3); }
 .tagpop label { display: flex; align-items: center; gap: 8px; padding: 2px 0; cursor: pointer; }
 .tagpop label input { accent-color: var(--accent); margin: 0; }
 .tagpop .n { margin-left: auto; color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.helppop { width: 320px; max-width: calc(100vw - 16px); padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+.helppop .hp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 -8px 0 0; padding-top: 8px; }
+.helppop .hp-head h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.helppop .d-list { font-size: 12px; color: var(--text-2); }
+.helppop kbd { font: 11px var(--mono); color: var(--text); border: 1px solid var(--border-2); border-radius: 3px; padding: 0 4px; background: var(--surface-2); }
 .inspop { width: 400px; max-width: calc(100vw - 16px); padding: 4px 0 8px; }
 .inspop h3 { font-size: 12px; margin: 0; padding: 10px 14px 4px; display: flex; gap: 6px; align-items: baseline; }
 .inspop h3 .muted { font-weight: 400; }
+.inspop h2.ins-notes { margin: 8px 0 0; padding: 10px 14px 0; border-top: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); font-weight: 600; }
+.inspop h2.ins-notes:first-child { margin-top: 0; border-top: 0; }
 .inspop button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 14px; cursor: pointer; font-size: 12px; color: var(--text-2); }
 .inspop button:hover, .inspop button:focus-visible { background: var(--surface-2); }
 .inspop button b { color: var(--text); font-family: var(--mono); font-weight: 600; }
@@ -452,15 +466,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <h1 id="title">Skill Atlas</h1>
       <span id="summary" class="summary"></span>
     </div>
-    <div class="spacer"></div>
+    <div class="bar-tools">
     <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
-    <button id="btn-insights" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="insights">Insights</span> <span class="badge" id="insights-n">0</span></button>
-    <button id="btn-rescan" class="btn" type="button" hidden>Rescan</button>
-    <button id="btn-details" class="btn" type="button" aria-controls="details" aria-expanded="true">Details</button>
-    <span class="lang">
-      <label class="sr-only" for="lang-select" id="lang-label">Language</label>
-      <select id="lang-select"><option value="en-US">English</option></select>
-    </span>
+    <button id="btn-insights" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="insights">Insights</span> <span class="badge" id="insights-n" hidden></span></button>
+    <button id="btn-rescan" class="btn icon-only" type="button" aria-label="Rescan" title="Rescan" hidden></button>
+    <button id="btn-help" class="btn icon-only" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Help" title="Help"></button>
+    <button id="btn-lang" class="btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Language"><span id="lang-short"></span></button>
+    </div>
   </div>
   <div class="bar-row">
     <span class="seg-label" id="seg-label">Group by</span>
@@ -479,10 +491,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <kbd aria-hidden="true">/</kbd>
     </div>
     <button id="btn-tags" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="tags">Tags</span> <span class="badge" id="tags-n" hidden></span></button>
+    <button id="btn-steps" class="btn" type="button" disabled>Expand steps</button>
     <span id="focus-chip"></span>
-    <div class="spacer"></div>
-    <button id="btn-expand" class="btn ghost" type="button">Expand all</button>
-    <button id="btn-collapse" class="btn ghost" type="button">Collapse all</button>
   </div>
 </header>
 <div id="banner" class="banner" role="alert" hidden></div>
@@ -533,7 +543,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // a kind whose message names what to do carries it whole, a repair's files and command in `repair`.
   const repairable = (p) => p.lang != null && Array.isArray(p.repairs) && typeof p.command === 'string';
   const code = (v) => h('code', { text: str(v) });
-  const runLine = (text, p) => h('p', null, withNodes(t(text), { command: code(p.command) }));
+  const runLine = (text, p) => h('p', null, withNodes(text, { command: code(p.command) }));
   const INSIGHTS = {
     // Reported for a conflict alone: differing copies of one name an agent may load either of.
     'duplicate-name': {
@@ -593,7 +603,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         h('ul', null, p.repairs.map((r) => h('li', null,
           r && r.writeTo ? withNodes(t('Write {file}, brought up to date, to {target}.'), { file: code(r.file), target: code(r.writeTo) }) : code(r && r.file),
           r && r.own ? [' ', withNodes(t('Or, where the skill’s folder is yours to edit, bring {file} in line with its source there and pin it instead.'), { file: code(r.own) })] : null))),
-        runLine('Then run {command}', p),
+        runLine(t('Then run {command}'), p),
       ],
     },
     'edited-translation': {
@@ -603,7 +613,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       // The edited file, where it lies, and the command pinning it once its edit is carried across.
       repair: (p) => [
         h('ul', null, p.repairs.map((r) => h('li', null, code(r && (r.own || r.writeTo || r.file))))),
-        runLine('Carry each edit across, then run {command}', p),
+        runLine(t('Carry each edit across, then run {command}'), p),
       ],
     },
     'stale-annotation': {
@@ -644,6 +654,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     plus: '<path d="M8 3v10M3 8h10"/>',
     pencil: '<path d="M10.5 2.8l2.7 2.7-7.7 7.7H2.8v-2.7z"/>',
     search: '<circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.5 13.5"/>',
+    globe: '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.7 3.7 2.7 6S9.8 12.3 8 14M8 2C6.2 3.7 5.3 5.7 5.3 8s.9 4.3 2.7 6"/>',
+    refresh: '<path d="M15.3 2.7v4h-4"/><path d="M13.7 10a6 6 0 1 1-1.4-6.2l3 2.9"/>',
+    check: '<path d="M3.5 8.5l3 3 6-7"/>',
+    help: '<circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4"/><circle cx="8" cy="11.4" r=".5" fill="currentColor"/>',
     copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.8A1.3 1.3 0 0 0 9.2 2.5H3.8a1.3 1.3 0 0 0-1.3 1.3v5.4a1.3 1.3 0 0 0 1.3 1.3h1.7"/>',
   };
 
@@ -793,12 +807,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const loc = i18n.locales[tag];
     return loc && loc.name ? loc.name : str(tag);
   }
+  // A language's short name on the page's language control: its catalog's, else its tag's language in capitals.
+  const languageShort = (tag) => (i18n.locales[tag] && i18n.locales[tag].short) || primary(tag).toUpperCase();
   function setupLanguages(config) {
     const locales = {};
     const given = config && config.locales && typeof config.locales === 'object' ? config.locales : {};
     for (const [tag, loc] of Object.entries(given)) {
       if (!loc || typeof loc !== 'object' || !loc.messages || typeof loc.messages !== 'object') continue;
-      locales[tag] = { name: str(loc.name) || tag, messages: loc.messages };
+      locales[tag] = { name: str(loc.name) || tag, short: str(loc.short), messages: loc.messages };
     }
     i18n.locales = locales;
     i18n.labels = config && config.labels && typeof config.labels === 'object' ? config.labels : {};
@@ -841,11 +857,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     openSteps: new Set(),       // step ids unfolded inline
     selection: null,            // {type:'skill', id} | {type:'phase', id}
     highlight: new Set(),       // skill ids highlighted from an insight
-    hover: null,
     focus: null,                // skill id the canvas is focused on
     search: '',
     tagFilter: new Set(),
-    detailsOpen: true,
     renaming: null,             // phase id being renamed inline
     wfBlocked: null,            // null | {kind:'invalid', path, message} | {kind:'unavailable', message} | {kind:'conflict'}
     visible: null,              // Set of visible skill ids, or null for all
@@ -855,13 +869,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const els = {
     title: $('#title'), summary: $('#summary'), saveStatus: $('#save-status'),
     insights: $('#btn-insights'), insightsN: $('#insights-n'), rescan: $('#btn-rescan'),
-    detailsBtn: $('#btn-details'), seg: $('#grouping'), wfTools: $('#wf-tools'), wfSelect: $('#wf-select'), wfMenu: $('#wf-menu'),
+    help: $('#btn-help'), seg: $('#grouping'), wfTools: $('#wf-tools'), wfSelect: $('#wf-select'), wfMenu: $('#wf-menu'),
     search: $('#search'), tagsBtn: $('#btn-tags'), tagsN: $('#tags-n'), focusChip: $('#focus-chip'),
-    expandAll: $('#btn-expand'), collapseAll: $('#btn-collapse'), main: $('#main'), canvas: $('#canvas'), board: $('#board'),
+    steps: $('#btn-steps'), main: $('#main'), canvas: $('#canvas'), board: $('#board'),
     svg: $('#links'), layer: $('#link-layer'), details: $('#details'), toasts: $('#toasts'), banner: $('#banner'),
-    lang: $('#lang-select'), langWrap: $('.lang'),
+    lang: $('#btn-lang'), langShort: $('#lang-short'),
   };
   els.wfMenu.append(icon('dots'));
+  els.rescan.append(icon('refresh'));
+  els.help.append(icon('help'));
+  els.lang.prepend(icon('globe'));
   els.search.parentNode.prepend(icon('search'));
 
   // ===================================================================
@@ -882,7 +899,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       skills: arr(a.skills).filter((s) => s && typeof s.id === 'string'),
       edges: arr(a.edges).filter((e) => e && e.from && e.to && isCall(e)),
       unresolved: arr(a.unresolved).filter((u) => u && u.from && u.name && isCall(u)),
-      insights: arr(a.insights).filter((i) => i && i.kind && !mentionOnly(i)),
+      // A problem the reader must act on, else a note, as the scan says (references/data-model.md);
+      // an insight of an older scan, with no level, is a problem.
+      insights: arr(a.insights).filter((i) => i && i.kind && !mentionOnly(i)).map((i) => ({ ...i, level: i.level === 'note' ? 'note' : 'problem' })),
     };
   }
   const catOf = (id) => { const c = str(id).split('.')[0]; return CATS.includes(c) ? c : 'tool'; };
@@ -912,9 +931,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
       const s = {
         ...raw, name: str(raw.name) || raw.id, description: str(raw.description), summary: raw.summary ? str(raw.summary) : '',
-        // A skill's issues are the kinds of the insights the page shows that name it.
+        // A skill's problems and notes are the kinds of the insights the page shows that name it.
         steps, tags: normTags(raw.tags), files: arr(raw.files).filter((f) => f && f.path),
-        issues: [...new Set(atlas.insights.filter((i) => arr(i.skills).includes(raw.id)).map((i) => String(i.kind)))],
+        problems: kindsNaming(atlas, raw.id, 'problem'), notes: kindsNaming(atlas, raw.id, 'note'),
         copies: arr(raw.copies).filter((c) => c && c.root != null).map((c) => ({ root: String(c.root), dir: str(c.dir) })),
         // The other differing skills of its name, each with how the two stand [skill-atlas-14].
         sameName: arr(raw.sameName).filter((x) => x && typeof x.id === 'string' && SAME_NAME.includes(x.relation))
@@ -960,6 +979,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return { skills, byId, byName, rootById, stepById, tagById, edges, unresolvedBy, roots: atlas.roots, insights: atlas.insights };
   }
 
+  const kindsNaming = (atlas, id, level) => [...new Set(atlas.insights.filter((i) => i.level === level && arr(i.skills).includes(id)).map((i) => String(i.kind)))];
   function rollupIds(tagIds, tagById) {
     const out = { input: [], output: [], tool: [], human: [] };
     for (const id of tagIds) { const tg = tagById.get(id); out[tg ? tg.category : catOf(id)].push(id); }
@@ -1357,9 +1377,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     document.title = pageTitle();
     els.title.textContent = pageTitle();
     $('[data-i18n="insights"]').textContent = t('Insights');
-    els.rescan.textContent = state.rescanning ? t('Rescanning…') : t('Rescan');
-    els.detailsBtn.textContent = t('Details');
-    $('#lang-label').textContent = t('Language');
+    setRescanLabel();
+    els.help.setAttribute('aria-label', t('Help'));
+    els.help.title = t('Help');
+    // The name begins with the short name shown, so it can be spoken as seen.
+    els.lang.setAttribute('aria-label', t('{language}, Language', { language: languageShort(i18n.lang) }));
+    els.lang.title = t('Language');
+    els.langShort.textContent = languageShort(i18n.lang);
     $('#seg-label').textContent = t('Group by');
     const groupingNames = { workflow: t('Workflow'), dependencies: t('Dependencies'), source: t('Source') };
     for (const b of els.seg.querySelectorAll('button[data-g]')) b.textContent = groupingNames[b.dataset.g];
@@ -1368,20 +1392,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.search.placeholder = t('Search skills');
     els.search.setAttribute('aria-label', t('Search skills by name, description or step'));
     $('[data-i18n="tags"]').textContent = t('Tags');
-    els.expandAll.textContent = t('Expand all');
-    els.collapseAll.textContent = t('Collapse all');
     els.toasts.setAttribute('aria-label', t('Notifications'));
     els.canvas.setAttribute('aria-label', t('Skills canvas'));
     els.details.setAttribute('aria-label', t('Details'));
-    const sel = els.lang;
-    sel.replaceChildren(...offeredLangs().map((tag) => h('option', { value: tag, lang: tag }, languageName(tag))));
-    sel.value = i18n.lang;
-    els.langWrap.hidden = offeredLangs().length < 2;
+    els.lang.hidden = offeredLangs().length < 2;
     setSaveStatus(save.status);
   }
 
   // The reader's choice: kept in the browser and applied at once, keeping what is open, selected,
   // filtered and unsaved (all of which live in `state`, not in the rendered page).
+  // The languages offered, each in its own name, the one shown checked.
+  function languageMenu(anchor) {
+    openMenu(anchor, offeredLangs().map((tag) => ({ label: languageName(tag), lang: tag, checked: tag === i18n.lang, run: () => chooseLanguage(tag) })));
+  }
   function chooseLanguage(tag) {
     if (!offeredLangs().includes(tag) || tag === i18n.lang) return;
     try { localStorage.setItem(LANG_KEY, tag); } catch { /* the choice holds for this visit */ }
@@ -1420,11 +1443,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const p = lsGet(PREFS_KEY);
     if (!p) return;
     if (GROUPINGS.includes(p.grouping)) state.grouping = p.grouping;
-    if (typeof p.detailsOpen === 'boolean') state.detailsOpen = p.detailsOpen;
     if (Array.isArray(p.collapsed)) state.collapsed = new Set(p.collapsed.map(String));
   }
   function savePrefs() {
-    lsSet(PREFS_KEY, { grouping: state.grouping, detailsOpen: state.detailsOpen, collapsed: [...state.collapsed].slice(0, 500) });
+    lsSet(PREFS_KEY, { grouping: state.grouping, collapsed: [...state.collapsed].slice(0, 500) });
   }
 
   // ===================================================================
@@ -1729,7 +1751,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const d = { ...dirty };
     dirty.chrome = dirty.canvas = dirty.details = dirty.links = false;
     if (d.chrome) renderChrome();
-    if (d.canvas) renderCanvas();
+    if (d.canvas) { renderCanvas(); syncStepsButton(); }
     if (d.details) renderDetails();
     if (d.canvas || d.links) drawLinks();
     if (d.canvas || d.details || d.links) syncSelection();
@@ -1784,12 +1806,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       els.focusChip.append(h('span', { class: 'chip-focus' }, withNodes(t('Focused on {skill}'), { skill: h('b', { text: '/' + s.name }) }),
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Clear focus on {skill}', { skill: '/' + s.name }), 'data-act': 'clear-focus' }, icon('x'))));
     }
-    const nIns = idx.insights.length;
-    els.insightsN.textContent = fmtNum(nIns);
-    els.insights.disabled = !nIns;
+    // The count is the problems' alone; the notes are listed after them.
+    const nProblems = idx.insights.filter((i) => i.level === 'problem').length;
+    els.insightsN.hidden = !nProblems;
+    els.insightsN.textContent = fmtNum(nProblems);
+    els.insights.setAttribute('aria-label', nProblems ? t('Insights, {n} problem|Insights, {n} problems', { n: nProblems }) : t('Insights'));
+    els.insights.disabled = !idx.insights.length;
     els.rescan.hidden = staticMode;
-    els.detailsBtn.setAttribute('aria-expanded', String(state.detailsOpen));
-    els.main.classList.toggle('no-details', !state.detailsOpen);
+    els.main.classList.toggle('no-details', !detailsShown());
   }
 
   // ===================================================================
@@ -1895,7 +1919,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const c of CATS) {
       const ids = cats[c];
       if (!ids.length) continue;
-      const label = t('{category}: {tags}', { category: catLabel(c), tags: list(ids.map((id) => tagLabel(id))) });
+      // A count names its category and number; a bare mark, with no number, its tags.
+      const label = opts.bare ? t('{category}: {tags}', { category: catLabel(c), tags: list(ids.map((id) => tagLabel(id))) }) : t('{category}: {n}', { category: catLabel(c), n: ids.length });
       wrap.append(h('span', { class: `pill cat-${c}${opts.bare ? ' bare' : ''}`, role: 'img', 'aria-label': label, title: label }, icon(c), opts.bare ? null : fmtNum(ids.length)));
     }
     return wrap;
@@ -2067,7 +2092,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const dup = isShared(s);
     const card = h('article', { class: 'card' + (expanded ? ' expanded' : '') + (inPhase && editable ? ' in-phase' : ''), 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, draggable: draggable ? 'true' : null });
     const stepsId = 'st-' + (++uid);
-    const issueText = s.issues.map((k) => insightIssue(k)).join(' ');
+    const issueText = s.problems.map((k) => insightIssue(k)).join(' ');
     const desc = shownDesc(s), summary = shownSummary(s);
     const n = s.copies.length + 1;
     const main = h('button', {
@@ -2077,14 +2102,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       h('span', { class: 'card-top' },
         h('span', { class: 'card-name', title: s.id === s.name ? '/' + s.name : `/${s.name} (${s.id})`, text: '/' + s.name }),
         dup ? h('span', { class: 'card-src', title: t('{source} — id {id}', { source: rootLabel(s), id: s.id }), text: rootLabel(s) }) : null,
-        s.copies.length ? h('span', { class: 'card-copies', title: t('Installed in {n} places', { n }), 'aria-label': t('installed in {n} places', { n }) }, '×' + fmtNum(n)) : null,
-        s.issues.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': t('Has issues: {issues}', { issues: issueText }), title: issueText }) : null),
+        s.copies.length ? h('span', { class: 'card-copies', role: 'img', title: t('Installed in {n} folders', { n }), 'aria-label': t('Installed in {n} folders', { n }) }, t('{n} places', { n })) : null,
+        s.problems.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': t('Has issues: {issues}', { issues: issueText }), title: issueText }) : null),
       h('span', { class: 'card-desc', title: desc || null, text: summary || desc || t('No description') }),
       h('span', { class: 'card-foot' },
         pillsFor(s._cats),
         h('span', { class: 'card-meta' },
-          h('span', { text: s.stepKind === 'none' ? t('no steps') : stepNoun(s, s.steps.length) }),
-          outN || inN ? h('span', { class: 'card-deps', text: t('Depends on {out} · used by {in}', { out: outN, in: inN }) }) : null)));
+          s.steps.length ? h('span', { text: stepNoun(s, s.steps.length) }) : null,
+          outN || inN ? h('span', { class: 'card-deps', text: [outN ? t('Depends on {n}', { n: outN }) : '', inN ? t('Used by {n}', { n: inN }) : ''].filter(Boolean).join(' · ') }) : null)));
     card.append(main);
     const tools = h('div', { class: 'card-tools' },
       h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-menu', 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, 'data-fk': `cm|${key}|${s.id}`, 'aria-label': t('Actions for {skill}', { skill: '/' + s.name }), 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')),
@@ -2303,13 +2328,20 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Selection and emphasis (class toggles only; no re-render)
   // ===================================================================
   let markedCards = [];
-  function activeSet() {
-    if (state.hover) return new Set([state.hover]);
+  // The skills selected, with the one whose card holds focus; hovering emphasizes nothing.
+  function selectedSet() {
     const sel = state.selection;
     if (sel && sel.type === 'skill') return new Set([sel.id]);
     if (sel && sel.type === 'phase') { const p = findPhase(sel.id); return p ? new Set(p.skills) : null; }
     if (state.highlight.size) return state.highlight;
     return null;
+  }
+  function activeSet() {
+    const a = document.activeElement;
+    const card = a && a !== els.board && els.board.contains(a) ? a.closest('.card[data-skill]') : null;
+    const sel = selectedSet();
+    if (!card) return sel;
+    return new Set([...(sel || []), card.dataset.skill]);
   }
   function applyEmphasis() {
     const act = activeSet();
@@ -2339,9 +2371,31 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function select(sel, opts = {}) {
     state.selection = sel;
     if (!opts.keepHighlight) state.highlight = new Set();
-    if (sel) state.detailsOpen = true;
-    savePrefs();
     invalidate('chrome', 'details', 'links');
+  }
+  // The details are open while, and only while, something shown is selected.
+  function detailsShown() {
+    const sel = state.selection;
+    return !!sel && (sel.type === 'skill' ? state.idx.byId.has(sel.id) : !!findPhase(sel.id));
+  }
+  // What a selection was made on: its card or its phase's name.
+  function selectionAnchor(sel) {
+    if (!sel) return null;
+    if (sel.type === 'skill') { const inst = (anchors.get(sel.id) || []).find((x) => !x.group); return inst ? inst.card.querySelector('.card-main') : null; }
+    return els.board.querySelector(`[data-fk="${CSS.escape('pn|' + sel.id)}"]`);
+  }
+  // Closing the details clears the selection; focus inside them, or lost with them, goes back
+  // to what was selected.
+  function closeDetails() {
+    const sel = state.selection;
+    const inside = els.details.contains(document.activeElement) || document.activeElement === document.body;
+    state.selection = null;
+    state.highlight = new Set();
+    invalidate('chrome', 'details', 'links');
+    flush();
+    if (!inside) return;
+    const target = selectionAnchor(sel);
+    if (target) target.focus({ preventScroll: true }); else els.canvas.focus({ preventScroll: true });
   }
 
   // Follow a link: reveal the target (clear filters, expand its group), select, scroll, flash.
@@ -2360,8 +2414,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (opts.openStep) state.openSteps.add(opts.openStep);
     state.selection = { type: 'skill', id };
     if (!opts.keepHighlight) state.highlight = new Set();
-    state.detailsOpen = true;
-    savePrefs();
     invalidate('chrome', 'canvas', 'details');
     flush();
     const inst = (anchors.get(id) || []).find((x) => !x.group);
@@ -2387,7 +2439,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     let content;
     if (sel && sel.type === 'skill' && state.idx.byId.has(sel.id)) content = renderSkillDetails(state.idx.byId.get(sel.id));
     else if (sel && sel.type === 'phase' && findPhase(sel.id)) content = renderPhaseDetails(findPhase(sel.id));
-    else content = renderDetailsEmpty();
+    else content = [];
     panel.replaceChildren(...content);
     panel.dataset.sel = selKey;
     panel.scrollTop = prevSel === selKey ? scrollTop : 0;
@@ -2396,29 +2448,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function detailsHead(kicker, title, mono) {
     return h('div', { class: 'd-head' },
       h('div', { style: 'flex:1;min-width:0' }, h('div', { class: 'd-kicker', text: kicker }), h('h2', { class: mono ? 'mono' : null, tabindex: '-1', text: title })),
-      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'close-details', 'aria-label': t('Close details'), title: t('Close (Esc clears the selection)') }, icon('x')));
+      h('button', { type: 'button', class: 'icon-btn', 'data-act': 'close-details', 'aria-label': t('Close details'), title: t('Close details') }, icon('x')));
   }
   const sec = (title, ...kids) => h('section', { class: 'd-sec' }, h('h3', null, title), ...kids);
 
-  function renderDetailsEmpty() {
-    const key = (k, what) => h('li', null, h('b', { text: k }), ' ', what);
-    return [
-      detailsHead(t('Details'), t('Nothing selected')),
-      h('div', { class: 'd-body' },
-        h('p', { class: 'd-desc', style: 'color:var(--text-2)', text: t('Select a skill to see its steps, tags and dependencies. Select a phase name to see what flows through it.') }),
-        sec(t('Legend'), h('div', { class: 'legend' },
-          CATS.map((c) => h('div', { class: 'row' }, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(2)), h('span', { text: catLabel(c) }))),
-          h('div', { class: 'row' }, legendLine(), h('span', { text: t('Dependency — one skill calls another') })),
-          h('div', { class: 'row' }, h('span', { class: 'issue-dot' }), h('span', { text: t('Has an issue worth a look') })))),
-        sec(t('Keys'), h('ul', { class: 'd-list', style: 'font-size:12px;color:var(--text-2)' },
-          key('/', t('Search')),
-          key('Esc', t('Close a menu or clear the selection')),
-          key('F6', t('Move between the canvas and these details')),
-          canEdit() ? key('Ctrl/⌘ Z', t('Undo the latest edit')) : null,
-          h('li', { text: t('Click a card to open it; click a call chip to go to the skill it calls.') }),
-          state.grouping === 'workflow' && canEdit() ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null))),
-    ];
-  }
   function legendLine() {
     const tpl = document.createElement('template');
     tpl.innerHTML = '<svg class="line" viewBox="0 0 40 10" aria-hidden="true"><path d="M2 5 H32" fill="none" stroke="var(--link)" stroke-width="1.5"/><path d="M31 1.5 L38 5 L31 8.5 z" fill="var(--link)"/></svg>';
@@ -2435,7 +2468,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     body.append(...trNotes(s));
     body.append(h('p', { class: 'd-desc', text: desc || t('No description.') }));
     if (summary) body.append(h('p', { class: 'd-summary', text: summary }));
-    if (s.issues.length) body.append(h('ul', { class: 'issues', 'aria-label': t('Issues') }, s.issues.map((k) => h('li', { text: insightIssue(k) }))));
+    if (s.problems.length) body.append(h('ul', { class: 'issues', 'aria-label': t('Issues') }, s.problems.map((k) => h('li', { text: insightIssue(k) }))));
+    if (s.notes.length) body.append(h('ul', { class: 'issues notes', 'aria-label': t('Notes') }, s.notes.map((k) => h('li', { text: insightIssue(k) }))));
     const same = sameNameNote(s);
     if (same) body.append(same);
     const actions = h('div', { class: 'd-actions' },
@@ -2477,7 +2511,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (fm.length) {
       const order = ['allowed-tools', 'model', 'license', 'compatibility'];
       fm.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99) || a[0].localeCompare(b[0]));
-      body.append(sec(t('Frontmatter'), h('dl', { class: 'kv' }, fm.map(([k, v]) => [h('dt', { text: k }), h('dd', { lang: trHas(k) ? trTag(s) : null, text: typeof v === 'string' ? v : Array.isArray(v) ? v.join(', ') : JSON.stringify(v) })]))));
+      // A value holding fields shows each on a row of its own, one level deep, deeper ones as text.
+      const lang = (k) => (trHas(k) ? trTag(s) : null);
+      const nested = (v) => v && typeof v === 'object' && (!Array.isArray(v) || v.some((x) => x && typeof x === 'object'));
+      const rows = (v) => (Array.isArray(v) ? v.map((x, i) => [String(i + 1), x]) : Object.entries(v));
+      body.append(sec(t('Properties'), h('dl', { class: 'kv' }, fm.map(([k, v]) => (nested(v)
+        ? [h('dt', { class: 'nest', text: k }), h('dd', { class: 'nest', lang: lang(k) }, h('dl', { class: 'kv' }, rows(v).map(([k2, v2]) => [h('dt', { text: k2 }), h('dd', { text: plainValue(v2) })])))]
+        : [h('dt', { text: k }), h('dd', { lang: lang(k), text: plainValue(v) })])))));
     }
 
     if (s.tags.length || s._tagIds.size) {
@@ -2530,6 +2570,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return [detailsHead(isShared(s) ? t('Skill · {source}', { source: rootLabel(s) }) : t('Skill'), '/' + s.name, true), body];
   }
 
+  // A property's value as text: a list's items and a map's fields joined, never as JSON.
+  function plainValue(v) {
+    if (Array.isArray(v)) return v.map(plainValue).join(', ');
+    if (v && typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k}: ${plainValue(x)}`).join('; ');
+    return str(v);
+  }
   function depList(edges, side) {
     if (!edges.length) return h('span', { class: 'muted', text: side === 'to' ? t('Depends on no other skill.') : t('No other skill uses it.') });
     const byOther = new Map();
@@ -2665,7 +2711,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     anchor.setAttribute('aria-expanded', 'true');
     pop = { el, anchor, fk: anchor.dataset.fk || null, id: anchor.id || null };
     positionPopover();
-    const first = el.querySelector('[role="menuitem"]:not(:disabled), input, button:not(:disabled)');
+    const first = el.querySelector('[role^="menuitem"]:not(:disabled), input, button:not(:disabled)');
     if (first) first.focus();
     return el;
   }
@@ -2696,16 +2742,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   const popoverOpenFor = (anchor) => pop && pop.anchor === anchor;
 
+  // An item with `checked` is one of a set of choices, shown with a check where it is the one chosen.
   function openMenu(anchor, items) {
     const m = h('div', { class: 'menu', role: 'menu' });
     for (const it of items) {
       if (!it) continue;
       if (it.heading) m.append(h('div', { class: 'menu-h', role: 'presentation', text: it.heading }));
       else if (it.sep) m.append(h('hr', { role: 'separator' }));
-      else m.append(h('button', { type: 'button', role: 'menuitem', class: 'menu-i' + (it.danger ? ' danger' : ''), disabled: it.disabled ? true : null, title: it.label, onclick: () => { closePopover(true); it.run(); } }, it.label));
+      else {
+        const radio = it.checked != null;
+        m.append(h('button', { type: 'button', role: radio ? 'menuitemradio' : 'menuitem', 'aria-checked': radio ? String(!!it.checked) : null, lang: it.lang || null, class: 'menu-i' + (it.danger ? ' danger' : ''), disabled: it.disabled ? true : null, title: it.label, onclick: () => { closePopover(true); it.run(); } },
+          radio ? icon('check', 'mi-check') : null, it.label));
+      }
     }
     m.addEventListener('keydown', (e) => {
-      const items = [...m.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+      const items = [...m.querySelectorAll('[role^="menuitem"]:not(:disabled)')];
       const i = items.indexOf(document.activeElement);
       if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
@@ -2714,6 +2765,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       else if (e.key === 'Tab') closePopover(false);
     });
     openPopover(anchor, m, 'menu-pop');
+    m.querySelector('[aria-checked="true"]')?.focus();
   }
 
   function modal(titleText, bodyKids, buttons, opts = {}) {
@@ -2966,14 +3018,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     openPopover(anchor, wrap, '');
   }
 
+  // The problems by kind, then the notes by kind under a quiet heading of their own.
   function insightsPopover(anchor) {
     const idx = state.idx;
     const byKind = new Map();
-    for (const i of idx.insights) { if (!byKind.has(i.kind)) byKind.set(i.kind, []); byKind.get(i.kind).push(i); }
+    for (const i of idx.insights) { const key = i.level + '\u0000' + i.kind; if (!byKind.has(key)) byKind.set(key, []); byKind.get(key).push(i); }
     const wrap = h('div', { class: 'inspop', role: 'group', 'aria-label': t('Insights') });
-    const kinds = [...byKind.keys()].sort((a, b) => (Object.keys(INSIGHTS).indexOf(a) + 1 || 99) - (Object.keys(INSIGHTS).indexOf(b) + 1 || 99));
-    for (const k of kinds) {
-      const ofKind = byKind.get(k);
+    const order = (key) => { const [level, kind] = key.split('\u0000'); return (level === 'note' ? 100 : 0) + (Object.keys(INSIGHTS).indexOf(kind) + 1 || 99); };
+    const keys = [...byKind.keys()].sort((a, b) => order(a) - order(b));
+    let notes = false;
+    for (const key of keys) {
+      const ofKind = byKind.get(key);
+      const k = ofKind[0].kind;
+      if (ofKind[0].level === 'note' && !notes) { notes = true; wrap.append(h('h2', { class: 'ins-notes', text: t('Notes') })); }
       wrap.append(h('h3', null, insightTitle(k), h('span', { class: 'muted', text: fmtNum(ofKind.length) })));
       for (const ins of ofKind) {
         const ids = arr(ins.skills).map(String);
@@ -2985,6 +3042,26 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (repair) wrap.append(repair);
       }
     }
+    openPopover(anchor, wrap, '');
+  }
+  // The legend of the page's marks and the keys it answers to, those editing only where it edits.
+  function helpPopover(anchor) {
+    const key = (k, what) => h('li', null, h('kbd', { text: k }), ' ', what);
+    const tid = 'help-t-' + (++uid);
+    const wrap = h('div', { class: 'helppop', role: 'dialog', 'aria-labelledby': tid },
+      h('div', { class: 'hp-head' }, h('h2', { id: tid, text: t('Help') }),
+        h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Close'), title: t('Close'), onclick: () => closePopover(true) }, icon('x'))),
+      sec(t('Legend'), h('div', { class: 'legend' },
+        CATS.map((c) => h('div', { class: 'row' }, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(2)), h('span', { text: catLabel(c) }))),
+        h('div', { class: 'row' }, legendLine(), h('span', { text: t('Dependency — one skill calls another') })),
+        h('div', { class: 'row' }, h('span', { class: 'issue-dot' }), h('span', { text: t('Has a problem to act on') })))),
+      sec(t('Keys'), h('ul', { class: 'd-list' },
+        key('/', t('Search')),
+        key('Esc', t('Close a menu or clear the selection')),
+        key('F6', t('Move between the canvas and the open details')),
+        canEdit() ? key('Ctrl/⌘ Z', t('Undo the latest edit')) : null,
+        h('li', { text: t('Click a card to open it; click a call chip to go to the skill it calls.') }),
+        state.grouping === 'workflow' && canEdit() ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null)));
     openPopover(anchor, wrap, '');
   }
   function showInsight(ids) {
@@ -3120,23 +3197,30 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     savePrefs();
     invalidate('chrome', 'canvas', 'details');
   }
-  function expandAll() {
-    state.collapsed = new Set([...state.collapsed].filter((k) => !k.startsWith(groupPrefix())));
-    for (const s of state.idx.skills) if (isVisible(s.id)) state.expanded.add(s.id);
-    savePrefs();
+  // The shown cards' steps, opened or closed together; groups keep their own state.
+  const shownCards = () => [...anchors].filter(([, insts]) => insts.some((x) => !x.group)).map(([id]) => state.idx.byId.get(id)).filter(Boolean);
+  const anyStepsOpen = (cards) => cards.some((s) => state.expanded.has(s.id));
+  function syncStepsButton() {
+    const cards = shownCards();
+    els.steps.disabled = !cards.some((s) => s.steps.length);
+    els.steps.textContent = anyStepsOpen(cards) ? t('Collapse steps') : t('Expand steps');
+  }
+  function toggleAllSteps() {
+    const cards = shownCards();
+    if (anyStepsOpen(cards)) for (const s of cards) state.expanded.delete(s.id);
+    else for (const s of cards) if (s.steps.length) state.expanded.add(s.id);
     invalidate('canvas', 'details');
   }
-  function collapseAll() {
-    const groups = computeGroups() || [];
-    for (const g of groups) state.collapsed.add(groupKey(g));
-    state.expanded.clear();
-    savePrefs();
-    invalidate('canvas', 'details');
+  function setRescanLabel() {
+    const label = state.rescanning ? t('Rescanning…') : t('Rescan');
+    els.rescan.setAttribute('aria-label', label);
+    els.rescan.title = label;
+    els.rescan.setAttribute('aria-busy', String(state.rescanning));
   }
   async function rescan() {
-    els.rescan.disabled = true;
+    if (state.rescanning) return;
     state.rescanning = true;
-    els.rescan.textContent = t('Rescanning…');
+    setRescanLabel();
     try {
       const res = await fetch('/api/rescan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skill-Atlas': '1' }, body: '{}' });
       if (!res.ok) throw new Error(String(res.status));
@@ -3147,9 +3231,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     } catch {
       toast(t('Rescan failed — is the Skill Atlas server still running?'));
     } finally {
-      els.rescan.disabled = false;
       state.rescanning = false;
-      els.rescan.textContent = t('Rescan');
+      setRescanLabel();
     }
   }
   async function copyText(text, btn) {
@@ -3192,7 +3275,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
     });
     els.wfMenu.addEventListener('click', () => { if (popoverOpenFor(els.wfMenu)) closePopover(); else workflowMenu(els.wfMenu); });
-    els.lang.addEventListener('change', () => chooseLanguage(els.lang.value));
+    els.lang.addEventListener('click', () => { if (popoverOpenFor(els.lang)) closePopover(); else languageMenu(els.lang); });
     // The box is the source of truth: state.search only follows it, so nothing can put old text back.
     els.search.addEventListener('input', () => {
       clearTimeout(searchTimer);
@@ -3207,10 +3290,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     });
     els.tagsBtn.addEventListener('click', () => { if (popoverOpenFor(els.tagsBtn)) closePopover(); else tagPopover(els.tagsBtn); });
     els.insights.addEventListener('click', () => { if (popoverOpenFor(els.insights)) closePopover(); else insightsPopover(els.insights); });
-    els.expandAll.addEventListener('click', expandAll);
-    els.collapseAll.addEventListener('click', collapseAll);
+    els.steps.addEventListener('click', toggleAllSteps);
     els.rescan.addEventListener('click', rescan);
-    els.detailsBtn.addEventListener('click', () => { state.detailsOpen = !state.detailsOpen; savePrefs(); invalidate('chrome', 'links'); });
+    els.help.addEventListener('click', () => { if (popoverOpenFor(els.help)) closePopover(); else helpPopover(els.help); });
     els.focusChip.addEventListener('click', (e) => { if (e.target.closest('[data-act="clear-focus"]')) { state.focus = null; refilter(); els.search.focus(); } });
 
     document.addEventListener('focusin', (e) => { if (!els.toasts.contains(e.target)) focusBeforeToasts = e.target; });
@@ -3225,13 +3307,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (tgt.matches && tgt.matches('input.col-rename') && state.renaming === tgt.dataset.phase) finishRename(tgt, true);
     });
 
-    // Hover emphasis: only class toggles.
-    els.board.addEventListener('mouseover', (e) => {
-      const card = e.target.closest('.card[data-skill]');
-      const id = card ? card.dataset.skill : null;
-      if (id !== state.hover) { state.hover = id; applyEmphasis(); }
-    });
-    els.board.addEventListener('mouseleave', () => { if (state.hover) { state.hover = null; applyEmphasis(); } });
+    // The emphasis follows the card holding focus: only class toggles.
+    els.board.addEventListener('focusin', () => applyEmphasis());
+    els.board.addEventListener('focusout', () => applyEmphasis());
 
     els.board.addEventListener('dragstart', onDragStart);
     els.board.addEventListener('dragover', onDragOver);
@@ -3261,7 +3339,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (state.expanded.has(sid)) state.expanded.delete(sid); else state.expanded.add(sid);
         state.selection = { type: 'skill', id: sid };
         if (!wasSelected) state.highlight = new Set();
-        state.detailsOpen = true;
         invalidate('chrome', 'canvas', 'details');
         break;
       }
@@ -3309,7 +3386,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         createWorkflow(t('Workflow'), p || null, false);
         break;
       }
-      case 'close-details': state.detailsOpen = false; savePrefs(); invalidate('chrome', 'links'); els.detailsBtn.focus(); break;
+      case 'close-details': closeDetails(); break;
       case 'focus': setFocus(sid); break;
       case 'toggle-expand': toggleExpand(sid); flush(); follow(sid); break;
       case 'goto-step': follow(sid, { expand: true, openStep: tgt.dataset.step }); break;
@@ -3361,42 +3438,25 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (undoLatest()) e.preventDefault();
       return;
     }
-    if (e.key === 'F6') { e.preventDefault(); toggleDetailsFocus(); return; }
+    if (e.key === 'F6') { if (detailsShown()) { e.preventDefault(); toggleDetailsFocus(); } return; }
     if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); els.search.focus(); els.search.select(); return; }
     if (e.key === 'Escape') {
       if (pop) { e.preventDefault(); closePopover(true); return; }
       if (typing && tgt.tagName === 'TEXTAREA') { tgt.blur(); return; }
-      if (state.selection || state.highlight.size) {
-        const sel = state.selection;
-        state.selection = null;
-        state.highlight = new Set();
-        if (window.matchMedia('(max-width: 900px)').matches) state.detailsOpen = false;
-        invalidate('chrome', 'details', 'links');
-        // Return focus to the card that was selected.
-        if (sel && sel.type === 'skill' && els.details.contains(document.activeElement)) {
-          flush();
-          const inst = (anchors.get(sel.id) || []).find((x) => !x.group);
-          if (inst) inst.card.querySelector('.card-main').focus({ preventScroll: true });
-        }
-        return;
-      }
+      if (state.selection || state.highlight.size) { closeDetails(); return; }
       if (state.focus) { state.focus = null; refilter(); }
     }
   }
 
-  // F6 moves focus between the selected card and the details panel.
+  // F6 moves focus between the selected card and the open details panel.
   function toggleDetailsFocus() {
-    const inDetails = els.details.contains(document.activeElement);
-    if (!inDetails) {
-      if (!state.detailsOpen) { state.detailsOpen = true; savePrefs(); invalidate('chrome', 'details', 'links'); flush(); }
+    if (!els.details.contains(document.activeElement)) {
+      flush();
       const head = els.details.querySelector('.d-head h2');
       if (head) head.focus();
       return;
     }
-    const sel = state.selection;
-    const inst = sel && sel.type === 'skill' ? (anchors.get(sel.id) || []).find((x) => !x.group) : null;
-    const target = inst ? inst.card.querySelector('.card-main')
-      : sel && sel.type === 'phase' ? els.board.querySelector(`[data-fk="${CSS.escape('pn|' + sel.id)}"]`) : null;
+    const target = selectionAnchor(state.selection);
     (target || els.canvas).focus({ preventScroll: !!target });
     if (target) target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }

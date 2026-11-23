@@ -7,7 +7,7 @@
 
 Accepted (2026-11-21).
 Amended in which of a skill's own and the state folder's translation is read by [DR-247](247-a-refreshed-translation-is-the-one-read.md).
-Amended in the page's settings and their labels, retiring the setting for mentions, by [DR-248](248-the-atlas-shows-dependencies-and-real-conflicts.md).
+Amended in the page's settings and their labels, retiring the setting for mentions, and in the control choosing the page's language by [DR-248](248-the-atlas-shows-dependencies-and-real-conflicts.md).
 Extends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the atlas's scan, page and state folder and in the form of a shipped skill.
 
 ## Context

@@ -22,6 +22,8 @@ export function summarize(atlas) {
   const copyNote = copyCount ? ` (plus ${copyCount} ${copyCount === 1 ? 'copy' : 'copies'} in other folders)` : '';
   out.push(`Skill Atlas: ${plural(atlas.skills.length, 'skill')}${copyNote} in ${plural(atlas.roots.length, 'folder')}; ${calls} calls, ${mentions} mentions, ${atlas.unresolved.length} unresolved.`);
   out.push(`Project: ${atlas.cwd}`);
+  const problems = atlas.insights.filter((i) => i.level === 'problem').length;
+  out.push(`Insights: ${plural(problems, 'problem')} to act on, ${plural(atlas.insights.length - problems, 'note')}.`);
 
   out.push('', 'Folders (skills present, copies included):');
   if (!atlas.roots.length) out.push('  (none found; pass --root <dir> to name a skill folder)');
@@ -88,10 +90,13 @@ export function summarize(atlas) {
     for (const s of shared) out.push(`  ${named(s.id)}: ${[s.root, ...s.copies.map((c) => c.root)].join(', ')}`);
   }
 
-  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch', 'stale-annotation'];
-  const rest = atlas.insights.filter((i) => other.includes(i.kind));
-  if (rest.length) {
-    out.push('', 'Other issues:');
+  // The insights' levels as the page shows them [insights.mjs levelOf]; each one not listed
+  // above under its own heading, an unresolved link or a skill with no steps, is listed here.
+  const listed = new Set(['duplicate-name', 'cycle', 'unresolved-link', 'no-steps']);
+  for (const [level, heading] of [['problem', 'Other problems'], ['note', 'Other notes']]) {
+    const rest = atlas.insights.filter((i) => i.level === level && !listed.has(i.kind));
+    if (!rest.length) continue;
+    out.push('', `${heading} (${rest.length}):`);
     for (const i of rest) out.push(`  ${i.kind}: ${i.message}`);
   }
   return out.join('\n') + '\n';

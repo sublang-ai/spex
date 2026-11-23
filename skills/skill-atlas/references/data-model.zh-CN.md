@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e43d6412bd3a4a40bce90a0e039045df2e83595099ccd7bd5d452026bd0f932c own=3eec62218556450af9517dff08fd5b066d9791c26bcee494517560263a7371e1 -->
+<!-- skill-atlas:source sha256=2ae57afe8beae5181db99f5b86d4a4be8a737b635570fab8ae4785e057eef499 own=fbde8a69544e491be997fd0973e43d5f0a1b44fe07deba67ba5f2845cac1185d -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -103,7 +103,7 @@
     { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
+    { "kind": "duplicate-name", "level": "problem", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -277,6 +277,15 @@
 | `edited-translation` | `lang`、`files`（脱离源文件修改过的相对路径）、`repairs`、`command` |
 | `translation-steps` | `lang`、`steps`、`expected` |
 
+每条洞察还带有 `level`，页面和摘要读取的是同一个值：读者必须处理的为 `problem`，否则为 `note`：
+
+| `level` | 类型 |
+| --- | --- |
+| `problem` | `duplicate-name`、`calls` 类的 `unresolved-link`、`cycle`、`invalid-frontmatter`、`stale-translation`、`edited-translation`、`stale-annotation`、`translation-steps` |
+| `note` | `mentions` 类的 `unresolved-link`、`oversized`、`missing-description`、`name-mismatch`、`no-steps` |
+
+页面只为问题在卡片上作标记、在“洞察”按钮上计数，并把提示列在问题之后。
+
 在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；某个标签下的文字总是报告在恰为该标签之下：有该标签自己的条目时覆盖在它之上，否则覆盖在名称顺序中第一个语言和文字相同的标签下译本文件条目的副本之上（`zh-CN` 对应 `zh`，绝不对应 `zh-TW`），否则自成一个条目（`origin` 为 `"annotation"`）。
 文件自己的条目绝不因另一个标签的文字而改变：`SKILL.en.md` 之上 `en-US` 和 `en-GB` 下的文字得出三个条目，`en`（文件的）、`en-US` 和 `en-GB`（各为文件的字段加上自己的文字）：
 
@@ -300,7 +309,7 @@
 {
   "lang": "zh-CN",                     // 命令给出的 --lang，或 null
   "locales": {                         // assets/locales/ 中的每个文件一项
-    "zh-CN": { "name": "简体中文", "messages": { "Rescan": "重新扫描" } }
+    "zh-CN": { "name": "简体中文", "short": "中", "messages": { "Rescan": "重新扫描" } }
   },
   "labels": {                          // 来自 references/<name>.<tag>.json
     "zh-CN": {
@@ -315,7 +324,8 @@
 
 ### 消息目录与名称文件
 
-- `assets/locales/<tag>.json` 是一个消息目录：`{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "messages": { "<English text>": "<translation>" } }`。
+- `assets/locales/<tag>.json` 是一个消息目录：`{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "short": "<its short name>", "messages": { "<English text>": "<translation>" } }`。
+  - `short` 可省略：页面的语言控件显示它，没有时显示语言标签的主子标签的大写形式（`EN`）。
   - 占位符写作 `{name}`，并在译文中保留。
   - 有两种形式的英文文本写作 `one|other`（`"{n} step|{n} steps"`）；其译文给出一种形式，或按 `Intl.PluralRules` 列出的顺序，为该语言的每个复数类别各给一种形式。
   - 没有条目的文本以英文显示。

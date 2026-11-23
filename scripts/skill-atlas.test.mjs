@@ -535,6 +535,19 @@ describe('scan (skill-atlas-24)', () => {
     assert.deepEqual(one('no-steps', 'plain').params, {});
   });
 
+  test('gives each insight its level: a problem where the reader must act, else a note (skill-atlas-5)', () => {
+    const NOTES = ['oversized', 'missing-description', 'name-mismatch', 'no-steps'];
+    const levels = new Map();
+    for (const i of atlas.insights) {
+      const note = NOTES.includes(i.kind) || (i.kind === 'unresolved-link' && i.params.kind === 'mentions');
+      assert.equal(i.level, note ? 'note' : 'problem', `${i.kind} ${i.skills.join(', ')}`);
+      levels.set(i.kind, i.level);
+    }
+    for (const k of ['duplicate-name', 'cycle', 'invalid-frontmatter', 'stale-translation', 'edited-translation', 'translation-steps']) assert.equal(levels.get(k), 'problem', k);
+    for (const k of NOTES) assert.equal(levels.get(k), 'note', k);
+    assert.equal(levels.get('unresolved-link'), 'problem', 'an unresolved call');
+  });
+
   test('reports a translation behind its source and one of other steps (skill-atlas-5)', () => {
     const stale = atlas.insights.filter((i) => i.kind === 'stale-translation');
     // Each insight's repair is in its params as data, the command its message gives included.
@@ -717,6 +730,16 @@ test('scan --summary prints the digest (skill-atlas-24, skill-atlas-7)', () => {
   assert.match(r.stdout, /\n {2}no steps \(\d+\): .*plain/);
   assert.match(r.stdout, /\n {2}sections only \(\d+\): .*delta/);
   assert.match(r.stdout, /\nInstalled in several folders \(\d+\):\n(.*\n)* {2}same \(also installed in 1 other folder\): project-claude, project-gemini/);
+  // The insights counted by level as the page counts them, and each not listed above under its level.
+  const atlas = JSON.parse(run(['scan', '--cwd', P, '--no-user', '--no-plugins', '--state', path.join(P, 'state')]).stdout);
+  const problems = atlas.insights.filter((i) => i.level === 'problem').length;
+  assert.ok(problems && problems < atlas.insights.length, 'the fixture has problems and notes');
+  assert.match(r.stdout, new RegExp(`\\nInsights: ${problems} problems to act on, ${atlas.insights.length - problems} notes\\.\\n`));
+  assert.match(r.stdout, /\nOther problems \(\d+\):\n(.*\n)* {2}edited-translation: /);
+  assert.match(r.stdout, /\nOther notes \(\d+\):\n(.*\n)* {2}oversized: /);
+  const section = (heading) => { const at = r.stdout.indexOf(`\n${heading} (`); return r.stdout.slice(at, r.stdout.indexOf('\n\n', at + 1) >>> 0); };
+  assert.doesNotMatch(section('Other problems'), /^ {2}(oversized|missing-description|name-mismatch|no-steps|duplicate-name|cycle|unresolved-link): /m);
+  assert.doesNotMatch(section('Other notes'), /^ {2}(invalid-frontmatter|stale-|edited-|translation-steps|no-steps|unresolved-link)/m);
 });
 
 test('an unreadable annotations file is warned of and skipped', () => {
@@ -972,7 +995,8 @@ test('differing skills of one name: a conflict, an override or another agent\'s 
   assert.deepEqual(conflicts.map((i) => [i.params.name, i.params.agents, i.params.copies.map((c) => c.path)]), [['cx', ['codex'], [path.join(sub, '.codex', 'skills', 'cx'), path.join(home, '.codex', 'skills', 'cx')]]], 'only a conflict is an insight');
   assert.ok(!skillOf(atlas, 'gem').issues.includes('duplicate-name'), 'an override is no issue');
   assert.deepEqual(atlas.unresolved.map((u) => [u.name, u.kind]).sort(), [['away', 'calls'], ['gone', 'mentions']]);
-  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'unresolved-link').map((i) => [i.params.name, i.params.kind, i.message.split('"')[0]]).sort(), [['away', 'calls', 'asker calls '], ['gone', 'mentions', 'asker mentions ']]);
+  // An unresolved call is a problem; a name only mentioned runs nothing, a note (skill-atlas-5).
+  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'unresolved-link').map((i) => [i.params.name, i.params.kind, i.level, i.message.split('"')[0]]).sort(), [['away', 'calls', 'problem', 'asker calls '], ['gone', 'mentions', 'note', 'asker mentions ']]);
   const summary = run(['scan', '--summary', ...args], { env });
   assert.equal(summary.status, 0, summary.stderr);
   assert.match(summary.stdout, /\nName conflicts \(1\):\n {2}cx: Codex may load either of /);
@@ -3176,7 +3200,7 @@ describe('export', () => {
 });
 
 // skill-atlas-25: every text the page looks up is in the zh-CN catalog.
-test('the zh-CN catalog holds every text the page looks up (skill-atlas-25, skill-atlas-29)', () => {
+test('the zh-CN catalog holds every text the page looks up, and no other (skill-atlas-25, skill-atlas-29)', () => {
   const viewerFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'viewer.html');
   const catalogFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'locales', 'zh-CN.json');
   const html = fs.readFileSync(viewerFile, 'utf8');
@@ -3192,6 +3216,8 @@ test('the zh-CN catalog holds every text the page looks up (skill-atlas-25, skil
   assert.equal(catalog.language, 'zh-CN');
   const missing = [...keys].filter((k) => !Object.prototype.hasOwnProperty.call(catalog.messages ?? {}, k));
   assert.deepEqual(missing, [], 'texts with no zh-CN entry');
+  // And no entry for a text the page no longer shows.
+  assert.deepEqual(Object.keys(catalog.messages).filter((k) => !keys.has(k)), [], 'zh-CN entries the page never looks up');
 });
 
 // agent-skills-7 and agent-skills-8 (specs/packages/agent-skills.md).

@@ -100,7 +100,7 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
     { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
+    { "kind": "duplicate-name", "level": "problem", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -274,6 +274,15 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `edited-translation` | `lang`, `files` (relative paths edited apart from their source), `repairs`, `command` |
 | `translation-steps` | `lang`, `steps`, `expected` |
 
+Every insight carries its `level` too, read alike by the page and the digest: `problem` where the reader must act on it, `note` where not:
+
+| `level` | Kinds |
+| --- | --- |
+| `problem` | `duplicate-name`, `unresolved-link` of the `calls` kind, `cycle`, `invalid-frontmatter`, `stale-translation`, `edited-translation`, `stale-annotation`, `translation-steps` |
+| `note` | `unresolved-link` of the `mentions` kind, `oversized`, `missing-description`, `name-mismatch`, `no-steps` |
+
+The page marks a card and counts on its Insights control the problems alone, and lists the notes after them.
+
 In `annotations.json` a skill's entry may repeat its words per language; words under a tag are always reported under exactly that tag, laid over that tag's own entry where there is one, else over a copy of a translation file's entry under the first tag in name order of the same language and script (`zh` for `zh-CN`, never `zh-TW`), else in an entry of their own (`origin` `"annotation"`).
 A file's own entry is never changed by words for another tag: words under `en-US` and `en-GB` over a `SKILL.en.md` give three entries, `en` (the file's), `en-US` and `en-GB` (each the file's fields with its own words):
 
@@ -297,7 +306,7 @@ A file's own entry is never changed by words for another tag: words under `en-US
 {
   "lang": "zh-CN",                     // the --lang the command was given, or null
   "locales": {                         // one per file in assets/locales/
-    "zh-CN": { "name": "简体中文", "messages": { "Rescan": "重新扫描" } }
+    "zh-CN": { "name": "简体中文", "short": "中", "messages": { "Rescan": "重新扫描" } }
   },
   "labels": {                          // from references/<name>.<tag>.json
     "zh-CN": {
@@ -312,7 +321,8 @@ A file's own entry is never changed by words for another tag: words under `en-US
 
 ### Catalogs and label files
 
-- `assets/locales/<tag>.json` is a catalog: `{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "messages": { "<English text>": "<translation>" } }`.
+- `assets/locales/<tag>.json` is a catalog: `{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "short": "<its short name>", "messages": { "<English text>": "<translation>" } }`.
+  - `short` is optional: the page's language control shows it, else the tag's primary subtag in capitals (`EN`).
   - A placeholder is `{name}` and is kept in the translation.
   - An English text with two forms is written `one|other` (`"{n} step|{n} steps"`); its translation gives one form, or one per plural category of its language in the order `Intl.PluralRules` lists them.
   - A text with no entry is shown in English.
