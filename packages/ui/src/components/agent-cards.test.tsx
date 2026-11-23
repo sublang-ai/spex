@@ -192,7 +192,7 @@ beforeEach(() => {
   catalogs.refresh.mockReset();
   commandMock.mockReset();
   setClientForTests({ command: commandMock } as never);
-  // The place's hold outlives a page; no case starts under another's.
+  // Reset the configuration re-read state between tests.
   useAppStore.setState({ configReread: undefined });
 });
 
@@ -311,7 +311,7 @@ describe("settings-65: each base-URL state", () => {
   });
 });
 
-describe("settings-66: how to configure, per place and computer", () => {
+describe("settings-66: configuration steps by platform and shell", () => {
   const computers: { platform: string; shell?: string; file: RegExp }[] = [
     { platform: "darwin", shell: "zsh", file: /~\/\.zshrc[\s\S]*export ANTHROPIC_API_KEY=/ },
     { platform: "darwin", shell: "bash", file: /~\/\.bash_profile[\s\S]*export ANTHROPIC_API_KEY=/ },
@@ -801,8 +801,7 @@ describe("settings-69: official names behind a third-party service", () => {
     expect(apply().disabled).toBe(true);
     expect(fix().disabled).toBe(true);
     expect((screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement).disabled).toBe(true);
-    // Leaving Settings and entering again keeps the hold: it is the
-    // place's, not the page's.
+    // Reopening Settings keeps the hold in the app store.
     cleanup();
     render(<AgentCards />);
     expect(screen.getByTestId("agents-stale").textContent).toContain("could not be read again");

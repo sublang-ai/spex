@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface against the stand-in Git host (git-host-12):
-// sign-in in both flows, picks, joins, members, direct sharing, sign-out
-// by the reader and by the host, the read a signed-in start owes, and
-// the host's renames, archives, removals and refusals over its own
-// HTTP transport, and groups and sharing — the host's roles and what
-// it lets the person do, groups created, members added and removed
-// (space-37, space-38, space-52, space-59, space-65, git-host-4,
-// git-host-5, git-host-7, git-host-11, git-host-21) —
-// hermetic, on loopback alone, in a file budget of its own.
+// Space sign-in, project selection, joins and sync against the loopback
+// stand-in. Cases cover account setup, restarts and repository changes
+// and refusals over the stand-in's Git transport (git-host-12).
 
 import { test } from "node:test";
 import { createServer } from "node:http";
@@ -39,7 +33,7 @@ test.after(() => fixture.dispose());
 // space-37, space-38, space-52 against the stand-in Git host (git-host-12)
 // ---------------------------------------------------------------------------
 
-/** The stand-in's person, and your own group's repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";
@@ -52,7 +46,7 @@ function loginAt(state: SpaceState, host: Pick<StandinHost, "url">): string | nu
   return instance?.signedIn ? instance.account.login : null;
 }
 
-/** Your own group and the stand-in's entries, as the surface lists them
+/** Local entries and those listed under this Space
  * (space-1, space-30). */
 function listed(state: SpaceState, host: Pick<StandinHost, "url">): unknown {
   return state.repositories.filter((row) => row.instance === host.url || row.instance === null).map((row) => row.key);
@@ -153,7 +147,7 @@ test("space-37: the browser sign-in names the personal records folder after the 
   assert.deepEqual(signedAt?.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace" });
   assert.equal(signedAt?.displayName, HOST_NAME);
   assert.equal(typeof signedAt?.readAt, "number");
-  // Your own group's folder and every clone in it bear the login, and
+  // The personal records folder and every clone in it bear the login, and
   // every pair naming one is rewritten (space-59, storage-2).
   const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
   assert.equal(repositoryOf(signed, moved).state, "local-only");
@@ -169,13 +163,12 @@ test("space-37: the browser sign-in names the personal records folder after the 
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
   assert.equal(statSync(join(home.dataDir, "local", "credentials.yaml")).mode & 0o777, 0o600);
-  // Your own group's spex repository stands on the stand-in, pushed
+  // The global records repository stands on the stand-in, pushed
   // beside its default branch (space-4, space-65, git-host-7).
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, HOST_OWN);
   assert.equal(own.state, "reachable");
-  // Asked of the stand-in in your own group by none, never by its id,
-  // which names no group of the instance there (git-host-6).
+  // Creation uses the account namespace (git-host-6).
   assert.deepEqual(creationsAsked(host), [[`${LOGIN}-spex`, null]]);
   // Created at the host, it goes straight to its sync: no state between
   // reads it no longer shared (space-61, git-host-5).
@@ -194,7 +187,7 @@ test("space-37: the browser sign-in names the personal records folder after the 
   assert.equal(git(clone, "rev-parse", `refs/remotes/${folder}/spex`), git(clone, "rev-parse", "spex"));
   const origin = git(clone, "remote", "get-url", folder);
   assert.ok(origin.startsWith(`${host.gitOrigin}/${LOGIN}/`) && !origin.includes("@"), origin);
-  assert.equal((await home.client.expectOk("config.get", {})).status, "valid", "your own group's config moved with it");
+  assert.equal((await home.client.expectOk("config.get", {})).status, "valid", "the global config moved with it");
   // A core restarted on the home reads the same account and last sync,
   // no read time, and the host it recorded whatever SPEX_HOST_URL says
   // (space-1, git-host-1).
@@ -211,7 +204,7 @@ test("space-37: the browser sign-in names the personal records folder after the 
   assert.equal(reread.defaultInstance, host.url);
   assert.deepEqual(placementOf(repositoryOf(reread, HOST_OWN), host.url).lastSync, placementOf(own, host.url).lastSync);
   // That first ask began the read a signed-in start owes, once for both
-  // asks, its state landing with a read time and the host's groups for
+  // asks, its state landing with a read time and the host's projects for
   // the picker (space-1, git-host-5); a later ask begins none.
   const read = await again.client.waitSpace(fromStart, (state) => typeof instanceOf(state, host.url)?.readAt === "number");
   const readOf = instanceOf(read, host.url);
@@ -260,7 +253,7 @@ test("space-37, storage-5: a fresh core with no sync of a clone's placement reco
   assert.deepEqual(placementOf(ahead, host.url).branch?.agreed, { at, current: false });
 });
 
-test("space-141, space-12, storage-34, space-87: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none, its placement file still naming the placement not on this device; a remote the reader sets is origin beside the placement", async (t) => {
+test("space-141, space-12, storage-34, space-87: the global records clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none, its placement file still naming the placement not on this device; a remote the reader sets is origin beside the placement", async (t) => {
   const host = await startHost();
   const home = await startHome("remote-names", { host, project: false });
   t.after(() => home.stop());
@@ -376,7 +369,7 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   assert.ok(host.script.repositories.some((repository) => repository.id === own.id && repository.path === `${LOGIN}-spex`));
 });
 
-test("space-59: a sign-in moves your own group's folder at its instant while a read of it is in flight; a write naming the old key is refused and recreates nothing", async (t) => {
+test("space-59: a sign-in moves the personal records folder at its instant while a read of it is in flight; a write naming the old key is refused and recreates nothing", async (t) => {
   const host = await startHost();
   const dataDir = mkdtempSync(join(scratch, "signin-reading-"));
   const shim = holdingGit(`${ownClone(dataDir)} rev-parse --git-dir`);
@@ -388,7 +381,7 @@ test("space-59: a sign-in moves your own group's folder at its instant while a r
   await home.client.waitSpace(added, (state) => rowsOf(state).some((repository) => repository.key === key));
   await sleep(200);
 
-  // A Groups read stands inside Git on your own group's clone.
+  // A Space read stands inside Git on the global records clone.
   shim.hold();
   const reading = home.client.command("space.get", {});
   await shim.held();
@@ -450,7 +443,7 @@ test("space-37: a Save held after its own read of HEAD writes where its clone li
   assert.ok(!existsSync(removed.clone), "the resumed Save made nothing where the clone stood");
   assert.ok(!rowsOf(after).some((repository) => repository.key === removed.key), "and lists no row for it");
 
-  // Moved meanwhile by the sign-in's rename of your own group's folder:
+  // Moved meanwhile by the sign-in's rename of the personal records folder:
   // the resumed Save refreshes the rules, validates and commits where
   // the clone lies, and the sync goes through there.
   const { key, clone } = await addFolder(home, gitFolder("save-moved"));
@@ -463,7 +456,7 @@ test("space-37: a Save held after its own read of HEAD writes where its clone li
   await shim.held();
   await signIn(home, host);
   for (let i = 0; i < 400 && existsSync(own); i += 1) await sleep(25);
-  assert.ok(!existsSync(own), "your own group's folder moved while the Save was held");
+  assert.ok(!existsSync(own), "the personal records folder moved while the Save was held");
   const moved = `${LOGIN}/save-moved-spex`;
   const movedClone = clonePath(home.dataDir, moved);
   const resumed = home.client.mark();
@@ -494,10 +487,8 @@ test("space-37: Choosing a Space creates personal <name>-spex there and pushes, 
   // Local only, it holds no placement (space-30).
   assert.deepEqual(row.placements, []);
   const sessionId = await runTurn(home, local, "Shared with Acme");
-  // Your own group's id names no group of the instance: refused before
-  // the stand-in is asked to create anything (git-host-6).
-  // A group picked: `<name>-spex` created there, the clone following it
-  // under `workspace/ada/`, its `spex` pushed (space-97, space-60).
+  // Picking the Space creates the project in the signed-in account’s
+  // namespace and pushes its records (space-97).
   const from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name: "alpha" } }), { accepted: true });
   const created = await home.client.waitRepository(from, hostKey(host, "ada/alpha-spex"), (repository) => repository.sync.phase === "done", syncTimeoutMs);
@@ -755,7 +746,7 @@ test("storage-34, git-host-7, space-32: the core's creation of a repository is m
   t.after(() => home.stop());
   const from = home.client.mark();
   await signIn(home, host);
-  // Your own group's own repository, created at the sign-in.
+  // The global records repository, created at the sign-in.
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   const folder = hostFolder(host);
   const clone = clonePath(home.dataDir, HOST_OWN);
@@ -860,7 +851,7 @@ test("space-37, space-63: a join naming a host id the last read lacks, the stand
   const folder = join(mkdtempSync(join(scratch, "late-")), "late");
   const from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.join", { instance: host.url, hostId: late.id, folder }), { accepted: true });
-  // The fresh read is held and published: the Groups state lists it with
+  // The fresh read is held and published: the Space state lists it with
   // a later read time (space-63).
   const listedNow = await home.client.waitSpace(from, (state) => rowsOf(state).some((repository) => repository.key === key));
   assert.ok((instanceOf(listedNow, host.url)?.readAt ?? 0) > readAt, "a fresh read of the instance is held");
@@ -1347,13 +1338,13 @@ test("space-97: a remote set while a pick asked the host is refused, never repla
   t.after(() => { shim.release(); return home.stop(); });
   const signedIn = home.client.mark();
   await signIn(home, host);
-  // The sign-in's set-up of your own group runs on after the sign-in
+  // The global records sync runs on after the sign-in
   // reads idle; the pick starts only once that sync has settled, or its
   // host reads race the pick's own.
   await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done" || repository.sync.phase === "stopped", 30_000);
   const added = home.client.mark();
   assert.equal((await addFolder(home, gitFolder("raced"))).key, key);
-  // The Groups state the registration sets going reads the new clone
+  // The Space read that registration triggers sees the new clone
   // after the reply; the hold waits for it, or that read takes the hold.
   await home.client.waitRepository(added, key, () => true);
   shim.hold();
@@ -1408,7 +1399,7 @@ test("space-97, storage-35: a local clone holding only the path placement origin
   await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, name: "again" } }, "invalid_request", /^path-only already syncs with a Space$/);
 });
 
-test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
+test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under the personal records folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1426,11 +1417,11 @@ test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a 
   const folder = hostFolder(host);
   const fromCreate = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name: "invites" } });
-  // Your own group named to the stand-in by none (git-host-6).
+  // Creation uses the account namespace (git-host-6).
   assert.deepEqual(creationsAsked(host).at(-1), ["invites-spex", null]);
   const synced = await home.client.waitRepository(fromCreate, key, (repository) => repository.sync.phase === "done", 30_000);
   const clone = clonePath(home.dataDir, key);
-  assert.ok(!existsSync(clonePath(home.dataDir, local)), "the clone left your own group's folder");
+  assert.ok(!existsSync(clonePath(home.dataDir, local)), "the clone left the personal records folder");
   assert.deepEqual(remotesOf(clone), [folder]);
   const pushed = git(clone, "rev-parse", "spex");
   const at = Number(git(clone, "log", "-1", "--format=%ct", pushed)) * 1000;
@@ -1515,8 +1506,8 @@ test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a 
   assert.ok(existsSync(join(movedClone, "placements", `${folder}.yaml`)), "its file kept");
   // Confirmed, it takes its remote with its id, the `spex` the clone
   // fetched of it, its upstream, this device's last sync record and
-  // its placement file; the clone moves under your own group's
-  // folder with its pair, reading local only with no last sync and no
+  // its placement file; the clone moves under the personal records folder with its pair,
+  // reading local only with no last sync and no
   // agreed commit; nothing at the host changes (space-98, space-141,
   // storage-38).
   const fromLeave = home.client.mark();
@@ -1524,7 +1515,7 @@ test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a 
   const left = await home.client.waitRepository(fromLeave, renamedLocal, (repository) => repository.sync.phase !== "running", 30_000);
   const localClone = clonePath(home.dataDir, renamedLocal);
   assert.deepEqual([left.sync, left.state, left.instance, left.id, left.placements], [{ phase: "idle" }, "local-only", null, null, []], JSON.stringify(left));
-  assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under your own group's folder");
+  assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under the personal records folder");
   assert.equal(readFileSync(join(localClone, "notes.md"), "utf8"), "a record of the project's\n", "its records kept");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), renamedLocal, "its pair follows it");
   assert.deepEqual(remotesOf(localClone), []);
@@ -1671,7 +1662,7 @@ test("space-60: a sync moving a renamed repository's clone stops naming a sessio
 
 test("space-37: sign-in adopts an unchanged generated bootstrap after restart; authored settings, environments, preexisting files and sessions require choices", async (t) => {
   const host = await startHost();
-  // The first device pushes your own group's spex repository, then
+  // The first device pushes the global records repository, then
   // another environment and configuration into it.
   const first = await startHome("first-device", { host, project: false, model: "claude-test-first", extra: { signIn: "browser" } });
   t.after(() => first.stop());
@@ -1691,7 +1682,7 @@ test("space-37: sign-in adopts an unchanged generated bootstrap after restart; a
   for (const file of hostFiles) assert.equal(git(bareOf(host, HOST_OWN), "show", `spex:${file}`), hosted.get(file)?.toString("utf8").trim(), `the host holds the first device's ${file}`);
   const hostRoot = git(bareOf(host, HOST_OWN), "rev-list", "--max-parents=0", "spex");
 
-  // The second device: its own group's clone holds the set-up commit
+  // The second device: its global records clone holds the set-up commit
   // alone, an unrelated history whose environment and configuration
   // each differ from the host's.
   const generated = await startHome("second-device", { host, project: false, starter: true, extra: { signIn: "browser" } });
@@ -1754,7 +1745,7 @@ test("space-37: sign-in adopts an unchanged generated bootstrap after restart; a
     assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), hostHead, `${authored}: no host write while choices stand`);
   }
 
-  // A third device whose own group's clone holds a session of its own:
+  // A third device whose global records clone holds a session of its own:
   // every unit on both sides is one choice (space-13).
   const third = await startHome("own-session-device", { host, project: false, model: "claude-test-third", extra: { signIn: "browser" } });
   t.after(() => third.stop());
@@ -1770,13 +1761,13 @@ test("space-37: sign-in adopts an unchanged generated bootstrap after restart; a
   for (const file of hostFiles) assert.deepEqual(readFileSync(join(thirdClone, file)), seeded.get(file), `the third device's ${file} kept`);
 });
 
-test("space-59: a sign-in while a session's lease stands beneath a clone of your own group moves none of its clones, and a Refresh after the release moves them all", async (t) => {
+test("space-59: a sign-in while a session's lease stands beneath a clone in the personal records folder leaves all its clones in place, and a Refresh after the release moves them all", async (t) => {
   const host = await startHost();
   const home = await startHome("signin-leased", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const { key } = await addFolder(home, home.projectDir);
   const sessionId = await runTurn(home, key, "Before the sign-in");
-  // The lease stands in your own group's own clone, which moves last: no
+  // The lease stands in the global records clone, which moves last: no
   // other clone may move before it is read.
   const sessions = createSessionStore({ sessionsDir: join(ownClone(home.dataDir), "sessions") });
   await sessions.prepare();
@@ -1786,7 +1777,7 @@ test("space-59: a sign-in while a session's lease stands beneath a clone of your
   try {
     const signed = await signIn(home, host);
     assert.equal(loginAt(signed, host), LOGIN);
-    assert.ok(existsSync(ownClone(home.dataDir)), "your own group's clone stays");
+    assert.ok(existsSync(ownClone(home.dataDir)), "the global records clone stays");
     assert.ok(existsSync(join(clonePath(home.dataDir, key), "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
     assert.ok(!existsSync(clonePath(home.dataDir, moved)));
     const file = Home.load(home.dataDir).file;
@@ -1825,7 +1816,7 @@ test("space-60, space-59: a destination already standing stops the host's move a
   const host = await startHost();
   const home = await startHome("taken", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
-  // The sign-in's destination for your own group's clone, which moves
+  // The sign-in's destination for the global records clone, which moves
   // last, is taken: the project clone's move stands free.
   const { key: ownProject } = await addFolder(home, home.projectDir);
   const destination = clonePath(home.dataDir, HOST_OWN);
@@ -1854,7 +1845,7 @@ test("space-60, space-59: a destination already standing stops the host's move a
   assert.equal(Home.load(home.dataDir).file.folders.find((entry) => entry.repository === key)?.repository, key, "its pair stays");
 });
 
-test("space-59: where the filesystem folds case, a sign-in into a group folder standing under another spelling moves none of your own group's clones", { skip: foldsCase ? false : "the scratch filesystem tells case apart" }, async (t) => {
+test("space-59: where the filesystem folds case, a first sign-in that collides with an existing folder leaves the personal records folder and its clones in place", { skip: foldsCase ? false : "the scratch filesystem tells case apart" }, async (t) => {
   const host = await startHost();
   const home = await startHome("cased-own", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1866,7 +1857,7 @@ test("space-59: where the filesystem folds case, a sign-in into a group folder s
   writeFileSync(join(unrelated, "keep.txt"), "unrelated\n");
   const signed = await signIn(home, host);
   assert.equal(loginAt(signed, host), LOGIN);
-  assert.ok(existsSync(ownClone(home.dataDir)), "your own group's clone stays");
+  assert.ok(existsSync(ownClone(home.dataDir)), "the global records clone stays");
   assert.ok(existsSync(join(clonePath(home.dataDir, key), "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
   assert.deepEqual(readdirSync(unrelated), ["keep.txt"], "the unrelated folder is untouched");
   const file = Home.load(home.dataDir).file;
@@ -1892,7 +1883,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   const key = hostKey(host, "ada/shared-spex");
   const pushed = await a.client.waitRepository(fromA, key, (repository) => repository.sync.phase === "done");
   const id = pushed.id ?? "";
-  // The second home: your own group's repository joins the first's, and
+  // The second home: the global records repository joins the first's, and
   // the project lists as not on this device.
   const b = await startHome("host-b", { host, project: false, model: "claude-test", extra: { signIn: "browser" } });
   t.after(() => b.stop());
@@ -2432,7 +2423,7 @@ test("space-110: pending sign-in cancels before its start reply and later auth s
 });
 
 // ---------------------------------------------------------------------------
-// space-59, space-60, storage-2, storage-56: your own group's folder in
+// space-59, space-60, storage-2, storage-56: the personal records folder in
 // lowercase, and every move of clones checked against home.yaml first
 // ---------------------------------------------------------------------------
 
@@ -2491,7 +2482,7 @@ for (const [why, login, folder] of [
   ["a -spex ending", "ada-spex", "ada"],
   ["nothing left in lowercase", "__", "me"],
 ] as const) {
-  test(`space-4, space-59, storage-2, storage-56: a first sign-in as a login holding ${why} names your own group's folder and its repository at the stand-in ${folder}, home.yaml and workspace/ agreeing, the project and its session listed after a restart`, async (t) => {
+  test(`space-4, space-59, storage-2, storage-56: a first sign-in as a login holding ${why} names the personal records folder and its repository at the stand-in ${folder}, home.yaml and workspace/ agreeing, the project and its session listed after a restart`, async (t) => {
     const host = await startHost({ person: { id: "1001", login, displayName: null } });
     const home = await startHome(`lower-${folder}`, { host, extra: { signIn: "browser" } });
     t.after(() => home.stop());
@@ -2500,17 +2491,17 @@ for (const [why, login, folder] of [
     const from = home.client.mark();
     await signIn(home, host);
     const moved = `${folder}/${basename(home.projectDir)}-spex`;
-    // Your own group's repository is created at the stand-in under the
+    // The global records repository is created at the stand-in under the
     // same lowercase name, and synced (space-4, space-65, git-host-6).
     const own = await home.client.waitRepository(from, `${folder}/${folder}-spex`, (repository) => repository.sync.phase === "done", 30_000);
     assert.equal(own.state, "reachable");
     assert.deepEqual(creationsAsked(host), [[`${folder}-spex`, null]]);
     const file = Home.load(home.dataDir).file;
-    // Your own group's folder is the login in lowercase (storage-2,
+    // The personal records folder is the login in lowercase (storage-2,
     // space-59), holding its clone and the project's.
     assert.equal(file.own, folder);
     assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, moved]]);
-    assert.ok(existsSync(join(home.dataDir, "workspace", folder, `${folder}-spex`, ".git")), "your own group's clone lies under the folder home.yaml names");
+    assert.ok(existsSync(join(home.dataDir, "workspace", folder, `${folder}-spex`, ".git")), "the global records clone lies under the folder home.yaml names");
     assert.ok(existsSync(clonePath(home.dataDir, moved)), "the project's clone lies under it too");
     assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
     if ((login as string) !== folder) assert.ok(!readdirSync(join(home.dataDir, "workspace")).includes(login), "no folder spelled as the login");
@@ -2541,7 +2532,7 @@ test("space-59: a sign-in while home.yaml stops reading as the rename begins mov
   assert.ok(bytes, "home.yaml stopped reading as the rename began");
   assert.deepEqual(readFileSync(Home.file(home.dataDir)), bytes, "home.yaml is left as it stands");
   assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
-  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "your own group's clone stays");
+  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "the global records clone stays");
   assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).filter((name) => !name.startsWith(".") && !name.startsWith("@")), [OWN], "no folder named after the login");
 });
 
@@ -2636,7 +2627,7 @@ test("space-60: a pick of a local-only clone, while home.yaml stops reading befo
   const bytes = damaged();
   assert.ok(bytes, "home.yaml stopped reading before the move");
   assert.deepEqual(readFileSync(Home.file(home.dataDir)), bytes, "home.yaml is left as it stands");
-  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone stays under your own group's folder, its session with it");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone stays under the personal records folder, its session with it");
   assert.ok(!existsSync(target), "nothing lands under the instance's folder");
 });
 
@@ -2661,7 +2652,7 @@ test("space-60: a pick of a local-only clone whose write of home.yaml fails afte
   assert.ok(said.some((line) => line.includes(`${key} stays where it lies`)), said.join("\n"));
   assert.ok(!said.some((line) => line.includes("did not move back")), "the clone moved back");
   assert.deepEqual(readFileSync(Home.file(home.dataDir)), homeBytes, "home.yaml is left as it was");
-  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone is back under your own group's folder, its session with it");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone is back under the personal records folder, its session with it");
   assert.ok(!existsSync(target), "nothing is left under the instance's folder");
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
 });

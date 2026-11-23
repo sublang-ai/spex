@@ -10,7 +10,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, write
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { applyStorageSelection, planStorageMerge, StorageWriteRefused, validateStorageSnapshot } from "./storage-git.js";
-import { createSpaceHarness, clonePath } from "./testing/space-harness.js";
+import { bareOf, createSpaceHarness, clonePath, hostKey } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { addFolder, bareRepo, git, gitFolder, startHost, startHome, signIn } = fixture;
@@ -65,7 +65,7 @@ test("git-host-14, space-37: authenticated LFS Check hydrates a cold reader befo
   assert.equal(host.script.requests.filter(request => request.path.startsWith("/git/")).length, requestsAtApply, "Apply makes no transport request");
 });
 
-test("git-host-14, space-37: Stop ends a held authenticated LFS Check before Apply", async (t) => {
+test("space-142: Stop ends a held authenticated LFS Check before Apply", async (t) => {
   const { host, home, key, clone } = await coldReader(t);
   let release!: () => void, reached!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
@@ -105,14 +105,66 @@ test("git-host-14: an alternate LFS endpoint receives no brokered credential", a
 
 test("git-host-14, space-142: an LFS override cannot send a personal records Check to another Space repository", async (t) => {
   const { host, home, key, clone } = await coldReader(t);
-  const endpoint = `${host.gitOrigin}/elsewhere.git/info/lfs`;
-  git(clone, "config", "lfs.url", endpoint);
-  const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
-  assert.ok(result.sync.phase === "stopped" && result.sync.step === "check" && result.sync.cause === "git", JSON.stringify(result.sync));
-  assert.match(result.sync.message, /Git settings.*Git LFS settings/);
-  assert.equal(result.sync.retry, true);
-  assert.ok(!host.script.requests.some((request) => request.path.startsWith(new URL(endpoint).pathname)), "the override receives no LFS request");
-  assert.equal(existsSync(join(clone, "asset.bin")), false);
+  const endpoint = new URL(`${host.gitOrigin}/elsewhere.git/info/lfs`);
+  for (const override of [endpoint.href, `ssh://git@${endpoint.hostname}:1${endpoint.pathname}`]) {
+    git(clone, "config", "lfs.url", override);
+    const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
+    assert.ok(result.sync.phase === "stopped" && result.sync.step === "check" && result.sync.cause === "git", JSON.stringify(result.sync));
+    assert.match(result.sync.message, /Git settings.*Git LFS settings/);
+    assert.equal(result.sync.retry, true);
+    assert.ok(!host.script.requests.some((request) => request.path.startsWith(endpoint.pathname)), "the override receives no LFS request");
+    assert.equal(existsSync(join(clone, "asset.bin")), false);
+  }
+});
+
+test("space-142: a hosted LFS upload override stops both the default-branch push and the ordinary records push", async (t) => {
+  const host = await startHost();
+  const home = await startHome("hosted-lfs-upload", { host });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  await home.client.waitRepository(0, "ada/ada-spex", row => row.sync.phase === "done");
+
+  const name = "hosted-lfs";
+  const key = hostKey(host, `ada/${name}-spex`);
+  const local = await addFolder(home, gitFolder(name));
+  const alternate = new URL(`${host.gitOrigin}/elsewhere.git/info/lfs`);
+  git(local.clone, "lfs", "install", "--local");
+  git(local.clone, "config", "lfs.pushurl", alternate.href);
+  host.script.holdInitialization(Infinity);
+  t.after(() => host.script.holdInitialization(null));
+  const firstRequest = host.script.requests.length;
+  const mark = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", instance: host.url, name } });
+  const initial = await home.client.waitRepository(mark, key, row => row.sync.phase === "stopped" || row.sync.phase === "done", 60_000);
+  assert.ok(initial.sync.phase === "stopped" && initial.sync.step === "check" && initial.sync.cause === "git", JSON.stringify(initial.sync));
+  assert.match(initial.sync.message, /Git settings.*Git LFS settings/);
+  assert.equal(initial.sync.retry, true);
+  const bare = bareOf(host, key);
+  assert.equal(git(bare, "for-each-ref", "refs/heads/"), "");
+  const assertNoUpload = (from: number) => {
+    assert.ok(!host.script.requests.slice(from).some(request =>
+      request.path.startsWith(alternate.pathname) || request.path.endsWith("/git-receive-pack")
+        || request.query.includes("service=git-receive-pack")), "refusal precedes Git and LFS upload requests");
+  };
+  assertNoUpload(firstRequest);
+
+  const clone = clonePath(home.dataDir, key);
+  git(clone, "config", "--unset", "lfs.pushurl");
+  const initialized = await home.client.settle("space.sync", { repository: key, placement: host.url }, 60_000);
+  assert.equal(initialized.sync.phase, "done", JSON.stringify(initialized.sync));
+  assert.equal(git(bare, "show", "main:README.md"), `# ${name}-spex`);
+  const head = git(bare, "rev-parse", "spex");
+  writeFileSync(join(clone, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n");
+  writeFileSync(join(clone, "asset.bin"), incoming);
+  git(clone, "config", "lfs.pushurl", `ssh://git@${alternate.hostname}:1${alternate.pathname}`);
+  const laterRequest = host.script.requests.length;
+  const updated = await home.client.settle("space.sync", { repository: key, placement: host.url });
+  assert.ok(updated.sync.phase === "stopped" && updated.sync.step === "push" && updated.sync.cause === "git", JSON.stringify(updated.sync));
+  assert.match(updated.sync.message, /Git settings.*Git LFS settings/);
+  assert.equal(updated.sync.retry, true);
+  assert.equal(git(bare, "rev-parse", "spex"), head);
+  assertNoUpload(laterRequest);
+  assert.deepEqual(readFileSync(join(clone, "asset.bin")), incoming);
 });
 
 async function externalReader(home: Awaited<ReturnType<typeof startHome>>, url?: string) {
@@ -182,7 +234,8 @@ test("space-142: an external records Push refuses Git LFS upload overrides into 
   assert.equal(git(bare, "rev-parse", "spex"), head);
 
   git(clone, "config", "--unset", "remote.origin.lfspushurl");
-  git(clone, "config", "--file", ".lfsconfig", "lfs.pushurl", endpoint);
+  const url = new URL(endpoint);
+  git(clone, "config", "--file", ".lfsconfig", "lfs.pushurl", `git@${url.hostname}:${url.pathname.slice(1)}`);
   const tracked = await home.client.settle("space.sync", { repository: key });
   assert.equal(tracked.sync.phase, "stopped");
   assert.equal(tracked.sync.step, "push");

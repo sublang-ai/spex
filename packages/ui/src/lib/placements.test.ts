@@ -82,7 +82,7 @@ describe("placements", () => {
     expect(cloneHere(repositoryRow(KEY, { state: "reachable", placements: [held] }))).toBe(true);
     expect(cloneHere(repositoryRow(KEY, { state: "unreachable", placements: [{ ...held, state: "unreachable" }] }))).toBe(true);
     expect(cloneHere(repositoryRow(KEY, { state: "reachable", placements: [placementState({ path: "/srv/academy-spex.git" })] }))).toBe(true);
-    // No clone: a listed row, and one in a group named like a login.
+    // Neither of these listed rows has an attached placement.
     expect(cloneHere(repositoryRow(KEY, { state: "absent", placements: [listed] }))).toBe(false);
     expect(
       cloneHere(repositoryRow(`${KEY}@1`, { state: "unreachable", placements: [{ ...listed, state: "unreachable", reason: "a group named like your login" }] })),

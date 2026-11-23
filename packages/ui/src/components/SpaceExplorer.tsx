@@ -184,7 +184,7 @@ function entryAnnotation(entry: SpaceEntry, groups?: SpaceState): string {
   }
 }
 
-/** The annotation of an entry, read against the place's Spaces. */
+/** The annotation of an entry, read against the home's Spaces. */
 function useAnnotate(): (entry: SpaceEntry) => string {
   const groups = useAppStore((state) => state.space);
   return (entry) => entryAnnotation(entry, groups);

@@ -12,7 +12,7 @@
 // editor with Save and Cancel, one row open at a time (settings-1,
 // settings-26). The Agents panel shows per-adapter readiness. Every
 // edit acknowledges in place — disabled while it is in flight, a
-// transient "Saved ✓" on the row once it landed (DR-010 §3). On a team
+// transient "Saved ✓" on the row once it landed (DR-010 §3).
 
 import {
   useCallback,

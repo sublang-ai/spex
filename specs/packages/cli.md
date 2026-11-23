@@ -141,7 +141,7 @@ When `spex login [--registry <url> | --space <url>] [--force]` runs, the CLI sha
 
 - both flags together are refused before any write or network request;
 - registry login reads the public descriptor [[environments-39](environments.md#environments-39)], stores only its registry credential and records no Space;
-- explicit Space login keeps the instance account/default registration and same-account admission rules [[storage-2](storage.md#storage-2)];
+- explicit Space login keeps the instance account/default registration and same-account admission rules and saves the Git address when the Space reports one, advancing the home to format 3 on the first such write [[storage-2](storage.md#storage-2)];
 - an existing selected credential is reported without replacement unless `--force`; a failed flow preserves its prior credential, and a replaced credential is revoked after successful replacement.
 
 #### cli-11
@@ -225,7 +225,7 @@ When the packed CLI runs `publish` in a scratch environment with stand-in regist
 
 #### cli-17
 
-When the real CLI runs `login`, `whoami` and `logout` against a scoped service fixture at one origin, the integration suite shall assert registry login by default, explicit Space login preserving the other grant, mutually exclusive target flags refused, an existing credential reported unless forced, no Space registration from registry login [[cli-10](#cli-10)], `whoami` printing the registry account by default or the selected account alone with a flag, each by display name with `@<login>` or `signed out`, marking the default Space on its explicit report, without secrets [[cli-12](#cli-12)] [[cli-22](#cli-22)], and registry logout preserving the Space credential and home entry [[cli-11](#cli-11)].
+When the real CLI runs `login`, `whoami` and `logout` against a scoped service fixture at one origin, the integration suite shall assert registry login by default, explicit Space login recording the reported Git address and preserving the other grant, mutually exclusive target flags refused, an existing credential reported unless forced, no Space registration from registry login [[cli-10](#cli-10)], `whoami` printing the registry account by default or the selected account alone with a flag, each by display name with `@<login>` or `signed out`, marking the default Space on its explicit report, without secrets [[cli-12](#cli-12)] [[cli-22](#cli-22)], and registry logout preserving the Space credential and home entry [[cli-11](#cli-11)].
 
 #### cli-18
 

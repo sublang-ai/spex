@@ -281,7 +281,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, reviewRequest, onRe
   useEffect(() => {
     if (!issuesOpen || revealDismissed === undefined || focusedReview.current === revealDismissed) return;
     // Back to Space removes the reader's button. Land on the named
-    // toggle once its place's state has rendered, and keep it as the
+    // toggle once the Space state has rendered, and keep it as the
     // review's return target. Ordinary background reads never move focus.
     const control = surfaceRef.current?.querySelector<HTMLButtonElement>('[data-testid="space-issues"]');
     if (!control || control.disabled) return;
@@ -739,11 +739,10 @@ function RepositoryPanel({
   );
 
   const root = clonePath(groups.home, repo.key);
-  // No clone here: records a Space lists that this computer lacks, or
-  // ones in a group named like a login (space-61).
+  // The Space lists these records and this computer lacks their clone
+  // (space-61).
   const absent = !cloneHere(repo);
-  // The row's own phrase reads beside its name, the same words the row
-  // reads; a row under "This computer" reads none (space-120).
+  // Repeat the row's standing phrase beside its name (space-120).
   const standingPhrase = rowPhrase(repo, now, dismissed, phraseNames(groups, repo)).text;
   return (
     <section

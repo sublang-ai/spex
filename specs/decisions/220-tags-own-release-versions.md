@@ -1,12 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-216: Tags Own Release Versions
+# DR-220: Tags Own Release Versions
 
 ## Status
 
 Accepted (2026-11-03) on the owner's request for app and npm releases without version-only PRs.
 Amends [DR-087](087-beta-app-releases.md) and [DR-184](184-native-desktop-tag-packages.md) in version and notes preparation, and [DR-199](199-release-gated-full-validation.md) only in deterministic metadata preparation before full validation.
+
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) to retire release preparation of the hub’s archived tree.
 
 ## Context
 

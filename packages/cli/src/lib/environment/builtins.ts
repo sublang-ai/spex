@@ -341,8 +341,8 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
 }
 
 /**
- * A new environment at its root (environments-11, storage-6): your own
- * group's clone, or a project's working folder at its pairing.
+ * A new environment at its root (environments-11, storage-6): the global
+ * records repository, or a project's working folder at its pairing.
  * `spex.yaml` requests the built-in spec package where it does not —
  * with `space` naming the environment's instance where one is given, the
  * caller giving the instance its spex repository is placed at wherever

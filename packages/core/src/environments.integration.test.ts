@@ -277,7 +277,7 @@ test("environments-23: an offline home launches its built-ins and automatically 
   // Seeded into the store, its release index recorded.
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`)));
   assert.ok(readdirSync(join(core.dataDir, "store")).some((name) => /^[0-9a-f]{64}$/.test(name)));
-  // Requested in your own group's environment, at a caret, and locked.
+  // Requested in the global environment, at a caret, and locked.
   assert.deepEqual(parseYaml(readFileSync(join(ownClone, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
   const ownState = await core.client.expectOk("environment.get", { repository: own });
   assert.deepEqual(ownState.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", shipped.version, "builtin", true]]);
@@ -664,18 +664,18 @@ test("environments-9, environments-7, playbook-library-46: installed playbook fo
   const projectLinks = linksOf(working);
   for (const links of [ownLinks, projectLinks]) assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the app's install prepared the folder");
 
-  // A configuration load hands the launcher your own group's module
+  // A configuration load hands the launcher the global environment's module
   // locations: it prepares that environment's playbooks first
   // (environments-9, playbook-library-46).
   rmSync(ownLinks, { recursive: true, force: true });
   await core.service.reloadConfig();
-  assert.ok(lstatSync(join(ownLinks, "xstate")).isSymbolicLink(), "[environments-9] the configuration load prepared your own group's playbook again");
+  assert.ok(lstatSync(join(ownLinks, "xstate")).isSymbolicLink(), "[environments-9] the configuration load prepared the global playbook again");
   assert.ok(existsSync(join(ownLinks, "@sublang", "playbook")), "with every engine link");
   const config = await core.client.expectOk("config.get", {});
   assert.equal(config.status, "valid", JSON.stringify(config));
 
   // environment.playbooks reads each listed playbook's module on the
-  // app's engine: the project's and your own group's are prepared
+  // app's engine: project and global playbooks are prepared
   // before the reply (environments-7, playbook-library-46).
   rmSync(projectLinks, { recursive: true, force: true });
   rmSync(ownLinks, { recursive: true, force: true });
@@ -971,7 +971,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 /** The command line this checkout builds, which scaffolds a `specs/`. */
 const SPEX_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
 
-test("environments-22 through a real core: a spec-only spec package requested from the registry places its spec in the project's specs/ and into no agent folder, your own group's as a generated skill in the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
+test("environments-22 through a real core: a spec-only spec package requested from the registry places its spec in the project's specs/ and into no agent folder, places the global copy as a generated skill in the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-spec-registry-") });
   t.after(() => registry.close());
   const spec = "# trip-split: Trip Split\n\n## Intent\n\nSplit a trip's costs.\n\n## External Behavior\n\n### trip-split-1\n\nThe splitter shall divide each cost among the travellers who shared it.\n\n## Verification\n\n### trip-split-2\n\nWhen a cost is shared, the suite shall assert its division [[trip-split-1](#trip-split-1)].\n";
@@ -1022,12 +1022,12 @@ test("environments-22 through a real core: a spec-only spec package requested fr
     "?? specs/packages/trip-split.md\n", "[environments-41] the placed spec left for the reader to commit, not ignored");
   assert.equal(existsSync(atHome), false, "a project's spec stays in its working folder");
 
-  // Requested in your own group's environment: your agents' home folder holds it.
+  // Requested in the global environment: your agents' home folder holds it.
   mark = client.mark();
   await client.expectOk("environment.request", { repository: own, name: "acme/trip-split", request });
   await client.environment(own, mark, (state) => state.busy === null && holds(state));
   assert.deepEqual(readdirSync(atHome).sort(), ["SKILL.md", "trip-split.md"]);
-  assert.ok(readFileSync(join(atHome, "trip-split.md")).equals(released), "your own group's copy is the release's too");
+  assert.ok(readFileSync(join(atHome, "trip-split.md")).equals(released), "the global copy is the release's too");
   // Only claude has a home folder here: no user-level folder of the other
   // four, and no agent's home folder, is made (environments-16).
   for (const folder of [".agents", ".codex", ".gemini", ".kimi-code", ".config/opencode", ".local/share/opencode"]) {
@@ -1055,11 +1055,11 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });
   await client.environment(own, mark, (state) => state.busy === null && !holds(state));
-  assert.equal(existsSync(atHome), false, "your own group's copy is gone");
+  assert.equal(existsSync(atHome), false, "the global copy is gone");
   assert.equal(existsSync(sharedAtHome), false, "and so is its copy in the shared user folder");
 });
 
-test("environments-14, environments-41 through a real core: environment.get says which artifacts a release provides and where its spec stands in a project's specs/ — placed with the links waiting for a package it cites, edited by a hand edit with the newer release waiting, blocked by a project file of its name, waiting for specs/ in a folder holding none — and gives your own group's environment no placement", { timeout: 180_000 }, async (t) => {
+test("environments-14, environments-41 through a real core: environment.get says which artifacts a release provides and where its spec stands in a project's specs/ — placed with the links waiting for a package it cites, edited by a hand edit with the newer release waiting, blocked by a project file of its name, waiting for specs/ in a folder holding none — and gives the global environment no placement", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-place-registry-") });
   t.after(() => registry.close());
   // The spec cites twice a package no environment here requests, by its
@@ -1152,14 +1152,14 @@ test("environments-14, environments-41 through a real core: environment.get says
     "[environments-14] waiting for specs/");
   assert.equal(existsSync(join(bare, "specs")), false, "no specs/ is made");
 
-  // Your own group's environment places its spec as a skill: what it
+  // The global environment places its spec as a skill: what it
   // provides is said, and no placement under specs/ (environments-8).
   const own = `${OWN}/${OWN}-spex`;
   await client.expectOk("environment.request", { repository: own, name: "acme/fare", request, wait: true });
   const ownFare = await fareOf(own);
   assert.equal(ownFare?.installed, true);
-  assert.deepEqual(provision(ownFare), offered, "[environments-14] your own group's: the spec provided, its support skill not");
-  assert.equal(ownFare?.placement, undefined, "[environments-14] no placement in your own group's environment");
+  assert.deepEqual(provision(ownFare), offered, "[environments-14] global environment: the spec provided, its support skill not");
+  assert.equal(ownFare?.placement, undefined, "[environments-14] no placement in the global environment");
 });
 
 test("environments-22 through a real core: a project rebound to a second working folder is exported there, and its state names what the export left out until an install exports it", { timeout: 180_000 }, async (t) => {
@@ -1270,10 +1270,10 @@ test("environments-22 through a real core: a project rebound to a second working
 });
 
 // ---------------------------------------------------------------------------
-// environments-33: a spec package kept in your own group's clone
+// environments-33: a spec package kept in the global records repository
 // ---------------------------------------------------------------------------
 
-test("environments-33 through real cores: a skill your own group requests by a path in its clone exports at once, refuses paths that would not sync, and reaches a second home through the sync", { timeout: 240_000 }, async (t) => {
+test("environments-33 through real cores: a skill the global environment requests by path in the global records repository exports at once, refuses paths that would not sync, and reaches a second home through the sync", { timeout: 240_000 }, async (t) => {
   const harness = createSpaceHarness();
   t.after(() => harness.dispose());
   const ownKey = `${OWN}/${OWN}-spex`;
@@ -1293,7 +1293,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   const cloneA = ownClone(a.dataDir);
   const cloneB = ownClone(b.dataDir);
 
-  // Both homes' own groups share one spex repository before the request.
+  // Both homes sync global records through the same repository before the request.
   const bare = harness.bareRepo();
   await a.client.expectOk("space.remote.set", { repository: ownKey, url: bare });
   assert.equal((await a.client.settle("space.sync", { repository: ownKey })).sync.phase, "done");
@@ -1321,7 +1321,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   // holding the path and no files, and exported at once.
   await a.client.expectOk("environment.request", { repository: ownKey, name: `${OWN}/notes`, request: { kind: "path", path: "mine/notes" } });
   const state = await settled(a.client, holds);
-  assert.equal(state.pathRoot, cloneA, "your own group's paths are relative to its clone [environments-2]");
+  assert.equal(state.pathRoot, cloneA, "global paths are relative to the global records repository [environments-2]");
   const lock = parseYaml(readFileSync(join(cloneA, "spex.lock"), "utf8")) as Lock;
   assert.deepEqual(lock.packages[`${OWN}/notes`]?.source, { path: "mine/notes", version: "0.1.0", dependencies: {}, requires: {} });
   assert.deepEqual(lock.packages[`${OWN}/notes`]?.files, []);
@@ -1353,7 +1353,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   await settled(a.client, (s) => s.error === null && holds(s));
 
   // Paired with a Git working folder holding another release at the
-  // same path, your own group's paths stay relative to its clone.
+  // same path, global paths stay relative to the global records repository.
   const working = join(harness.scratch, "own-working");
   gitFolder(working);
   await makeRelease(join(working, "mine", "notes"), {
@@ -1534,10 +1534,10 @@ test("environments-33: a nonignored unreadable subtree refuses request, resoluti
 });
 
 // ---------------------------------------------------------------------------
-// playbook-library-109: engine links in your own group's clone stay out of its sync
+// playbook-library-109: engine links in the global records repository stay out of its sync
 // ---------------------------------------------------------------------------
 
-test("playbook-library-109 through real cores: a playbook your own group keeps in its clone takes no engine link while the clone's exclude cannot list them, then takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
+test("playbook-library-109 through real cores: a playbook in the global records repository takes no engine link while the clone's exclude cannot list them, then takes engine links its clone's Git ignores, and both homes sync", { timeout: 240_000 }, async (t) => {
   const harness = createSpaceHarness();
   t.after(() => harness.dispose());
   const ownKey = `${OWN}/${OWN}-spex`;
@@ -1776,7 +1776,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.ok(code?.folder?.endsWith(join("packages", "sublang", "playbooks", "playbooks", "en", "code")));
   assert.ok(listed.own.some((row) => row.id === "review"));
 
-  // Your own group's spex repository, which holds its environment,
+  // The global records repository, which holds its environment,
   // syncs to a host (environments-26).
   const own = `${OWN}/${OWN}-spex`;
   const bare = join(dir, "host.git");
@@ -1809,7 +1809,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectOk("space.sync", { repository: own });
   const applied = await client.environment(own, synced, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed), 60_000);
   assert.equal(applied.stale, null);
-  assert.equal(applied.committed, null, "your own group's environment syncs with its clone, never committed with code");
+  assert.equal(applied.committed, null, "the global environment syncs with its clone, never committed with code");
   assert.ok(existsSync(join(dir, "user", ".claude", "skills", "tidy", "SKILL.md")), "the applied lock's skill is exported into your agents' home folders");
 });
 
@@ -1913,7 +1913,7 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   assert.equal((await core.client.expectOk("environment.get", { repository: project.id })).committed, false, "added alone: still this device's");
   codeGit(working, "commit", "-q", "-m", "Add the environment");
   assert.equal((await core.client.expectOk("environment.get", { repository: project.id })).committed, true, "a commit holds both");
-  assert.equal((await core.client.expectOk("environment.get", { repository: `${OWN}/${OWN}-spex` })).committed, null, "your own group's syncs with its clone");
+  assert.equal((await core.client.expectOk("environment.get", { repository: `${OWN}/${OWN}-spex` })).committed, null, "the global environment syncs with the global records");
 });
 
 test("environments-14, environments-1, environments-6, environments-41: environment.get marks what each release provides, a sibling's support not, and reads where a project's provided spec stands under specs/ from its files, its marker and the record of placed specs", { timeout: 120_000 }, async (t) => {
@@ -2027,7 +2027,7 @@ test("environments-14, environments-1, environments-6, environments-41: environm
   }
   assert.equal((await read("acme/kit")).placement, undefined, "its support spec waits for nothing");
 
-  // [environments-14] your own group's environment, whose root holds no
+  // [environments-14] the global environment, whose root holds no
   // specs/, places its spec as a skill: no placement under specs/.
   const ownClone = clonePath(core.dataDir, own);
   await makeRelease(join(ownClone, "mine", "notes"), {
@@ -2146,7 +2146,7 @@ test("environments-21 through a real core: the registry presents its own refresh
   const signing = home.client.mark();
   // The home's instance is the front, which serves the stand-in's sign-in.
   await harness.signIn(home, host, front.url);
-  // Your own group's spex repository is created on the host and pushed
+  // The global records repository is created on the host and pushed
   // before its environment takes a write (environments-17).
   await home.client.waitRepository(signing, own, (repository) => repository.sync.phase === "done", 60_000);
   await home.client.expectOk("environment.registry.set", { repository: own, origin: front.url });
@@ -2854,7 +2854,7 @@ test("playbook-library-98: an Add refused after some of its writes names them, t
   await until(() => latest()?.state === "added", 10_000, "the added chip");
 });
 
-test("playbook-library-110: an authoring session of the global environment keeps its spec package in your own group's clone and adds it in the global environment by its path there", { timeout: 180_000 }, async (t) => {
+test("playbook-library-110: an authoring session of the global environment keeps its spec package in the global records repository and adds it in the global environment by its path there", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-enable-own-");
   const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
   t.after(() => core.stop());
@@ -2863,7 +2863,7 @@ test("playbook-library-110: an authoring session of the global environment keeps
   const clone = ownClone(core.dataDir);
   await settledProject(client, ownKey);
 
-  // The global environment, named by your own group's key, takes an
+  // The global environment, named by the global records repository's key, takes an
   // authoring session whose spec package folder lies in its clone
   // (core-service-96).
   const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
@@ -2880,7 +2880,7 @@ test("playbook-library-110: an authoring session of the global environment keeps
   await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance,
     command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
   const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
-  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: `spex-packages/${OWN}/triage` }, "[playbook-library-7] requested by its path in your own group's clone");
+  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: `spex-packages/${OWN}/triage` }, "[playbook-library-7] requested by its path in the global records repository");
   const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as Lock;
   assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, `spex-packages/${OWN}/triage`, "[playbook-library-7] resolved there");
   const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
@@ -2915,7 +2915,7 @@ test("environments-29: instance package sources keep transport locators out of s
   const signed = home.client.mark();
   await harness.signIn(home, host);
   await home.client.waitRepository(signed, own, (row) => row.sync.phase === "done", 60_000);
-  // Your own group's environment names its Space, as the environment
+  // The global environment names its Space, as the environment
   // migration names it at the next start (storage-24), so the restart
   // below finds nothing to move.
   const ownYaml = join(clonePath(home.dataDir, own), "spex.yaml");

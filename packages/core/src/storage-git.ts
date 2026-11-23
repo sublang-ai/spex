@@ -183,11 +183,11 @@ export async function storageMachineIdentity(): Promise<string> {
   catch (error) { throw new Error(`Spex cannot identify this machine: ${error instanceof Error ? error.message : String(error)}`); }
 }
 export interface ValidateStorageOptions {
-  /** Your own group's clone: its config holds the captain and players. */
+  /** The global records repository: its config holds the captain and players. */
   own?: boolean;
   /** Retired with the library folder (DR-104); ignored. */
   libraryDir?: string;
-  /** The environments' module locations for your own group's config; a
+  /** The environments' module locations for the global config; a
    * playbook none exports is a non-blocking diagnostic (environments-9). */
   modules?: import("./config.js").PlaybookModules;
   selectedSessionIds?: ReadonlySet<string>;

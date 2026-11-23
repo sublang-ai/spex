@@ -50,7 +50,7 @@ function inspectCredential(options: GitRunOptions): { file: string; mode: number
   return { file, mode: file ? statSync(file).mode & 0o777 : 0, args: options.credential?.configArgs ?? [] };
 }
 
-test("space-37, projects-20, git-host-14: joining private code uses the brokered helper, disposes it and keeps the remote unchanged", async (t) => {
+test("space-37, projects-20, projects-48, git-host-14: joining private code uses the brokered helper, disposes it and keeps the remote unchanged", async (t) => {
   const host = await startHost();
   const privateKey = hostKey(host, "ada/private-spex");
   const code = privateCode(host, "private-code");
@@ -229,8 +229,7 @@ const SECOND_NAME = "Second stand-in";
 const INSTANCE_GUIDANCE = `Issues and PRs come from GitHub · Code: ${HOST_NAME}`;
 const REMOTE_GUIDANCE = "Issues and PRs come from GitHub";
 
-/** A home signed in at the first stand-in instance as `ada`, your own
- * group's repository pushed there, then at the second, on a Git backend
+/** A home signed in at the first stand-in instance as `ada`, the global records repository pushed there, then at the second, on a Git backend
  * of its own, as `bob`: the first the home's default instance. */
 async function twoInstances(name: string): Promise<{ first: StandinHost; second: StandinHost; home: Home }> {
   const first = await startHost();
@@ -264,7 +263,7 @@ function leaks(hosts: StandinHost[], values: unknown[]): string[] {
   return values.flatMap(stringsOf).filter((text) => hosts.some((host) => text.includes(`${host.url}/`) || text.includes(host.storage)) || /gitlab/i.test(text));
 }
 
-/** Every Groups state broadcast to a client, the sign-in's own pages
+/** Every Space state broadcast to a client, the sign-in's own pages
  * aside (space-3). */
 function broadcasts(messages: ServerMessage[]): SpaceState[] {
   return messages.flatMap((message) => message.type === "space.state" ? [{ ...message.state, signIn: { phase: "idle" as const } }] : []);

@@ -56,8 +56,7 @@ interface ProjectRowState {
   worst?: AttentionItem["kind"];
 }
 
-/** Each project's running and attention counts at one place, from that
- * place's own sessions and attention. */
+/** Each project's running and attention counts from its sessions and attention. */
 function rowStates(
   projects: readonly ProjectInfo[],
   sessions: readonly SessionInfo[],

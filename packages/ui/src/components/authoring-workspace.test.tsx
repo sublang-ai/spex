@@ -1886,7 +1886,7 @@ describe("playbook-library-111: what stands beneath the Add form by the project'
   /** The Space state the core would send: the home's instances in its
    * list's order, the first its default, else the origin it was created
    * with; the session's project in your namespace at Two, or local-only
-   * under your own group. */
+   * in the global records repository. */
   function groups(project: "two" | "local", instances: { origin: string; name: string; signedIn: boolean }[], created = ONE): SpaceState {
     const row = repositoryRow(PROJECT_ID, project === "two" ? { instance: TWO, state: "reachable" } : {});
     const own = repositoryRow(OWN_KEY, { own: true, instance: instances[0]?.origin ?? null });

@@ -98,7 +98,7 @@ export interface ProjectTree {
   attention: Map<string, AttentionItem>;
   /** The current project, which starts disclosed. */
   currentProjectId?: string;
-  /** The session whose tab is showing at this place, if any. */
+  /** The session whose tab is showing, if any. */
   activeSessionId?: string;
   /** Explicit disclosure; a project with no entry follows current. */
   expanded: Record<string, boolean>;
@@ -116,7 +116,7 @@ export interface ProjectTree {
 export interface NavRailProps {
   surface: Surface;
   onSurface(surface: Surface): void;
-  /** Cross-project attention count, every place's; rides the
+  /** Cross-project attention count shown on the
    * Dashboard entry. */
   attentionCount: number;
   collapsed: boolean;
@@ -240,12 +240,10 @@ function projectRowName(
 interface Row {
   key: string;
   kind: "project" | "session" | "action";
-  /** The key of the project row this row belongs to; a place's
-   * heading row is its own. */
+  /** The key of the project row this row belongs to. */
   projectRow: string;
   projectId: string;
-  /** What type-ahead matches: a place's name, a project's name or a
-   * session's title. */
+  /** What type-ahead matches: a project's name or a session's title. */
   label: string;
   activate(): void;
 }
@@ -443,8 +441,7 @@ export function NavRail(props: NavRailProps) {
     }
   }
 
-  /** Delete a session at its own place; its row's state is kept by
-   * its placed key. */
+  /** Delete a session and track its row state by session ID. */
   function deleteSession(sessionId: string): void {
     const key = sessionId;
     setConfirmDelete(undefined);
@@ -522,7 +519,7 @@ export function NavRail(props: NavRailProps) {
 
   // Selection says where the reader is, so it follows the surface
   // (run-view-67): off Projects the surface's own entry is the only
-  // current place, and the remembered project lights again when
+  // current entry, and the remembered project is selected again when
   // Projects comes back.
   const inWorkspace = surface === "Workspace";
   const selectedProjectOf = (): string | undefined =>

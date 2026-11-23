@@ -2,9 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // A Space state as the core sends it (space-30, DR-127), for any test
-// that holds one: your own group, and every instance the home lists
-// with its groups. No test framework is imported, so any suite may build
-// one.
+// that needs local repositories, Space instances or personal projects.
 
 import type {
   SpaceState,
@@ -32,8 +30,7 @@ export function instanceState(origin: string, over: Partial<InstanceState> = {})
   };
 }
 
-/** A home with your own group alone and no instance listed, its folder
- * still bearing this device's user name, unless a test says otherwise. */
+/** An empty home, with repository and instance overrides for each test. */
 export function spaceState(over: Partial<SpaceState> = {}): SpaceState {
   return {
     home: "/home/.spex",

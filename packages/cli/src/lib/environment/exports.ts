@@ -9,7 +9,7 @@
 // is generated per provided playbook, into `<root>/.spex/skills/<name>/`;
 // those are mirrored into the folder where each agent Spex drives reads
 // project-level skills in the working folder, kept out of Git there by
-// its `.git/info/exclude`, and, for your own group, into the user-level
+// its `.git/info/exclude`, and, for the global environment, into the user-level
 // folders of the agents this device has. A playbook's skill goes only
 // where the table lets it. A manifest beside them records what Spex
 // wrote, so a re-export removes only its own and a skill the reader put
@@ -28,7 +28,7 @@
 // whose package no longer places it leaves unless edited; and a file of
 // its basename anywhere under `specs/` that is none of these blocks it.
 // A project not scaffolded yet, its root holding no `specs/`, places no
-// spec and reports it; your own group's clone, which is no project, has
+// spec and reports it; the global records repository, which is no project, has
 // a generated skill hold the spec file instead.
 // Playbooks go to the launcher as module locations at launch, bound to
 // the environment whose lock exported them.
@@ -83,9 +83,9 @@ export interface ExportOptions {
    * root's `.spex/` and the user's home. */
   workingFolder: string | null;
   /** The folder a path source's path is relative to (environments-2):
-   * your own group's clone; the working folder where omitted. */
+   * the global records repository; the working folder where omitted. */
   pathRoot?: string | null;
-  /** The user's home, for your own group's environment; else null. */
+  /** The user's home when exporting the global environment; otherwise null. */
   userHome: string | null;
   /** The agents this device has: only their user-level folders are
    * written, while every project-level folder is (environments-16). */
@@ -135,7 +135,7 @@ export interface ExportReport {
   missing: string[];
   /** Each provided spec of a project's root with where it stands, in
    * name order (environments-41); none where the root is no working
-   * folder, as your own group's clone. */
+   * folder, as the global records repository. */
   specs: SpecPlacement[];
 }
 
@@ -533,7 +533,7 @@ function waitingList(waiting: Record<string, number>): { name: string; count: nu
  * files under `specs/packages/` where the root is the working folder
  * and holds `specs/`; nowhere in a working folder holding none, each
  * reported waiting for `specs/`; and as generated skills where the root
- * is no working folder — your own group's clone. */
+ * is no working folder — the global records repository. */
 type SpecMode = "files" | "no-specs" | "skills";
 
 function specMode(root: string, workingFolder: string | null): SpecMode {
@@ -870,7 +870,7 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); unread.add(name); continue; }
           // In a project's `specs/`, a file placed after the skills
           // (environments-41); in a project holding no `specs/`, nowhere,
-          // reported waiting for it; else, your own group's, a generated
+          // reported waiting for it; for the global environment, a generated
           // skill, the spec file in its chosen language byte for byte
           // beside a SKILL.md saying what spec package it is (DR-115).
           if (mode === "files") { specSources.push({ name, id, version, file }); continue; }
@@ -1025,8 +1025,8 @@ export type LaunchModules =
   | { ok: false; errors: { playbook: string; repository: string }[] };
 
 /** The modules a session hands the launcher (environments-9): each
- * enabled playbook from the project's environment, else your own
- * group's; one no environment exports is a config error naming the
+ * enabled playbook from the project's environment, else the global
+ * environment; one no environment exports is a config error naming the
  * playbook and the spex repository whose environment lacks it. */
 export function launchModules(enabled: Iterable<string>, project: EnvironmentModules | null, own: EnvironmentModules): LaunchModules {
   const modules = new Map<string, ModuleLocation & { repository: string }>();

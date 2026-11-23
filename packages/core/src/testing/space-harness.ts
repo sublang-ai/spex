@@ -26,7 +26,7 @@ import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, SpaceState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage } from "../protocol.js";
 
-/** Every scratch home's own group: a name no device user collides with. */
+/** The personal records folder of each scratch home: a name no device user collides with. */
 export const OWN = "tester";
 export const OWN_KEY = `${OWN}/${OWN}-spex`;
 
@@ -51,8 +51,7 @@ export function bareOf(host: StandinHost, key: string): string {
   return host.bareOf(folder === null ? key : key.slice(folder.length + 1));
 }
 
-/** Every row of the Space state, as your own group and the instances'
- * headings hold them (space-30). */
+/** All local and Space project rows (space-30). */
 export function rowsOf(state: SpaceState): RepositoryState[] {
   return state.repositories;
 }
@@ -66,8 +65,7 @@ export function placementOf(row: RepositoryState, origin: string | null): Placem
   throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
-/** One repository's state out of the Space state: under your own group
- * or an instance's heading. */
+/** One repository's state out of the Space state: under This computer or a Space heading. */
 export function repositoryOf(state: SpaceState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
@@ -318,8 +316,7 @@ export function assertGroupsState(state: SpaceState): void {
     assert.ok(instance.readAt === null || typeof instance.readAt === "number");
   }
   assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
-  // Every row stands once, under your own group or an instance's
-  // heading, in its shape (space-30).
+  // Every row stands once, under This computer or a Space heading, in its shape (space-30).
   const keys = rowsOf(state).map((repository) => repository.key);
   assert.equal(new Set(keys).size, keys.length, `every row stands once: ${JSON.stringify(keys)}`);
   for (const repository of rowsOf(state)) {
@@ -395,7 +392,7 @@ interface Home {
   stop(): Promise<void>;
 }
 
-/** Your own group's clone in a scratch home: under the name its
+/** The global records clone in a scratch home: under the name its
  * `home.yaml` records, once it has one — a sign-in renames it. */
 export function ownClone(dataDir: string): string {
   let own = OWN;
@@ -409,7 +406,7 @@ export function clonePath(dataDir: string, key: string): string {
 }
 
 /** Where a spex repository's environment stands in a scratch home
- * (environments-26): your own group's clone, else the working folder
+ * (environments-26): the global records clone, else the working folder
  * `home.yaml` pairs with the key, which holds a project's `spex.yaml`
  * and `spex.lock`. */
 export function environmentRoot(dataDir: string, key: string): string {
@@ -504,8 +501,8 @@ playbooks:
     return dir;
   }
 
-  /** Add a working folder: it pairs with a local spex repository in your
-   * own group (storage-6); returns its key and its clone. */
+  /** Add a working folder: it pairs with a local spex repository under the personal records
+   * folder (storage-6); returns its key and its clone. */
   async function addFolder(home: Home, path: string): Promise<{ key: string; clone: string }> {
     const project = await home.client.expectOk("project.register", { path });
     return { key: project.id, clone: clonePath(home.dataDir, project.id) };
@@ -669,8 +666,7 @@ playbooks:
     return state;
   }
 
-  /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository; `host` names the stand-in the new home
+  /** A real core on a scratch home whose configuration lies in the global records repository; `host` names the stand-in the new home
    * records from `SPEX_HOST_URL` (git-host-1), and any other instance is
    * reached by a sign-in naming its origin. */
   async function startHome(name: string, options: { model?: string; starter?: boolean; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {

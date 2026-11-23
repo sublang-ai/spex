@@ -411,8 +411,8 @@ function ConflictRow({
   placement: string | null;
   /** Its display name, which the Space's diff is headed by. */
   name: string;
-  /** The two choices' words (space-17): this place's side, and the
-   * side of the Space the choices are for. */
+  /** The two choices' words (space-17): this computer's side and the
+   * placement's side. */
   labels: { mine: string; remote: string };
   /** Which picker the row stands in — beneath the row or in its Sync
    * tab — so two standing at once never share a radio group. */
@@ -1147,8 +1147,8 @@ export function conflictsOf(
   return { line, name, conflicts, units: new Set(conflicts.map((conflict) => conflict.unit.unit)), stands, marked };
 }
 
-/** The choices made for each repository's conflicts, by its place and
- * key, and the last sync the surface sent with them (space-14,
+/** The choices made for each repository's conflicts, keyed by repository,
+ * and the last sync the surface sent with them (space-14,
  * space-17). */
 interface Choices {
   choices: Record<string, Record<string, Side>>;

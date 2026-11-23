@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Settings workspace surface of the Spex desktop app — its externally visible behavior, the implementation requirements behind it, and the integration coverage that verifies both.
-The Settings surface is an editor over the shared playbook config file at `${SPEX_HOME:-$HOME/.spex}/config/playbook.config.yaml`, which stays the source of truth shared with the playbook CLI.
+Settings and the playbook CLI share the configuration in the global records repository [[settings-7](#settings-7)].
 Signing in to a Space or a registry has no page here: Settings holds no accounts or registries page ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 The inline agent block (adapter, optional model, optional reasoning effort, optional adapter-scoped fast mode, permissions), the adapter names known to the embedded runtime (`claude`, `codex`, `gemini`, `kimi`, `opencode`), the config's top-level entries (`captain`, `layout`, `notifications`, `theme`), and the fail-closed validation rules are those of the playbook launcher that shares this file.
 Behind the surface, the implementation requires one validation module shared with core config loading, comment-preserving YAML writing, launcher-equivalent readiness checks, and the protocol boundary between the Settings UI and the core service.

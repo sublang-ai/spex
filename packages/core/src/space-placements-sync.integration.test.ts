@@ -36,7 +36,7 @@ const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, bareRepo, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut, sleep } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's person, and the personal settings repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";

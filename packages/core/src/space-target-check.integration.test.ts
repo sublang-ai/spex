@@ -12,7 +12,7 @@ import { join } from "node:path";
 import type { Store } from "./store.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
 import { holdingFetch, settled } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, bareRepo, startHost, startHome, signIn } = fixture;
@@ -92,7 +92,12 @@ test("storage-62, space-142: a separate Git address stays classified after sign-
   const client = internals(cold).hostClient;
   const reads: string[] = [];
   client.fetchImpl = async (input) => { reads.push(pathOf(input)); return unavailable(); };
-  for (const address of [url, url.replace("/git/", "/%67it/")]) {
+  const gitAddress = new URL(url);
+  for (const address of [
+    url, url.replace("/git/", "/%67it/"),
+    `git@${gitAddress.hostname}:${gitAddress.pathname.slice(1)}`,
+    `ssh://git@${gitAddress.hostname}:2222${gitAddress.pathname.replace("/git/", "/%67it/")}`,
+  ]) {
     await cold.client.expectError("space.remote.set", { repository: key, url: address }, "invalid_request", /^Choose that Space as a sync destination$/);
   }
   assert.equal(git(clone, "remote"), "", "the refused address was not persisted");
@@ -254,6 +259,19 @@ test("space-142: Git URL rewrites cannot redirect a verified Space records check
   assert.equal(blocked.sync.phase, "stopped");
   assert.equal(blocked.sync.step, "push");
   assert.match(blocked.sync.message, /Check the URL rewrite rules/);
+
+  const hosted = bareOf(host, key);
+  const hostedHead = git(hosted, "rev-parse", "spex");
+  const external = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: external });
+  writeFileSync(join(clone, "notes.md"), "Third change\n");
+  const continued = await home.client.settle("space.sync", { repository: key });
+  const refusal = placementOf(continued, host.url).outcome;
+  assert.ok(refusal?.kind === "stopped" && refusal.step === "push" && refusal.retry, JSON.stringify(refusal));
+  assert.match(refusal.message, /Check the URL rewrite rules/);
+  assert.equal(placementOf(continued, null).outcome?.kind, "synced");
+  assert.equal(git(hosted, "rev-parse", "spex"), hostedHead);
+  assert.equal(git(external, "show", "spex:notes.md"), "Third change");
 
   const second = await startHome("records-rewrite-join", {
     host, project: false, env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: rewrite, GIT_CONFIG_VALUE_0: prefix },
@@ -483,7 +501,7 @@ for (const next of ["signed-out", "another-account"] as const) {
       // The stand-in's current user's namespace follows the scripted
       // person; existing repositories retain their original group object.
       host.script.groups[0] = { id: "2004", fullPath: "bob", name: "bob", kind: "user" };
-      // The sign-in ends once its set-up has run; your own group's folder
+      // The sign-in ends once its set-up has run; the personal records folder
       // keeps the first login's name, which no later sign-in renames
       // (space-59).
       const signed = await signIn(home, host);

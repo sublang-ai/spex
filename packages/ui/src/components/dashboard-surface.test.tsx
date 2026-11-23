@@ -3146,7 +3146,7 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     const empty = screen.getByTestId("projects-empty");
     expect(empty.textContent).toBe("No projects yet · Add a project");
     fireEvent.click(within(empty).getByRole("button", { name: "Add a project" }));
-    // This computer's place, whose projects the band lists (dashboard-9).
+    // Add a project opens the Projects surface (dashboard-9).
     expect(onNavigate).toHaveBeenCalledWith("Workspace");
   });
 

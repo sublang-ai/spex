@@ -181,7 +181,7 @@ export function listingFor(view: Pick<HostView, "listings" | "gitOrigin"> | unde
   return repositoryFor(view.listings, (listing) => listing.repository, view.gitOrigin, id, remote);
 }
 
-/** The name of the personal settings repository for this login. */
+/** The name of the global records repository for this login. */
 export function ownNameFor(login: string): string {
   return kebab(login).replace(/(?:-spex)+$/, "") || "me";
 }

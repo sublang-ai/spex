@@ -154,7 +154,7 @@ test("keys: a key splits into its instance's folder, the group path in that inst
   assert.deepEqual(splitKey("@spex.pub/acme/platform/a-spex"), { instance: "@spex.pub", group: "acme/platform", name: "a-spex" });
   assert.deepEqual(splitKey("@127.0.0.1_4100/ada/x-spex"), { instance: "@127.0.0.1_4100", group: "ada", name: "x-spex" });
   assert.deepEqual(splitKey("@spex.pub/a-spex"), { instance: "@spex.pub", group: "", name: "a-spex" });
-  // Your own group's and the local-only clones lie outside every
+  // The global and local project clones lie outside every
   // instance's folder.
   assert.deepEqual(splitKey("me/me-spex"), { instance: null, group: "me", name: "me-spex" });
   assert.deepEqual(splitKey("acme/platform/b-spex"), { instance: null, group: "acme/platform", name: "b-spex" });

@@ -1716,7 +1716,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.match(walker, /`acme\/walker` — org `acme`, name `walker`, version `0\.1\.0`: The acme\/walker spec package/);
   assert.match(walker, /Its spec is `walker\.md` beside this file/);
 
-  // Your own group's skills go to the user's home; a name the project
+  // Skills from the global environment go to the user's home; a name the project
   // also exports stands in both, each from where it came.
   const ownText = requestsYaml({ "acme/mine": { version: "^1.0.0" } });
   const ownLock = locked(await resolveText(ownClone, ownText));
@@ -1745,8 +1745,8 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   assert.match(readFileSync(join(otherHome, ".claude/skills/lint/SKILL.md"), "utf8"), /my own lint/);
   assert.match(readFileSync(join(workingFolder, ".claude/skills/lint/SKILL.md"), "utf8"), /the project's lint/);
 
-  // A session hands the launcher the project's playbook, your own
-  // group's where the project lacks it, the path source's in the folder.
+  // A session hands the launcher the project's playbook, the global
+  // environment's where the project lacks it, the path source's in the folder.
   const project = { repository: projectKey, locations: moduleLocations(projectLock, home.clone, workingFolder) };
   const own = { repository: ownKey, locations: moduleLocations(ownLock, ownClone, null) };
   const launch = launchModules(["ship", "own-pb", "walk"], project, own);

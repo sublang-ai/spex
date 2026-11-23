@@ -4,7 +4,7 @@
 // A clone's move under `workspace/` (space-59, space-60, DR-127): what
 // every mover reads at its rename's instant — whether a session's lease
 // beneath holds the clone where it is, whether the destination is taken
-// — and the empty folders a move leaves. Shared by the Groups' core,
+// — and the empty folders a move leaves. Shared by the Space core,
 // which moves clones while writers run, and by the instances migration,
 // which moves them once before any writer is admitted.
 

@@ -22,7 +22,7 @@ const project = resolve(
 // recording, so stopping the core removes it.
 const dir = mkdtempSync(join(tmpdir(), "spex-demo-core-"));
 const removeStore = () => rmSync(dir, { recursive: true, force: true });
-// The user's config lives in their own group's spex repository under
+// The user's config lives in the global records repository under
 // their Spex home (storage-1), which a core on a scratch home would not
 // read: name it, where it exists. A home with none yet gets nothing
 // written into it; the scratch home seeds the starter instead.

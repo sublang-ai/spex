@@ -123,7 +123,7 @@ const describeExit = ({ code, signal, error }) =>
 
 /** A quick command; non-zero exit fails the stage. */
 /**
- * Your own group's config in a home (storage-1): the clone named by
+ * The global config in a home (storage-1): the clone named by
  * `home.yaml`'s `own`, or a path that cannot exist where the home has
  * no home file yet.
  */
@@ -534,7 +534,7 @@ try {
   );
   assert(config.seeded === true, "the first start did not seed the config");
   // The config lands where the README's user finds it: inside the home,
-  // in your own group's spex repository.
+  // in the global records repository.
   const configPath = ownConfigPath(serverHome);
   assert(
     config.summary.path === configPath && existsSync(configPath),

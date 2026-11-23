@@ -966,7 +966,7 @@ test("storage-2: a new home writes home.yaml with this device, the origin it was
   assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex" });
   // The project file names the code's remote, none here (storage-3).
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "workspace", "tester", "home-file-spex", "project.json"), "utf8")), { format: 1, name: "Home File", remote: null });
-  // Your own group's spex repository stands on its spex branch, seeded.
+  // The global records repository stands on its spex branch, seeded.
   const own = join(dir, "workspace", "tester", "tester-spex");
   assert.ok(existsSync(join(own, "config", "playbook.config.yaml")));
   assert.equal(execFileSync("git", ["-C", own, "symbolic-ref", "--short", "HEAD"], { encoding: "utf8" }).trim(), "spex");

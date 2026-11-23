@@ -34,7 +34,7 @@ const PATHS: Record<string, ReactNode> = {
   refresh: (
     <path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.8v2.7h-2.7" />
   ),
-  // The Groups surface (DR-103): people sharing what is kept.
+  // The Space navigation entry.
   people: (
     <>
       <circle cx="6" cy="5.5" r="2" />

@@ -65,7 +65,7 @@ export interface CaptainHomeProps {
   onRecheckReadiness?: () => Promise<unknown>;
   /** Settings at an adapter's agent card (run-view-45, settings-70). */
   onOpenAgentCard?: (adapter: string) => void;
-  /** The current project while this place opens it (run-view-200):
+  /** The current project while it opens on this computer (run-view-200):
    * its name over the join's step, or the join's cause where it
    * stopped, in place of the welcome page and the greeting. */
   opening?: OpeningProject;

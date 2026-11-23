@@ -4,7 +4,7 @@
 // The home file's encoding and its instances (storage-2, DR-103, DR-127,
 // DR-165): `home.yaml` names this device, the origin the home was
 // created with, every instance it has signed in to with its account,
-// your own group's folder name, and each working folder paired with its
+// the personal records folder's name, and each working folder paired with its
 // spex repository's key. This module reads and checks the file, and
 // adds, updates and removes an instance's entry; the pairings are the
 // app's, which checks them where it reads them. Either host changes the
@@ -120,7 +120,7 @@ export type FoldersCheck = (folders: readonly unknown[], file: string) => void;
 
 /**
  * `home.yaml`'s value checked field by field (storage-2): its format,
- * device, origin, your own group's name and every instance's entry —
+ * device, origin, the personal records folder's name and every instance's entry —
  * one per origin, and no two origins at one folder — and the pairings a
  * list, each entry checked by `checkFolders` where the host supplies it.
  * A malformed or unknown file is refused, never guessed at.
@@ -173,7 +173,7 @@ function originOf(origin: string, file: string): string {
 
 /** A new home, not yet written: a fresh device id unless one is
  * supplied, the origin the environment names, no instance signed in
- * to, and this device's user name as your own group. A URL the
+ * to, and this device's user name for its personal records folder. A URL the
  * environment names that is no instance's origin is refused as a
  * storage diagnostic of `file`. */
 export function newHomeFile(file: string, options: { own?: string; env?: NodeJS.ProcessEnv; device?: string } = {}): HomeFile {

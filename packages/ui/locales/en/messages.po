@@ -526,10 +526,6 @@ msgstr "{path} · removed"
 msgid "{path} is not in the tree"
 msgstr "{path} is not in the tree"
 
-#: src/state/store.ts
-msgid "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
-msgstr "{path} is not the root of a git work tree. To start a new repository there, use Create instead."
-
 #: src/components/MachineCard.tsx
 msgid "{playbookId} machine drawing"
 msgstr "{playbookId} machine drawing"

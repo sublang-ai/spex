@@ -235,6 +235,7 @@ test("run-view-96: a Dashboard failure between turns lands on the line at its on
   const records = [
     { seq: 1, record: { type: "runtime_error", turnId: null, timestamp: onset - 1_000, message: "An earlier failure" } },
     { seq: 2, record: { type: "runtime_error", turnId: null, timestamp: onset, message: "The release failed between turns" } },
+    { seq: 3, record: { type: "runtime_error", turnId: null, timestamp: onset + 1_000, message: "A later failure" } },
   ];
   commandMock.mockImplementation(async (type: string) => {
     if (type === "ledger.get") return ledger;
@@ -249,6 +250,7 @@ test("run-view-96: a Dashboard failure between turns lands on the line at its on
   const error = await screen.findByText("The release failed between turns");
   await vi.waitFor(() => expect(error.closest("[data-focus-key]")?.getAttribute("data-focused")).toBe("1"));
   expect(screen.getByText("An earlier failure").closest("[data-focus-key]")?.getAttribute("data-focused")).toBeNull();
+  expect(screen.getByText("A later failure").closest("[data-focus-key]")?.getAttribute("data-focused")).toBeNull();
 });
 
 describe("run-view-70: the sidebar navigates, the tabs hold what is open", () => {
@@ -584,7 +586,9 @@ describe("dismissed folder choices remain reachable through Space (DR-214)", () 
     await act(async () => {});
     // Recovery uses the existing named destination in either rail state.
     expect(screen.queryByTestId("sidebar-locate-files")).toBeNull();
-    expect(screen.queryByTestId("sidebar-place-heading")).toBeNull();
+    const tree = within(screen.getByRole("navigation", { name: "Spex navigation" })).queryByRole("tree", { name: "Projects and sessions" });
+    if (collapsed) expect(tree).toBeNull();
+    else expect(within(tree!).queryAllByRole("treeitem")).toEqual([]);
     const openSpace = async () => {
       const entry = screen.getByRole("button", { name: "Space" });
       entry.focus();
@@ -1159,9 +1163,8 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
 
   test("space-59, space-60, space-63: a Space state whose project row stands under a second instance re-reads nothing", () => {
     render(<App />);
-    // alpha's row stands under the second instance's group, beta's under
-    // your own group: both are the page's projects, wherever the state
-    // heads them (space-1, DR-127).
+    // Space lists alpha under the second instance and beta under This
+    // computer. Both are already registered locally (space-1, DR-127).
     const state = spaceState({
       repositories: [repo("p2", "/tmp/beta"), repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
       instances: [instanceState("https://host.test"), instanceState("https://second.test")],

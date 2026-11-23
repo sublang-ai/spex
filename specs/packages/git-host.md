@@ -184,7 +184,7 @@ When a real core signs in through the stand-in Space and creates a personal reco
 - account identity, tokens and personal catalog refresh on sign-in, catalog pagination and exclusion of other namespaces [[git-host-2](#git-host-2)] [[git-host-3](#git-host-3)] [[git-host-4](#git-host-4)] [[git-host-5](#git-host-5)];
 - creation, branch preparation and authenticated Git transport use that account and Space, with an expired token refreshed and a refused refresh signing out that Space only [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)] [[git-host-9](#git-host-9)] [[git-host-4](#git-host-4)];
 - a delayed README is read again before the first push; if it never lands the core pushes its own README on `main` before `spex`, while refusal, read-only access or a restart before completion preserves the creation marker for retry [[git-host-7](#git-host-7)];
-- a cold reader fetches LFS objects with the brokered credential before Apply, Stop ends the held transfer, and an alternate LFS endpoint receives no credential [[git-host-9](#git-host-9)] [[git-host-12](#git-host-12)];
+- a cold reader fetches LFS objects with the brokered credential, and an alternate LFS endpoint receives no credential [[git-host-9](#git-host-9)] [[git-host-12](#git-host-12)];
 - classified failure and retry guidance reports the Space name and bounds a rate-limit wait [[git-host-11](#git-host-11)] [[git-host-21](#git-host-21)];
 - a rate-limited read keeps its initial recovery deadline when another request extends the shared hold, and a replay still in flight at that deadline is aborted without masking a separate request timeout, provider refusal or authentication failure [[git-host-21](#git-host-21)];
 - the repository moved outside the personal namespace fails its fresh target check before Git transport [[git-host-22](#git-host-22)];
@@ -195,7 +195,7 @@ When a real core signs in through the stand-in Space and creates a personal reco
 When a real core syncs an individual repository against the stand-in Space, the integration suite shall verify the target read [[git-host-22](#git-host-22)]:
 
 - an unrelated repository detail failure leaves the selected sync available and the full read time unchanged;
-- a repository moved outside the personal namespace stops the transfer, retains its local files and receives no new records, including during catch-up;
+- a repository moved outside the personal namespace stops the transfer, retains its local files and receives no new records;
 - target, catalog and authentication failures prevent transfer, and a held response across sign-out cannot restore access;
 - a later complete read supersedes an earlier target read, while a target-only check after restart leaves the first full read due.
 
@@ -211,7 +211,7 @@ When two stand-in Spaces list the same personal repository over one Git backend,
 
 #### git-host-26
 
-When a real core places one project at two stand-in Spaces on distinct Git backends, the integration suite shall verify that creation, branch preparation, access checks, credentials, failures and retries apply to the selected placement, including a fresh ownership check before catch-up [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)] [[git-host-9](#git-host-9)] [[git-host-22](#git-host-22)].
+When a real core places one project at two stand-in Spaces on distinct Git backends, the integration suite shall verify that creation, branch preparation, access checks, credentials, failures and retries apply to the selected placement [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)] [[git-host-9](#git-host-9)] [[git-host-22](#git-host-22)].
 
 #### git-host-32
 

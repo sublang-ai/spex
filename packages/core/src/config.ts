@@ -98,8 +98,8 @@ export interface PlacedPlaybook extends PlaybookModule {
 }
 
 /** Where composition finds each playbook's module: the environments of
- * the session's spex repositories, the project's before your own
- * group's — the global (environments-9). A shared file names no path. */
+ * the session's spex repositories, the project's before the global
+ * records repository's (environments-9). A shared file names no path. */
 export interface PlaybookModules {
   /** The module of a playbook of this id present on this device, the
    * project's before the global. */
@@ -117,7 +117,7 @@ export interface PlaybookModules {
 export interface ComposeOptions {
   /** The environments' module locations; absent, no playbook has one. */
   modules?: PlaybookModules;
-  /** A project's or another group's own file, added on top of yours. */
+  /** A project's config file, added on top of the global config. */
   project?: { top: unknown; path: string };
   /** The paired project's actual folder; absent for global composition. */
   cwd?: string;
@@ -136,12 +136,12 @@ const MODEL_FIELDS = ["model", "effort", "fastMode", "ultracode", "subagentModel
 const notInProjectFile = (entry: string): Error =>
   new Error(i18n._({
     id: "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses",
-    comment: "Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path",
+    comment: "Config error: a project's settings file holds a field reserved for the global config; {entry} is the field's own path",
     values: { entry },
   }));
 
 /**
- * Check a project's or another group's own file (core-service-2): only
+ * Check a project's config file (core-service-2): only
  * `playbooks.<id>` entries, each naming its roles' players by name, with
  * an option slice — never a captain, players, a model field or a `from`.
  */
@@ -173,7 +173,7 @@ export function validateProjectConfig(top: unknown, _path: string): void {
   }
 }
 
-/** Your own group's file with a project's added on top: the project's
+/** The global config file with a project's added on top: the project's
  * playbooks join yours, its roles and options over your entry's. */
 function layerProjectConfig(own: Record<string, unknown>, project: unknown): Record<string, unknown> {
   if (!isPlainObject(project) || !isPlainObject(project.playbooks)) return own;
@@ -555,7 +555,7 @@ export function resolveConfigPath(
   return ownConfigPath(resolveRoot(env, home), env);
 }
 
-/** Your own group's config inside its spex repository's clone
+/** The global config in the global records repository
  * (storage-1, DR-103): the name `home.yaml` records — before the
  * instances migration rewrites it too (DR-127) — or this device's user
  * name for a home not yet written; a damaged home reads as a new one. */
@@ -2213,7 +2213,7 @@ export async function loadConfig(
 }
 
 /**
- * The players project files name for a role that your own group's
+ * The players project files name for a role that the global
  * roster lacks (core-service-2, settings-46): one entry per player,
  * naming the spex repository whose file names it and every role that
  * does. A file that will not read names none; its own load reports it.

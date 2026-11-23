@@ -114,7 +114,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const home = await startHome("remote");
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  // A clone no instance holds reaches one by a group picked for it
+  // A local-only clone needs a sync destination
   // (space-11).
   await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Choose a Space to sync first$/);
   await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /^nowhere is not on this computer — Refresh, then Retry$/);
@@ -571,8 +571,8 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   // The explorer.
   mkdirSync(join(clone, "packages", "builtin"), { recursive: true });
   writeFileSync(join(clone, "packages", "builtin", "spex.yaml"), "format: 1\n");
-  // The installed tree of a group's own environment, a manifest inside
-  // it no spec package folder (environments-26, storage-1).
+  // An installed package’s manifest is outside the project’s editable
+  // spec package folders (environments-26, storage-1).
   mkdirSync(join(clone, ".spex", "packages", "acme", "kit"), { recursive: true });
   writeFileSync(join(clone, ".spex", "packages", "acme", "kit", "meta.yaml"), "format: 2\n");
   mkdirSync(join(clone, "intents", `${intent.id}.assets`), { recursive: true });

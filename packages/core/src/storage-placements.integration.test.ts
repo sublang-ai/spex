@@ -31,7 +31,7 @@ const fixture = createSpaceHarness();
 const { git, gitFolder, bareRepo, addFolder, otherDevice, peerClone, peerPush, runTurn, sleep, startHome, startHost, signIn, signOut } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's person, and your own group's repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 /** A second stand-in's display name, and the person signing in there. */
@@ -94,7 +94,7 @@ test("storage-36, space-35, space-23: personal global records setup, explicit pr
   t.after(() => a.stop());
 
   // The sign-in's own-group step (space-4, space-65): the file names the
-  // stand-in and the host's id for your own group's own repository
+  // stand-in and the host's id for the global records repository
   // there, and its first sync pushes it.
   let from = a.client.mark();
   await signIn(a, host);
@@ -131,7 +131,7 @@ test("storage-36, space-35, space-23: personal global records setup, explicit pr
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${hostFolder(host)}.yaml`].sort());
   assert.equal(readFileSync(join(clone, file), "utf8"), bytes);
 
-  // A second home: its sign-in joins your own group's own repository and
+  // A second home: its sign-in joins the global records repository and
   // writes that file's very bytes; its join of the project writes the
   // bytes the first pushed, so nothing is left to save (space-59,
   // space-63).
@@ -528,7 +528,7 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
   assert.equal(committed(shared.bare, file), bytes, "the first's repository left as it stands");
 });
 
-test("storage-37, storage-38, space-91: a placement file a commit once held, removed by a peer's commit the sync merges, is not written again by the next Save while that placement's drop waits on a session's lease beneath the clone, which syncs nothing with it; the sync after the release drops it, moving the clone, its last placement gone, under your own group's folder, local only, its pair following", async (t) => {
+test("storage-37, storage-38, space-91: a placement file a commit once held, removed by a peer's commit the sync merges, is not written again by the next Save while that placement's drop waits on a session's lease beneath the clone, which syncs nothing with it; the sync after the release drops it, moving the clone, its last placement gone, under the personal records folder, local only, its pair following", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const file = `placements/${folder}.yaml`;
@@ -581,7 +581,7 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
     assert.deepEqual(remoteNamesOf(clone), [folder]);
 
     // Released, the next sync drops the placement before its turn: the
-    // clone, its last placement gone, moves under your own group's folder,
+    // clone, its last placement gone, moves under the personal records folder,
     // local only, its pair following and this device's records of the
     // placement leaving with it (storage-38, storage-5).
     await live.release();
@@ -592,7 +592,7 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
     const dropped = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
     assert.deepEqual([dropped.sync.phase, dropped.state, dropped.placements, dropped.id], ["done", "local-only", [], null], JSON.stringify(dropped.sync));
     const ownClone = clonePath(home.dataDir, ownKey);
-    assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+    assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under the personal records folder");
     assert.equal(git(ownClone, "remote"), "");
     assert.equal(git(ownClone, "rev-parse", "HEAD"), removed, "its records kept");
     assert.equal(Home.load(home.dataDir).keyForFolder(code), ownKey);
@@ -601,7 +601,7 @@ test("storage-37, storage-38, space-91: a placement file a commit once held, rem
   } finally { if (!released) await live.release(); }
 });
 
-test("space-91, storage-38: a lone placement's file deleted by hand on this device is the proposal to drop it: the next sync's Save commits the deletion and the drop before its turn moves the clone, its last placement gone, under your own group's folder, local only, its pair following, nothing sent to the host", async (t) => {
+test("space-91, storage-38: a lone placement's file deleted by hand on this device is the proposal to drop it: the next sync's Save commits the deletion and the drop before its turn moves the clone, its last placement gone, under the personal records folder, local only, its pair following, nothing sent to the host", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const file = `placements/${folder}.yaml`;
@@ -622,8 +622,8 @@ test("space-91, storage-38: a lone placement's file deleted by hand on this devi
   const atHost = git(bare, "rev-parse", "spex");
 
   // The reader deletes the file; the next sync's Save commits that, and
-  // the placement is dropped before its turn: the clone moves under your
-  // own group's folder, local only, its records and pair with it, and
+  // the placement is dropped before its turn: the clone moves under the
+  // personal records folder, local only, its records and pair with it, and
   // the deletion never reaches the host (space-91, storage-38).
   rmSync(join(clone, file));
   const transports = host.script.transportCredentials.length;
@@ -633,7 +633,7 @@ test("space-91, storage-38: a lone placement's file deleted by hand on this devi
   const dropped = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.deepEqual([dropped.state, dropped.placements, dropped.id], ["local-only", [], null], JSON.stringify(dropped.sync));
   const ownClone = clonePath(home.dataDir, ownKey);
-  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under the personal records folder");
   assert.equal(git(ownClone, "remote"), "");
   assert.throws(() => git(ownClone, "cat-file", "-e", `HEAD:${file}`), "the Save committed the deletion");
   assert.equal(existsSync(join(ownClone, file)), false);
@@ -653,7 +653,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   const home = await startHome("end-to-end", { host: first, project: false });
   t.after(() => home.stop());
 
-  // Your own group's sign-in at each instance writes each placement's
+  // Signing in at each Space writes each placement's
   // file as its three lines, its remote named by that instance's folder
   // with the host's id in its section, in the order added; its own
   // repository keeps its folder and reads as the first's, where it was
@@ -738,11 +738,11 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.deepEqual(unpathed.placements.map((line) => line.instance), [first.url, second.url]);
   assert.equal(syncRecordsOf(home.dataDir, key)[`sync:${key}:origin:last`], undefined);
 
-  // A second home signed in at the second alone: its sign-in joins your
-  // own group's own repository there, and its join of the project, each
-  // writing the very bytes of that placement's file the first home wrote
+  // The second home signs in at the second Space only and joins the
+  // global records repository there. That join and the project's join
+  // each write the same placement file bytes as the first home
   // (storage-36, space-63). The home is made with the first's origin, as
-  // the first home was, so its own group's bootstrap locks the built-in
+  // the first home was, so its global environment locks the built-in
   // at the same registry and its sign-in's join asks no choice (space-59).
   const other = await startHome("end-to-end-other", { host: first, project: false });
   t.after(() => other.stop());
@@ -879,8 +879,8 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal((await again.client.expectOk("environment.get", { repository: movedKey })).repository, movedKey);
   await again.client.expectError("environment.get", { repository: key }, "not_found");
 
-  // The last placement left, confirmed: the clone moves under your own
-  // group's folder, local only, with its pair, session and no record of
+  // The last placement left, confirmed: the clone moves under the personal
+  // records folder, local only, with its pair, session and no record of
   // a placement left; a remote then named through space.remote.set makes
   // it local only no more, written to no file (storage-38, storage-34,
   // storage-36, storage-5).
@@ -890,7 +890,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.deepEqual(await again.client.expectOk("space.leave", { repository: movedKey, instance: second.url, confirmed: true }), { accepted: true });
   const left = await again.client.waitRepository(mark, localKey, (repository) => repository.sync.phase !== "running", 30_000);
   assert.deepEqual([left.sync, left.state, left.instance, left.id, left.placements], [{ phase: "idle" }, "local-only", null, null, []], JSON.stringify(left));
-  assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under your own group's folder");
+  assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under the personal records folder");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), localKey);
   assert.ok((await again.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === localKey));
   assert.deepEqual(remotesOf(localClone), []);
@@ -904,8 +904,8 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.deepEqual(readdirSync(join(localClone, "placements")).sort(), filesLeft, "no file for the remote the reader names");
 
   // The second home leaves its one placement, confirmed: its clone local
-  // only under your own group's folder, holding the first's file; signed
-  // in at the first — your own group's own repository there writing the
+  // only under the personal records folder, holding the first's file; signed
+  // in at the first — the global records repository there writing the
   // first home's bytes — that file offers the first's placement, and its
   // Attach moves the clone under the first's folder at the repository's
   // path there and syncs it (storage-35, space-98, space-99, storage-36).
@@ -938,7 +938,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal(git(firstBare, "rev-parse", "spex"), git(attachedClone, "rev-parse", "HEAD"));
 });
 
-test("storage-38, space-98, space-15: a Leave of the first placement whose remote Git refuses to remove — the clone's configuration locked — stops at Check in Git's words, the clone, its remote, its file and its pair where they were; once Git can, the same Leave drops it and moves the clone under your own group's folder, local only", async (t) => {
+test("storage-38, space-98, space-15: a Leave of the first placement whose remote Git refuses to remove — the clone's configuration locked — stops at Check in Git's words, the clone, its remote, its file and its pair where they were; once Git can, the same Leave drops it and moves the clone under the personal records folder, local only", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const file = `placements/${folder}.yaml`;
@@ -974,14 +974,14 @@ test("storage-38, space-98, space-15: a Leave of the first placement whose remot
   assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair kept");
 
   // The lock gone, the same Leave drops the placement and moves the
-  // clone, its last placement gone, under your own group's folder, local
+  // clone, its last placement gone, under the personal records folder, local
   // only, its pair following (storage-38, space-98).
   rmSync(lock);
   from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: host.url, confirmed: true }), { accepted: true });
   const left = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase !== "running", 30_000);
   assert.deepEqual([left.state, left.placements, left.sync.phase], ["local-only", [], "idle"], JSON.stringify(left.sync));
-  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under your own group's folder");
+  assert.ok(existsSync(join(ownClone, ".git")) && !existsSync(clone), "moved under the personal records folder");
   assert.equal(git(ownClone, "remote"), "");
   assert.equal(existsSync(join(ownClone, file)), false, "its file deleted");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), ownKey);

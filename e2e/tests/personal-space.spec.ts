@@ -511,7 +511,9 @@ test.describe("personal projects on two computers", () => {
         await secondPage.getByRole("tab", { name: "Overview" }).click();
         await expect(secondPage.getByTestId("overview-tab")).toContainText(intent.text);
         await expect(secondPage.getByRole("button", { name: /^(Servers|Groups)$/ })).toHaveCount(0);
-        await expect(secondPage.getByTestId("sidebar-place-heading")).toHaveCount(0);
+        const tree = secondPage.getByRole("tree", { name: "Projects and sessions" });
+        // One project, its saved session, and its new-task action.
+        await expect(tree.getByRole("treeitem")).toHaveCount(3);
 
         if (!existing) {
           const secondWork = await second.core.command("session.create", { projectId: key });

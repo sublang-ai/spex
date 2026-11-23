@@ -97,7 +97,7 @@ test("storage-29: home pairs, project names and clones changed outside the core 
   assert.throws(() => store.sessionStore(project.id), /no records /);
   assert.equal(existsSync(clone), false);
 
-  // Your own group's clone, made only at the open, is refused once gone.
+  // The global records clone, made only at the open, is refused once gone.
   const own = join(dir, "workspace", "tester", "tester-spex");
   rmSync(own, { recursive: true, force: true });
   assert.throws(() => store.ownRepository(), /no records /);

@@ -159,7 +159,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("drafts-section")).toBeVisible();
     found.push(...(await scan(page, "Playbooks tab (with a draft)")));
 
-    // Groups: your own group with its spex repositories (space-30);
+    // Space: personal project rows (space-30);
     // the picker and the tree are scanned by space-44.
     await nav(page, "Space").click();
     await expect(page.getByTestId("space-projects")).toBeVisible();

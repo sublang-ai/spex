@@ -18,7 +18,7 @@ The core performs every Git operation and every call to an instance; the surface
 
 While the IDE is connected, Space shall show local projects and one flat list of personal projects for each account listed by the home [[storage-2](storage.md#storage-2)] ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
-- projects without a governing Space appear under “This computer”;
+- each project appears under its own Space, including while that Space is signed out [[space-6](#space-6)]; for a clone, the store determines its instance [[storage-31](storage.md#storage-31)], and clones with no instance appear under “This computer”;
 - each Space uses its display name with its signed-in login, sign-in state, and its latest Refresh activity;
 - an unsigned Space offers Sign in and a signed-in Space offers Sign out; a signed-out entry also offers Remove from this list;
 - each row offers its local opening action [[space-111](#space-111)] and a row under a Space identifies its configured code location by the corresponding Space or the code’s own remote once the home knows every listed and default Space’s Git address;
@@ -41,7 +41,7 @@ While a spex repository's clone holds a placement, a placement file of it names 
 
 #### space-120
 
-The Space surface shall give each spex repository's row one standing phrase, the first of these that its state [[space-61](#space-61)] and its placements' lines [[space-87](#space-87)] hold, a row under "This computer" [[space-1](#space-1)] reading none ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+The Space surface shall give each spex repository's row the first standing phrase below that its state [[space-61](#space-61)] and its placements' lines [[space-87](#space-87)] hold, with a local-only or not-on-this-device row reading none while no step is in flight ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 1. the step in flight [[space-12](#space-12)], or "Opening…" while its join runs [[space-63](#space-63)];
 2. "1 record to sync" or "<n> records to sync", <n> being the count of its local units [[space-7](#space-7)], whose kinds stand in its title;
@@ -79,7 +79,7 @@ The Space surface shall offer the sign-in at an instance in one card titled "Sig
 - a URL the core refuses by the origin rule [[git-host-2](git-host.md#git-host-2)] starts no flow, the card reading the core's cause with the field kept;
 - a denial, an expiry or a refusal — a sign-in at a listed instance as another account among them [[git-host-2](git-host.md#git-host-2)] — ends the flow, the card reading the core's cause and the control "Sign in again";
 - while no flow runs or stands failed and the core reports that an instance signed this device out [[git-host-4](git-host.md#git-host-4)], that instance's heading reads "<display name> · signed out · @<login>", <login> being the account's there, beside its "Sign in again";
-- while the home lists no instance, every spex repository is local only [[space-61](#space-61)]; a placement at a signed-out instance reads "Signed out of <display name>" unless a signed-in instance lists its host repository [[space-61](#space-61)], and the surface never contacts an instance that is not signed in.
+- a placement at a signed-out instance reads "Signed out of <display name>" unless a signed-in instance lists its host repository [[space-61](#space-61)], and the surface never contacts an instance that is not signed in.
 
 #### space-115
 
@@ -103,15 +103,18 @@ When a working folder's remote is read for `project.json` [[storage-3](storage.m
 
 #### space-136
 
-When classifying a records URL, the core shall match its normalized origin and path segments against each listed or default Space’s last reported Git address [[storage-2](storage.md#storage-2)], using the service origin until its Git address is known and treating an unmatched address as external.
+When classifying a records URL, the core shall match it against each listed or default Space’s last reported Git address [[storage-2](storage.md#storage-2)], using the service origin until its Git address is known and treating an unmatched address as external:
+
+- match HTTP(S) by normalized origin and path segments;
+- match `ssh://` and Git’s SCP-style SSH addresses by normalized hostname and path segments, regardless of SSH username and port.
 
 #### space-140
 
 When Git transfers records, the core shall use the transport rules of the placement’s destination [[space-136](#space-136)]:
 
-- a Space supplies its repository address [[storage-34](storage.md#storage-34)] and brokers its credential [[git-host-9](git-host.md#git-host-9)]. Git must resolve to the approved address with HTTP redirects disabled;
+- a Space supplies its current repository address [[git-host-22](git-host.md#git-host-22)] and brokers its credential [[git-host-9](git-host.md#git-host-9)]. Git must resolve to the approved address with HTTP redirects disabled;
 - an external remote uses the computer’s Git credentials, redirect settings and native LFS authentication, independently of Space availability;
-- check the effective fetch and push URLs, the selected LFS download endpoint and any override for an active LFS upload. A Space’s LFS endpoint may use an external origin without its brokered credential. If Git settings change the Space-approved Git address, select another repository at a known Space for LFS or send an external placement to a known Space, stop before that transfer with the configuration guidance and Retry [[space-15](#space-15)].
+- check the effective fetch and push URLs, the selected LFS download endpoint and its SSH address when reported, and any override for an active LFS upload, including the default-branch push during Check. A Space’s LFS endpoint may use an external origin without its brokered credential. At a known Space, LFS must use the approved repository’s HTTP(S) endpoint. If Git settings change the Space-approved Git address, select an unapproved LFS endpoint at a known Space or send an external placement to a known Space, stop before that transfer with the configuration guidance and Retry [[space-15](#space-15)].
 
 #### space-6
 
@@ -162,7 +165,7 @@ The Space surface shall show each spex repository, and each of its placements, i
 | local only | the clone holds no placement [[storage-34](storage.md#storage-34)] | nothing [[space-120](#space-120)] | Open project and “Sync to a Space…” to choose a signed-in account [[space-97](#space-97)] |
 | reachable | the latest full or selected-target read of the instance governing it lists it [[git-host-5](git-host.md#git-host-5)] [[git-host-22](git-host.md#git-host-22)] and the clone is here, no join of it running [[space-63](#space-63)], or it is the path placement this device can reach | its standing phrase [[space-120](#space-120)] | Open [[space-111](#space-111)], with "Sync records" in its overflow |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push other than for an explicit content-size limit [[space-15](#space-15)] | "Read-only: <the host's reason>"; new sessions reach only the placements that take pushes, said so | Open [[space-111](#space-111)], "Sync records" in its overflow bringing only |
-| unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while no signed-in instance lists its host repository | "Unreachable: <cause>", or "Signed out of <display name>" while its instance is signed out | Retry, none while its instance is signed out |
+| unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while no signed-in instance lists its host repository | "Unreachable: <cause>", or "Signed out of <display name>" while its instance is signed out | Retry acts as Refresh [[space-2](#space-2)]; no Retry while its instance is signed out |
 | not on this device | an instance listed it and no clone is here, or its join still runs [[space-63](#space-63)], or a placement file of a clone here names it | nothing, the row carrying no local-location text [[space-1](#space-1)]; "Opening…" while its join runs | Open [[space-111](#space-111)] |
 
 - a project whose only destination is an explicitly configured non-Space remote can also choose its first Space [[space-137](#space-137)] [[space-136](#space-136)] [[space-97](#space-97)]. Once a Space destination is attached, the row offers the controls for its current state;
@@ -457,7 +460,7 @@ When the Compare step at a placement finds a unit changed differently on both si
 
 #### space-15
 
-When a sync or check step fails, the core shall stop — the placement alone for a Check, Compare or Push cause other than Stop and Git's own error, the next placement running, a Refresh diagnostic stopping nothing [[space-20](#space-20)], and the whole sync, no later placement running, for a Save's or an Apply's stop, any other Refresh failure, Git's own error and Stop — leaving the clone in the state below, and the surface shall show the step, the cause in plain words and its guidance on that placement's line, offering Retry where retrying can help ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When a sync or check step fails, the core shall limit the stop to the affected placement during Check, Compare and Push, including a destination refused by the core [[space-140](#space-140)], and stop the whole sync on Stop, Git’s own error, a Save or Apply failure or a Refresh failure other than a diagnostic [[space-20](#space-20)], leaving the state and showing the cause, guidance and Retry on the placement’s line as follows ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 | Step | Cause | State left | Surface |
 | --- | --- | --- | --- |
@@ -472,7 +475,8 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | Check, Push | the host no longer listing the repository | commits stand | the Space-account unavailable message [[git-host-11](git-host.md#git-host-11)]; the placement turns unreachable; nothing deleted |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <display name>"; Retry |
 | Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<display name> answered with an error (HTTP <status>)"; Retry |
-| Check, Push | Git configuration changes a Space-approved destination or sends an external placement to a known Space address [[space-140](#space-140)] | no records transferred to that address | identify the Git settings to check and offer Retry |
+| Check, Push | Git settings change a Space-approved destination [[space-140](#space-140)] | only that placement stops before transfer | “Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry.”; Retry |
+| Check, Push | Git settings send an external transfer to a known Space [[space-140](#space-140)] | only that placement stops before transfer | “Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry.”; Retry |
 | Compare | unrelated history | unchanged | "Combine…" [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation | nothing written; its base stands [[space-19](#space-19)] | the unit and reason; the picker stays with the unit marked; Retry |
 | Check | a session lease beneath a clone its move would move, a deferred migration move among them [[space-60](#space-60)] | commits stand; the clone where it was, nothing fetched | the session and reason; Retry |
@@ -579,10 +583,10 @@ When a sync completes a placement's turn through its Push, or through Refresh fo
 
 #### space-141
 
-When a placement changes, the core shall retain or discard its tracking ref, last check and last-sync receipt [[space-22](#space-22)] according to the repository they describe:
+When a placement changes, the core shall retain or discard its tracking ref and last check according to the repository they describe, with the last-sync receipt [[space-22](#space-22)] following its remote [[storage-5](storage.md#storage-5)]:
 
-- a rename or follow of the same Space repository id preserves all three [[space-60](#space-60)];
-- dropping the placement clears all three [[space-98](#space-98)] [[space-91](#space-91)], as does replacing a user-configured records remote [[space-29](#space-29)].
+- a rename or follow of the same Space repository id preserves the ref and check [[space-60](#space-60)];
+- dropping the placement clears the ref and check [[space-98](#space-98)] [[space-91](#space-91)], as does replacing a user-configured records remote, whose former receipt is cleared as well [[space-29](#space-29)].
 
 ### Explorer and Privacy
 
@@ -819,6 +823,7 @@ apply: a written unit changed since its base (first) → save;  validation | lea
 refresh: diagnostic → push;  unsafe parent → stopped
 push: rejected (first) → check;  rejected twice | refused | throttled | transport | timeout → next placement;  Stop → stopped;  read-only → next placement
 catch-up: rejected (first) → that placement's check;  rejected again → that placement behind
+check or push: core rejects effective Git destination (cause `git`) → next placement
 any step: Git's own error → stopped
 done: a placement in choices → choices;  choices ─sync with choices→ save;  unrelated ─sync with join→ save;  stopped ─Dismiss or next→ idle
 ```
@@ -999,9 +1004,11 @@ When the Space moves an already synced project repository outside the signed-in 
 
 When real cores transfer records with independent Space and external Git destinations, the integration suite shall verify their routing:
 
-- after sign-out and restart, a previously learned separate Git address is still classified locally, while an unrelated external remote can sync when the Space is unavailable [[space-136](#space-136)];
+- after sign-out and restart, a previously learned separate Git address is still classified locally and refused as a path placement in HTTP(S) and both SSH forms, while an unrelated external remote can sync when the Space is unavailable [[space-136](#space-136)];
 - an approved personal repository uses its Space and an external HTTP redirect and SSH-authenticated LFS fetch use ordinary Git transport [[space-140](#space-140)];
-- a conflicting fetch rewrite, separate push URL or configured LFS download or upload endpoint stops the affected transfer before records reach the unapproved repository, identifies the Git settings and offers Retry [[space-140](#space-140)] [[space-15](#space-15)].
+- a conflicting fetch rewrite, separate push URL or configured LFS download or upload endpoint stops the affected transfer before records reach the unapproved repository, identifies the Git settings and offers Retry. The endpoint cases include SSH and hosted uploads for both the default branch and `spex` [[space-140](#space-140)] [[space-15](#space-15)];
+- when Git settings stop the first hosted placement at Push, a later healthy external placement still receives the saved records [[space-15](#space-15)];
+- Stop during a held LFS Check ends the transfer before Apply, with HEAD, the index and the local asset unchanged [[space-16](#space-16)] [[space-12](#space-12)].
 
 #### space-74
 
@@ -1167,9 +1174,11 @@ When a reader chooses a project’s first Space in the IDE, the integration suit
 
 When the rendered Space lists personal projects, the integration suite shall verify that each row presents and routes the action appropriate to its state:
 
+- a reachable project with only an external remote shows its standing phrase under “This computer” [[space-1](#space-1)] [[space-61](#space-61)] [[space-120](#space-120)];
 - with two Spaces signed in, Open here opens the native folder picker directly. Cancelling sends nothing and selecting a folder opens the row's repository at its own Space [[space-63](#space-63)] [[space-111](#space-111)];
 - Choose folder… on local records without a working folder pairs the chosen folder with those records [[space-63](#space-63)] [[space-111](#space-111)];
 - an unreachable row with a signed-in Space displays the cause and its Retry requests another read [[space-61](#space-61)];
+- after sign-out, the row remains under that Space and names the sign-out without Retry [[space-1](#space-1)] [[space-6](#space-6)] [[space-61](#space-61)];
 - a waiting placement displays its step on the placement line with the refusal in its title [[space-64](#space-64)] [[space-87](#space-87)].
 
 ### Browser Journeys

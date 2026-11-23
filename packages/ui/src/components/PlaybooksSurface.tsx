@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Playbooks surface (playbook-library-122, DR-176): the global page,
-// the rail's Playbooks entry for the place it shows. Under a header
+// opened from the sidebar's Playbooks entry. Under a header
 // carrying the global environment's registry, the account there and one
 // "Add…", each spec package the global environment requests stands as
 // the Packages tab's row reads it — each it requires beneath the one

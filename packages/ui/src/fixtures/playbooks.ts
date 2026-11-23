@@ -113,8 +113,7 @@ export function repository(over: RowOver = {}): RepositoryState {
 
 /** The home: your personal spex repository and the project's, the
  * account signed in unless a test says otherwise — signed in nowhere,
- * the home lists no instance and the project's clone stands under your
- * own group. */
+ * the home lists no instance and the project's clone is local. */
 export function home(
   options: { syncing?: string; account?: InstanceState["account"] | null } = {},
 ): SpaceState {

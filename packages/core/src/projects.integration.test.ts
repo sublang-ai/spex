@@ -161,13 +161,37 @@ test("projects-17: register a Git root, read its local status, refuse invalid fo
   assert.ok(!duplicate.ok);
   assert.equal(duplicate.error.code, "conflict");
   assert.equal(duplicate.error.details?.path, folder);
-  for (const path of [nested, accountHome]) {
+  const top = git(nested, "rev-parse", "--show-toplevel");
+  for (const [path, message] of [
+    [nested, `“${nested}” is inside a Git work tree. Add its top-level folder instead: “${top}”.`],
+    [accountHome, `“${accountHome}” is outside a Git work tree. Use Create to start a repository there.`],
+  ] as const) {
     const rejected = await client.command("project.register", { path });
     assert.ok(!rejected.ok);
     assert.equal(rejected.error.code, "invalid_request");
-    assert.match(rejected.error.message, /not the root of a git work tree.*use project.create/);
+    assert.equal(rejected.error.message, message);
+  }
+  assert.ok(!existsSync(join(nested, ".git")) && !existsSync(join(accountHome, ".git")));
+  const broken = join(scratch, "broken");
+  mkdirSync(broken);
+  writeFileSync(join(broken, ".git"), "gitdir: missing\n");
+  for (const [path, diagnostic] of [
+    [broken, /^fatal: not a git repository:/],
+    [upstream, /^fatal: this operation must be run in a work tree/],
+  ] as const) {
+    const rejected = await client.command("project.register", { path });
+    assert.ok(!rejected.ok);
+    assert.equal(rejected.error.code, "invalid_request");
+    assert.equal(rejected.error.message, `Git could not inspect “${path}” as a project folder. Choose the top-level folder of a Git work tree.`);
+    assert.match(String(rejected.error.details?.output), diagnostic);
   }
   assert.deepEqual((await client.ok("project.list", {})).map((entry) => entry.id), [project.id]);
+
+  await client.ok("language.set", { language: "zh" });
+  const localized = await client.command("project.register", { path: nested });
+  assert.ok(!localized.ok);
+  assert.equal(localized.error.message, `“${nested}”位于 Git 工作树内。请添加其顶层文件夹“${top}”。`);
+  await client.ok("language.set", { language: "en" });
 
   const homeFile = join(dataDir, "home.yaml");
   const home = parseYaml(readFileSync(homeFile, "utf8")) as { folders: { repository: string }[] };
@@ -329,7 +353,7 @@ test("projects-40, projects-9: a project placed at two stand-in instances, while
   const second = await startHost({ displayName: "Second stand-in", person: { id: "1002", login: "bob", displayName: "Bob" } });
   const home = await startHome("removal-placed", { host: first, project: false });
   t.after(() => home.stop());
-  // Signed in to both: your own group created at the first, then placed
+  // Signed in to both: the global records repository created at the first, then placed
   // at the second, both syncing directly (space-94).
   let mark = home.client.mark();
   await signIn(home, first);

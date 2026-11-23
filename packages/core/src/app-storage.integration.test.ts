@@ -244,7 +244,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   assert.ok(existsSync(join(cloneA, "sessions", `${sA}.hints.json`)), "hints travel with their session, ignored");
   assert.ok(existsSync(join(cloneB, "sessions", `${sB}.json`)), "a session in a recorded alias is the project's");
 
-  // 4 — your own group's clone: the config with every from dropped, the
+  // 4 — the global records clone: the config with every from dropped, the
   // unmatched session.
   const ownClone = join(home, "workspace", own, `${own}-spex`);
   const config = readFileSync(join(ownClone, "config", "playbook.config.yaml"), "utf8");
@@ -296,7 +296,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
     assert.ok(ledger.intents.every((entry) => !("rank" in entry.intent) && !("afterId" in entry.intent)));
     // The config composes with the built-in in place of the dropped from.
     assert.equal((await client.ok("config.get", {})).status, "valid");
-    // The unmatched session waits in your own group's spex repository.
+    // The unmatched session waits in the global records repository.
     const diagnostics = await client.ok("storage.diagnostics", {});
     const repair = diagnostics.find((entry) => entry.repair?.kind === "repository")?.repair;
     assert.deepEqual(repair && { repository: repair.repository, directories: repair.directories, sessions: repair.sessions }, { repository: `${own}/${own}-spex`, directories: [unmatched], sessions: 1 });

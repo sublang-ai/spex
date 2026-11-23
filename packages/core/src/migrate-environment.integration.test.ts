@@ -5,7 +5,7 @@
 // whose project clones hold their environments, as Spex kept them before
 // DR-113, starts and moves each into its working folder — the folder's
 // own standing where it holds one, a folder missing on this device
-// moving once paired — your own group's keeping its two files, each
+// moving once paired — the global records repository keeping its two files, each
 // `spex.yaml` naming its placement's instance, the installed trees under
 // the root's `.spex/` with no fetch where their record matches, one
 // receipt left and the clone's deletion pushed by its next sync.
@@ -39,7 +39,7 @@ async function addFolder(home: Home, path: string): Promise<{ key: string; clone
 
 type Home = Awaited<ReturnType<typeof startHome>>;
 
-/** The stand-in's default person, and your own group's repository once
+/** The stand-in's default person, and the global records repository once
  * signed in as them. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
@@ -107,7 +107,7 @@ function fetchesOf(registry: StandinRegistry, from: number, name: string): strin
   return registry.script.received.slice(from).filter((request) => request.path.includes(`/${name}/`)).map((request) => request.path);
 }
 
-test("environments-51, storage-25, storage-24: a home whose project clones hold their environments moves each into its working folder at start, the folder's own standing, a missing folder's moving once paired, your own group's staying in its clone, each naming its instance as space, the installed trees moved without a fetch where their record matches and installed from the store where not, one receipt standing that a restart does not repeat, and the clone's deletion pushed by its sync", { timeout: 300_000 }, async (t) => {
+test("environments-51, storage-25, storage-24: a home whose project clones hold their environments moves each into its working folder at start, the folder's own standing, a missing folder's moving once paired, the global environment staying in the global records repository, each naming its instance as space, the installed trees moved without a fetch where their record matches and installed from the store where not, one receipt standing that a restart does not repeat, and the clone's deletion pushed by its sync", { timeout: 300_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: join(scratch, "migrate-registry") });
   t.after(() => registry.close());
   await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratch, "releases", "kit"), {
@@ -141,7 +141,7 @@ test("environments-51, storage-25, storage-24: a home whose project clones hold 
   // its clone — the first's committed there and pushed to the host, as
   // its sync once pushed it — with no space named; the second's folder
   // holding its own environment too; the third's folder missing on this
-  // device, its tree's install record matching no lock; your own group's
+  // device, its tree's install record matching no lock; the global records repository's
   // trees under its clone's root.
   const former = (key: string, keepFolder: boolean): void => {
     const folder = folders[key]!;
@@ -183,7 +183,7 @@ test("environments-51, storage-25, storage-24: a home whose project clones hold 
   const modeOf = (file: string): number => statSync(file).mode & 0o777;
   const kept: [string, number][] = [[join(own, "spex.yaml"), 0o664], [join(own, "spex.lock"), 0o600], [join(folders[two]!, "spex.yaml"), 0o664]];
   if (posix) for (const [file, mode] of kept) chmodSync(file, mode);
-  assert.equal(parseRequests(ownFiles[0]!).space, undefined, "your own group's environment names no space yet");
+  assert.equal(parseRequests(ownFiles[0]!).space, undefined, "the global environment names no space yet");
   const formerFiles = Object.fromEntries([one, two, three].map((key) => [key, FILES.map((file) => readFileSync(join(clones[key]!, file), "utf8"))]));
   const formerTree = inodes(join(clones[one]!, "packages"));
   const twoTree = inodes(join(folders[two]!, ".spex", "packages"));
@@ -224,14 +224,14 @@ test("environments-51, storage-25, storage-24: a home whose project clones hold 
   const missing = await home.client.expectOk("environment.get", { repository: three });
   assert.deepEqual([missing.pathRoot !== null && existsSync(missing.pathRoot), missing.packages], [false, []]);
 
-  // [storage-24] Your own group's clone keeps its two files, naming the
+  // [storage-24] The global records repository keeps its two files, naming the
   // instance its own repository's remote names, its trees under .spex/.
   const ownState = await environmentOf(home, HOST_OWN, (state) => installed(state, BUILTIN_PACKAGE_NAME));
   assert.equal(ownState.stale, null);
   assert.equal(parseRequests(readFileSync(join(own, "spex.yaml"), "utf8")).space, host.url);
   assert.equal(readFileSync(join(own, "spex.yaml"), "utf8").replace(/^space: .*\n/m, ""), ownFiles[0]);
   assert.ok(existsSync(join(own, ".spex", "packages", INSTALL_RECORD)), "its install record under .spex/");
-  for (const entry of ["packages", "skills"]) assert.equal(existsSync(join(own, entry)), false, `your own group's clone holds no former ${entry}/`);
+  for (const entry of ["packages", "skills"]) assert.equal(existsSync(join(own, entry)), false, `the global records repository holds no former ${entry}/`);
   if (posix) for (const [file, mode] of kept) assert.equal(modeOf(file), mode, `[environments-49] the rewritten ${file} keeps its mode ${mode.toString(8)}`);
 
   // [storage-24] One receipt of kind environment.

@@ -114,7 +114,7 @@ export interface AuthorManagerOptions {
    * once as each turn or compile starts (DR-111); it keeps what it read. */
   prepareConfig?: () => Promise<void>;
   readiness: (adapter: AdapterName) => boolean | null;
-  /** Ids a playbook of the project's or your own group's environment
+  /** Ids a playbook of the project's or the global environment
    * holds; a new session never takes one (playbook-library-51). */
   reservedIds: (projectId: string) => string[];
   /** The home's interface language as the core resolves it for its own

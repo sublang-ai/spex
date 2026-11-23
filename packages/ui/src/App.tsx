@@ -51,8 +51,8 @@ import {
   type SpecViewState,
 } from "./components/SpecView.js";
 
-/** A record another surface asked the spec view to open, with where
- * it was asked from (spec-view-57), at the place of its project. */
+/** A record another surface asked the spec view to open, with the
+ * invoking surface and its project (spec-view-57). */
 type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty, treeCounts } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
@@ -471,8 +471,8 @@ function WorkspaceSurface({
   const registeredId = project?.id;
   const space = useAppStore((state) => state.space);
   const opening = project === undefined ? openingAt(space, currentProjectId) : undefined;
-  // A tab per installed applet of the project's environment and your
-  // own group's (applets-1), read as the core last reported them.
+  // A tab per installed applet of the project's environment and the
+  // global environment (applets-1), read as the core last reported them.
   const ownKey = ownRepositoryKey(space, playbookLists?.own);
   const applets = useMemo(
     () => projectApplets({ environments, space, playbookLists }, registeredId),
@@ -1301,8 +1301,7 @@ export function App() {
   };
 
   // Start on an intent stages its dispatch (run-view-86): the store
-  // picks the lane — the live session's composer, or the Captain home —
-  // at the intent's own place.
+  // chooses the live session's composer or the Captain home for its project.
   const startIntent = async (intent: IntentInfo) => {
     await useAppStore.getState().stageDispatch(intent);
     showWorkspace();
@@ -1333,7 +1332,6 @@ export function App() {
   // sends the Overview's origin to the Dashboard instead.
   const [pendingReturn, setPendingReturn] = useState<RecordOrigin>();
   const returnToOrigin = (origin: RecordOrigin) => {
-    // The record was read on the Projects surface, at the place shown.
     const state = useAppStore.getState();
     const registered = state.projects.some(
       (project) => project.id === origin.projectId,

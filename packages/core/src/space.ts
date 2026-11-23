@@ -169,7 +169,7 @@ export interface SpaceHost {
 interface CloneFacts { remote: string | null; id: string | null; remoteName: string | null; remotes?: string }
 
 /** A clone's remote URL and recorded host id, and, where known, that
- * remote's name, which names the personal settings repository's instance
+ * remote's name, which names the global records repository's instance
  * (storage-31): what the URL rules of space-15 read. */
 type RemoteFacts = Pick<CloneFacts, "remote" | "id"> & { remoteName?: string | null };
 
@@ -258,8 +258,36 @@ function underRecordAddress(remote: string, origin: string): boolean {
   const endpoint = recordAddress(remote);
   const base = recordAddress(origin);
   if (endpoint === null || base === null || endpoint.origin !== base.origin) return false;
+  return underRecordPath(endpoint, base);
+}
+
+function underRecordPath(endpoint: URL, base: URL): boolean {
   const path = base.pathname.replace(/\/+$/, "");
   return endpoint.pathname === path || endpoint.pathname.startsWith(`${path}/`);
+}
+
+/** SSH has its own username and port. Match its host and repository
+ * path for classification only, leaving verified HTTP addresses strict. */
+function sshRecordAddress(remote: string): URL | null {
+  if (isAbsolute(remote)) return null;
+  const ssh = URL.parse(remote);
+  if (ssh?.protocol === "ssh:" && ssh.hostname) {
+    return recordAddress(`https://${ssh.hostname}${ssh.pathname}`);
+  }
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(remote)) return null;
+  const scp = remote.match(/^(?:[^@/:\s]+@)?(\[[^\]]+\]|[^@/:\s]+):(.+)$/);
+  if (!scp) return null;
+  const address = URL.parse(`https://${scp[1]}/`);
+  if (!address) return null;
+  address.pathname = `/${scp[2]}`;
+  return recordAddress(address.href);
+}
+
+function belongsToRecordAddress(remote: string, origin: string): boolean {
+  const ssh = sshRecordAddress(remote);
+  if (!ssh) return underRecordAddress(remote, origin);
+  const base = recordAddress(origin);
+  return base !== null && ssh.hostname === base.hostname && underRecordPath(ssh, base);
 }
 
 function sameRecordAddress(left: string, right: string | null): boolean {
@@ -277,11 +305,14 @@ function recordLfsAddress(remote: string): string | null {
   return new URL(path, address.origin).href;
 }
 
-function selectedLfsEndpoint(env: string, name?: string): string | undefined {
+function selectedLfsEndpoint(env: string, name: string): { address: string; ssh?: string } | undefined {
   const lines = env.split(/\r?\n/);
-  const selected = (name && lines.find((line) => line.startsWith(`Endpoint (${name})=`)))
-    || lines.find((line) => line.startsWith("Endpoint="));
-  return selected?.match(/=(.+) \(auth=[^)]*\)$/)?.[1];
+  const named = lines.findIndex((line) => line.startsWith(`Endpoint (${name})=`));
+  const index = named === -1 ? lines.findIndex((line) => line.startsWith("Endpoint=")) : named;
+  const address = lines[index]?.match(/=(.+) \(auth=[^)]*\)$/)?.[1];
+  if (!address) return undefined;
+  const ssh = lines[index + 1]?.match(/^\s+SSH=(.+)$/)?.[1];
+  return { address, ssh };
 }
 
 /** A verified Records URL must also remain the destination Git uses.
@@ -780,7 +811,7 @@ class SpaceStopped extends Error {
   }
 }
 
-/** The personal settings repository found placed at an instance, or
+/** The global records repository found placed at an instance, or
  * waiting there, once the operation placing it there began (space-4):
  * nothing to add, the clone and its lines left as they were. */
 class OwnPlacedMeanwhile extends Error {
@@ -1725,7 +1756,7 @@ class RepositorySync {
   }
 
   /** The name of the remote the clone syncs with at this instant, if
-   * any: what names the personal settings repository's instance
+   * any: what names the global records repository's instance
    * (storage-31). */
   remoteNameNow(): string | null {
     return this.remoteNow().name;
@@ -2182,9 +2213,8 @@ class RepositorySync {
         outcome: run?.outcome ?? null,
       }));
       const store = this.host.store;
-      // The placements its files name as they stand, held here or not, a
-      // file that does not read naming none (storage-36, storage-41), nor
-      // a group's own repository's naming one it does not hold (space-87).
+      // Read the clone’s placement files, including placements not attached
+      // on this device. Unreadable files name none (storage-36, storage-41).
       const files = repo.root ? readPlacementFiles(this.dir).files : [];
       // Its instance (storage-31), whose Git origin its code remote is
       // read against first (space-1).
@@ -2752,7 +2782,7 @@ class RepositorySync {
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
     if (repo.remote === null) {
       // A clone keyed under a signed-out instance waits for its sign-in
-      // there; any other reaches an instance by a group picked for it
+      // there; a local-only clone can choose a Space for its records
       // (space-11, space-97, space-61).
       throw new CoreError("invalid_request", this.owner.withoutRemoteRefusal(this));
     }
@@ -2837,7 +2867,7 @@ class RepositorySync {
   }
 
   /** Drop one of the clone's placements, as a Forget of its instance
-   * drops the personal settings repository's remote there (space-82): its
+   * drops the global records repository's remote there (space-82): its
    * first or a later one, whole, as any drop is (dropPlacement) — its id
    * and creation mark with its remote's section (storage-34), the `spex`
    * the clone fetched of it and the upstream naming it, and this device's
@@ -2980,7 +3010,7 @@ class RepositorySync {
 
   /** A sync, requested directly or after a sign-in, pick or creation
    * (space-4, space-12, space-97). `setUp`
-   * marks the account's set-up joining the personal settings repository,
+   * marks the account's set-up joining the global records repository,
    * which takes the host's side where the clone holds nothing of its own
    * (space-59). A Sync asked while a sync runs joins it; one asked while
    * a check runs follows that check. Nothing beneath the clone is refused
@@ -3054,7 +3084,7 @@ class RepositorySync {
 
   /**
    * Place the clone at another instance (space-97, space-31) — a
-   * Place's, or a sign-in's placing the personal settings repository
+   * Place's, or a sign-in's placing the global records repository
    * there (space-4): an operation of its machine, following one running
    * (space-21), whose first step, `act`, asks that instance — `origin` —
    * to create or join the placement and adds it as the host answered
@@ -3792,11 +3822,13 @@ class RepositorySync {
         const endpoint = selectedLfsEndpoint(env, name);
         if (endpoint) {
           if (host) {
-            this.requireHostedLfsDestination(target, endpoint, "check");
-            if (recordAddress(endpoint)) lfsConfig.push("-c", `lfs.url=${endpoint}`);
+            this.requireHostedLfsDestination(target, endpoint.address, "check");
+            if (endpoint.ssh) this.requireHostedLfsDestination(target, endpoint.ssh, "check");
+            if (recordAddress(endpoint.address)) lfsConfig.push("-c", `lfs.url=${endpoint.address}`);
           } else {
             // Setting lfs.url bypasses Git LFS's SSH authentication.
-            this.owner.requireExternalRecordRemote(endpoint, "check");
+            this.owner.requireExternalRecordRemote(endpoint.address, "check");
+            if (endpoint.ssh) this.owner.requireExternalRecordRemote(endpoint.ssh, "check");
           }
         } else if (host) {
           requireApprovedRecordDestination(false, "check");
@@ -4625,7 +4657,7 @@ export class SpaceManager {
    * systems mint one id: each join's own entry, which only it replaces
    * or removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
-  /** The set-up step placing the personal settings repository at an
+  /** The set-up step placing the global records repository at an
    * instance (space-4), one at a time across instances, its first
    * placement brought by the earliest signed-in instance in the home's
    * list: the last begun, which the next waits for. */
@@ -5003,8 +5035,8 @@ export class SpaceManager {
 
   /** Where a project's code is, as its row's code glyph reads it
    * (space-1, core-service-145), from its `project.json` — the one its
-   * clone holds, or the one its listing carries: nothing for none, a
-   * group's own or your own group's own; where it names no remote,
+   * clone holds, or the one its listing carries: no label without project
+   * metadata (including global records); where it names no remote,
    * "Code remote not configured", without inferring whether a working
    * folder is a Git repository or whether other copies exist;
    * and otherwise nothing until the default instance and every
@@ -5274,8 +5306,10 @@ export class SpaceManager {
    * still known, but an undisclosed separate endpoint looks external. */
   spaceForRecords(url: string, preferred?: HostInstance): HostInstance | undefined {
     const instances = this.preferring(preferred?.origin ?? null);
-    return instances.find((instance) => this.reportedUnder(url, instance))
-      ?? instances.find((instance) => instance.knownOrigin() === undefined && underRecordAddress(url, instance.origin));
+    return instances.find((instance) => {
+      const origin = instance.knownOrigin();
+      return origin !== undefined && belongsToRecordAddress(url, origin);
+    }) ?? instances.find((instance) => instance.knownOrigin() === undefined && belongsToRecordAddress(url, instance.origin));
   }
 
   /** The origin a sign-in names (git-host-2, storage-2): the canonical
@@ -5489,8 +5523,8 @@ export class SpaceManager {
 
   /**
    * Forget a signed-out instance the command names (space-82), in order:
-   * each placement at that instance of a clone other than your own
-   * group's own repository follows the signed-in instance governing it —
+   * each placement at that instance of a clone other than the global records repository
+   * follows the signed-in instance governing it —
    * the earliest in the home's list whose view lists the host repository
    * it records (git-host-5), but none at which the clone holds another
    * placement — as a sync's follow makes it follow (space-60): the key
@@ -5500,7 +5534,7 @@ export class SpaceManager {
    * (storage-31) or a placement there — listed by no signed-in instance,
    * or its follow refused by a session's lease beneath — Forget is
    * refused naming each, the instance kept with every follow already
-   * made; then the personal settings repository's placement there, its
+   * made; then the global records repository's placement there, its
    * first or a later one, has its remote renamed to the folder of the
    * signed-in instance governing it, its file rewritten, else that
    * remote dropped, its id, what it fetched and its upstream with it,
@@ -5691,9 +5725,9 @@ export class SpaceManager {
     };
   }
 
-  /** The account's set-up at an instance, in order (space-4): your own
-   * group renamed after the login, that instance read, your own group's
-   * spex repository there where it has no remote, and every step left
+  /** The account's set-up at an instance, in order (space-4): the personal records folder
+   * renamed after the login, that instance read, the global records repository there where it
+   * has no remote, and every step left
    * waiting there asked again. */
   private setUp(instance: HostInstance): Promise<void> {
     const generation = instance.accountGeneration;
@@ -6062,7 +6096,7 @@ export class SpaceManager {
     }
   }
 
-  /** The listing that is the personal settings repository while its
+  /** The listing that is the global records repository while its
    * clone records no host id (space-4, git-host-5): `<name>-spex` in
    * your namespace at the instance, `<name>` the local projects folder's
    * name or the one your login gives it (ownNameFor), which a sign-in's
@@ -6078,8 +6112,8 @@ export class SpaceManager {
   }
 
   /** Step 3 of the set-up at an instance (space-4), after any other
-   * instance's set-up begun before it has taken it: your own group's own
-   * repository placed at every instance the home signs in to. Its first
+   * instance's set-up begun before it has taken it: the global records repository placed at
+   * every instance the home signs in to. Its first
    * placement, which its instance and its commits' identity follow
    * (storage-31, space-32), is the earliest signed-in instance's in the
    * home's list, whichever instance's read answers first (space-83):
@@ -6118,7 +6152,7 @@ export class SpaceManager {
     return work;
   }
 
-  /** The personal settings repository at an instance where it holds no
+  /** The global records repository at an instance where it holds no
    * placement there and none whose host repository that instance lists
    * (space-4, space-65, git-host-5): joined where that instance lists
    * `<login there>-spex` in your namespace, else created there as that
@@ -6139,8 +6173,7 @@ export class SpaceManager {
       return;
     }
     if (this.waitsOf(key).length > 0) return;
-    // Your own group is named to the host by none, never by its id,
-    // which names no group of the instance there (git-host-6).
+    // New repositories belong to the authenticated account (git-host-6).
     const namespace = view.account.login;
     const name = `${ownNameFor(view.account.login)}-spex`;
     const listed = this.ownNamespaceListing(view);
@@ -6152,7 +6185,7 @@ export class SpaceManager {
     await this.create(instance, machine, namespace, name, repositoryDescription({ kind: "personal" }), "quiet", expected);
   }
 
-  /** The personal settings repository placed at an instance beside the
+  /** The global records repository placed at an instance beside the
    * placements it holds (space-4, space-65): as an operation of its
    * machine, following one running (space-21, space-31), `<login
    * there>-spex` in your namespace there joined as a placement, its
@@ -6194,8 +6227,7 @@ export class SpaceManager {
    * so its row goes straight to its sync. The remote is written only
    * while the clone's remotes read `expected`, as the caller read them
    * before asking the host (space-21).
-   * `setUp` marks the account's set-up joining your own group's spex
-   * repository (space-4, space-59), and `created` a repository the core
+   * `setUp` marks the account's set-up joining the global records repository (space-4, space-59), and `created` a repository the core
    * just created, which the clone records with its remote (git-host-7);
    * `then` runs once that sync has ended, whatever its outcome. */
   private async adopt(instance: HostInstance, machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string; setUp?: boolean; created?: boolean; then?: () => Promise<void> } = {}): Promise<void> {
@@ -6264,8 +6296,8 @@ export class SpaceManager {
     if (moved) await this.afterMove([{ from, to }]);
   }
 
-  /** Whether a key names a local-only clone under your own group's
-   * folder, its own repository aside (storage-35). */
+  /** Whether a key names a local-only clone under the personal records folder, its own
+   * repository aside (storage-35). */
   private localOnly(key: string): boolean {
     const home = this.host.store.home;
     return key !== home.own() && splitKey(key).instance === null && key.startsWith(`${home.ownName}/`);
@@ -6735,8 +6767,8 @@ export class SpaceManager {
     // Read from each clone now, whatever instance it lies under: the id
     // it records beside the remote of any placement it holds under that
     // instance's Git origin, or that remote (git-host-5), so another Git
-    // system's same id is another repository; your own group's own
-    // repository, recording no id yet, is the one your namespace at its
+    // system's same id is another repository; the global records repository, recording no id
+    // yet, is the one your namespace at its
     // instance lists under its name (space-4). Otherwise a clone whose
     // placement file names it holds it as a placement not on this
     // device, to attach on its row (space-87).
@@ -6891,8 +6923,8 @@ export class SpaceManager {
    * only where that remote lies under that instance's Git origin, and
    * none of the app's at any other, one under the Git origin of an
    * instance no placement is at included (projects-37, codeBroker) — or
-   * a folder already holding it, paired with the clone; a group's own
-   * spex repository pairs the folder its sessions run in. The join's
+   * a folder already holding it, paired with the clone. A clone with no
+   * code remote pairs the folder its sessions run in. The join's
    * Code step runs while the code clones (space-63), shown through
    * `step`; a failure comes back as the row's stopped state, the host's
    * failure classified at the brokering instance's Git origin and Git's
@@ -7000,7 +7032,7 @@ export class SpaceManager {
    * its folder; where that is not the clone's own — signed out, another
    * signed-in instance listing it — a sync follows it there before any
    * transport, the clone re-keyed under its folder with its remote
-   * renamed, the personal settings repository renaming its remote alone
+   * renamed, the global records repository renaming its remote alone
    * (space-60). The instance it answered at comes
    * back with the URL; undefined for a clone whose remote is not at an
    * instance. */
@@ -7036,7 +7068,7 @@ export class SpaceManager {
     if (facts.id === null && facts.remote !== null) machine.recordId(repository.id, facts.remote);
     // The clone follows the host under the folder of the instance
     // answering — its own, or the one it follows (DR-127, space-60);
-    // the personal settings repository keeps its folder, which lies
+    // the global records repository keeps its folder, which lies
     // outside every instance's, following another instance by its
     // remote's name alone.
     const key = this.keyAtHost(repository, instance);
@@ -7239,8 +7271,8 @@ export class SpaceManager {
   }
 
   /** A clone's remote takes the name of the folder of the instance its
-   * sync answers at (space-60, storage-34), its key kept: your own
-   * group's own repository following another instance listing it while
+   * sync answers at (space-60, storage-34), its key kept: the global records repository
+   * following another instance listing it while
    * its own is signed out, its folder kept; or a clone already under
    * that instance's folder whose follow or deferred move renamed the
    * clone but not its remote. One rename at one instant, once the clone
@@ -7402,7 +7434,7 @@ export class SpaceManager {
    * A placement follows the instance whose file names its host
    * repository (space-91, space-60): one step at its instant, once it
    * still reads as it was read and its clone lies where the home says —
-   * the key placement, but the personal settings repository's, moving the
+   * the key placement, but the global records repository's, moving the
    * clone to its path at that instance as that instance's listing names
    * it (renameClone, whose refusal refuses the follow whole), then its
    * remote renamed to that instance's folder with its file rewritten and
@@ -7448,11 +7480,11 @@ export class SpaceManager {
    * Drop a placement whose file a merge removed, or changed to name
    * another host repository (space-91): one step at its instant, once it
    * still reads as it was read and its clone lies where the home says. A
-   * placement after the first, or the personal settings repository's
+   * placement after the first, or the global records repository's
    * first, is dropped alone; a first placement's drop moves the clone, in
    * the same step, to the path of its next placement with an instance at
-   * that instance, as a read of this run placed it, or under your own
-   * group's folder where none is left — refused, nothing dropped or
+   * that instance, as a read of this run placed it, or under the personal records folder
+   * where none is left — refused, nothing dropped or
    * moved, while a session's lease beneath holds the clone, where no read
    * of this run placed that next placement, naming its instance, and
    * where the destination is taken, as a sync's move is (storage-38).
@@ -7490,8 +7522,8 @@ export class SpaceManager {
     const leased = heldSessionLease(machine.repository.dir, identity);
     if (leased !== undefined) throw inUseStop("check", `sessions/${leased}`, store);
     // Where the clone goes: the path of its next placement with an
-    // instance, as a read of this run placed it, else under your own
-    // group's folder — read again at each try of its move.
+    // instance, as a read of this run placed it, else under the personal records folder —
+    // read again at each try of its move.
     const destination = (): string => {
       const next = machine.placementsNow().find((candidate) => candidate.name !== placement.name && candidate.instance !== null);
       if (!next?.instance) return `${store.home.ownName}/${splitKey(from).name}`;
@@ -8183,7 +8215,7 @@ export class SpaceManager {
       // Every clone here stands for each listing a placement it holds
       // matches, whatever instance it lies under, and otherwise for each
       // one its placement files name, as a placement not on this device
-      // (git-host-5, space-87); the personal settings repository,
+      // (git-host-5, space-87); the global records repository,
       // recording no id yet, for the one your namespace at its instance
       // lists under its name (space-4): never absent.
       const matched = new Set<string>();

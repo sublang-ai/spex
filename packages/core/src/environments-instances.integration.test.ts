@@ -54,7 +54,7 @@ async function startHome(name: string, options: Parameters<typeof fixture.startH
 }
 function seedLegacy(clone: string): void {
   mkdirSync(clone, { recursive: true });
-  // Your own group's environment as an earlier core left it: the
+  // The global environment as an earlier core left it: the
   // built-in spec package requested, no registry setting, no lock yet
   // (environments-11).
   writeFileSync(join(clone, "spex.yaml"), `format: 1\npackages:\n  ${BUILTIN_PACKAGE_NAME}:\n    version: ^${builtinPackage().version}\n`);
@@ -94,7 +94,7 @@ async function selectRegistry(home: Home, key: string, origin: string): Promise<
   assert.equal(state.error, null);
 }
 
-/** The stand-ins' default person, and your own group's repository once
+/** The stand-ins' default person, and the global records repository once
  * signed in as them. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
@@ -135,11 +135,10 @@ async function environmentOf(home: Home, key: string, check: (state: Environment
 const installedFrom = (state: EnvironmentState, name: string, registry: string): boolean =>
   state.packages.some((pkg) => pkg.name === name && pkg.installed && pkg.source.detail === registry);
 
-/** A repository's row in the Groups state, under your own group or an
- * instance's heading (space-30), asserted to stand there. */
+/** A repository row expected in the Space state (space-30). */
 function rowOf(state: SpaceState, key: string): RepositoryState {
   const row = rowsOf(state).find((candidate) => candidate.key === key);
-  assert.ok(row, `${key} is listed under your own group or an instance's heading`);
+  assert.ok(row, `${key} is listed in Space state`);
   return row;
 }
 
@@ -689,7 +688,7 @@ test("environments-38, environments-17, environments-12: searches use explicit r
 
   // The local-only project, which has no instance, searches the first's
   // registry, the default instance's, with the first's token; so does
-  // your own group, whose own repository's remote names the first
+  // the global environment, whose records repository's remote names the first
   // (environments-17, environments-12).
   for (const key of [local, HOST_OWN]) {
     one = R1.script.received.length;
@@ -800,7 +799,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
   // Signed in to the second again, the first signed out and forgotten:
-  // your own group's own repository, created at the first, follows the
+  // the global records repository, created at the first, follows the
   // second — the second lists it over the shared Git backend — and syncs
   // with it.
   await registrySignIn(home, second);
@@ -821,7 +820,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.ok(await fileCredentialStore(home.dataDir, first.url, "registry").read(), "Space sign-out preserves its registry grant");
   await home.client.expectOk("environment.registry.set", { repository: HOST_OWN, origin: second.url });
 
-  // After the explicit registry choice, your own group's environment
+  // After the explicit registry choice, the global environment
   // resolves a spec package newly requested at the second's registry, with the second's token — the
   // release private there to it — its lock recording the second's
   // origin; the built-in keeps the origin its lock records, as it
@@ -842,7 +841,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.ok(asked.every(([, instance, account, bearer]) => instance === second.url && account === LOGIN && bearer), JSON.stringify(asked));
   assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
 
-  // A publish from your own group lands at the second's registry, as the
+  // A publish from the global environment lands at the second's registry, as the
   // second's account; the first's registry is asked nothing
   // (environments-10).
   one = R1.script.received.length;
@@ -886,10 +885,10 @@ test("environments-34, environments-27: the orgs asked for the second's project 
   assert.deepEqual(orgsAsked(R2, two), []);
 });
 
-test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone makes it again, requesting the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and the global records repository following the second by its remote, a start finding the global environment gone makes it again, requesting the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
   const { first, second, home } = await twoInstances(t, "own-prepare");
 
-  // The first signed out, the second read again: your own group's own
+  // The first signed out, the second read again: the global records
   // repository, created at the first, follows the second — the second
   // lists it over the shared Git backend — its remote renamed to the
   // second's folder by its next sync (space-60, storage-34).
@@ -906,8 +905,8 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.deepEqual(remoteNamesOf(ownClone(home.dataDir)), [hostFolder(second)]);
 
   // Stopped, its environment taken away, then started again: the first
-  // is still the home's default instance, signed out, and your own
-  // group's own repository reads as the second's by its remote
+  // is still the home's default instance, signed out, and the global records
+  // repository reads as the second's by its remote
   // (storage-31).
   await home.stop();
   for (const file of ["spex.yaml", "spex.lock"]) rmSync(join(ownClone(home.dataDir), file));
@@ -919,7 +918,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.equal(rowOf(state, HOST_OWN).instance, second.url);
 
   // A home holding no global environment has it made, as a home is:
-  // the start requests the built-in spec package in your own group's
+  // the start requests the built-in spec package in the global
   // environment again, locked at the public registry while its Space
   // still follows the remote at the second (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");

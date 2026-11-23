@@ -1014,7 +1014,7 @@ test("seedConfig creates once and never overwrites", () => {
 });
 
 test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
-  // Your own group's config sits in its spex repository's clone
+  // The global config sits in the global records repository
   // (storage-1, DR-103), named after this device's user before the home
   // has its file.
   const own = defaultOwnName();
@@ -1023,7 +1023,7 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   assert.equal(resolveConfigPath({}, "/home/u"), inClone(join("/home/u", ".spex")));
   // A blank override is not a root; the home fallback still applies.
   assert.equal(resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"), inClone(join("/home/u", ".spex")));
-  // A written home names your own group itself.
+  // A written home specifies the personal records folder.
   const root = scratchDir("spex-config-path-");
   const home = Home.create(root, { own: "alice" }); home.save();
   assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));

@@ -20,7 +20,7 @@
 // stands on disk at the version read and still matches `spex.yaml` and
 // its path sources: an install overtaken meanwhile publishes nothing
 // (DR-111). A path source copies nothing and is reported missing where
-// the folder its path resolves to lacks it; your own group's path source
+// the folder its path resolves to lacks it; the global environment's path source
 // must hold only what its clone's sync carries, checked before anything
 // is installed or linked (environments-32); a stale lock installs
 // nothing new.
@@ -106,10 +106,10 @@ export interface InstallOptions {
   git: GitSource;
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
   /** The folder a path source's path is relative to (environments-2):
-   * the paired working folder's root, or your own group's clone's; null
+   * the paired working folder's root, or the global records repository's; null
    * where this device has none. */
   pathRoot: string | null;
-  /** Whether `pathRoot` is your own group's clone, whose path sources
+  /** Whether `pathRoot` is the global records repository, whose path sources
    * hold only what its sync carries (environments-32). */
   confined?: boolean;
   /** `spex.yaml`'s text; read from the root when omitted. */
@@ -144,7 +144,7 @@ export class InstallError extends Error {
     readonly packageName: string | undefined,
     message: string,
     readonly cause?: unknown,
-    /** The folder your own group's clone refuses, with its reason, for a
+    /** The folder the global records repository refuses, with its reason, for a
      * host to phrase (environments-32). */
     readonly confined?: { path: string; issue: OwnPathIssue },
   ) {
@@ -514,9 +514,9 @@ function pathSourcePlaybooks(lock: Lock, pathRoot: string | null): string[] {
 }
 
 /** The engine links of a path source's playbook folders are ignored by
- * the Git of the working folder or of your own group's clone holding
+ * the Git of the working folder or of the global records repository holding
  * them before any is made, so a sync never carries one
- * (playbook-library-46, DR-125): your own group's clone failing to list
+ * (playbook-library-46, DR-125): the global records repository failing to list
  * them fails the install, which makes none; a working folder's failure
  * is logged and its folders are linked anyway, its Git being the
  * reader's alone. */
@@ -539,7 +539,7 @@ function linkPathSources(folders: readonly string[], engine: InstallEngine): voi
   }
 }
 
-/** Refuse your own group's path source holding what its clone's sync
+/** Refuse the global environment's path source holding what its clone's sync
  * drops or refuses (environments-32), before anything is installed or
  * linked: a folder this device lacks is reported missing instead. */
 async function assertConfined(lock: Lock, pathRoot: string): Promise<void> {
@@ -687,7 +687,7 @@ export interface PrepareOptions {
   lock: Lock;
   /** The folder a path source's path is relative to (environments-2). */
   pathRoot: string | null;
-  /** Whether `pathRoot` is your own group's clone (environments-32). */
+  /** Whether `pathRoot` is the global records repository (environments-32). */
   confined?: boolean;
   engine: InstallEngine;
 }
@@ -700,7 +700,7 @@ export interface PrepareOptions {
  * so a playbook another host installed — the command line prepares
  * none — runs. Nothing here fails the use: a folder that cannot be
  * prepared is logged and left; a path source's links are made only once
- * its Git lists them, your own group's clone otherwise taking none.
+ * its Git lists them, the global records repository otherwise taking none.
  * Returns the registry modules kept carrying their own engine.
  */
 export async function prepareEnvironment(options: PrepareOptions): Promise<InstallReport["engineKept"]> {
@@ -710,7 +710,7 @@ export async function prepareEnvironment(options: PrepareOptions): Promise<Insta
   const kept = await prepareInstalled(installedDir(root), names, lock, engine, (folder) => folder, true);
   const playbooks = pathSourcePlaybooks(lock, pathRoot);
   try {
-    // Your own group's path sources are confined as an install confines
+    // The global environment's path sources are confined as an install confines
     // them (environments-32): one refused takes no link, nothing linked
     // outside what the clone syncs.
     if (options.confined === true && pathRoot !== null) await assertConfined(lock, pathRoot);

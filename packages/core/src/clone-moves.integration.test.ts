@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Clones moved while the core watches them (space-119, storage-60): the
-// first sign-in's rename of your own group's folder, a pick moving a
+// first sign-in's rename of the personal records folder, a pick moving a
 // local-only clone under its instance's folder, a sync following the
 // host's rename, and a Leave of a clone's first placement. The core lets
 // go of what it watches and reads within a clone across its move
@@ -27,7 +27,7 @@ const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, config, startHome, startHost, signIn, writeForeignSession, announced } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's account, whose login names your own group's folder
+/** The stand-in's account, whose login names the personal records folder
  * once the home signs in (space-59). */
 const LOGIN = "ada";
 const WINDOWS_ONLY = process.platform === "win32" ? false : "only Windows refuses to rename a folder something holds open";
@@ -66,7 +66,7 @@ async function placedProject(home: StartedHome, host: StandinHost, name: string)
   return { key, id: synced.id ?? "", clone: clonePath(home.dataDir, key), folder };
 }
 
-test("space-119: the first sign-in moves your own group's folder its core watches, places your own group's repository, and watches the clones where they now lie", async (t) => {
+test("space-119: the first sign-in moves the personal records folder its core watches, places the global records repository, and watches the clones where they now lie", async (t) => {
   const host = await startHost();
   const home = await watchingHome("moves-signin", host);
   t.after(() => home.stop());
@@ -78,7 +78,7 @@ test("space-119: the first sign-in moves your own group's folder its core watche
   await signIn(home, host);
   const own = `${LOGIN}/${LOGIN}-spex`;
   const placed = await home.client.waitRepository(from, own, (repository) => repository.sync.phase === "done", 30_000);
-  assert.equal(placed.state, "reachable", "[space-59] your own group's repository is placed at the Space");
+  assert.equal(placed.state, "reachable", "[space-59] the global records repository is placed at the Space");
   assert.equal(git(bareOf(host, own), "rev-parse", "spex"), git(clonePath(home.dataDir, own), "rev-parse", "spex"), "[space-59] and pushed there");
   const former = join(home.dataDir, "workspace", OWN);
   assert.ok(!existsSync(former), `[space-59] the folder bearing the device's user name left with its clones: ${existsSync(former) ? JSON.stringify(readdirSync(former, { recursive: true })) : ""}`);
@@ -88,10 +88,10 @@ test("space-119: the first sign-in moves your own group's folder its core watche
   assert.ok(existsSync(join(movedClone, "sessions", `${before}.json`)), "[space-59] the session moved with its clone");
 
   // Watched where they now lie: a session another host writes, and a
-  // change of your own group's config (space-59).
+  // change of the global config (space-59).
   assert.ok(await announced(home, await writeForeignSession(movedClone, home.projectDir, "written after the sign-in")), "[space-59] the moved clone's sessions are read as they are written");
   // A reload whose files change while it reads them — the environment
-  // still installing beneath your own group's clone — announces nothing
+  // still installing beneath the global records repository — announces nothing
   // (DR-111): the change is written again until one reload announces it,
   // each write read by the watch alone.
   let reloaded = false;
@@ -100,7 +100,7 @@ test("space-119: the first sign-in moves your own group's folder its core watche
     writeFileSync(join(clonePath(home.dataDir, own), "config", "playbook.config.yaml"), config(model));
     reloaded = await home.client.waitFor(reloadedTo(model), 5_000).then(() => true, () => false);
   }
-  assert.ok(reloaded, "[space-59] a change of your own group's config where it now lies is read as it is written");
+  assert.ok(reloaded, "[space-59] a change of the global config where it now lies is read as it is written");
 });
 
 test("space-119: a sync follows the host's rename of a clone its core watches, and watches it where it now lies", async (t) => {
@@ -160,7 +160,7 @@ test("storage-60: a pick moves a local-only clone its core watches under its ins
   const local = `${LOGIN}/picked-spex`;
   const { key, clone, folder } = await placedProject(home, host, "picked");
   assert.equal(key, `${hostFolder(host)}/ada/picked-spex`);
-  assert.ok(!existsSync(clonePath(home.dataDir, local)), "[storage-35] the clone left your own group's folder");
+  assert.ok(!existsSync(clonePath(home.dataDir, local)), "[storage-35] the clone left the personal records folder");
   assert.equal(git(bareOf(host, key), "rev-parse", "spex"), git(clone, "rev-parse", "spex"), "[storage-35] its first sync pushed from where it now lies");
   assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, "[storage-35] its pair follows it");
   assert.ok(await announced(home, await writeForeignSession(clone, folder, "written after the pick")), "[storage-35] its sessions are read where it now lies");
@@ -187,7 +187,7 @@ test("storage-60: on Windows, a Leave of a clone's first placement while another
   await home.client.expectOk("space.leave", { repository: key, instance: host.url, confirmed: true });
   const left = await home.client.waitRepository(from, local, (repository) => repository.sync.phase !== "running", 30_000);
   assert.equal(left.state, "local-only", `[storage-38] ${JSON.stringify(left)}`);
-  assert.ok(!existsSync(clone) && existsSync(join(clonePath(home.dataDir, local), ".git")), "[storage-38] dropped and moved under your own group's folder once let go");
+  assert.ok(!existsSync(clone) && existsSync(join(clonePath(home.dataDir, local), ".git")), "[storage-38] dropped and moved under the personal records folder once let go");
 });
 
 test("space-135, media-23: a pick moving a project's clone while the core reads an attachment there leaves it readable under the project's key now, from where the clone now lies, and under its former key no more", async (t) => {

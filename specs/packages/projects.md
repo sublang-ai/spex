@@ -15,11 +15,12 @@ Integration coverage exercises registration and card state against fixture repos
 
 #### projects-1
 
-When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
+When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below, showing the core's refusal in the home's interface language [[core-service-111](core-service.md#core-service-111)]:
 
 - The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] locally, the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
-- Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
-- No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
+- Inside a work tree below its top level: the palette registers nothing and directs the user to add the work tree's top-level folder by its path.
+- Git reports no repository: the palette registers nothing and points at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path.
+- Git cannot inspect the directory or the directory belongs to Git metadata without a work tree: the palette registers nothing, directs the user to select a work tree's top-level folder, and shows Git's diagnostic when available, carried in the refusal's `output` detail.
 
 #### projects-2
 
@@ -93,7 +94,7 @@ While a project is the workspace's current project, the Overview tab shall show 
 
 #### projects-36
 
-When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the home's default instance [[storage-2](storage.md#storage-2)] and each instance it lists have reported Git origins, including those saved from earlier reads [[git-host-5](git-host.md#git-host-5)] and the code's remote lies outside every one of them, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the home's default instance [[storage-2](storage.md#storage-2)] and each instance it lists have reported Git origins, including those saved from earlier reads [[git-host-5](git-host.md#git-host-5)], and the code's remote lies outside every one of them, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 ### Forge Binding
 
@@ -205,6 +206,10 @@ Where project repository state is collected — current branch or detached HEAD,
 
 - The repo-state provider performs no network operation while collecting state, so ahead/behind counts reflect the locally recorded upstream ref.
 
+#### projects-48
+
+When a client sends `project.status` or `forge.items`, the core shall classify the code's remote from the current or saved reports of Git origins [[git-host-5](git-host.md#git-host-5)] without requesting a Space read.
+
 #### projects-12
 
 While projects are registered, when the app window gains focus, and on a periodic interval bounded between 10 seconds and 5 minutes, the repo-state provider shall refresh the projects' repository state:
@@ -245,8 +250,9 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 
 - Confirming the same path again creates no duplicate entry [[projects-2](#projects-2)], the core's `conflict` carrying the registered path as a detail of its reply [[projects-27](#projects-27)].
 - Pairing a repair's spex repository with a folder keeps its key; a clone no pair names prompts the repair without silently pairing anything [[projects-10](#projects-10)].
-- Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
-- Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].
+- Confirming a directory inside a work tree below its top level registers nothing and directs the user to add the top-level path [[projects-1](#projects-1)].
+- Confirming a directory where Git finds no repository registers nothing and points to the Create action [[projects-1](#projects-1)].
+- Confirming a directory with broken Git metadata, or a bare repository, registers nothing and displays the top-level-folder guidance with Git's diagnostic [[projects-1](#projects-1)].
 
 #### projects-18
 
@@ -287,7 +293,7 @@ Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `P
 
 - No `origin` remote: the guidance is the no-remote sentence exactly [[projects-7](#projects-7)].
 - An `origin` remote while the instance has no current or saved Git origin: the guidance is the generic remote sentence, carrying no URL or hostname [[projects-7](#projects-7)].
-- Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first Space read serves the instance sentence from the same cache using the saved Git address [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no Space read for either local command.
+- Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first Space read serves the instance sentence from the same cache using the saved Git address [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no Space read for either local command [[projects-48](#projects-48)].
 - Code outside the instance's reported Git origin: the guidance names that remote's host [[projects-7](#projects-7)] and `project.status` carries its credential-free URL [[projects-36](#projects-36)].
 
 #### projects-38

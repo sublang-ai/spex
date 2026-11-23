@@ -3,7 +3,7 @@
 
 // The home (storage-2, DR-103, DR-127): its file — this device, the
 // origin it was created with, every instance it has signed in to with
-// its account, your own group's folder name — read and changed through
+// its account, the personal records folder name — read and changed through
 // the library's home file (DR-165), and each working folder paired with
 // its spex repository's key — the clone's path under `workspace/` —
 // which the app alone records and checks here.
@@ -41,11 +41,8 @@ export function isRepositoryKey(value: unknown): value is string {
   return typeof value === "string" && REPOSITORY_KEY_PATTERN.test(value);
 }
 
-/** The instance folder, the group path in that instance and the name
- * of a key: `@spex.sublang.ai`, `acme/platform` and `a-spex` of
- * `@spex.sublang.ai/acme/platform/a-spex`; the instance null for a key outside
- * every instance's folder, as your own group's and the local-only
- * clones' are (DR-127). */
+/** Split a repository key into its Space folder, namespace path and
+ * repository name. Global and local project keys have no Space folder (DR-127). */
 export function splitKey(key: string): { instance: string | null; group: string; name: string } {
   const instance = instanceSegmentOf(key);
   const path = instance === null ? key : key.slice(instance.length + 1);
@@ -177,7 +174,7 @@ export class Home {
 
   /** A new home, not yet written: a fresh device id unless one is
    * supplied, the origin the environment names, no instance signed in
-   * to, and this device's user name as your own group. A URL the
+   * to, and this device's user name as the personal records folder name. A URL the
    * environment names that is no instance's origin is refused. */
   static create(root: string, options: { own?: string; env?: NodeJS.ProcessEnv; device?: string } = {}): Home {
     return new Home(resolve(root), newHomeFile(Home.file(root), options));
@@ -188,10 +185,10 @@ export class Home {
   /** The origin the home was created with. */
   get origin(): string { return this.data.origin; }
   get workspace(): string { return join(this.root, WORKSPACE); }
-  /** Your own group's folder name under `workspace/`. */
+  /** The personal records folder name under `workspace/`. */
   get ownName(): string { return this.data.own; }
 
-  /** Your own group's spex repository: `<own>/<own>-spex`. */
+  /** The global records repository: `<own>/<own>-spex`. */
   own(): string { return `${this.data.own}/${this.data.own}-spex`; }
 
   clonePath(key: string): string { return join(this.workspace, ...key.split("/")); }
@@ -246,14 +243,14 @@ export class Home {
   rename(oldKey: string, newKey: string): void {
     this.data = { ...this.data, folders: this.data.folders.map((folder) => folder.repository === oldKey ? { ...folder, repository: newKey } : folder) };
     if (oldKey === this.own()) {
-      // Your own group's folder lies outside every instance's (DR-127).
+      // The personal records folder lies outside every instance's (DR-127).
       const { instance, group, name } = splitKey(newKey);
       if (instance === null && `${group}-spex` === name && isGroupName(group)) this.data = { ...this.data, own: group };
     }
   }
 
   /** Several clones moved in one step (space-59, space-60): every pair
-   * naming a moved key names its new one, and your own group's folder
+   * naming a moved key names its new one, and the personal records folder
    * takes `own` where it was renamed. Validated before it is taken. */
   move(moves: { from: string; to: string }[], own?: string): void {
     this.data = this.moved(moves, own);

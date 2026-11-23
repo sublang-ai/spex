@@ -158,8 +158,8 @@ export interface AppOptions {
   /** Substitute task-free model discovery; never start installed providers. */
   discoverAgentModels?: NonNullable<ServerShellOptions["core"]>["discoverAgentModels"];
   /**
-   * Write the configuration inside the Spex home, in your own group's
-   * spex repository at `workspace/<own>/<own>-spex/config/`, where it
+   * Write the configuration inside the Spex home's global records
+   * repository at `workspace/<own>/<own>-spex/config/`, where it
    * syncs with that repository (storage-1, DR-103); the scratch default
    * lies outside the home. Implied by `remote` and `host`.
    */
@@ -182,7 +182,7 @@ export interface AppOptions {
    * another app started, and its `second` at that app's second instance
    * (space-83), which this home reaches only by a sign-in naming it,
    * both left to their owner to close. The home's configuration lies in
-   * your own group's spex repository and follows it when sign-in
+   * the global records repository and follows it when sign-in
    * renames it (space-59), and the core's Git is the isolated one of
    * `remote`.
    * `second` starts a second stand-in instance after it (DR-127), at an
@@ -260,19 +260,18 @@ export interface AppOptions {
   compiler?: { adapter: string; model: string; effort?: string };
 }
 
-/** Every journey home's own group (storage-2): a fixed folder name, so
+/** The initial name of the global records folder (storage-2), fixed so
  * the paths under `workspace/` are known before the shell boots. */
 export const E2E_OWN = "e2e";
 
-/** The stand-in's account (git-host-12): sign-in renames your own group
- * after it (space-59). */
+/** The stand-in's account (git-host-12): sign-in renames the global records folder
+ * after its login (space-59). */
 export const HOST_LOGIN = "ada";
 /** The second stand-in instance's display name unless one is named
  * (`host.second`, DR-127). */
 export const SECOND_HOST_NAME = "Second stand-in";
-/** The stand-in's team group and its id (git-host-12). */
 
-/** Your own group's name in a home: the one `home.yaml` records once
+/** The global records folder's name: the one `home.yaml` records once
  * the home has written it — a sign-in renames it (space-59). */
 export function ownName(dataDir: string): string {
   try {
@@ -282,7 +281,7 @@ export function ownName(dataDir: string): string {
   }
 }
 
-/** Your own group's spex repository's key in a home (storage-1). */
+/** A home's global records repository key (storage-1). */
 export function ownKey(dataDir: string): string {
   const own = ownName(dataDir);
   return `${own}/${own}-spex`;
@@ -305,8 +304,7 @@ export function instanceOf(state: SpaceState, origin: string): SpaceState["insta
   return state.instances.find((instance) => instance.origin === canonical);
 }
 
-/** One repository's state out of the Space state (space-30): under
- * your own group or an instance's heading. */
+/** One repository in the flat Space state (space-30). */
 export function repositoryOf(state: SpaceState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
@@ -617,7 +615,7 @@ export function git(cwd: string, ...args: string[]): string {
   }).trim();
 }
 
-/** The model this device sets in your own group's config before the
+/** The model this device sets in the global config before the
  * daily sync (space-41). */
 export const LOCAL_MODEL = "claude-opus-5-local";
 /** The peer's prompt in the shared session (space-41). */
@@ -640,15 +638,16 @@ export interface App {
   /** Scratch home (hermetic) — readiness and `~` resolve here. */
   home: string;
   dataDir: string;
-  /** Your own group's config file (with `host`, where sign-in moved it). */
+  /** The global config file (with `host`, at the path sign-in chose). */
   readonly configPath: string;
   /** The demo project's path — registered when `project` was asked. */
   projectDir: string;
   projectId?: string;
   /** The session store the playbook CLI would write into for the demo
-   * project: its spex repository's `sessions/` (storage-14), or your own
-   * group's before a project is registered — scratch in both lanes, so a
-   * terminal-run fixture lands where the core serves it (core-service-60). */
+   * project: its spex repository's `sessions/` (storage-14), or the global
+   * records repository's before a project is registered. Both lanes use
+   * scratch storage so terminal-run fixtures land where the core serves
+   * them (core-service-60). */
   readonly sharedSessionsDir: string;
   server: RunningServer;
   /** Arrange-only protocol client on the running shell. */
@@ -666,8 +665,7 @@ export interface App {
    * undefined where that instance fronts none (`host.registry`,
    * `host.second.registry`, environments-18). */
   registries: (StandinRegistry | undefined)[];
-  /** Your own group's spex repository's key, as `home.yaml` now names
-   * it (storage-1). */
+  /** The global records repository's key, as `home.yaml` now names it (storage-1). */
   readonly ownKey: string;
   /** The bare repository standing in for `origin` (with `remote`), or
    * the stand-in's bare repository of the project once it is there. */
@@ -793,8 +791,7 @@ async function arrangeApp(
   const hostMode = options.host !== undefined && options.host !== false;
   if (options.signedIn && !hostMode) throw new Error("signedIn needs host");
   const homeConfig = options.homeConfig || options.remote !== undefined || hostMode;
-  // Inside the home, the config is your own group's spex repository's
-  // (storage-1, DR-103).
+  // The home config is in the global records repository (storage-1).
   const configPath = homeConfig
     ? join(clonePath(dataDir, `${E2E_OWN}/${E2E_OWN}-spex`), "config", "playbook.config.yaml")
     : join(scratch, "config", "playbook.config.yaml");
@@ -914,7 +911,7 @@ async function arrangeApp(
     host: "127.0.0.1",
     port: 0,
     token,
-    // Signed in, your own group's folder is renamed after the account
+    // Sign-in renames the global records folder after the account
     // (space-59): the core reads its config where it then lies only
     // when no path was named for it.
     ...(hostMode ? {} : { configPath }),
@@ -985,7 +982,7 @@ async function arrangeApp(
     token,
     home,
     dataDir,
-    // Your own group's config, where a sign-in may have moved it.
+    // The global config, where a sign-in may have moved it.
     get configPath() {
       return hostMode
         ? join(clonePath(dataDir, ownKey(dataDir)), "config", "playbook.config.yaml")
@@ -1262,8 +1259,9 @@ export async function refreshProjectKey(app: App): Promise<string | undefined> {
  * only), by its origin — the home's default instance unless another
  * of `app.hosts` is named (DR-127): the device flow the served core
  * runs (space-3), its user code approved through the script, and the
- * account's set-up awaited — your own group renamed after the login,
- * created on the host and pushed (space-4, space-59, space-65).
+ * account's setup awaited. The global records folder is renamed after
+ * the login and its repository is created at the Space and pushed
+ * (space-4, space-59, space-65).
  */
 export async function signInCore(app: App, host: StandinHost | undefined = app.host): Promise<SpaceState> {
   if (!host) throw new Error("signing in needs a host");
@@ -1294,7 +1292,7 @@ export async function selectRegistryCore(app: App, origin: string, repository: s
 
 /** Whether a sign-in's set-up has ended: signed in at the instance at
  * `origin` (the default instance unless named), nothing in flight, and
- * your own group's spex repository at an instance (space-4). */
+ * a settled placement of the global records repository (space-4). */
 export function ownSetUp(state: SpaceState, origin: string = state.defaultInstance): boolean {
   if (!instanceOf(state, origin)?.signedIn || state.signIn.phase !== "idle") return false;
   const own = state.repositories.find((repository) => repository.own);

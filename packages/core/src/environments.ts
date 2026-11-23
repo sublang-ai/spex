@@ -2,21 +2,21 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Environments in the service (environments-8..17, DR-104, DR-165): one
-// per spex repository on this device — your own group's and every
+// per spex repository on this device — the global environment and each
 // project's — read from its files: requests, lock, staleness and what
-// is installed under its root's `.spex/` — your own group's clone, a
+// is installed under its root's `.spex/` — the global records repository, a
 // project's working folder, none for a project whose working folder this
 // device does not hold — beside the last operation's report. Operations start at
 // once and run side by side, each write versioned on the file it writes
 // and each install checked against the lock and requests at its swap,
 // so one overtaken meanwhile publishes nothing (DR-111); they report
 // through `environment.state`. Every install is exported into
-// the paired working folder's agent folders and, for your own group,
+// the paired working folder's agent folders and, for the global environment,
 // into your agents' home folders, as is a folder once paired, and what
 // the last export left out is listed; a session's playbooks are found in
-// the project's environment before your own group's. A request by path
-// is relative to the paired working folder, or, in your own group's
-// environment, to its clone, confined to what that clone syncs
+// the project's environment before the global environment. A request by path
+// is relative to the paired working folder or the global records
+// repository, where it is confined to what that repository syncs
 // (environments-2, environments-32, DR-125). The built-in spec
 // package is seeded at start, requested in the global environment once
 // when the home is made, so the built-in playbooks work offline from the
@@ -146,7 +146,7 @@ export interface InstalledApplet {
 
 export interface EnvironmentManagerOptions {
   store: Store;
-  /** Your agents' home folders' root for your own group's exports, or
+  /** Your agents' home folders' root for the global environment's exports, or
    * null where none are written (environments-8). */
   userHome: string | null;
   /** This user's home, where each agent's own folder tells whether the
@@ -159,8 +159,8 @@ export interface EnvironmentManagerOptions {
   /** The registry's fetch, for tests. */
   fetch?: typeof fetch;
   /** The origin of the instance a spex repository is placed at
-   * (storage-31): a project's by its key or remote, your own group's the
-   * one its own repository's remote names; null for one local only
+   * (storage-31): a project's by its key or remote, the global records
+   * repository's by its remote, and null for a local-only repository
    * (DR-127). Read only to name it as `space` where the core writes an
    * environment's built-in request (environments-11); the environment's
    * instance itself is the `space` its `spex.yaml` names, else the home's
@@ -416,11 +416,8 @@ function folderManifest(folder: string): { name: string | null; version: string 
   };
 }
 
-/** The reader's words for a folder your Personal records refuse as a
- * package's folder (environments-32), each with what to do, alike when
- * the package is added, updated or installed: your own group is
- * "Personal" and its clone "your Personal records" on every surface
- * (core-service-145, DR-172). */
+/** Guidance when the global records repository refuses a package folder
+ * during Add, Update or Install (environments-32). */
 function confinedPhrase(path: string, issue: OwnPathIssue): string {
   switch (issue.reason) {
     case "root":
@@ -693,8 +690,8 @@ export class EnvironmentManager {
     return this.options.store;
   }
 
-  /** The agents this device has, whose user-level folders your own
-   * group's exports reach (environments-16): each agent the folder table
+  /** The agents this device has, whose user-level folders receive global
+   * exports (environments-16): each agent the folder table
    * names one of whose home folders stands in the user's home — such as
    * `~/.claude` for claude. An agent never used here gets no folder made
    * for it. */
@@ -874,7 +871,7 @@ export class EnvironmentManager {
   }
 
   /** The folder a request's `path` is relative to on this device
-   * (environments-2): your own group's clone, where its `spex.yaml` is
+   * (environments-2): the global records repository, where its `spex.yaml` is
    * and which syncs to every device; else the paired working folder;
    * null where none is paired. */
   pathRoot(key: string): string | null {
@@ -884,7 +881,7 @@ export class EnvironmentManager {
 
   /** The environment's root on this device (environments-26), holding
    * its `spex.yaml` and `spex.lock` and, under `.spex/`, what is
-   * installed: your own group's clone, else the paired working folder
+   * installed: the global records repository, else the paired working folder
    * while it stands; null where this device holds none, so a project
    * whose working folder is missing here has no environment here. */
   rootOf(key: string): string | null {
@@ -1442,7 +1439,7 @@ export class EnvironmentManager {
   }
 
   /** Export the installed environment into its root's `.spex/skills/`,
-   * its working folder and, for your own group, your agents' home folders
+   * its working folder and, for the global environment, your agents' home folders
    * (environments-8). */
   private exportNow(root: string, key: string, lock: Lock, workingFolder: string | null): Promise<ExportReport> {
     return exportEnvironment({
@@ -1466,7 +1463,7 @@ export class EnvironmentManager {
   }
 
   /** The refusal a request earns before any write (environments-15),
-   * a request by path in your own group's environment checked against
+   * a request by path in the global environment checked against
    * what stands at its path in the clone (environments-32). */
   private async refuseRequest(key: string, name: string, request: Request): Promise<void> {
     // A folder leading out of the one it is relative to is said with
@@ -1478,7 +1475,7 @@ export class EnvironmentManager {
   }
 
   /** A request by path's own refusals (environments-15): no path root
-   * here, a path outside it, or one your own group's clone refuses. */
+   * here, a path outside it, or one the global records repository refuses. */
   private async refusePath(key: string, request: Request): Promise<void> {
     if (!isPathRequest(request)) return;
     const root = this.pathRoot(key);
@@ -1715,7 +1712,7 @@ export class EnvironmentManager {
   }
 
   /** Prepare the playbook artifact folders of the environments a session
-   * or a configuration load reads — the project's and your own group's —
+   * or a configuration load reads — the project's and the global environment —
    * to run on the app's engine before their module locations reach the
    * launcher (environments-7, environments-9, playbook-library-46), so a
    * playbook another host installed runs. It fails nothing. */
@@ -2056,7 +2053,7 @@ export class EnvironmentManager {
   }
 
   /** Where a session's playbooks come from (environments-9): the
-   * project's environment, else your own group's — the global; a module
+   * project's environment, else the global environment; a module
    * missing on this device counts as none for `find`, while `placed`
    * lists every playbook either places, the project's first, so each
    * runs on its default binding where no entry binds it
@@ -2140,7 +2137,7 @@ export class EnvironmentManager {
     const conflicts = clone.conflicts !== null && clone.conflicts.requests === requestsVersion ? clone.conflicts.conflicts : null;
     // Where each provided spec stands under a project's `specs/`, read
     // through the library as an install finds it, writing nothing
-    // (environments-14, environments-41); your own group's environment
+    // (environments-14, environments-41); the global environment
     // places its spec as a skill its exports name, so it has none
     // (environments-8). Files that cannot be read place nothing here.
     const specs = new Map<string, SpecPlacement>();
@@ -2238,8 +2235,8 @@ export class EnvironmentManager {
       instance,
       ...(registry ? { registry } : {}),
       // A project's files travel with the code once both are committed;
-      // null where this device holds no working folder to read, as for
-      // your own group's (environments-14).
+      // null for the global environment or when this device has no
+      // working folder to read (environments-14).
       committed: this.isOwn(key) || envRoot === null ? null : committedWithCode(envRoot),
       ...(builtinUpdate ? { builtinUpdate } : {}),
       ...(unexported ? { unexported } : {}),

@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface's test home (DR-103): a signed-in home with your
-// own group holding its own spex repository and one project's, the
-// units of every kind a Sync tab lists, an explorer tree and its reads,
-// and a mocked protocol client answering every `space.*` command the
-// surface sends — so the surface tests render it as the core would
-// feed it, and read back exactly what it asked.
+// Fixtures for the Space surface: a signed-in home, personal repositories,
+// Sync and Explore data, and a mocked protocol client that records the
+// commands the surface sends.
 
 import { vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -253,8 +250,7 @@ export function instance(over: Partial<InstanceState> = {}): InstanceState {
  * the default instance. */
 export type HomeOver = Partial<SpaceState> & { instance?: Partial<InstanceState> };
 
-/** A signed-in home: your own group with its own spex repository, then
- * the instance with the given ones in your namespace there (space-30). */
+/** A signed-in home with the given repositories (space-30). */
 export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): SpaceState {
   const { instance: instanceOverrides, ...home } = over;
   return {

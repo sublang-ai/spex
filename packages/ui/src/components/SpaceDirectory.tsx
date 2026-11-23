@@ -39,7 +39,7 @@ interface DirectoryRead {
   listeners: Set<() => void>;
 }
 
-/** One read per core connection: the place's client keys it, so a new
+/** One read per core connection: the connected core's client keys it, so a new
  * connection — and each test's own client — reads afresh. */
 const READS = new WeakMap<object, DirectoryRead>();
 const NONE: DirectoryRead = { value: { status: "failed" }, inFlight: false, listeners: new Set() };
@@ -72,7 +72,7 @@ function validSpaces(reply: unknown): DirectorySpace[] | undefined {
   return valid ? (spaces as DirectorySpace[]) : undefined;
 }
 
-/** The place's client, where one is set. */
+/** The connected core's client, where one is set. */
 type DirectoryClient = { command(type: "registry.directory", fields: Record<string, never>): Promise<unknown> };
 function clientOf(store: { getClient(): unknown }): DirectoryClient | undefined {
   try {

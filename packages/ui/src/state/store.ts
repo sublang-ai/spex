@@ -568,7 +568,6 @@ export interface AppState extends AttachmentState {
     baseVersion?: string,
   ): Promise<{ version: string }>;
   refreshReadiness(): Promise<void>;
-  registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
   /** Forget the working folder and delete its spex repository's clone
    * (projects-9); a clone holding what has not reached the host is
@@ -2212,25 +2211,6 @@ function createAppState(clientAccess: StoreClientAccess, set: SetState, get: Get
       safeStorageSet(DASHBOARD_GROUPS_COLLAPSED_KEY, JSON.stringify(next));
     },
 
-    async addProjectByPath(path: string): Promise<ProjectInfo> {
-      try {
-        return await get().registerProject(path);
-      } catch (cause) {
-        // Add means an existing repository: a directory that is none
-        // is refused with the way forward, never initialized behind
-        // the user's back (projects-1, projects-22).
-        if (/not the root of a git work tree/.test((cause as Error).message)) {
-          throw new Error(
-            i18n._(
-              "{path} is not the root of a git work tree. To start a new repository there, use Create instead.",
-              { path },
-            ),
-          );
-        }
-        throw cause;
-      }
-    },
-
     async openAcademyExample(path?: string): Promise<ProjectInfo> {
       // Same path UX as the palette's typed paths: pass through as
       // written and let the core expand ~ (DR-015 example mode).
@@ -2370,7 +2350,7 @@ function createAppState(clientAccess: StoreClientAccess, set: SetState, get: Get
       set({ readiness: await getClient().command("readiness.get", {}) });
     },
 
-    async registerProject(path: string): Promise<ProjectInfo> {
+    async addProjectByPath(path: string): Promise<ProjectInfo> {
       const project = await getClient().command("project.register", { path });
       set({ projects: await getClient().command("project.list", {}) });
       void get().loadProjectMeta(project.id);

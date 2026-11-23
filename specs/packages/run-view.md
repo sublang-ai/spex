@@ -1351,7 +1351,7 @@ While a fixture turn's player call is open with a tool use whose result has not 
 
 #### run-view-54
 
-The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes, and that every Boss, Captain, and question bubble carries a clock stamp at its outer foot — its clock time as text, the exact moment in its tooltip and on the element — while narration lines carry no stamp [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized [[run-view-59](#run-view-59)]; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, Escape closes with the composer draft intact, and a pending group submission keeps it open and focused through Escape, Cmd/Ctrl+P and backdrop clicks) [[run-view-42](#run-view-42)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
+The test suite shall assert time separators appear before the first line, after >10-minute gaps, and on day changes, and that every Boss, Captain, and question bubble carries a clock stamp at its outer foot — its clock time as text, the exact moment in its tooltip and on the element — while narration lines carry no stamp [[run-view-41](#run-view-41)]; that known states map to human labels with unknown ids humanized [[run-view-59](#run-view-59)]; that the project palette is driven end-to-end by keyboard (opens focused, arrows highlight, Enter picks, and Escape closes with the composer draft intact) [[run-view-42](#run-view-42)]; and that Escape hides the slash menu without touching the draft [[run-view-43](#run-view-43)].
 
 #### run-view-55
 
@@ -1451,7 +1451,7 @@ Where fixture projects hold queues whose next intents span the published schedul
 
 #### run-view-96
 
-Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure — recorded naming its turn, and recorded naming none while that turn was open, as earlier cores recorded their own — one finished awaiting its verdict, and an unowned session's failure recorded between turns, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively, with the between-turn failure focusing its onset's line from its Dashboard entry [[run-view-91](#run-view-91)].
+Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure — recorded naming its turn, and recorded naming none while that turn was open, as earlier cores recorded their own — one finished awaiting its verdict, and an unowned session's failure recorded between turns, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively, with the between-turn failure focusing its onset's line from its Dashboard entry even when a later error appears in the thread [[run-view-91](#run-view-91)].
 
 #### run-view-137
 

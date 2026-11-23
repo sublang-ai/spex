@@ -425,7 +425,9 @@ describe("SPACE: signing in (space-3, space-6, space-29)", () => {
     expect(within(section).getByRole("heading", { level: 2 }).textContent).toBe("Spex Example");
     expect(live()).toBe("Signed out of Spex Example");
     await waitFor(() => expect(document.activeElement).toBe(again));
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Signed out of Spex Example");
+    const row = within(section).getByTestId(`space-row-${KEY}`);
+    expect(within(row).getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Signed out of Spex Example");
+    expect(within(row).queryByRole("button", { name: "Retry" })).toBeNull();
     expect(screen.queryByTestId("space-signin-card")).toBeNull();
     // A refusal — a sync running — stays beside the control.
     cleanup();
@@ -702,6 +704,17 @@ describe("Personal Space destinations", () => {
 
 
 describe("space-143: personal project row states", () => {
+  test("an external remote's project under This computer displays its standing phrase", async () => {
+    const remote = "/srv/academy-spex.git";
+    const project = repo({
+      instance: null, id: null, remote,
+      placements: [placement({ instance: null, id: null, path: remote, branch: null })],
+    });
+    await renderSpace(noInstance({}, [project]), { open: false });
+    const computer = within(screen.getByRole("group", { name: "This computer" }));
+    expect(computer.getByTestId(`space-repo-state-${project.key}`).textContent).toBe("Never synced");
+  });
+
   test("Open here invokes the native picker and joins the selected row at its own Space", async () => {
     const first = repo({ state: "absent", branch: null, folder: null });
     const second = repo({ instance: SECOND, key: "@second.example/jada/academy-spex", id: "202", state: "absent", branch: null, folder: null });

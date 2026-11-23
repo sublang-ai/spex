@@ -219,7 +219,7 @@ function seedRepository(projectDir: string): void {
   execFileSync("git", ["-C", projectDir, "commit", "-q", "-m", "baseline"]);
 }
 
-/** Every scratch home's own group (storage-2). */
+/** The personal records folder name in each scratch home (storage-2). */
 
 
 const OWN = "tester";
@@ -249,7 +249,7 @@ function pairedHome(dataDir: string, projectDir: string): { projectId: string; s
   }
 }
 
-/** The shared config path of a scratch home: your own group's clone
+/** The shared config path of a scratch home: the global records clone
  * holds it (storage-1). */
 function ownConfig(dataDir: string): string {
   return join(clonePath(dataDir, `${OWN}/${OWN}-spex`), "config", "playbook.config.yaml");
@@ -1920,7 +1920,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   mkdirSync(plain);
   const rejected = await client.command("project.register", { path: plain });
   assert.ok(!rejected.ok && rejected.error.code === "invalid_request");
-  assert.match(rejected.error.message, /git work tree/);
+  assert.match(rejected.error.message, /outside a Git work tree\. Use Create/);
 
   // Create flow produces a registered, statusable repo (PROJ-2/3)
   // whose scaffold names the creator as the copyright holder
@@ -3351,8 +3351,8 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   // (storage-6)...
   const elsewhere = "ccccccc1-3333-4333-8333-cccccccccccc";
   writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
-  // ...and one in a clone no folder pairs — your own group's — whose
-  // history remains readable without borrowing that project's folder
+  // ...and one in a clone no folder pairs — the global records clone — whose history remains
+  // readable without borrowing that project's folder
   // (core-service-60, DR-195).
   const unpaired = "ccccccc2-3333-4333-8333-cccccccccccc";
   writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
@@ -5185,11 +5185,10 @@ for (const selection of ["default", "home override", "sessions override"] as con
     await client.expectOk("project.register",{path:projectPath});
     const sessions = await client.expectOk("session.list",{});
     if (selection === "default") {
-      // storage-18: the ordinary default imports into your own group's
-      // sessions/. Without a paired folder, its history remains readable
-      // but cannot continue (core-service-60, storage-12).
+      // storage-18: the default import puts unmatched sessions in the global
+      // records repository. Without a paired folder they are history only (core-service-60, storage-12).
       const ownKey = `${OWN}/${OWN}-spex`;
-      assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into your own group's sessions");
+      assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into global sessions");
       assert.deepEqual(sessions.map((session) => session.id), [sessionId], "the imported session is listed for reading");
       assert.equal(sessions[0]!.projectId, ownKey, "the session belongs to the clone holding it, not its recorded working folder");
       assert.equal(sessions[0]!.continuable, undefined, "an unpaired session offers no continuation");
@@ -5197,7 +5196,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
       assert.deepEqual(history.records.filter(({ record }) => record.type === "turn_started")
         .map(({ record }) => (record as { turn: { prompt: string } }).turn.prompt), ["Prior CLI work"], "imported conversation history can be read without its project files");
       const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
-      assert.equal(repair?.repair?.sessions, 1, "your own group's clone is reported once it holds the session");
+      assert.equal(repair?.repair?.sessions, 1, "the global records clone is reported once it holds the session");
       const skipped = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === unsupported);
       assert.equal(skipped?.code, "session-import", "the skipped import carries guidance without parsing its reason");
       assert.equal(skipped?.blocking, false);
@@ -6559,7 +6558,7 @@ test("writable paths: Chinese Settings refusal names the field and preserves pri
 // core-service-2: a project's composed configuration, read and announced
 // ---------------------------------------------------------------------------
 
-/** Your own group's config enabling `code` alone. */
+/** The global config enabling `code` alone. */
 const OWN_CODE_ONLY = VALID_CONFIG.replace(/ {2}review:\n(?: {4,}.*\n)*/, "");
 
 /** The commands a config state offers, sorted. */
@@ -6602,7 +6601,7 @@ test("core-service-2: config.get with a project answers its composition, and the
   assert.equal(originIn(announced.projects?.[project.id], "review"), "project");
   const composed = announced.projects?.[project.id];
   assert.ok(composed?.status === "valid");
-  assert.equal(composed.summary.captain.adapter, "claude", "your own group's captain");
+  assert.equal(composed.summary.captain.adapter, "claude", "the configured Captain");
 
   // A project's file naming a player yours lacks: the player plays on
   // the Captain's block, flagged to set up, and refuses nothing

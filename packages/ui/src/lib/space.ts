@@ -7,8 +7,8 @@
 // code is (space-1), the kinds' order and labels (space-7), the sync
 // steps' names (space-12), the catalog's sharing marks, each entry's
 // family word, and the families that stay on this computer (space-23,
-// space-25). Every phrase names a Space by its display name and this
-// place "this computer" (space-27). Pure functions; the surface renders
+// space-25). Phrases use the Space's display name and "this computer"
+// for the local device (space-27). Pure functions; the surface renders
 // them.
 //
 // Every word here is a message of the catalog (localization-4), so a
@@ -44,8 +44,7 @@ export function rowName(repo: RepositoryState): string {
 
 /** Whether a spex repository's clone is on this computer (space-61): it
  * is local only or holds a placement; a row the host lists that this
- * computer lacks, or one in a group named like a login, which takes no
- * folder, holds none (space-30). */
+ * computer lacks holds no attached placement (space-30). */
 export function cloneHere(repo: RepositoryState): boolean {
   return repo.state === "local-only" || repo.placements.some((placement) => placement.attached);
 }
@@ -402,16 +401,15 @@ const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
  * 9. its last sync — "Synced <age>", "Not synced since <moment>" or
  *    "Never synced".
  *
- * A row under "This computer" (`quiet`), local only, or not on this
- * computer reads none but the join running on it. Outcomes the reader
- * dismissed and those that need nothing of him — synced, behind — leave
+ * A local-only row or a row not on this device reads only an in-flight
+ * step, if any. Outcomes the reader dismissed and outcomes that require
+ * no action — synced, behind — leave
  * the state's phrase. */
 export function rowPhrase(
   repo: RepositoryState,
   now: number,
   dismissed: string | undefined,
   names: PhraseNames,
-  quiet = false,
 ): RowPhrase {
   const sync = repo.sync;
   if (sync.phase === "running") {
@@ -419,11 +417,10 @@ export function rowPhrase(
       const text = i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code are downloaded" });
       return { text, title: text, tone: "running" };
     }
-    if (quiet) return NO_PHRASE;
     const text = STEP_LINES[sync.step](sync.placement === undefined ? undefined : names.nameAt(sync.placement));
     return { text, title: text, tone: "running" };
   }
-  if (quiet || repo.state === "local-only" || repo.state === "absent") return NO_PHRASE;
+  if (repo.state === "local-only" || repo.state === "absent") return NO_PHRASE;
   if (repo.local.length > 0) {
     const { text, title } = toSendPhrase(repo.local);
     return { text, title, tone: "idle" };

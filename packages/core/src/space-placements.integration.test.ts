@@ -20,7 +20,7 @@ const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, bareRepo, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut, forget } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's person, and the personal settings repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";
@@ -388,7 +388,7 @@ test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-
   const own = clonePath(home.dataDir, HOST_OWN);
   const names = (host: StandinHost): unknown[] => host.script.creations.map((body) => [(body as { name?: unknown }).name, (body as { group_id?: unknown }).group_id ?? null]);
 
-  // A sign-in at the first creates the personal settings repository in
+  // A sign-in at the first creates the global records repository in
   // your namespace there, its first placement (space-4, space-65).
   let mark = home.client.mark();
   await signIn(home, first);
@@ -433,7 +433,7 @@ test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-
   assert.deepEqual(row.placements.map((line) => [line.instance, line.attached]), [[first.url, true], [third.url, true]]);
   assert.deepEqual(rowsOf(state).filter((repository) => repository.id === ownId).map((repository) => repository.key), [HOST_OWN], "the second's listing is the first's placement");
 
-  // space.place and space.leave naming the personal settings repository
+  // space.place and space.leave naming the global records repository
   // are each refused, nothing changed and nothing asked (space-29).
   const asked = [first, second, third].map((host) => host.script.requests.length);
   await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, name: LOGIN } }, "invalid_request", /^Personal settings sync with each Space when you sign in$/);
@@ -560,7 +560,7 @@ test("space-82: Forget follows available personal copies and refuses when projec
 
   // The third signed out, which no signed-in instance replaces: Forget
   // is refused, naming `atlas`, placed there beside its key placement at
-  // the second, and `borealis` and the personal settings repository, keyed
+  // the second, and `borealis` and the global records repository, keyed
   // under it (space-82, space-29, storage-31) — the instance kept signed
   // out, every clone, remote and file as it stood, the personal settings
   // remote there untouched, nothing asked of any instance.

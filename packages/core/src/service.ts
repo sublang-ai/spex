@@ -101,6 +101,7 @@ import {
   seedExampleProject,
   defaultRunCommand,
   isWorkTreeRoot,
+  workTreeLocation,
   isSeededAcademyProject,
   repoStatus,
   type ForgeAdapter,
@@ -257,7 +258,7 @@ export interface CoreServiceOptions {
    * begun, before the runtime has begun it — so a suite can hold a turn
    * in that window (core-service-6). */
   sessionStatePublished?: (session: import("./protocol.js").SessionInfo) => void | Promise<void>;
-  /** Your own group's folder name for a new home; this device's user
+  /** The personal records folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
   /** The Git host's sign-in flow this deployment runs: `browser` on the
@@ -271,7 +272,7 @@ export interface CoreServiceOptions {
   /** The built-in spec package this app ships (environments-11): the
    * build's staged one by default; null ships none. A test seam. */
   builtinPackage?: BuiltinPackage | null;
-  /** Your agents' home folders' root, where your own group's skills are
+  /** Your agents' home folders' root, where the global environment’s skills are
    * exported (environments-8); null writes none. By default the given
    * `home`, or this user's home for the default Spex home at `~/.spex`;
    * a home elsewhere exports nothing there, so a scratch home never
@@ -491,8 +492,8 @@ class RecordsChangedError extends Error {
 
 export class CoreService {
   private readonly options: CoreServiceOptions;
-  /** Your own group's config, which follows its clone when your own
-   * group is renamed at sign-in (space-59); an explicit path stays. */
+  /** The global config, which follows its clone when the personal records folder is renamed
+   * at sign-in (space-59); an explicit path stays. */
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
@@ -525,8 +526,7 @@ export class CoreService {
   /** The applets open on the endpoint, by capability (applets-3). */
   private readonly applets: AppletServer;
   /** What the core watches within the clones: their sessions
-   * (core-service-60) and configs (core-service-2), your own group's
-   * among them. */
+   * (core-service-60) and configs (core-service-2), including the global records repository. */
   private readonly watches: CloneWatches;
   /** Which sessions are read again as the clones' `sessions/` change,
    * and when (core-service-158). */
@@ -603,7 +603,7 @@ export class CoreService {
     this.claudeSettings = claudeSettings;
     claudeSettings.apply();
     this.adapterImports = withRunSettings(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { claudeSettings.apply(); });
-    // Your own group's config, inside its clone (storage-1, DR-103); an
+    // The global config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
     this.sessionScans = new SessionScans({
@@ -790,7 +790,7 @@ export class CoreService {
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
     // (environments-10). The global environment's sessions live with
-    // your own group's records, its clone their working folder
+    // the global records, its clone their working folder
     // (core-service-96).
     this.drafts = new DraftStore(() =>
       this.store.listRepositories().map((repository) => ({
@@ -806,7 +806,7 @@ export class CoreService {
       cancelApprovals: (draftId, instance, invocationId) => this.approvals.cancel({kind: "draft", id: draftId, instance}, invocationId),
       store: this.store,
       drafts: this.drafts,
-      // Read when used: your own group's config moves with its clone.
+      // Read when used: the global config moves with its clone.
       get configPath() { return service.configPath; },
       env: this.env,
       agentEnv: () => service.agentRunEnv(),
@@ -883,7 +883,7 @@ export class CoreService {
     try { return builtinPackage(); } catch { return null; }
   }
 
-  /** Where your own group's skills are exported (environments-8): the
+  /** Where the global environment’s skills are exported (environments-8): the
    * given root; else the given `home`; else, for the default Spex home
    * at `~/.spex`, this user's home; a home elsewhere writes none there. */
   private static userHomeOf(options: CoreServiceOptions, env: NodeJS.ProcessEnv, home: string): string | null {
@@ -948,7 +948,7 @@ export class CoreService {
   }
 
   /** Playbook ids a new authoring session of a project may not take:
-   * every playbook the project's or your own group's environment
+   * every playbook the project's or the global environment
    * exports, but the one a folder `spex-packages/<org>/<id>/` left by a
    * deleted session exports, which the new session takes over
    * (playbook-library-51). */
@@ -979,8 +979,8 @@ export class CoreService {
     return [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
   }
 
-  /** An environment's files or exports changed (environments-17): your
-   * own group's config composes anew; a session's enabled mark may move. */
+  /** An environment's files or exports changed (environments-17): the global config composes
+   * anew; a session's enabled mark may move. */
   private environmentChanged(repository: string): void {
     if (!this.started || this.stopping) return;
     if (repository === this.store.home.own()) void this.reloadConfig();
@@ -994,7 +994,7 @@ export class CoreService {
     this.authors.republish();
   }
 
-  /** Where your own group's config, or a project's session, finds each
+  /** Where the global config, or a project's session, finds each
    * enabled playbook's module (environments-9). */
   private modules(projectId: string | null): PlaybookModules {
     return this.environments.modulesFor(projectId);
@@ -1054,8 +1054,8 @@ export class CoreService {
     };
   }
 
-  /** The players every project's file names that your own group's
-   * roster lacks (core-service-2, settings-46), listed on the valid
+  /** The players every project's file names that the global roster lacks (core-service-2,
+   * settings-46), listed on the valid
    * config state; a project's session raises them when it opens. */
   private missingPlayers(ownTop: unknown, inputs: ConfigInputs): import("./protocol.js").MissingPlayer[] {
     const own = this.store.home.own();
@@ -1121,8 +1121,7 @@ export class CoreService {
    * `check` is the removal's own instant: called synchronously inside
    * the removal itself, with nothing awaited before the deletion, it
    * refuses as a change meanwhile a session that appeared while the
-   * leases were taken, or a clone moved or replaced since. Your own
-   * group's clone is never deleted.
+   * leases were taken, or a clone moved or replaced since. The global records clone is never deleted.
    */
   private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void; changed(): CoreError }> {
     const repository = this.store.repository(key);
@@ -1278,8 +1277,8 @@ export class CoreService {
       }
     }
     // The home opens under its lease, migrating the former layout once
-    // before any writer is admitted (storage-9, core-service-15). Your own
-    // group's clone requests the built-in spec package as the home is
+    // before any writer is admitted (storage-9, core-service-15). The global records clone
+    // requests the built-in spec package as the home is
     // made, before its first commit, and a project paired here is
     // written an environment requesting nothing (storage-6,
     // environments-11, DR-176).
@@ -1312,7 +1311,7 @@ export class CoreService {
     await service.media.prepare();
     service.store.markAllSessionsNotLive();
     service.relocateLegacyLibrary();
-    // The store seeds your own group's config as the clone stands up;
+    // The store seeds the global config as the clone stands up;
     // the core reports that starter as its own seed (settings-9).
     const version = seedConfig(service.configPath, service.env, service.home, credentials);
     if (version !== null) store.recordSeed(service.configPath, version);
@@ -1418,8 +1417,7 @@ export class CoreService {
     if (joined.length > 0) await this.sessions.completeRestores(joined);
   }
 
-  /** The playbook CLI's former XDG sessions import once into your own
-   * group's spex repository (storage-18). */
+  /** The playbook CLI's former XDG sessions import once into the global records repository (storage-18). */
   private async migrateLegacySessionDefault(): Promise<void> {
     if (!this.options.dataDir || this.env.SPEX_HOME?.trim() ||
       resolve(this.options.dataDir) !== resolve(this.home,".spex")) return;
@@ -1706,7 +1704,7 @@ export class CoreService {
 
   /**
    * The configuration a session of this project runs with
-   * (core-service-2): your own group's, with the project's own file on
+   * (core-service-2): the global config, with the project's own file on
    * top where its spex repository holds one, and every playbook the
    * project's or the global environment places on its default binding
    * where no entry binds it. A project's file that breaks the rules is a
@@ -1748,7 +1746,7 @@ export class CoreService {
     const repository = this.store.repository(projectId);
     if (!repository) return own();
     // The session's playbooks come from the project's environment before
-    // your own group's (environments-9), whether or not the project's
+    // the global environment (environments-9), whether or not the project's
     // own file enables any; one not yet resolved resolves first.
     if (ready) await this.environments.ready(projectId);
     for (let attempt = 0; ; attempt += 1) {
@@ -1810,8 +1808,8 @@ export class CoreService {
   /**
    * The configuration a session of this project runs with, as a state
    * a client reads (core-service-2, DR-104: every member gets the same
-   * tools): your own group's summary with the project's file on top and
-   * its environment's playbooks first; your own group's state while that
+   * tools): the global config summary with the project's file on top and
+   * its environment's playbooks first; the global config state while that
    * is not valid; and invalid, naming the cause, where the project's
    * file is refused.
    */
@@ -1822,13 +1820,13 @@ export class CoreService {
     try {
       const inputs = this.configInputs;
       const composed = await this.composeProject(projectId, ready);
-      // Your own group's state, its notifications and theme, as its files
+      // The global config state, its notifications and theme, as its files
       // still stand after composing.
       const changed = this.cacheChanged(inputs);
       if (changed !== undefined) throw changedMeanwhile(changed);
       const own = this.configState;
       if (own.status !== "valid" || composed === this.composed) return own;
-      // Notifications and theme are your own group's alone.
+      // Notifications and theme are global settings.
       const summary = summarizeConfig({ path: own.summary.path, raw: null, composed });
       return {
         ...own,
@@ -1851,7 +1849,7 @@ export class CoreService {
   }
 
   /** Every project's composed configuration, for the broadcast; none
-   * while your own group's is not valid. */
+   * while the global config is invalid. */
   private async projectConfigStates(): Promise<Record<string, ConfigState> | undefined> {
     if (this.configState.status !== "valid") return undefined;
     const out: Record<string, ConfigState> = {};
@@ -1959,7 +1957,7 @@ export class CoreService {
   }
 
   /** The first file the published config state no longer stands on;
-   * your own group's config where no load has been published. */
+   * the global config where no load has been published. */
   private cacheChanged(inputs = this.configInputs): string | undefined {
     return inputs === undefined ? this.configPath : changedInput(inputs);
   }
@@ -2005,7 +2003,7 @@ export class CoreService {
     return this.reseed(await seedCredentials(this.env, this.home, signIn));
   }
 
-  /** Reseed your own group's config while it stands at the version the
+  /** Reseed the global config while it stands at the version the
    * core seeded (core-service-137, DR-156); true where it was rewritten.
    * A file no longer at that version loses its record for good. */
   private reseed(credentials: SeedCredentials): boolean {
@@ -2023,7 +2021,7 @@ export class CoreService {
     return true;
   }
 
-  /** Your own group's config state, recording each file read in `inputs`. */
+  /** The global config state, recording each file read in `inputs`. */
   private async loadOwnConfig(inputs: ConfigInputs): Promise<{ state: ConfigState; composed: ComposedConfig | undefined }> {
     let nextState: ConfigState;
     let nextComposed: ComposedConfig | undefined;
@@ -2033,7 +2031,7 @@ export class CoreService {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
-      // Your own group's playbooks run on the app's engine, whichever
+      // Global playbooks run on the app's engine, whichever
       // host installed them (environments-9, playbook-library-46).
       await this.environments.prepareForUse(null);
       try {
@@ -2399,7 +2397,7 @@ export class CoreService {
         if (command.projectId === undefined) return this.configState;
         try { return await this.projectConfigState(command.projectId, true); }
         catch (error) {
-          // Your own group's state stands on the projects' files too, by
+          // The global config state stands on the projects' files too, by
           // the players they name (settings-46): one changed while the
           // project composed is read once more (DR-111).
           if (!(error instanceof CoreError) || error.code !== "conflict") throw error;
@@ -2439,12 +2437,36 @@ export class CoreService {
             }),
           );
         }
-        if (!(await isWorkTreeRoot(path, this.runCommand))) {
-          // English, deliberately (core-service-111): the page matches
-          // this phrase to offer Create instead, so it is wire text.
+        const workTree = await workTreeLocation(path, this.runCommand);
+        if (workTree.kind === "no_repository") {
           throw new CoreError(
             "invalid_request",
-            `${path} is not the root of a git work tree (run git init first, or use project.create)`,
+            i18n._({
+              id: "“{path}” is outside a Git work tree. Use Create to start a repository there.",
+              comment: "Refusal when Add is given a directory outside Git; Create is the action in the project palette",
+              values: { path },
+            }),
+          );
+        }
+        if (workTree.kind === "unavailable") {
+          throw new CoreError(
+            "invalid_request",
+            i18n._({
+              id: "Git could not inspect “{path}” as a project folder. Choose the top-level folder of a Git work tree.",
+              comment: "Refusal when Git cannot inspect a directory as a work tree, such as a bare repository",
+              values: { path },
+            }),
+            workTree.output ? { output: workTree.output } : undefined,
+          );
+        }
+        if (!workTree.isRoot) {
+          throw new CoreError(
+            "invalid_request",
+            i18n._({
+              id: "“{path}” is inside a Git work tree. Add its top-level folder instead: “{top}”.",
+              comment: "Refusal when Add is given a subdirectory; {top} is the folder to select with Add",
+              values: { path, top: workTree.top },
+            }),
           );
         }
         // The code's remote is written without a credential, and one
@@ -2455,8 +2477,8 @@ export class CoreService {
           const checked = validateRemoteUrl(remote);
           if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
         }
-        // The folder pairs with a local spex repository in your own group
-        // until a group is picked (storage-6).
+        // The folder pairs with a local spex repository under the personal records folder
+        // until its first Space placement (storage-6).
         const pairedAlready = this.store.home.keyForFolder(resolve(path)) !== undefined;
         const registered = this.store.registerProject(path, basename(path), Date.now());
         // A folder newly paired: its environment — the one it holds, or
@@ -2916,7 +2938,7 @@ export class CoreService {
         return this.configState;
       }
       case "config.batch": {
-        // Your own group's file alone, all or none, against the config
+        // The global config file alone, all or none, against the config
         // the client saw (core-service-44, DR-204).
         const result = await editConfigBatch(
           this.configPath,
@@ -2970,8 +2992,7 @@ export class CoreService {
         return resolveArtifacts({ id: command.playbookId, from }, this.env);
       }
       case "library.builtins": {
-        // The built-in spec package's playbooks your own group's
-        // environment installs, each `configured` where the config
+        // The built-in spec package's playbooks the global environment installs, each `configured` where the config
         // enables it (playbook-library-34), as its files stand (DR-111).
         await this.settledConfig();
         const configuredIds = new Set(
@@ -3731,7 +3752,7 @@ export class CoreService {
   }
 
   /** A playbook's installed module on this device, from any spex
-   * repository's environment, your own group's first. */
+   * repository's environment, the global environment first. */
   private installedModule(playbookId: string): string | undefined {
     const own = this.store.home.own();
     const keys = [own, ...this.store.listRepositories().map((repository) => repository.key).filter((key) => key !== own)];
@@ -3943,8 +3964,7 @@ export class CoreService {
    * the config's fail-closed rules before anything is written
    * (playbook-library-15, playbook-library-20); request the spec package
    * by path from the environment named — the session's, the project's or
-   * the global — and install it; write the players your own group's
-   * roster lacks; write the `playbooks.<id>` entry, no `from`, into that
+   * the global — and install it; write the players the global roster lacks; write the `playbooks.<id>` entry, no `from`, into that
    * environment's config; reload. Each write is versioned on its own
    * file; one refused after others leaves them written, named in the
    * refusal (DR-111).
@@ -3954,8 +3974,8 @@ export class CoreService {
     result: CompileResult;
     bindings: Record<string, string>;
     newPlayers: Record<string, AgentBlock> | undefined;
-    /** The environment to add to: a project's spex repository, or your
-     * own group's — the global (core-service-96). */
+    /** The environment to add to: a project's spex repository, or the global records
+     * repository (core-service-96). */
     repository: string;
     packageDir: string;
   }): Promise<ConfigState> {
@@ -3966,7 +3986,7 @@ export class CoreService {
     const target = this.store.repository(targetKey);
     if (!target) throw noProject(targetKey);
     // A request by path is relative to the environment's path root:
-    // your own group's clone, or the working folder (environments-2).
+    // the global records clone, or the working folder (environments-2).
     const targetFolder = this.environments.pathRoot(targetKey);
     const relativePath = targetFolder === null ? undefined : relative(resolve(targetFolder), resolve(input.packageDir));
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
@@ -4088,9 +4108,8 @@ export class CoreService {
   }
 
   /** The environment a new authoring session would belong to — a
-   * project's, or the global, named by your own group's key — with its
-   * spex repository and its working folder: the project's, or your own
-   * group's clone; `invalid_request` where that folder is not on this
+   * project's, or the global, named by the global records repository’s key — with its
+   * spex repository and its working folder: the project's, or the global records clone; `invalid_request` where that folder is not on this
    * device (core-service-96). */
   private draftHome(key: string): { repository: SpexRepository; workingFolder: string } {
     if (key === this.store.home.own()) {
@@ -4122,9 +4141,9 @@ export class CoreService {
   }
 
   /**
-   * Clones moved under `workspace/` — your own group renamed at sign-in
+   * Clones moved under `workspace/` — the personal records folder renamed at sign-in
    * (space-59), a rename or transfer followed (space-60) — the store
-   * already re-keyed: your own group's config is read where it now lies,
+   * already re-keyed: the global config is read where it now lies,
    * every moved clone's sessions are watched there, and each moved
    * session and ledger is announced under its new key.
    */

@@ -64,10 +64,20 @@ msgstr "; unknown {roles}"
 msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 msgstr "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 
+#. Refusal when Add is given a subdirectory; {top} is the folder to select with Add
+#: src/service.ts
+msgid "“{path}” is inside a Git work tree. Add its top-level folder instead: “{top}”."
+msgstr "“{path}” is inside a Git work tree. Add its top-level folder instead: “{top}”."
+
 #. Folder selection refusal: names the selected path and explains that this action does not create a Git project
 #: src/service.ts
 msgid "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
 msgstr "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+
+#. Refusal when Add is given a directory outside Git; Create is the action in the project palette
+#: src/service.ts
+msgid "“{path}” is outside a Git work tree. Use Create to start a repository there."
+msgstr "“{path}” is outside a Git work tree. Use Create to start a repository there."
 
 #. A session's own title, quoted
 #: src/session.ts
@@ -124,7 +134,7 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 msgid "{diagnostic}; delete the draft, or repair the file"
 msgstr "{diagnostic}; delete the draft, or repair the file"
 
-#. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
+#. Config error: a project's settings file holds a field reserved for the global config; {entry} is the field's own path
 #: src/config.ts
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 msgstr "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
@@ -889,7 +899,7 @@ msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgid "a new playbook needs a license on one line, such as Apache-2.0"
 msgstr "a new playbook needs a license on one line, such as Apache-2.0"
 
-#. Refusal: an edit to a project's config file that only your own group's file may take
+#. Refusal: an edit to a project's config file that only the global config file may take
 #: src/config-edit.ts
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
 msgstr "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
@@ -1343,6 +1353,11 @@ msgstr "Git could not diff"
 msgid "Git could not download the code"
 msgstr "Git could not download the code"
 
+#. Refusal when Git cannot inspect a directory as a work tree, such as a bare repository
+#: src/service.ts
+msgid "Git could not inspect “{path}” as a project folder. Choose the top-level folder of a Git work tree."
+msgstr "Git could not inspect “{path}” as a project folder. Choose the top-level folder of a Git work tree."
+
 #. Project creation refusal: Git signs commits and has no signing key; Git's own output is shown beneath, and Add is the palette action
 #: src/forge.ts
 msgid "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
@@ -1392,6 +1407,16 @@ msgstr "Git is not installed. Install Git, then reopen Space."
 #: src/space-git.ts
 msgid "Git runs without prompts, so a helper that prompts fails instead of hanging. Check the connection, then try again."
 msgstr "Git runs without prompts, so a helper that prompts fails instead of hanging. Check the connection, then try again."
+
+#. An external records transfer stopped because Git would use a known Space address
+#: src/space.ts
+msgid "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."
+msgstr "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."
+
+#. A records transfer stopped because Git configuration could change the Space-approved destination
+#: src/space.ts
+msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
+msgstr "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
 
 #. Forge guidance where the gh command is absent; the command stays as it is
 #: src/forge.ts
@@ -3142,11 +3167,3 @@ msgstr "Your orgs at {registry} could not be read — check the connection, then
 #: src/space-git.ts
 msgid "Your saved commits remain on this computer. Address the content limit, then Retry."
 msgstr "Your saved commits remain on this computer. Address the content limit, then Retry."
-
-#. A records transfer stopped because Git configuration could change the Space-approved destination
-msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
-msgstr "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
-
-#. An external records transfer stopped because Git would use a known Space address
-msgid "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."
-msgstr "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."

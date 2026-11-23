@@ -36,7 +36,7 @@ const fixture = createSpaceHarness();
 const { git, gitFolder, addFolder, peerClone, peerPush, attachByHand, startHome, startHost, signIn, signOut } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's person, and the personal settings repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const FIRST_NAME = "Stand-in Git host";
@@ -417,7 +417,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst);
 });
 
-test("storage-38, space-91, storage-31, space-12, space-4: the personal settings repository placed at two instances on separate Git backends by their sign-ins, syncing directly at both, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
+test("storage-38, space-91, storage-31, space-12, space-4: the global records repository placed at two instances on separate Git backends by their sign-ins, syncing directly at both, a peer's commit at the second removing the first's placement file drops the first's remote alone at that merge, the clone keeping its folder, the second synced and the row then at the second", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
   const firstFolder = hostFolder(first);
@@ -430,7 +430,7 @@ test("storage-38, space-91, storage-31, space-12, space-4: the personal settings
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   await signIn(home, second);
   const own = clonePath(home.dataDir, HOST_OWN);
-  // The second's sign-in places the personal settings repository there as
+  // The second's sign-in places the global records repository there as
   // bob-spex (space-4); both sync with no further acknowledgement.
   const both = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done" && repository.placements.length === 2
     && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
@@ -503,7 +503,7 @@ test("space-91, storage-41, storage-12: a placement's file a merge makes unreada
   assert.equal(git(firstBare, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
 });
 
-test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: for a project placed at the first and the third of three instances, the first two over one Git backend, the first lacking a record the third holds — space.leave refused at an instance it holds no placement at, at one the home does not list and for the personal settings repository — space.leave of the third, fetched first, stops unreceived naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session with Retry, and once it is released moves the clone under the third's folder with its pair re-keyed, its file deleted as a local change; and of the third, the last, sent confirmed after it stops naming every unit, moves the clone under the local-only folder, local only, nothing at either host changed", async (t) => {
+test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: for a project placed at the first and the third of three instances, the first two over one Git backend, the first lacking a record the third holds — space.leave refused at an instance it holds no placement at, at one the home does not list and for the global records repository — space.leave of the third, fetched first, stops unreceived naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session with Retry, and once it is released moves the clone under the third's folder with its pair re-keyed, its file deleted as a local change; and of the third, the last, sent confirmed after it stops naming every unit, moves the clone under the local-only folder, local only, nothing at either host changed", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
   const third = await startHost({ displayName: THIRD_NAME });
@@ -526,8 +526,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   const atThird = await peerPush(peerClone(thirdBare), (dir) => { writeFileSync(join(dir, "peer.md"), "the third's alone\n"); });
 
   // Refused before anything runs: an instance the clone holds no
-  // placement at, one the home does not list, and the personal settings
-  // repository (space-29).
+  // placement at, one the home does not list, and the global records repository (space-29).
   await home.client.expectError("space.leave", { repository: key, instance: second.url }, "invalid_request", /^atlas does not sync there$/);
   await home.client.expectError("space.leave", { repository: key, instance: "https://unlisted.example" }, "not_found");
   await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^Personal settings sync with each Space when you sign in$/);

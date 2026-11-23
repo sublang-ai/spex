@@ -25,7 +25,7 @@ const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, signOut, forget, runTurn } = fixture;
 test.after(() => fixture.dispose());
 
-/** The stand-in's person, and your personal settings repository once signed in. */
+/** The stand-in's person, and the global records repository once signed in. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const HOST_NAME = "Stand-in Git host";
@@ -110,7 +110,7 @@ test("space-74: a 500 stops a check, a push and a join as the host's error; a re
   assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {})]), []);
 });
 
-test("space-60: a clone an earlier Spex keyed outside the instance's folder, its remote origin recording the host's id, moves under that folder at its next sync with its remote renamed, its upstream and fetched spex following; your personal settings repository keeps its folder", async (t) => {
+test("space-60: a clone an earlier Spex keyed outside the instance's folder, its remote origin recording the host's id, moves under that folder at its next sync with its remote renamed, its upstream and fetched spex following; the global records repository keeps its folder", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const home = await startHome("earlier", { host, project: false, extra: { signIn: "browser" } });
@@ -154,7 +154,7 @@ test("space-60: a clone an earlier Spex keyed outside the instance's folder, its
   assert.equal(Home.load(home.dataDir).keyForFolder(code), key, "its pair follows it");
   assert.ok((await again.client.expectOk("project.list", {})).some((project) => project.id === key));
 
-  // Your personal settings repository syncs where it stands, its folder
+  // The global records repository syncs where it stands, its folder
   // outside every instance's.
   const own = await again.client.settle("space.sync", { repository: HOST_OWN });
   assert.equal(own.sync.phase, "done", JSON.stringify(own.sync));
@@ -328,8 +328,8 @@ test("storage-38, storage-30: a confirmed Leave of a clone the instances migrati
   assert.deepEqual(deferredKeys(dataDir), [legacy], "[storage-30] still deferred");
   assert.equal(placementOf(stopped, host.url)?.attached, true, "[storage-38] still read as the instance's placement");
 
-  // Git able to, the Leave drops it and moves it under your own group's
-  // folder, local only, as for any clone (storage-38).
+  // Git able to, the Leave drops it and moves it under the personal records folder, local
+  // only, as for any clone (storage-38).
   unlock();
   const ownKey = `${LOGIN}/leaving-deferred-spex`;
   mark = again.client.mark();
@@ -441,8 +441,8 @@ test("storage-35, storage-5: a pick of a clone in your local projects folder mov
   }
   home.hooks.beforeStep = undefined;
 
-  // A session's lease beneath: the pick stands, the clone stays in your
-  // own group's folder with its remote named by the instance's folder,
+  // A session's lease beneath: the pick stands, the clone stays in the personal records
+  // folder with its remote named by the instance's folder,
   // and its first sync stops at the move the lease refuses.
   const leased = gitFolder("leased");
   const { key: leasedLocal } = await addFolder(home, leased);
@@ -474,9 +474,9 @@ test("storage-35, storage-5: a pick of a clone in your local projects folder mov
   } finally { if (!released) await live.release(); }
 });
 
-test("space-4, git-host-5: your namespace's listing of your personal settings repository is your own clone's — never a row not on this device, never cloned again by Join — before and after that clone records the host's id", async (t) => {
+test("space-4, git-host-5: your namespace's listing of the global records repository is your own clone's — never a row not on this device, never cloned again by Join — before and after that clone records the host's id", async (t) => {
   const host = await startHost();
-  // Your own group's repository, made at the instance from another device.
+  // The global records repository, made at the instance from another device.
   const listedOwn = host.script.addRepository({ group: LOGIN, name: `${LOGIN}-spex` });
   const home = await startHome("own-listed", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -501,7 +501,7 @@ test("space-4, git-host-5: your namespace's listing of your personal settings re
     released = true;
   } finally { if (!released) await lease.release(); }
 
-  // Released, a Refresh renames your own group and joins the two
+  // Released, a Refresh renames the personal records folder and joins the two
   // histories: the one row is your own clone, recording the host's id.
   const mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -681,7 +681,7 @@ test("git-host-12, space-30: the harness runs several stand-in instances at once
     assert.equal(signed.defaultInstance, host.url);
     assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[host.url, login, true]]);
     // Its read held names its display name and what the person may do
-    // there; your personal settings repository is made in the person's
+    // there; the global records repository is made in the person's
     // namespace there and pushed (space-4).
     const read = await home.client.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? null) !== null);
     assert.equal(instanceOf(read, host.url)?.displayName, name);
@@ -904,7 +904,7 @@ test("space-83, space-4, space-59, space-65, storage-34, storage-2, storage-36: 
   const placing = home.client.mark();
   const signed = await signIn(home, second);
   assert.deepEqual(signed.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[first.url, LOGIN, true], [second.url, bob.login, true]]);
-  // Your own group is placed at the second too, its first push there
+  // The global records repository is placed at the second too, its first push there
   // proceeding directly alongside the first (space-4, space-65).
   await home.client.waitRepository(placing, HOST_OWN, (repository) => repository.sync.phase === "done" && repository.placements.length === 2 && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
   const state = await home.client.expectOk("space.get", {});
@@ -915,7 +915,7 @@ test("space-83, space-4, space-59, space-65, storage-34, storage-2, storage-36: 
   // git-host-5).
   assert.deepEqual(state.instances.map((instance) => [instance.displayName, instance.read, typeof instance.readAt]), [[HOST_NAME, { phase: "idle" }, "number"], ["Second stand-in", { phase: "idle" }, "number"]]);
   assert.equal(Home.load(home.dataDir).instance(second.url)?.displayName, "Second stand-in");
-  // Your own group's folder bears the first's login, no later sign-in
+  // The personal records folder bears the first's login, no later sign-in
   // renaming it; its own repository is the first's, in your namespace
   // there, its first remote named by the first's folder, the instance
   // its row reads (space-4, space-59, storage-34, storage-31).
@@ -942,9 +942,9 @@ test("space-83, space-4, space-59, space-65, storage-34, storage-2, storage-36: 
 });
 
 /** Two stand-in instances on Git backends of their own, each holding a
- * group `acme` with a spex repository, and a home signed in at the
+ * project in the signed-in account's namespace, and a home signed in at the
  * first as `ada`, then at the second as `bob` (git-host-24, space-83),
- * your personal settings repository placed and synced at both (space-4). */
+ * the global records repository placed and synced at both (space-4). */
 async function twoInstances(name: string) {
   const bob = { id: "1002", login: "bob", displayName: "Bob" };
   const first = await startHost();
@@ -971,7 +971,7 @@ function meReads(host: StandinHost): number {
   return host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
 }
 
-test("space-4, space-83, space-65, storage-31: with both instances signed in and your personal settings repository holding no remote, a Refresh places it at the first, the earliest in the home's list, though the second answers first, then at the second, joining the bob-spex there, its push there proceeding directly", async (t) => {
+test("space-4, space-83, space-65, storage-31: with both instances signed in and the global records repository holding no remote, a Refresh places it at the first, the earliest in the home's list, though the second answers first, then at the second, joining the bob-spex there, its push there proceeding directly", async (t) => {
   const { bob, first, second, home } = await twoInstances("own-at-the-first");
   t.after(() => home.stop());
   const ownDir = clonePath(home.dataDir, HOST_OWN);
@@ -1016,14 +1016,14 @@ test("space-4, space-83, space-65, storage-31: with both instances signed in and
   assert.equal(git(bareOf(first, HOST_OWN), "rev-parse", "spex"), git(ownDir, "rev-parse", "spex"));
 });
 
-test("storage-34, storage-31: a clone's placements are its remotes in the order its Git configuration holds them, a rename keeping its place and origin last; your personal settings repository is at its first placement's instance, its row's, its environment's and its commits' identity's", async (t) => {
+test("storage-34, storage-31: a clone's placements are its remotes in the order its Git configuration holds them, a rename keeping its place and origin last; the global records repository is at its first placement's instance, its row's, its environment's and its commits' identity's", async (t) => {
   const { first, second, home } = await twoInstances("placements-in-order");
   t.after(() => home.stop());
   const own = clonePath(home.dataDir, HOST_OWN);
   const [atFirst, atSecond] = [hostFolder(first), hostFolder(second)];
   const firstUrl = git(own, "remote", "get-url", atFirst);
   const firstId = git(own, "config", "--get", `remote.${atFirst}.spexId`);
-  // Your own group's records at the second too, placed there as bob-spex
+  // The global records at the second too, placed there as bob-spex
   // by its sign-in (space-4), its `spex` pushed from here.
   await home.client.waitRepository(0, HOST_OWN, (repository) => repository.sync.phase === "done" && repository.placements.length === 2 && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
   const notesPath = "bob/bob-spex";
@@ -1057,7 +1057,7 @@ test("storage-34, storage-31: a clone's placements are its remotes in the order 
   assert.equal(instanceOrigin(), first.url);
 
   // Its first placement dropped and added again, it stands after the
-  // second's: your personal settings repository is now at the second, its
+  // second's: the global records repository is now at the second, its
   // folder kept, its commits made as the account there (space-32).
   git(own, "config", "--remove-section", `remote.${atFirst}`);
   git(own, "remote", "add", atFirst, firstUrl);
@@ -1163,7 +1163,7 @@ test("git-host-24, space-83, git-host-5, git-host-21: Refresh reads each instanc
   assert.deepEqual(rowsUnder(waited, second.url), [[betaKey, "absent", second.url]]);
 });
 
-test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the first refuses signs that instance out alone, its entry kept marked signed out and its rows unreachable with Sign in again — your personal settings repository, placed at the second too, reachable by that placement, its first placement's line reading Sign in again — the second's token, view and rows kept, and Refresh then reading the second alone; a sign-out of one keeps the other signed in", async (t) => {
+test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the first refuses signs that instance out alone, its entry kept marked signed out and its rows unreachable with Sign in again — the global records repository, placed at the second too, reachable by that placement, its first placement's line reading Sign in again — the second's token, view and rows kept, and Refresh then reading the second alone; a sign-out of one keeps the other signed in", async (t) => {
   const { bob, first, second, alpha, home, alphaKey, betaKey } = await twoInstances("signed-out-alone");
   t.after(() => home.stop());
   let mark = home.client.mark();
@@ -1190,12 +1190,8 @@ test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the fir
   assert.deepEqual(pairs()[second.url], pairsBefore[second.url], "the second's token stands");
   const atFirst = instanceOf(out, first.url);
   assert.deepEqual([atFirst?.signedIn, atFirst?.hostSignedOut, atFirst?.read, atFirst?.readAt], [false, true, { phase: "idle" }, null]);
-  // Its rows turn unreachable with "Sign in again", their clones kept,
-  // each under its key's group at its heading, your own group's own
-  // repository under your own group (git-host-4, space-6, space-1). Your
-  // personal settings repository, placed at the second too, stays
-  // reachable by that placement, its first placement's line reading
-  // "Sign in again" (space-61, space-4).
+  // Signed-out rows keep their Space heading. The global records remain
+  // reachable through the second placement (space-1, space-6, space-61).
   assert.ok(out.repositories.some((repository) => repository.key === HOST_OWN));
   const alphaRow = repositoryOf(out, alphaKey);
   assert.deepEqual([alphaRow.state, alphaRow.reason, alphaRow.instance], ["unreachable", "Sign in again", first.url]);
@@ -1397,7 +1393,7 @@ test("core-service-123, core-service-42: signed in at the first as ada and at th
   assert.equal(await authorOf(local, "Still here alone"), undefined);
 });
 
-test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61, space-65: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name — your personal settings repository, placed at the second too, reachable by that placement, its Sync proceeding through the second — while the second's stay reachable and sync with the second's credential", async (t) => {
+test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61, space-65: a credential the second refuses to a transport signs the second out alone before Git runs; space.signout of the first lists it signed out, its rows unreachable and their Sync refused naming the first's display name — the global records repository, placed at the second too, reachable by that placement, its Sync proceeding through the second — while the second's stay reachable and sync with the second's credential", async (t) => {
   const { first, second, alpha, beta, home, alphaKey, betaKey } = await twoInstances("signed-out-transport");
   t.after(() => home.stop());
   let mark = home.client.mark();
@@ -1449,7 +1445,7 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61
   const alphaRow = repositoryOf(signedOut, alphaKey);
   assert.deepEqual([alphaRow.state, alphaRow.reason, alphaRow.instance], ["unreachable", "Sign in again", first.url]);
   await home.client.expectError("space.sync", { repository: alphaKey }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
-  // Your personal settings repository, placed at the second too, stays
+  // The global records repository, placed at the second too, stays
   // reachable by that placement, its first placement's line reading
   // "Sign in again"; its Sync proceeds through the second without another
   // acknowledgement (space-61, space-65, space-4).
@@ -1479,7 +1475,7 @@ async function refreshed(home: Awaited<ReturnType<typeof startHome>>): Promise<S
     || (instance.read.phase === "idle" && (instance.readAt ?? 0) > (instanceOf(before, instance.origin)?.readAt ?? 0))), 30_000);
 }
 
-test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-host-9, space-141, space-11, space-12, space-32, space-61: two instances over one Git backend, the first signed out — a namespace repository both list reads reachable through the second, a Check host of it refused until it follows; its next Sync moves its clone under the second's folder with its remote renamed, its placement file rewritten to the second and the first's deleted, its pair, session and sync preferences re-keyed and its last sync kept, then reads the second's catalog and pushes with a credential the second issued, its Save commit bearing the account there; your personal settings repository follows by its remote's rename alone; the repository the first lists alone reads unreachable, no transport running for it through the second's credential", async (t) => {
+test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-host-9, space-141, space-11, space-12, space-32, space-61: two instances over one Git backend, the first signed out — a namespace repository both list reads reachable through the second, a Check host of it refused until it follows; its next Sync moves its clone under the second's folder with its remote renamed, its placement file rewritten to the second and the first's deleted, its pair, session and sync preferences re-keyed and its last sync kept, then reads the second's catalog and pushes with a credential the second issued, its Save commit bearing the account there; the global records repository follows by its remote's rename alone; the repository the first lists alone reads unreachable, no transport running for it through the second's credential", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   // The two Spaces expose different subsets of the same account’s projects.
@@ -1499,7 +1495,7 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
 
   // Joined through the first — `a-spex` paired with a working folder and
   // synced there once, recording this device's last sync — and the
-  // first's own group's repository beside it.
+  // global records repository at the first Space beside it.
   const code = gitFolder("a");
   mark = home.client.mark();
   await home.client.expectOk("space.join", { instance: first.url, hostId: a.id, folder: code });
@@ -1529,8 +1525,8 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
   assert.deepEqual([repositoryOf(out, soloKey).state, repositoryOf(out, soloKey).reason, repositoryOf(out, soloKey).instance], ["unreachable", "Sign in again", first.url]);
 
   // A Check host follows no instance: refused naming the first, nothing
-  // fetched through the second (git-host-9); the first's own group's
-  // repository, which the second does not list, is refused a Sync
+  // fetched through the second (git-host-9); the first Space’s
+  // solo project, which the second does not list, is refused a Sync
   // likewise (space-11).
   const transported = first.script.transportCredentials.length;
   await home.client.expectError("space.fetch", { repository: aKey }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
@@ -1588,7 +1584,7 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
   const after = await home.client.expectOk("space.get", {});
   assert.deepEqual(rowsUnder(after, second.url), [[followedKey, "reachable", second.url]]);
 
-  // Your personal settings repository follows the second by its remote's
+  // The global records repository follows the second by its remote's
   // rename alone, keeping its folder, and syncs through it (space-60).
   const ownFrom = first.script.transportCredentials.length;
   const ownSynced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
@@ -1708,7 +1704,7 @@ test("space-83, space-82, space-29, git-host-10: space.forget of a signed-out in
   assert.deepEqual([first.script.requests.length, second.script.requests.length], asked, "Forget asks nothing of either instance");
 });
 
-test("space-83, space-82, space-61, space-4, space-59, space-141, space-32, storage-2, storage-34: on a home signed in at the first alone, space.forget after its sign-out drops your personal settings repository's remote, its id, the spex it fetched and its upstream with it, its placement file left, the state listing no instance and that row local only; a sign-in then at the second creates bob-spex in the second's namespace and pushes it, the folder keeping ada", async (t) => {
+test("space-83, space-82, space-61, space-4, space-59, space-141, space-32, storage-2, storage-34: on a home signed in at the first alone, space.forget after its sign-out drops the global records repository's remote, its id, the spex it fetched and its upstream with it, its placement file left, the state listing no instance and that row local only; a sign-in then at the second creates bob-spex in the second's namespace and pushes it, the folder keeping ada", async (t) => {
   const bob = { id: "1002", login: "bob", displayName: "Bob" };
   const first = await startHost();
   const second = await startHost({ displayName: "Second stand-in", person: bob });
@@ -1720,8 +1716,8 @@ test("space-83, space-82, space-61, space-4, space-59, space-141, space-32, stor
   assert.ok(created.id);
   await signOut(home, first);
 
-  // Forget of the first, which no signed-in instance replaces: your own
-  // group's own repository's remote there is dropped — the host's id in
+  // Forget of the first, which no signed-in instance replaces: the global records
+  // repository's remote there is dropped — the host's id in
   // its section (storage-34), the spex it fetched and the upstream naming
   // it with it, its last check cleared, its placement file left — and the
   // entry goes, the home as before any sign-in (space-82, space-141,
@@ -1762,7 +1758,7 @@ test("space-83, space-82, space-61, space-4, space-59, space-141, space-32, stor
   assert.deepEqual(state.instances.map((instance) => [instance.origin, instance.account.login, instance.signedIn]), [[second.url, bob.login, true]]);
 });
 
-test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36: two instances over one Git backend, the first signed out — space.forget of the first, a session beneath b-spex's clone under a lease taken out of band, is refused naming that session, the instance and that clone kept as they were and a-spex's follow made; the lease released, it re-keys b-spex's clone under the second's folder with its remote renamed, its pair re-keyed and its placement file rewritten to the second's, and removes the instance, your personal settings repository keeping its folder and syncing with the second through its remote renamed, its placement file rewritten to the second's with the first's deleted", async (t) => {
+test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36: two instances over one Git backend, the first signed out — space.forget of the first, a session beneath b-spex's clone under a lease taken out of band, is refused naming that session, the instance and that clone kept as they were and a-spex's follow made; the lease released, it re-keys b-spex's clone under the second's folder with its remote renamed, its pair re-keyed and its placement file rewritten to the second's, and removes the instance, the global records repository keeping its folder and syncing with the second through its remote renamed, its placement file rewritten to the second's with the first's deleted", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   const a = first.script.addRepository({ group: LOGIN, name: "a-spex" });
@@ -1813,7 +1809,7 @@ test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36:
     assert.ok(existsSync(join(bClone, ".git")) && !existsSync(clonePath(home.dataDir, bFollowed)), "that clone stays where it lay");
     assert.deepEqual(remotes(bKey), [hostFolder(first)]);
     assert.equal(Home.load(home.dataDir).keyForFolder(code), bKey);
-    assert.deepEqual(remotes(HOST_OWN), [hostFolder(first)], "your personal settings repository is reached only after every follow");
+    assert.deepEqual(remotes(HOST_OWN), [hostFolder(first)], "the global records repository is reached only after every follow");
     assert.ok(existsSync(join(clonePath(home.dataDir, aFollowed), ".git")) && !existsSync(clonePath(home.dataDir, aKey)), "a-spex's follow is made");
     assert.deepEqual(remotes(aFollowed), [hostFolder(second)]);
     const refusedState = await home.client.expectOk("space.get", {});
@@ -1827,7 +1823,7 @@ test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36:
 
   // The lease released, Forget re-keys `b-spex`'s clone under the
   // second's folder with its remote renamed and its pair re-keyed, then
-  // removes the instance; your personal settings repository keeps its
+  // removes the instance; the global records repository keeps its
   // folder, its remote renamed to the second's folder (space-82,
   // space-60, storage-34).
   const forgotten = await forget(home, first);
@@ -1839,8 +1835,7 @@ test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36:
   assert.deepEqual(remotes(HOST_OWN), [hostFolder(second)]);
   assert.ok(existsSync(join(ownClone(home.dataDir), ".git")));
   // Each placement file is rewritten to the second's, the first's
-  // deleted, in the step that renames its remote (storage-36): your own
-  // group's among them (space-82).
+  // deleted, in the step that renames its remote (storage-36): including the global records repository (space-82).
   const ownId = git(ownClone(home.dataDir), "config", "--get", `remote.${hostFolder(second)}.spexId`);
   for (const [clone, id] of [[clonePath(home.dataDir, bFollowed), b.id], [ownClone(home.dataDir), ownId]] as const) {
     assert.deepEqual(readdirSync(join(clone, PLACEMENTS_DIR)), [`${hostFolder(second)}.yaml`], clone);
@@ -1852,7 +1847,7 @@ test("space-84, space-82, space-60, space-29, space-141, storage-34, storage-36:
   assert.ok(!existsSync(join(home.dataDir, "workspace", hostFolder(first))), "nothing is kept under the first's folder");
   assert.equal(first.script.requests.filter((request) => request.path.startsWith("/api/")).length, askedFirst, "nothing asks the first");
 
-  // Your personal settings repository syncs with the second through its
+  // The global records repository syncs with the second through its
   // renamed remote, with a credential the second issued (space-82).
   const ownFrom = first.script.transportCredentials.length;
   const ownSynced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);

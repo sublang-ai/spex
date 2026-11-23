@@ -24,7 +24,7 @@ test.after(() => fixture.dispose());
 
 type Device = Awaited<ReturnType<typeof startHome>>;
 
-/** The first stand-in's person, and the personal settings repository once
+/** The first stand-in's person, and the global records repository once
  * signed in as them. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
@@ -218,7 +218,7 @@ test("space-93, space-99, storage-36, space-87, space-29, space-61, space-63, sp
   // instance the home does not list, or for no clone, not found; and
   // signed out there (space-29, storage-36).
   await three.client.expectError("space.attach", { repository: key, instance: first.url }, "invalid_request", new RegExp(`^atlas is at ${HOST_NAME} already$`));
-  // The personal settings repository, which the third home's sign-in at
+  // The global records repository, which the third home's sign-in at
   // the second placed there, is placed there already (space-4).
   await three.client.expectError("space.attach", { repository: HOST_OWN, instance: second.url }, "invalid_request", new RegExp(`^${LOGIN} is at ${SECOND_NAME} already$`));
   const { key: other, clone: otherClone } = await addFolder(two, gitFolder("other"));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The sidebar names one place at a time (run-view-122): leaving
+// The sidebar marks one surface current (run-view-122): leaving
 // Projects — for the Dashboard, the Playbooks surface or Space — leaves
 // no project row lit beside the surface's own entry, and coming back
 // lights the remembered project again; a project's Playbooks tab stands
@@ -27,8 +27,7 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   await expect(nav(page, "Projects")).toHaveAttribute("aria-current", "page");
   await expect(projectRow).toHaveAttribute("aria-selected", "true");
 
-  // The Dashboard, the Playbooks surface and Space are places of their
-  // own; none leaves a row behind claiming to be where the reader is.
+  // Each surface marks its own entry current and clears tree selection.
   await nav(page, "Dashboard").click();
   await expect(nav(page, "Dashboard")).toHaveAttribute("aria-current", "page");
   await expect(selectedRows).toHaveCount(0);

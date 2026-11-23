@@ -114,19 +114,19 @@ export interface StoreOptions {
   /** The agents the seed counts as set up, confirmed before the store
    * opens; the credential variables alone where absent (core-service-3). */
   seedCredentials?: SeedCredentials;
-  /** Your own group's folder name for a new home; this device's user
+  /** The personal records folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
   /** The home's compiled-playbook library, for the migration's checks. */
   libraryDir?: string;
-  /** Publish a config a former location holds at your own group's
-   * config path before the starter is seeded there (core-service-66). */
+  /** Publish a config a former location holds at the global config path before the starter is
+   * seeded there (core-service-66). */
   relocateConfig?: (configPath: string) => void;
   /** Internal: Store.open runs the migration the constructor defers. */
   deferMigration?: boolean;
   /** Write the environment at `root`, naming `space` as the
    * environment's instance wherever the spex repository is placed at one
-   * (environments-2, DR-165): `global`, your own group's clone, when the
+   * (environments-2, DR-165): `global`, the global records clone, when the
    * home is made — as its config is seeded, before its first commit —
    * requesting the built-in spec package, locked at `registryOrigin`, the
    * environment's registry (environments-11, DR-127, DR-176); else a new
@@ -573,7 +573,7 @@ export class Store {
   /** Whether a legacy store was imported into the former layout this
    * open, which the groups migration carries into the home. */
   private legacyImported = false;
-  /** Whether this open seeded the starter into your own group's clone. */
+  /** Whether this open seeded the starter into the global records clone. */
   seededConfig = false;
 
   private meta: StoreMeta = { version: META_VERSION };
@@ -720,8 +720,7 @@ export class Store {
   /** The home file this store serves, as `home.yaml` reads now. */
   get home(): Home { this.refreshHome(); return this.homeFile; }
 
-  /** Read or create `home.yaml`, make sure your own group's spex
-   * repository stands, and index every clone under `workspace/`. */
+  /** Read or create `home.yaml`, make sure the global records repository stands, and index every clone under `workspace/`. */
   private openHome(): void {
     if (Home.exists(this.dir)) {
       try { this.homeFile = Home.load(this.dir); }
@@ -754,7 +753,7 @@ export class Store {
     }).map((move) => ({ ...move }));
   }
 
-  /** Your own group's clone always stands, its config seeded from the
+  /** The global records clone always stands, its config seeded from the
    * starter and its `spex` branch begun with one commit (storage-6); the
    * seed's run requests the built-in spec package in the global
    * environment, once, so a later removal stands (environments-11). */
@@ -837,7 +836,7 @@ export class Store {
 
   /** Every clone under `workspace/` as the folders stand now: a folder
    * named `<name>-spex` inside plain group folders mirroring the Git host
-   * (storage-1), under an instance's folder or your own group's, its key
+   * (storage-1), under an instance's folder or the personal records folder, its key
    * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
    * again keeps its descriptor, and one gone leaves the map. */
   private currentRepositories(): Map<string, SpexRepository> {
@@ -903,7 +902,7 @@ export class Store {
 
   repository(key: string): SpexRepository | undefined { return this.currentRepositories().get(key); }
 
-  /** Your own group's spex repository: made at the store's open alone
+  /** The global records repository: made at the store's open alone
    * (storage-6), and refused, never made again, where it went since. */
   ownRepository(): SpexRepository {
     this.refreshHome();
@@ -1055,7 +1054,7 @@ export class Store {
 
   // -- sessions, one shared store per clone (storage-14) --------------------
 
-  /** A clone's session store; your own group's by default: where the
+  /** A clone's session store; the global records repository’s by default: where the
    * XDG import lands (storage-18) and what a session-less caller reads.
    * A key naming no clone now is refused, never served by another's. */
   sessionStore(key?: string): SharedSessionStore {
@@ -1767,8 +1766,8 @@ export class Store {
 
   // -- projects (projects-10, storage-6) ------------------------------------
 
-  /** Pair a working folder with a new local spex repository in your own
-   * group, or select the pair it already has (storage-6). */
+  /** Pair a working folder with a new local spex repository under the personal records
+   * folder, or select the pair it already has (storage-6). */
   registerProject(path: string, name: string, _at?: number): ProjectInfo {
     this.assertProjectsWritable();
     const normalized = resolve(path);
@@ -1836,7 +1835,7 @@ export class Store {
     this.saveHome();
   }
 
-  /** This device's user name as your own group's folder name: the name a
+  /** This device's user name as the personal records folder name: the name a
    * new home's folder takes, which a sign-in renames while the folder
    * still bears it (storage-2, space-59). */
   deviceOwnName(): string {
@@ -1874,8 +1873,7 @@ export class Store {
 
   /**
    * Clones the caller already moved on disk (space-59, space-60): every
-   * pair naming a moved key names its new one in `home.yaml`, your own
-   * group's name follows where it was renamed, and the indexes — clones,
+   * pair naming a moved key names its new one in `home.yaml`, the personal records folder name follows where it was renamed, and the indexes — clones,
    * sessions, the preferences keyed by repository — follow in the same
    * step, so no reader sees a key that names nothing; intents are read
    * where their clones now lie. Only the write of `home.yaml` throws: one
@@ -2042,7 +2040,7 @@ export class Store {
     for (const repository of repositories) {
       if (paired.has(repository.key)) continue;
       const held = [...this.sessions.values()].filter((meta) => meta.projectId === repository.key);
-      // Your own group's clone needs a folder only once it holds sessions.
+      // The global records clone needs a folder only once it holds sessions.
       if (repository.key === this.homeFile.own() && held.length === 0) continue;
       const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
       const { name } = splitKey(repository.key);

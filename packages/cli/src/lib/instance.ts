@@ -127,7 +127,7 @@ export function isInstanceFolder(value: string): boolean {
 
 /** The instance folder a key begins with — `@spex.sublang.ai` of
  * `@spex.sublang.ai/acme/a-spex` — or null for a key outside every instance's
- * folder, as your own group's and the local-only clones' are. */
+ * folder, as for the global records repository and local-only project clones. */
 export function instanceSegmentOf(key: string): string | null {
   const at = key.indexOf("/");
   if (at < 0) return null;

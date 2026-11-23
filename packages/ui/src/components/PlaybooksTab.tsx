@@ -140,7 +140,7 @@ export function PlaybooksTab({
   project,
   onNavigate,
 }: {
-  /** The project whose tab this is, at the place it is shown. */
+  /** The project whose Playbooks tab is open. */
   project: ProjectInfo;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {

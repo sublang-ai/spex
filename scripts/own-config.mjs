@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Your own group's configuration in a Spex home (storage-1, DR-103): the
+// The global configuration in a Spex home (storage-1, DR-103): the
 // clone `home.yaml` names under `workspace/`, read once a core has
 // written the home.
 import { readFileSync } from "node:fs";

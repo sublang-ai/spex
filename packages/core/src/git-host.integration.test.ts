@@ -480,7 +480,7 @@ test("storage-19, git-host-11: a credentials file the YAML parser would quote, o
     await assert.rejects(store.read(), refused);
     assert.throws(() => store.replace(null, { access: "a", accessExpiresAt: 1, refresh: "r" }), refused);
     assert.equal(readFileSync(file, "utf8"), text, "the file is left as it is");
-    // A core reading it at start says so in the Groups state, naming the
+    // A core reading it at start says so in the Space state, naming the
     // file and none of its content.
     const home = await space.startHome("quoted-credentials-again", { host, project: false, dataDir: first.dataDir });
     replies.push(await home.client.command("space.get", {}), await home.client.command("storage.diagnostics", {}));

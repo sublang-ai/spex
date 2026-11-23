@@ -19,7 +19,7 @@ export function PackagesTab({
   project,
   onNavigate,
 }: {
-  /** The project whose tab this is, at the place it is shown. */
+  /** The project whose Packages tab is open. */
   project: ProjectInfo;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
