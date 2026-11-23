@@ -9,6 +9,7 @@ Accepted (2026-11-03) on the owner's request to review the purpose and priority 
 Amends [DR-196](196-a-review-count-and-a-way-back.md) and [DR-197](197-dismiss-reminders-without-losing-history.md) in naming the saved-file review Files & history and in the return path for optional folder recovery: Space → Files & history → Dismissed replaces Locate project files in the sidebar.
 Amends [DR-175](175-projects-shown-where-they-are-open.md) in sidebar availability by restoring headings only for places holding or opening projects.
 Amends [DR-195](195-read-saved-conversations-before-locating-files.md) in returning from saved history directly to its place's review.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: server-specific location wording and recovery navigation. Local Files & history continues.
 
 ## Context
 

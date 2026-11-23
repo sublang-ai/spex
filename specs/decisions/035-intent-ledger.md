@@ -22,6 +22,7 @@ Amended by [DR-103](103-the-home-and-its-groups.md): an intent is one file in it
 Amended by [DR-119](119-an-answer-continues-its-intent.md) in what a Boss turn sent while a question waits belongs to: it continues the work that asked, a session entry standing in where no intent is bound leads with the turn that opened that work rather than the latest, and a dispatch waits for the answer; the fields, turn ranges, derived states, bands and verdicts stand.
 Amended by [DR-134](134-execution-ownership.md) in its attention queue and verdicts: only the runtime's own records count.
 Amended by [DR-133](133-one-desktop-over-several-cores.md) in the Dashboard's attention: one queue joins every connected core's attention.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: each IDE's connection, sidebar and Dashboard return to one core.
 
 ## Context
 

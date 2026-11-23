@@ -10,6 +10,7 @@ Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "nothing rewrites a s
 Amends [DR-132](132-team-servers.md) in "a seat's core reads that file into its process environment at start": the read, with the member's own credentials, comes before the seat seeds its config.
 The exclusive first create, the seed's text and its agreement with the `playbook` CLI under the same credentials and home stand.
 Amended by [DR-206](206-the-workshop-points-to-its-guide.md): each readiness request reseeds too.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

@@ -47,8 +47,8 @@ const commandMock = vi.fn();
 const REGISTRY = "https://spex.example";
 
 /** The global environment: the built-in package at an older release
- * than the app ships, a registry package and a path one in your own
- * group's clone. */
+ * than the app ships, a registry package and a path package in the
+ * global records repository. */
 const GLOBAL: EnvironmentState = environment({
   ...OWN_ENVIRONMENT,
   registry: { origin: REGISTRY, legacy: false },

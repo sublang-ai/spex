@@ -9,7 +9,7 @@
 import type { AgentBlockInput } from "@sublang/spex-core/protocol";
 
 import type { SpexClient } from "./client.js";
-import { getClient } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 
 /** A merge patch over an existing agent block (DR-019): provided
  * keys change, absent keys survive, and an explicit null unsets a
@@ -31,23 +31,20 @@ export type AgentPatch = {
   permissions?: AgentBlockInput["permissions"] | null;
 };
 
-/** Set the Captain's block at a core: the local core's unless `client`
- * names the core of the place shown (run-view-168). */
-export function setCaptain(patch: AgentPatch, client: SpexClient = getClient()): Promise<unknown> {
-  return client.command("config.edit", {
+/** Set the Captain's block. */
+export function setCaptain(patch: AgentPatch): Promise<unknown> {
+  return useAppStore.getClient().command("config.edit", {
     op: { kind: "captain.set", patch },
   });
 }
 
 /** Edit a session player's envelope — identity and defaults. Settings
- * owns this; a role binding cannot reach it (DR-032). The local core's
- * unless `client` names the core of the place shown (run-view-168). */
+ * owns this; a role binding cannot reach it (DR-032). */
 export function patchPlayer(
   playerId: string,
   patch: AgentPatch,
-  client: SpexClient = getClient(),
 ): Promise<unknown> {
-  return client.command("config.edit", {
+  return useAppStore.getClient().command("config.edit", {
     op: { kind: "player.set", playerId, patch },
   });
 }
@@ -56,8 +53,7 @@ export function patchPlayer(
  * the provider default; null clears the override so the role inherits
  * the player's (DR-032). `repository` names whose config the entry is
  * in — a project's takes the player alone (playbook-library-4); absent,
- * your own group's. The local core's unless `client` names the core of
- * the place shown (run-view-168). */
+ * the global config. */
 export function bindRole(
   playbookId: string,
   role: string,
@@ -70,8 +66,8 @@ export function bindRole(
     fastMode?: boolean | null;
     ultracode?: boolean | null;
   },
-  repository?: string,
-  client: SpexClient = getClient(),
+  repository: string | undefined,
+  client: Pick<SpexClient, "command">,
 ): Promise<unknown> {
   // An untouched tuning is absent, not `undefined`: the op means
   // "preserve the existing value" when a key does not appear; null clears it.

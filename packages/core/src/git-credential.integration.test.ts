@@ -17,7 +17,7 @@ import { test } from "node:test";
 
 import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 
-import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, gitCredentialHelperPath, memberHelperCommand, withGitCredential } from "./git-credential.js";
+import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, gitCredentialHelperPath, withGitCredential } from "./git-credential.js";
 import { scratchDir } from "./testing/scratch.js";
 
 /** A folder name holding what `sh` reads specially: a space, `$`, a
@@ -72,11 +72,6 @@ test("git-host-37: the helper's line quotes each path as one word and refuses on
   try {
     assert.equal(windows.configArgs[3], String.raw`credential.helper=!'C:\Users\a b\AppData\Local\Programs\Spex\Spex.exe' 'C:\Users\a b\it'\''s $x\git-credential-spex.mjs'`, "[git-host-9] backslashes, a space, `$` and a quote stand in single quotes");
   } finally { await windows.dispose(); }
-  assert.equal(
-    memberHelperCommand({ execPath: "/opt/spex/bin/node", electron: false }, "/home/m/.spex/local/code-credentials.yaml", { helperPath: "/opt/spex/it's/helper.mjs" }),
-    String.raw`!'/opt/spex/bin/node' '/opt/spex/it'\''s/helper.mjs' --member '/home/m/.spex/local/code-credentials.yaml'`,
-    "[git-host-9] the member mode's line quotes its paths alike",
-  );
   await assert.rejects(withGitCredential({ username: "oauth2", secret: "x" }, { execPath: "/tmp/a\nb", electron: false }), /cannot be quoted/, "[git-host-9] a path no line carries is refused");
   await assert.rejects(withGitCredential({ username: "oauth2", secret: "x\ny" }, currentRuntime()), /cannot carry/);
 });

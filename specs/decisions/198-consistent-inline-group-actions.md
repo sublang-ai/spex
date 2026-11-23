@@ -13,6 +13,7 @@ Amends [DR-190](190-membership-with-a-clear-scope.md) in membership-panel presen
 Extended by [DR-203](203-groups-within-groups-and-deletion-review.md) in applying the attached presentation and bounded editor layout to top-level and nested New group.
 Extends [DR-187](187-the-group-chooser-belongs-to-its-project.md)'s attached expansion to Members and Delete group.
 Applies [DR-010](010-interface-craft.md)'s visual and keyboard rules to these flows and the related New group and Invite members editors.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
 
 ## Context
 

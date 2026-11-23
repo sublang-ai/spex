@@ -103,7 +103,7 @@ export function runsElsewhere(runtime: AssignedRuntime | null | undefined, devic
 export function runsOnPhrase(label: string): string {
   return i18n._({
     id: "Runs on {label}",
-    comment: "Why a session or an intent does not run here: it is assigned to another runtime, named by its label — the server's name on a seat, else the host name",
+    comment: "Why a session or an intent does not run here: it is assigned to another runtime, identified by its display label",
     values: { label },
   });
 }

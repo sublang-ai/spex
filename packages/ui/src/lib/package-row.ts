@@ -7,7 +7,7 @@
 // project's Packages tab for a project's package, the Playbooks surface
 // for a global one — then bring the row into view once it draws.
 
-import type { AppStore } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 
 /** How long the row is looked for while the page reads its packages. */
 const LOOK_MS = 3000;
@@ -18,10 +18,10 @@ const LOOK_MS = 3000;
 export type PackageRowPlace = { projectId: string } | { show: () => void };
 
 /** Show the page `place` names and bring `name`'s row into view there. */
-export function openPackageRow(store: AppStore, place: PackageRowPlace, name: string): void {
+export function openPackageRow(place: PackageRowPlace, name: string): void {
   let container: string;
   if ("projectId" in place) {
-    store.getState().setWorkspaceTab(place.projectId, "packages");
+    useAppStore.getState().setWorkspaceTab(place.projectId, "packages");
     container = "packages-tab";
   } else {
     place.show();

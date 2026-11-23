@@ -4,7 +4,7 @@
 // RUN-42 (amended by DR-011): the project palette is fully keyboard
 // operable, carries per-project live state, and owns add/create.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { useState } from "react";
 import {
   cleanup,
@@ -18,9 +18,7 @@ afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
 import { SpexCommandError } from "../lib/client.js";
-import { createAppStore, setClientForTests, useAppStore } from "../state/store.js";
-import { usePlaces } from "../state/places.js";
-import { useServerOpens } from "../state/server-opens.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
 import {
   applyRecords,
   initialSessionView,
@@ -28,16 +26,13 @@ import {
 } from "../state/reducer.js";
 import type {
   ProjectInfo,
-  RepositoryState,
-  SeatState,
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
-import { NO_CAN, groupsState, instanceState, namespace, repositoryRow, type RowOver } from "../fixtures/groups-state.js";
 
 const PROJECTS: ProjectInfo[] = [
-  { id: "me/alpha-spex", path: "/tmp/alpha", name: "alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex", group: "me", own: true } },
-  { id: "me/beta-spex", path: "/tmp/beta", name: "beta", registeredAt: 1, repository: { key: "me/beta-spex", name: "beta-spex", group: "me", own: true } },
+  { id: "me/alpha-spex", path: "/tmp/alpha", name: "alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex" } },
+  { id: "me/beta-spex", path: "/tmp/beta", name: "beta", registeredAt: 1, repository: { key: "me/beta-spex", name: "beta-spex" } },
 ];
 
 function liveSession(id: string, projectId: string): SessionInfo {
@@ -56,23 +51,7 @@ function liveSession(id: string, projectId: string): SessionInfo {
 }
 
 /** A view parked on a Boss question (attention: question). */
-function parkedView(): SessionView {
-  return applyRecords(initialSessionView([]), [
-    {
-      seq: 1,
-      record: {
-        type: "captain_telemetry",
-        turnId: 1,
-        timestamp: 1,
-        topic: "playbook.fsm.state",
-        payload: {
-          to: "awaitBossReply",
-          pendingBossQuestion: { player: "coder", question: "Which way?" },
-        },
-      } as unknown as TmuxPlayRecord,
-    },
-  ]);
-}
+
 
 function renderPalette(overrides: Partial<Parameters<typeof ProjectPalette>[0]> = {}) {
   const onPick = vi.fn();
@@ -351,6 +330,35 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
   });
 });
 
+describe("projects-17: registration refusals in the palette", () => {
+  afterEach(() => setClientForTests(undefined));
+
+  test.each([
+    { path: "/tmp/alpha/src", message: "“/tmp/alpha/src” is inside a Git work tree. Add its top-level folder instead: “/tmp/alpha”." },
+    { path: "/tmp/plain", message: "“/tmp/plain” is outside a Git work tree. Use Create to start a repository there." },
+    {
+      path: "/tmp/bare",
+      message: "Git could not inspect “/tmp/bare” as a project folder. Choose the top-level folder of a Git work tree.",
+      output: "fatal: this operation must be run in a work tree",
+    },
+  ])("shows the applicable guidance for $path", async ({ path, message, output }) => {
+    const command = vi.fn().mockRejectedValue(new SpexCommandError("invalid_request", message, output ? { output } : undefined));
+    setClientForTests({ command } as never);
+    const { onPick, onClose } = renderPalette({ onAddPath: useAppStore.getState().addProjectByPath });
+    const field = screen.getByTestId("palette-path");
+    fireEvent.change(field, { target: { value: path } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect((await screen.findByTestId("palette-error")).firstChild?.textContent).toBe(message);
+    expect(screen.queryByTestId("palette-error-detail")?.textContent).toBe(output);
+    expect(command.mock.calls.map(([type, fields]) => [type, fields])).toEqual([
+      ["project.register", { path }],
+    ]);
+    expect(field).toHaveProperty("value", path);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
 describe("projects-35: a Create refusal shows Git's words beneath the app's", () => {
   const WORDS =
     "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.";
@@ -430,392 +438,5 @@ describe("DR-015: the palette offers the Academy example", () => {
     );
     expect(onPick).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-  });
-});
-
-describe("projects-1, space-58: a folder added while signed in asks for its group in place", () => {
-  beforeEach(() => {
-    setClientForTests({ command: vi.fn(async (type: string) => type === "space.get"
-      ? useAppStore.getState().space
-      : type === "server.list" ? { servers: [], failures: [] } : {}) } as never);
-  });
-  afterEach(() => setClientForTests(undefined));
-
-  const ADDED: ProjectInfo = { id: "ada/gamma-spex", path: "/tmp/gamma", name: "gamma", registeredAt: 2, repository: { key: "ada/gamma-spex", name: "gamma-spex", group: "ada", own: true } };
-  const HOST = "https://host.test";
-  const SECOND = "https://second.test";
-  const row = (key: string, extra: RowOver = {}) => repositoryRow(key, { folder: "/tmp/gamma", ...extra });
-  const acme = (id: string) => ({ id, login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories: [] });
-  /** An instance where ada may be signed in, listing her namespace and
-   * acme. */
-  const at = (origin: string, signedIn: boolean, id: string) =>
-    instanceState(origin, {
-      displayName: origin === HOST ? "Host" : "Second",
-      account: { id: "1", login: "ada", displayName: null, canCreateGroup: false },
-      signedIn,
-      groups: [namespace("ada"), acme(id)],
-    });
-  /** Ada's home: signed in to the host where `account`, else listing no
-   * instance; the added folder's clone under her own group. */
-  const groups = (account: boolean, repositories: RepositoryState[]) =>
-    groupsState({ defaultInstance: HOST, own: { name: "ada", named: !account, repositories }, instances: account ? [at(HOST, true, "20")] : [] });
-
-  function add(path = "/tmp/gamma"): void {
-    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: path } });
-    fireEvent.click(screen.getByTestId("palette-add"));
-  }
-
-  test("the picker stands in the palette; picking a group creates there and closes it", async () => {
-    const spacePick = vi.fn(async () => {});
-    useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
-    const onNote = vi.fn();
-    const onShowSpace = vi.fn();
-    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED), onNote, onShowSpace });
-    add();
-    await screen.findByTestId(`space-picker-${ADDED.id}`);
-    // The folder is the current project already; nothing is closed yet,
-    // and the picker stands where the list was.
-    expect(onPick).toHaveBeenCalledWith(ADDED.id);
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("palette-path")).toBeNull();
-    // No field names the new records: they take the folder's name
-    // (space-58, DR-172).
-    expect(screen.queryByTestId(`space-pick-name-${ADDED.id}`)).toBeNull();
-    fireEvent.click(screen.getByTestId("space-pick-group-acme"));
-    expect(spacePick).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(screen.getByTestId(`space-pick-submit-${ADDED.id}`)).toHaveProperty("disabled", false));
-    fireEvent.click(screen.getByTestId(`space-pick-submit-${ADDED.id}`));
-    await vi.waitFor(() =>
-      expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: HOST, groupId: "20", name: "gamma" }),
-    );
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(onShowSpace).toHaveBeenCalledTimes(1);
-    expect(onNote).toHaveBeenCalledWith("Adding gamma to acme at Host");
-  });
-
-  test("space-58: pending group submission survives backdrop and Escape; refusal keeps the selected destination available to retry", async () => {
-    let refuse!: (error: Error) => void;
-    const spacePick = vi.fn(() => new Promise<void>((_resolve, reject) => { refuse = reject; }));
-    useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
-    const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
-    const selected = within(picker).getByTestId("space-pick-group-acme") as HTMLInputElement;
-    expect(document.activeElement).toBe(within(picker).getByTestId("space-pick-group-@ada"));
-    const header = within(picker).getByRole("heading", { name: "Add gamma to a group" }).closest("header")!;
-    expect(within(header).getByRole("button", { name: /^Close$/ }).textContent).toBe("");
-    const submit = within(picker).getByTestId(`space-pick-submit-${ADDED.id}`) as HTMLButtonElement;
-    fireEvent.click(selected);
-    await vi.waitFor(() => expect(submit.disabled).toBe(false));
-    fireEvent.click(submit);
-    expect(submit.disabled).toBe(true);
-    const close = screen.getByRole("button", { name: /^Close$/ });
-    expect(close.hasAttribute("disabled")).toBe(true);
-    fireEvent.click(close);
-    fireEvent.mouseDown(screen.getByTestId("project-palette"));
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-    fireEvent.keyDown(picker, { key: "Escape" });
-    fireEvent.click(submit);
-    expect(onClose).not.toHaveBeenCalled();
-    expect(spacePick).toHaveBeenCalledTimes(1);
-    refuse(new Error("Could not reach Host"));
-    await vi.waitFor(() => expect(within(picker).getByRole("alert").textContent).toBe("Could not reach Host"));
-    expect(selected.checked).toBe(true);
-    expect(submit.disabled).toBe(false);
-    expect(close.hasAttribute("disabled")).toBe(false);
-    expect(onClose).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(document.activeElement).toBe(submit));
-    fireEvent.mouseDown(screen.getByTestId("project-palette"));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  test("Cancel leaves it local only and closes the palette", async () => {
-    const spacePick = vi.fn(async () => {});
-    useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
-    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    fireEvent.click(await screen.findByTestId(`space-pick-cancel-${ADDED.id}`));
-    expect(onClose).toHaveBeenCalled();
-    expect(onPick).toHaveBeenCalledWith(ADDED.id);
-    expect(spacePick).not.toHaveBeenCalled();
-  });
-
-  test("signed out, or a folder already a project, the palette just closes", async () => {
-    useAppStore.setState({ connection: "open", space: groups(false, [row(ADDED.id)]) });
-    const first = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    await vi.waitFor(() => expect(first.onClose).toHaveBeenCalled());
-    expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
-    cleanup();
-
-    useAppStore.setState({ space: groups(true, [row(PROJECTS[0].id, { folder: "/tmp/alpha" })]) });
-    const again = renderPalette();
-    add("/tmp/alpha");
-    await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
-    expect(again.onPick).toHaveBeenCalledWith(PROJECTS[0].id);
-    expect(screen.queryByTestId(`space-picker-${PROJECTS[0].id}`)).toBeNull();
-  });
-
-  test("projects-17, projects-1, space-58: signed in to two instances each holding acme, the picker offers the acme of each and picking the second's creates there", async () => {
-    const spacePick = vi.fn(async () => {});
-    useAppStore.setState({
-      connection: "open",
-      space: groupsState({ defaultInstance: HOST, own: { name: "ada", named: false, repositories: [row(ADDED.id)] }, instances: [at(HOST, true, "20"), at(SECOND, true, "30")] }),
-      spacePick,
-    });
-    const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
-    const chooser = within(picker).getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
-    expect([...chooser.options].map((option) => option.textContent)).toEqual(["Host", "Second"]);
-    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@ada", "space-pick-group-acme"]);
-    fireEvent.change(chooser, { target: { value: SECOND } });
-    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
-    expect(spacePick).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(within(picker).getByTestId(`space-pick-submit-${ADDED.id}`)).toHaveProperty("disabled", false));
-    fireEvent.click(within(picker).getByTestId(`space-pick-submit-${ADDED.id}`));
-    await vi.waitFor(() =>
-      expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: SECOND, groupId: "30", name: "gamma" }),
-    );
-    expect(spacePick).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
-  });
-
-  test("projects-1, space-58: signed in at any instance the picker stands in place; signed in nowhere the palette just closes", async () => {
-    // Signed out of the default instance, signed in at a second one: the
-    // folder asks for its group in place (projects-1, space-58).
-    const two = (second: boolean) =>
-      groupsState({ defaultInstance: HOST, own: { name: "ada", named: false, repositories: [row(ADDED.id)] }, instances: [at(HOST, false, "20"), at(SECOND, second, "30")] });
-    useAppStore.setState({ connection: "open", space: two(true), spacePick: vi.fn(async () => {}) });
-    const first = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    await screen.findByTestId(`space-picker-${ADDED.id}`);
-    expect(first.onPick).toHaveBeenCalledWith(ADDED.id);
-    expect(first.onClose).not.toHaveBeenCalled();
-    cleanup();
-
-    // Both listed, both signed out: nothing to pick at, so the palette
-    // closes on the current project.
-    useAppStore.setState({ space: two(false) });
-    const again = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
-    add();
-    await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
-    expect(again.onPick).toHaveBeenCalledWith(ADDED.id);
-    expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
-  });
-});
-
-describe("run-view-168: this computer's From your groups", () => {
-  const SPEX = "https://spex.pub";
-  const ABSENT = repositoryRow("@spex.pub/acme/gamma-spex", { instance: SPEX, governing: SPEX, id: "301", state: "absent", branch: null });
-  /** A project in your own records at the Space, and one another account
-   * shares, neither on this computer. */
-  const MINE = repositoryRow("@spex.pub/me/notes-spex", { instance: SPEX, governing: SPEX, id: "302", state: "absent", branch: null });
-  const BOBS = repositoryRow("@spex.pub/bob/demo-spex", { instance: SPEX, governing: SPEX, id: "303", state: "absent", branch: null });
-  const acme = (repositories: RepositoryState[]) => ({
-    id: "7", login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories,
-  });
-  const signedIn = (repositories: RepositoryState[], signed = true) =>
-    groupsState({ instances: [instanceState(SPEX, { signedIn: signed, groups: [namespace("me"), acme(repositories)] })] });
-  const pristine = useAppStore.getState();
-  afterEach(() => {
-    useAppStore.setState({ space: pristine.space, connection: pristine.connection, spaceJoin: pristine.spaceJoin, loadSpace: pristine.loadSpace });
-  });
-
-  test("it stands only once this computer's groups read it signed in, and never in the add form", () => {
-    useAppStore.setState({ connection: "open", space: undefined, loadSpace: vi.fn(async () => {}) });
-    renderPalette();
-    // Unread: nothing stands until the read says where it is signed in.
-    expect(screen.queryByTestId("palette-groups")).toBeNull();
-    expect(useAppStore.getState().loadSpace).toHaveBeenCalledOnce();
-    cleanup();
-    useAppStore.setState({ space: signedIn([ABSENT], false) });
-    renderPalette();
-    expect(screen.queryByTestId("palette-groups")).toBeNull();
-    cleanup();
-    // [run-view-168] signed in, with no project in the groups at all.
-    useAppStore.setState({ space: signedIn([]) });
-    renderPalette();
-    expect(screen.getByTestId("palette-groups-note").textContent).toBe("No projects in your groups yet");
-    cleanup();
-    // [projects-22] the add form keeps to adding a local project.
-    useAppStore.setState({ space: signedIn([ABSENT]) });
-    renderPalette({ addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
-    expect(screen.queryByTestId("palette-groups")).toBeNull();
-  });
-
-  test("one overflow explains a blocked code opening, and an allowed opening connects immediately", async () => {
-    const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
-    const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
-    setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
-    useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
-    const place = `${SPEX}#9`;
-    try {
-      // [run-view-168] [space-111] its records name no code remote: the
-      // entry stands disabled with what it needs.
-      useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, code: "Code remote not configured", codeKind: "none" }]) });
-      const blocked = renderPalette();
-      const trigger = await screen.findByTestId(`palette-join-places-${ABSENT.key}`);
-      expect(trigger.getAttribute("aria-label")).toBe("More for gamma");
-      expect(trigger.textContent).toContain("⋯");
-      trigger.focus();
-      fireEvent.click(trigger);
-      const entry = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
-      const reason = "A Git remote is required to open this project's code on a server.";
-      expect(entry.textContent).toBe(`Open on lab-9${reason}`);
-      expect(entry.disabled).toBe(true);
-      expect(entry.getAttribute("title")).toBe(reason);
-      expect(within(entry).getByText(reason)).toBeTruthy();
-      fireEvent.click(entry);
-      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
-      expect(command).not.toHaveBeenCalledWith("space.join", expect.anything());
-      // Even an all-disabled menu closes independently of its palette.
-      fireEvent.keyDown(trigger, { key: "Escape" });
-      expect(screen.queryByTestId(`palette-join-places-${ABSENT.key}-menu`)).toBeNull();
-      expect(document.activeElement).toBe(trigger);
-      expect(blocked.onClose).not.toHaveBeenCalled();
-      cleanup();
-      // [run-view-168] [run-view-170] with a remote, the first explicit
-      // open starts the connection and shows its progress on Space.
-      useAppStore.setState({ space: signedIn([{ ...ABSENT, code: "Code: github.com", codeKind: "elsewhere" }]) });
-      const onShowSpace = vi.fn();
-      const { onClose } = renderPalette({ onShowSpace });
-      fireEvent.click(await screen.findByTestId(`palette-join-places-${ABSENT.key}`));
-      const open = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
-      expect(open.disabled).toBe(false);
-      expect(document.activeElement).toBe(open);
-      fireEvent.keyDown(open, { key: "Escape" });
-      expect(onClose).not.toHaveBeenCalled();
-      const allowedTrigger = screen.getByTestId(`palette-join-places-${ABSENT.key}`);
-      expect(document.activeElement).toBe(allowedTrigger);
-      fireEvent.click(allowedTrigger);
-      fireEvent.click(screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`));
-      expect(onShowSpace).toHaveBeenCalledOnce();
-      expect(onClose).toHaveBeenCalledOnce();
-      expect(command).toHaveBeenCalledWith("server.open", { instance: SPEX, serverId: "9", consented: true });
-      expect(command.mock.calls.filter(([type]) => type === "server.open")).toHaveLength(1);
-    } finally {
-      setClientForTests(undefined);
-      useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
-    }
-  });
-
-  test("an open project's overflow opens an existing server workspace without starting another download", async () => {
-    const place = `${SPEX}#9`;
-    const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: true }], failures: [] };
-    const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
-    const client = { command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() };
-    setClientForTests(client as never);
-    const remoteProject = PROJECTS[0];
-    const seat: SeatState = { instance: SPEX, serverId: "9", name: "lab-9", group: "acme", place, leaseExpiresAt: Date.now() + 60_000, relay: "open", signIn: { state: "signedIn" } };
-    const store = createAppStore({ key: place, name: "lab-9" }, client as never);
-    store.setState({ projects: [remoteProject] });
-    usePlaces.setState({ seats: [{ seat, store }] });
-    useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, key: PROJECTS[0].repository.key, state: "reachable", folder: PROJECTS[0].path }]) });
-    const onPickAt = vi.fn();
-    try {
-      const { onPick, onClose } = renderPalette({ onPickAt });
-      const trigger = await screen.findByTestId(`palette-project-places-${PROJECTS[0].id}`);
-      expect(trigger.getAttribute("aria-label")).toBe("More for alpha");
-      fireEvent.click(trigger);
-      const open = screen.getByTestId(`palette-show-at-${place}-${PROJECTS[0].repository.key}`);
-      expect(open.textContent).toBe("Open on lab-9");
-      fireEvent.keyDown(open, { key: "Tab" });
-      expect(document.activeElement).toBe(trigger);
-      expect(onClose).not.toHaveBeenCalled();
-      fireEvent.click(trigger);
-      fireEvent.click(screen.getByTestId(`palette-show-at-${place}-${PROJECTS[0].repository.key}`));
-      expect(onPickAt).toHaveBeenCalledWith(place, PROJECTS[0].id);
-      expect(onPick).not.toHaveBeenCalled();
-      expect(onClose).toHaveBeenCalledOnce();
-      expect(command).not.toHaveBeenCalledWith("space.join", expect.anything());
-      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
-    } finally {
-      usePlaces.setState({ seats: [] });
-      setClientForTests(undefined);
-    }
-  });
-
-  test("the arrows reach its rows from the filter, and Enter on one asks its folder in place where no picker exists", async () => {
-    const spaceJoin = vi.fn(async () => {});
-    useAppStore.setState({ connection: "open", space: signedIn([ABSENT]), spaceJoin });
-    renderPalette();
-    const search = screen.getByTestId("palette-search");
-    // Two projects, then the group's.
-    fireEvent.keyDown(search, { key: "ArrowDown" });
-    fireEvent.keyDown(search, { key: "ArrowDown" });
-    const row = screen.getByTestId(`palette-join-${ABSENT.key}`);
-    expect(row.className).toContain("bg-neutral-100");
-    fireEvent.keyDown(search, { key: "Enter" });
-    const field = screen.getByTestId(`palette-join-folder-${ABSENT.key}-path`);
-    expect(document.activeElement).toBe(field);
-    fireEvent.change(field, { target: { value: "/work/gamma" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
-  });
-
-  test("a row reads the project's name and its group — Personal for your own — never the records' key; it reads Opening… while its open runs and offers Try again once it stopped", async () => {
-    const spaceJoin = vi.fn(async () => {});
-    const groups = (rows: RepositoryState[]) =>
-      groupsState({
-        instances: [
-          instanceState(SPEX, {
-            groups: [namespace("me", rows.filter((row) => row.key.includes("/me/"))), acme(rows.filter((row) => row.key.includes("/acme/"))), namespace("bob", rows.filter((row) => row.key.includes("/bob/")), false)],
-          }),
-        ],
-      });
-    useAppStore.setState({ connection: "open", space: groups([ABSENT, MINE, BOBS]), spaceJoin });
-    renderPalette();
-    const row = (key: string) => screen.getByTestId(`palette-join-${key}`);
-    // Name and group, no tooltip of the records' key (run-view-168).
-    expect(row(ABSENT.key).textContent).toBe("gammaacmeOpen here");
-    expect(row(MINE.key).textContent).toBe("notesPersonalOpen here");
-    expect(row(BOBS.key).textContent).toBe("demoShared by @bobOpen here");
-    for (const key of [ABSENT.key, MINE.key, BOBS.key]) {
-      expect(row(key).hasAttribute("title")).toBe(false);
-      expect(row(key).textContent).not.toContain("-spex");
-    }
-    cleanup();
-
-    // While its open runs, the row reads "Opening…" and opens nothing
-    // again; once it stopped, "Try again" sends it again (run-view-168).
-    const opening = { ...ABSENT, sync: { phase: "running" as const, op: "join" as const, step: "check" as const, since: 1, cancelable: false } };
-    useAppStore.setState({ space: groups([opening]) });
-    renderPalette({ onPickFolder: vi.fn(async () => "/work/gamma") });
-    expect(row(ABSENT.key).textContent).toBe("gammaacmeOpening…");
-    expect((row(ABSENT.key) as HTMLButtonElement).disabled).toBe(true);
-    cleanup();
-    const stopped = {
-      ...ABSENT,
-      sync: { phase: "stopped" as const, op: "join" as const, step: "check" as const, cause: "unreachable" as const, message: "Could not reach spex.pub", guidance: "", retry: true },
-    };
-    useAppStore.setState({ space: groups([stopped]) });
-    const onPickFolder = vi.fn(async () => "/work/gamma");
-    renderPalette({ onPickFolder });
-    const again = screen.getByTestId(`palette-join-again-${ABSENT.key}`);
-    expect(again.textContent).toBe("gammaacmeTry again");
-    fireEvent.click(again);
-    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
-  });
-
-  test("opened at it, the first row takes focus over the add flow's folder action", async () => {
-    const spaceJoin = vi.fn(async () => {});
-    const onPickFolder = vi.fn(async () => "/work/gamma");
-    const onOpened = vi.fn();
-    useAppStore.setState({ connection: "open", space: signedIn([ABSENT]), spaceJoin });
-    const { onClose } = renderPalette({ projects: [], sessions: [], groupsAt: "local", onPickFolder, onOpened });
-    const row = screen.getByTestId(`palette-join-${ABSENT.key}`);
-    // [run-view-172] the palette opens at "From your groups".
-    expect(document.activeElement).toBe(row);
-    expect(row.className).toContain("bg-neutral-100");
-    expect(screen.getByTestId("palette-academy").className).not.toContain("bg-neutral-100");
-    fireEvent.click(row);
-    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
-    expect(onPickFolder).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
-    // [run-view-168] accepted, the project is handed back as this
-    // computer's current one by its row's key, before the palette closes.
-    expect(onOpened).toHaveBeenCalledWith("local", ABSENT.key);
-    expect(onOpened.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 });

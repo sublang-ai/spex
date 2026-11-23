@@ -49,8 +49,7 @@ const CHANGE_RIGHTS = FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_WRITE_EA | FILE_
 
 /** Spex's private-storage check (storage-57) over facts inspected by
  * fs-safe, applied only where an entry's integrity is relied on — the
- * root lease, a clone's lease before a move, upload staging and a seat's
- * Codex home. POSIX admits the current user's entry with no group or
+ * root lease, a clone's lease before a move, and upload staging. POSIX admits the current user's entry with no group or
  * other bit. Windows admits an entry the current user, LocalSystem or
  * built-in Administrators own, as root is on POSIX, whose descriptor
  * grants no other principal a right to change it; a read grant another

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Real Groups integration fixtures; each file owns its scratch and cores.
+// Real core integration fixtures for Space. Each file owns its scratch and cores.
 
 import assert from "node:assert/strict";
 import { orderRemotes, remoteOrderOf } from "../home.js";
@@ -24,9 +24,9 @@ import { removeTree } from "@sublang/spex/files";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
-import type { Command, CommandResults, GroupsState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage } from "../protocol.js";
+import type { Command, CommandResults, SpaceState, PlacementState, RepositoryState, ServerMessage, SpaceStateMessage } from "../protocol.js";
 
-/** Every scratch home's own group: a name no device user collides with. */
+/** The personal records folder of each scratch home: a name no device user collides with. */
 export const OWN = "tester";
 export const OWN_KEY = `${OWN}/${OWN}-spex`;
 
@@ -51,10 +51,9 @@ export function bareOf(host: StandinHost, key: string): string {
   return host.bareOf(folder === null ? key : key.slice(folder.length + 1));
 }
 
-/** Every row of the Space state, as your own group and the instances'
- * headings hold them (space-30). */
-export function rowsOf(state: GroupsState): RepositoryState[] {
-  return [...state.own.repositories, ...state.instances.flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
+/** All local and Space project rows (space-30). */
+export function rowsOf(state: SpaceState): RepositoryState[] {
+  return state.repositories;
 }
 
 /** A row's line for the placement at an instance by its origin, or the
@@ -66,20 +65,19 @@ export function placementOf(row: RepositoryState, origin: string | null): Placem
   throw new Error(`no placement ${origin} on ${row.key}: ${JSON.stringify(row.placements.map((line) => line.instance))}`);
 }
 
-/** One repository's state out of the Space state: under your own group
- * or an instance's heading. */
-export function repositoryOf(state: GroupsState, key: string): RepositoryState {
+/** One repository's state out of the Space state: under This computer or a Space heading. */
+export function repositoryOf(state: SpaceState, key: string): RepositoryState {
   const found = rowsOf(state).find((repository) => repository.key === key);
   if (found) return found;
   throw new Error(`no repository ${key} in ${JSON.stringify(rowsOf(state).map((repository) => repository.key))}`);
 }
 
-const describe = (state: GroupsState): string =>
+const describe = (state: SpaceState): string =>
   JSON.stringify(rowsOf(state).map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`));
 
 /** The entry the Space state lists for the instance at `origin`, in any
  * spelling of it (space-30). */
-export function instanceOf(state: GroupsState, origin: string): GroupsState["instances"][number] | undefined {
+export function instanceOf(state: SpaceState, origin: string): SpaceState["instances"][number] | undefined {
   const canonical = canonicalOrigin(origin);
   return state.instances.find((instance) => instance.origin === canonical);
 }
@@ -112,8 +110,8 @@ class Client {
   async expectOk<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
-    // The state-shaped replies carry the GroupsState shape (space-30).
-    if (type === "space.get" || type === "space.remote.set" || type === "space.signout") assertGroupsState(reply.result as GroupsState);
+    // The state-shaped replies carry the SpaceState shape (space-30).
+    if (type === "space.get" || type === "space.remote.set" || type === "space.signout") assertGroupsState(reply.result as SpaceState);
     return reply.result;
   }
   async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
@@ -133,7 +131,7 @@ class Client {
     }
   }
   /** The first space.state message at or after `from` matching `check`. */
-  async waitSpace(from: number, check: (state: GroupsState) => boolean, timeoutMs = 60_000): Promise<GroupsState> {
+  async waitSpace(from: number, check: (state: SpaceState) => boolean, timeoutMs = 60_000): Promise<SpaceState> {
     const start = Date.now();
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
@@ -220,23 +218,21 @@ class Client {
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
 /** The Space state's fields (space-30). */
-const GROUPS_KEYS = ["defaultInstance", "diagnostics", "git", "home", "instances", "issues", "own", "signIn"];
+const GROUPS_KEYS = ["defaultInstance", "diagnostics", "git", "home", "instances", "issues", "repositories", "signIn"];
 
 /** The fields a running sign-in may carry, and those a failed one does
  * (space-30). */
 const SIGN_IN_RUNNING_KEYS = new Set(["flow", "instance", "phase", "since", "userCode", "verificationUri"]);
 const SIGN_IN_FAILED_KEYS = ["cause", "instance", "message", "phase"];
 
-const INSTANCE_KEYS = ["account", "displayName", "groups", "host", "hostSignedOut", "origin", "read", "readAt", "roles", "signedIn"];
-
-const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "placed", "repositories"];
+const INSTANCE_KEYS = ["account", "displayName", "host", "hostSignedOut", "origin", "read", "readAt", "signedIn"];
 
 /** A row's fields (space-30): what each placement holds is on its line
  * alone. */
 const REPOSITORY_KEYS = ["code", "codeKind", "conflicts", "folder", "governing", "id", "instance", "key", "local", "mergePending", "name", "own", "placedAt", "placements", "reason", "state", "sync"];
 
 /** A placement's line's fields (space-30). */
-const PLACEMENT_KEYS = ["attached", "branch", "can", "conflicts", "id", "incoming", "instance", "lastSync", "members", "noticed", "outcome", "path", "reason", "state", "visibility", "waiting"];
+const PLACEMENT_KEYS = ["attached", "branch", "conflicts", "id", "incoming", "instance", "lastSync", "outcome", "path", "reason", "state", "waiting"];
 
 const PLACEMENT_BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "unrelated"];
 
@@ -249,7 +245,7 @@ const PHASE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
   running: { required: ["cancelable", "op", "phase", "since", "step"], optional: ["placement"] },
   choices: { required: ["phase", "placement", "savedCommit"], optional: [] },
   unrelated: { required: ["phase", "placement"], optional: [] },
-  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count", "credential"] },
+  stopped: { required: ["cause", "guidance", "message", "op", "phase", "retry", "step"], optional: ["count"] },
   done: { required: ["at", "phase", "pushed", "received", "sent"], optional: [] },
 };
 
@@ -266,10 +262,7 @@ function assertPhase(sync: RepositoryState["sync"]): void {
   // comes with that cause alone (space-30, space-98).
   if (sync.phase === "stopped") assert.equal(sync.count !== undefined, sync.cause === "unreceived", JSON.stringify(sync));
   if (sync.phase === "stopped" && sync.count !== undefined) assert.ok(sync.op === "leave" && Number.isInteger(sync.count) && sync.count > 0, JSON.stringify(sync));
-  // A credential names the code host a join's failed code clone needs
-  // one of the member's for, and comes with that step alone (space-30,
-  // space-103).
-  if (sync.phase === "stopped" && sync.credential !== undefined) assert.ok(sync.op === "join" && sync.step === "code" && typeof sync.credential === "string" && sync.credential.length > 0, JSON.stringify(sync));
+
 }
 
 const CHANGES = new Set(["new", "updated", "deleted"]);
@@ -282,8 +275,8 @@ export function stringsOf(value: unknown): string[] {
   return [];
 }
 
-/** Every reply and broadcast carries the GroupsState shape (space-30). */
-export function assertGroupsState(state: GroupsState): void {
+/** Every reply and broadcast carries the SpaceState shape (space-30). */
+export function assertGroupsState(state: SpaceState): void {
   assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
   assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.instances));
   assert.equal(typeof state.defaultInstance, "string");
@@ -309,72 +302,21 @@ export function assertGroupsState(state: GroupsState): void {
   const origins = [state.defaultInstance, ...state.instances.map((instance) => instance.origin)];
   const leaks = stringsOf({ ...state, signIn: null }).filter((text) => origins.some((origin) => text.startsWith(`${origin}/`)) || /gitlab/i.test(text));
   assert.deepEqual(leaks, [], "the Space state names nothing behind the instance");
-  // Your own group by its folder name, and whether that folder still
-  // bears this device's user name; then every instance the home lists,
-  // each with its account, its read and its groups (space-30).
-  assert.deepEqual(Object.keys(state.own).sort(), ["name", "named", "repositories"]);
-  assert.ok(typeof state.own.name === "string" && typeof state.own.named === "boolean", JSON.stringify(state.own));
   for (const instance of state.instances) {
     assert.deepEqual(Object.keys(instance).sort(), INSTANCE_KEYS);
     assert.ok(typeof instance.origin === "string" && typeof instance.host === "string" && (instance.displayName === null || typeof instance.displayName === "string"), JSON.stringify(instance));
     // What its last read said the person may do there (DR-114).
-    assert.deepEqual(Object.keys(instance.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
-    assert.ok(typeof instance.account.canCreateGroup === "boolean" && typeof instance.signedIn === "boolean" && typeof instance.hostSignedOut === "boolean", JSON.stringify(instance));
+    assert.deepEqual(Object.keys(instance.account).sort(), ["displayName", "id", "login"]);
+    assert.ok(typeof instance.signedIn === "boolean" && typeof instance.hostSignedOut === "boolean", JSON.stringify(instance));
     if (instance.hostSignedOut) assert.equal(instance.signedIn, false, "an instance's sign-out of this device is said only while signed out");
     assert.ok(["idle", "running", "failed"].includes(instance.read.phase));
     assert.deepEqual(Object.keys(instance.read).sort(), instance.read.phase === "failed" ? ["message", "phase"] : ["phase"]);
     if (instance.read.phase === "failed") assert.equal(typeof instance.read.message, "string");
     if (!instance.signedIn) assert.deepEqual(instance.read, { phase: "idle" }, "an instance signed out reads idle");
     assert.ok(instance.readAt === null || typeof instance.readAt === "number");
-    assert.ok(Array.isArray(instance.roles));
-    for (const role of instance.roles) {
-      assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
-      assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
-    }
-    for (const group of instance.groups) {
-      assert.deepEqual(Object.keys(group).sort(), [...GROUP_ENTRY_KEYS, ...(group.pendingDeletion !== undefined ? ["pendingDeletion"] : []), ...(group.deletionRoot !== undefined ? ["deletionRoot"] : [])].sort());
-      if (group.pendingDeletion !== undefined) assert.equal(typeof group.pendingDeletion, "boolean");
-      if (group.deletionRoot !== undefined) assert.equal(typeof group.deletionRoot, "string");
-      // The rows standing elsewhere this entry holds a placement of,
-      // each by its key and name (space-1, space-30).
-      assert.ok(Array.isArray(group.placed) && group.placed.every((line) => Object.keys(line).sort().join() === "key,name" && typeof line.key === "string" && typeof line.name === "string"), JSON.stringify(group.placed));
-      assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename", ...(group.can.restore !== undefined ? ["restore"] : [])]);
-      assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
-      // A namespace by its login, with no id and nothing to do there; a
-      // group with no login, never yours.
-      if (group.login !== null) {
-        assert.equal(group.id, null, JSON.stringify(group));
-        assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "a namespace takes no subgroup, member, rename or deletion");
-      } else assert.equal(group.mine, false, JSON.stringify(group));
-    }
-    // A line naming a row stands where the row does not, the row
-    // standing once elsewhere in the state (space-1).
-    for (const group of instance.groups) {
-      for (const line of group.placed) {
-        assert.ok(!group.repositories.some((repository) => repository.key === line.key), `${line.key} stands in ${group.fullPath} and is named there`);
-        const named = rowsOf(state).find((repository) => repository.key === line.key);
-        assert.equal(named?.name, line.name, `${group.fullPath} names a row standing elsewhere: ${JSON.stringify(line)}`);
-      }
-    }
-    // An entry is one by its instance and id (DR-127).
-    const ids = instance.groups.flatMap((group) => (group.id === null ? [] : [group.id]));
-    assert.equal(new Set(ids).size, ids.length, `one entry per group id at ${instance.origin}`);
-    // Signed in, your namespace there stands once, by your login there
-    // (space-1).
-    if (instance.signedIn) {
-      const mine = instance.groups.filter((group) => group.mine);
-      assert.equal(mine.length, 1, `your namespace once at ${instance.origin}`);
-      assert.equal(mine[0].login?.toLowerCase(), instance.account.login.toLowerCase(), "your namespace by your login there");
-    }
-    // A row under an instance's heading stands there as the instance
-    // governing it, or, governed by none, as its own (space-1).
-    for (const repository of instance.groups.flatMap((group) => group.repositories)) {
-      assert.ok(repository.governing === null || repository.governing === instance.origin, `${repository.key} governed by ${repository.governing} stands under ${instance.origin}`);
-    }
   }
   assert.equal(new Set(state.instances.map((instance) => instance.origin)).size, state.instances.length, "one entry per instance");
-  // Every row stands once, under your own group or an instance's
-  // heading, in its shape (space-30).
+  // Every row stands once, under This computer or a Space heading, in its shape (space-30).
   const keys = rowsOf(state).map((repository) => repository.key);
   assert.equal(new Set(keys).size, keys.length, `every row stands once: ${JSON.stringify(keys)}`);
   for (const repository of rowsOf(state)) {
@@ -412,13 +354,11 @@ function assertPlacements(row: RepositoryState): void {
     assert.deepEqual(Object.keys(line).sort(), PLACEMENT_KEYS);
     assert.ok((line.instance === null || typeof line.instance === "string") && typeof line.path === "string" && (line.id === null || typeof line.id === "string") && typeof line.attached === "boolean", JSON.stringify(line));
     assert.ok(PLACEMENT_STATES.has(line.state), JSON.stringify(line));
-    assert.deepEqual(Object.keys(line.can), ["manageMembers", "transfer"]);
-    assert.ok(typeof line.can.manageMembers === "boolean" && typeof line.can.transfer === "boolean", JSON.stringify(line.can));
     if (line.branch !== null) assert.deepEqual(Object.keys(line.branch).sort(), PLACEMENT_BRANCH_KEYS);
     const agreed = line.branch?.agreed;
     if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
     if (line.lastSync !== null) assert.deepEqual(Object.keys(line.lastSync).sort(), ["at", "received", "sent"]);
-    assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts) && typeof line.noticed === "boolean", JSON.stringify(line));
+    assert.ok(Array.isArray(line.incoming) && Array.isArray(line.conflicts), JSON.stringify(line));
     if (!line.attached) assert.equal(line.branch, null, `${row.key}: a line no remote here holds has no branch`);
   }
   // Local only, a clone holds no placement: its lines are a creation's
@@ -452,7 +392,7 @@ interface Home {
   stop(): Promise<void>;
 }
 
-/** Your own group's clone in a scratch home: under the name its
+/** The global records clone in a scratch home: under the name its
  * `home.yaml` records, once it has one — a sign-in renames it. */
 export function ownClone(dataDir: string): string {
   let own = OWN;
@@ -466,7 +406,7 @@ export function clonePath(dataDir: string, key: string): string {
 }
 
 /** Where a spex repository's environment stands in a scratch home
- * (environments-26): your own group's clone, else the working folder
+ * (environments-26): the global records clone, else the working folder
  * `home.yaml` pairs with the key, which holds a project's `spex.yaml`
  * and `spex.lock`. */
 export function environmentRoot(dataDir: string, key: string): string {
@@ -561,8 +501,8 @@ playbooks:
     return dir;
   }
 
-  /** Add a working folder: it pairs with a local spex repository in your
-   * own group (storage-6); returns its key and its clone. */
+  /** Add a working folder: it pairs with a local spex repository under the personal records
+   * folder (storage-6); returns its key and its clone. */
   async function addFolder(home: Home, path: string): Promise<{ key: string; clone: string }> {
     const project = await home.client.expectOk("project.register", { path });
     return { key: project.id, clone: clonePath(home.dataDir, project.id) };
@@ -682,13 +622,11 @@ playbooks:
   /** A stand-in Git host (git-host-12) of this suite's own: an instance
    * at its own loopback origin, on a Git backend of its own or, with
    * `gitBackend`, over that instance's (DR-127); `person` signs in there
-   * in place of `ada`, `canCreateGroup` scripts whether the person may
-   * make a root group, and `registry` names a stand-in registry the
+   * in place of `ada`, and `registry` names a stand-in registry the
    * instance relays to, which may stand behind several (environments-18). */
-  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; canCreateGroup?: boolean; registry?: StandinRegistry } = {}): Promise<StandinHost> {
-    const { canCreateGroup, gitBackend, registry, ...rest } = options;
+  async function startHost(options: { displayName?: string; person?: StandinPerson; gitBackend?: StandinHost; registry?: StandinRegistry } = {}): Promise<StandinHost> {
+    const { gitBackend, registry, ...rest } = options;
     const host = await startStandinHost({ ...rest, ...(registry ? { registry: registry.url } : {}), ...(gitBackend ? { gitBackend } : { dir: mkdtempSync(join(scratch, "host-")) }) });
-    if (canCreateGroup !== undefined) host.script.canCreateGroup = canCreateGroup;
     hosts.push(host);
     return host;
   }
@@ -698,7 +636,7 @@ playbooks:
    * its core runs: the browser's redirect followed as the system browser
    * would, or the user code approved. Waits until that instance's entry
    * reads signed in with no sign-in running (space-4, DR-127). */
-  async function signIn(home: Home, host: StandinHost, url: string = host.url): Promise<GroupsState> {
+  async function signIn(home: Home, host: StandinHost, url: string = host.url): Promise<SpaceState> {
     const from = home.client.mark();
     const started = await home.client.expectOk("space.signin.start", { url });
     if (started.flow === "browser") {
@@ -714,7 +652,7 @@ playbooks:
 
   /** Sign a home out of one instance by its origin, its entry kept
    * (space-6, DR-127). */
-  async function signOut(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+  async function signOut(home: Home, host: Pick<StandinHost, "url">): Promise<SpaceState> {
     const state = await home.client.expectOk("space.signout", { instance: host.url });
     assert.equal(instanceOf(state, host.url)?.signedIn, false, "the instance reads signed out");
     return state;
@@ -722,14 +660,13 @@ playbooks:
 
   /** Forget one signed-out instance by its origin (space-82): its entry
    * gone from the state the reply carries. */
-  async function forget(home: Home, host: Pick<StandinHost, "url">): Promise<GroupsState> {
+  async function forget(home: Home, host: Pick<StandinHost, "url">): Promise<SpaceState> {
     const state = await home.client.expectOk("space.forget", { instance: host.url });
     assert.equal(instanceOf(state, host.url), undefined, "the instance is listed no more");
     return state;
   }
 
-  /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository; `host` names the stand-in the new home
+  /** A real core on a scratch home whose configuration lies in the global records repository; `host` names the stand-in the new home
    * records from `SPEX_HOST_URL` (git-host-1), and any other instance is
    * reached by a sign-in naming its origin. */
   async function startHome(name: string, options: { model?: string; starter?: boolean; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
@@ -837,7 +774,7 @@ playbooks:
    * placement's file written in the clone, uncommitted; its host id, its
    * remote URL and that folder. `group` may name an account's namespace,
    * which every instance over that Git backend lists (DR-127). */
-  function attachByHand(home: Home, key: string, host: StandinHost, group = "acme"): { id: string; url: string; folder: string } {
+  function attachByHand(home: Home, key: string, host: StandinHost, group = host.script.person.login): { id: string; url: string; folder: string } {
     const clone = clonePath(home.dataDir, key);
     const name = key.slice(key.lastIndexOf("/") + 1);
     const repository = host.script.addRepository({ group, name });

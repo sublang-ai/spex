@@ -80,12 +80,12 @@ test("dependency tooling and unknown root paths still reach everything", () => {
 
 test("known workflows and root tooling select script tests alone, without hiding product changes", () => {
   for (const path of [
-    ".github/workflows/ci.yml", ".github/workflows/app-release.yml", ".github/workflows/release.yml", ".github/workflows/hub-lane.yml",
+    ".github/workflows/ci.yml", ".github/workflows/app-release.yml", ".github/workflows/release.yml",
     ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml",
     "scripts/affected-tests.mjs", "scripts/affected-tests.test.mjs", "scripts/ci-verdict.mjs", "scripts/ci-workflow.test.mjs", "scripts/app-release-workflow.test.mjs",
     "scripts/prepush.sh", "scripts/merge-on-green.sh", "scripts/test-linux.sh", "scripts/linux-ci/Dockerfile",
     "scripts/release-notes.mjs", "scripts/release-notes.test.mjs", "scripts/smoke.mjs", "scripts/smoke.test.mjs", "scripts/install-smoke.mjs", "scripts/cli-smoke.mjs", "scripts/desktop-smoke.mjs", "scripts/migration-smoke.mjs",
-    "scripts/desktop-runner.test.mjs", "scripts/source-launch.integration.test.mjs", "scripts/live-output.test.mjs", "scripts/inspection-browser-cache.test.mjs", "scripts/inspection-evidence.test.mjs", "scripts/team-server-local.test.mjs",
+    "scripts/desktop-runner.test.mjs", "scripts/source-launch.integration.test.mjs", "scripts/live-output.test.mjs", "scripts/inspection-browser-cache.test.mjs", "scripts/inspection-evidence.test.mjs",
     "scripts/skill-atlas.test.mjs",
   ]) {
     assert.deepEqual(reach(root, [path, "specs/packages/release.md"]), { docsOnly: false, all: false, workspaces: [] }, path);
@@ -186,7 +186,7 @@ function repositoryWorkspaces() {
   });
 }
 
-test("this repository: the UI reaches itself, the core its dependents, the hub itself", () => {
+test("this repository: the UI reaches itself and the core reaches its dependents", () => {
   const workspaces = repositoryWorkspaces();
   // The core's dependents, to a fixpoint over the manifests.
   const reached = new Set(["packages/core"]);
@@ -207,7 +207,6 @@ test("this repository: the UI reaches itself, the core its dependents, the hub i
   assert.ok(core.workspaces.includes("packages/ui"), "the UI depends on the core");
   assert.ok(!core.workspaces.includes("packages/cli"), "the CLI is the core's dependency, not its dependent");
   assert.deepEqual(reach(root, ["packages/ui/src/x.ts"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
-  assert.deepEqual(reach(root, ["apps/hub/x.ts"]), { docsOnly: false, all: false, workspaces: ["apps/hub"] });
 });
 
 /** Runs the script with a stand-in npm that logs its arguments and fails with 3 on the command NPM_FAIL_ON names. */

@@ -12,18 +12,18 @@
 import { useEffect } from "react";
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { EnvironmentSection } from "./EnvironmentSection.js";
 
 export function PackagesTab({
   project,
   onNavigate,
 }: {
-  /** The project whose tab this is, at the place it is shown. */
+  /** The project whose Packages tab is open. */
   project: ProjectInfo;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const connection = store((state) => state.connection);
   const lists = store((state) => state.playbookLists);
   const loadPlaybookLists = store((state) => state.loadPlaybookLists);

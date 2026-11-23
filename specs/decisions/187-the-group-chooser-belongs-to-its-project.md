@@ -10,6 +10,7 @@ Amends [DR-192](192-choose-a-group-before-adding.md) in the chooser's visual att
 Applies [DR-010](010-interface-craft.md)'s one visual grammar and [DR-041](041-chrome-that-fits.md)'s container fit to the existing inline form.
 
 Amended by [DR-198](198-consistent-inline-group-actions.md) in the shared attached presentation and opening and closing behavior of group-management panels.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

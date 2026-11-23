@@ -8,6 +8,7 @@
 Accepted (2026-11-02) on the owner's request for complete, simple group creation and a way to collapse and revisit scheduled deletions.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in creating a group inside another group, and [DR-193](193-group-deletion-follows-the-space-policy.md) in scheduled groups' presentation.
 Extends [DR-198](198-consistent-inline-group-actions.md)'s attached presentation to New group at both levels, retaining its focus and pending-mutation guarantees.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

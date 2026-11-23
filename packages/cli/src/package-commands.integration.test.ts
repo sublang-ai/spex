@@ -470,6 +470,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   const userVars = { HOME: user, USERPROFILE: user };
   for (const [label, vars, at, cause] of [
     ["a clone of the home", {}, join(clone, "sub"), /lies in the Spex home .+ — run spex in a project folder$/m],
+    ["a project-shaped folder inside the home", {}, join(home, "projects", "app"), /lies in the Spex home .+ — run spex in a project folder$/m],
     ["the home itself", {}, home, /lies in the Spex home .+ — run spex in a project folder$/m],
     ["the user's home folder", userVars, user, /is your home folder, where spex manages no packages — run spex in a project folder$/m],
   ] as [string, NodeJS.ProcessEnv, string, RegExp][]) {
@@ -480,11 +481,25 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
     assert.match(ran.stderr, cause, `[cli-1] ${label} is no root`);
     assert.deepEqual({ home: snapshot(home), user: snapshot(user) }, before, `[cli-1] ${label}: nothing written`);
   }
-  // A seat's project below the home's projects/ is a working folder.
-  const seat = workingFolder(join(home, "projects", `@${host.replace(":", "_")}`, "tester", "app"));
-  writeFileSync(join(seat, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
-  await ok(seat, "add", "demo/tool@^1.0.0");
-  assert.ok(existsSync(join(seat, "spex.lock")), "[cli-1] a seat's project is a root");
+
+});
+
+test("cli-15, cli-1: skip an ineligible user-home manifest while resolving a project root", async () => {
+  const ancestor = workingFolder(join(SCRATCH, "ancestor"));
+  const user = join(ancestor, "user");
+  const child = join(user, "project");
+  mkdirSync(child, { recursive: true });
+  const manifest = `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`;
+  writeFileSync(join(ancestor, "spex.yaml"), manifest);
+  writeFileSync(join(user, "spex.yaml"), "not a manifest\n");
+  const list = () => spexWith({ HOME: user, USERPROFILE: user }, HOME, child, "list");
+  const inherited = await list();
+  assert.equal(inherited.code, 0, inherited.stderr);
+  assert.ok(inherited.stdout.startsWith(`Folder    ${ancestor}\n`), inherited.stdout);
+  writeFileSync(join(child, "spex.yaml"), manifest);
+  const local = await list();
+  assert.equal(local.code, 0, local.stderr);
+  assert.ok(local.stdout.startsWith(`Folder    ${child}\n`), local.stdout);
 });
 
 test("cli-15: a Git source is shown with no network remote named, and a source changed at one version is an update", async () => {

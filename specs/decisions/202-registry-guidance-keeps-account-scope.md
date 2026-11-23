@@ -9,6 +9,7 @@ Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publ
 
 Accepted (2026-11-02) under the owner's request to separate package and Space accounts and correct their visitor guidance.
 Amends [DR-200](200-publishing-names-need-registry-authority.md) in the namespace-management destination used by authoring, export and publication guidance.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group and seat examples in user guidance, and the hub lane in app validation and download caching.
 
 ## Context
 

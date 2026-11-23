@@ -12,6 +12,7 @@ Amends [DR-175](175-projects-shown-where-they-are-open.md) in sidebar availabili
 Amended by [DR-197](197-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
 
 Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the control's Files & history name and deferred navigation: Space → Files & history → Dismissed replaces the sidebar recovery entry, and saved history returns directly to its place's review.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: server-specific location wording and recovery navigation. Local Files & history continues.
 
 ## Context
 

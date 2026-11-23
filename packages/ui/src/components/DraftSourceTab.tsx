@@ -7,7 +7,7 @@
 // with who changed it last and when; Edit through the whole-file
 // editor idiom with its version-token conflicts (spec-view-48/50);
 // Paste — text or a picked file — as the way in for a source of one's
-// own, text alone at a remote place (run-view-169). Save and Use as
+// own. Save and Use as
 // source wait while the agent may be editing the same file.
 
 import { useState } from "react";
@@ -34,7 +34,6 @@ export function DraftSourceTab({
   editor,
   connected,
   pickFile,
-  pathEntry = true,
   onMode,
   onEditor,
   onWrite,
@@ -50,10 +49,6 @@ export function DraftSourceTab({
   connected: boolean;
   /** The native bridge's file picker, where the shell offers one. */
   pickFile?: () => Promise<string | null>;
-  /** Whether a file's path may be named: false at a remote place,
-   * whose drafts are on its server, where only text is pasted
-   * (run-view-169). */
-  pathEntry?: boolean;
   onMode: (mode: Partial<DraftSourceMode>) => void;
   onEditor: (editor: SpecEditorState | undefined) => void;
   onWrite: (input: {
@@ -105,8 +100,7 @@ export function DraftSourceTab({
   }
 
   if (mode.mode === "paste") {
-    // A path is read only where one may be named (run-view-169).
-    const pastedPath = pathEntry ? mode.pastePath.trim() : "";
+    const pastedPath = mode.pastePath.trim();
     const canUse =
       connected &&
       !pasteBusy &&
@@ -139,35 +133,33 @@ export function DraftSourceTab({
             className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
           />
         </label>
-        {pathEntry ? (
-          <label className="flex flex-col gap-0.5 text-sm">
-            <span className="text-xs text-neutral-500">{i18n._("Source file path (overrides the text)")}</span>
-            <span className="flex items-center gap-1.5">
-              <input
-                data-testid="paste-path"
-                value={mode.pastePath}
-                onChange={(event) => onMode({ pastePath: event.target.value })}
-                // The placeholder is the shape of a path, not a phrase.
-                placeholder="/path/to/workflow.md"
-                className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
-              />
-              {pickFile ? (
-                <button
-                  type="button"
-                  data-testid="paste-pick"
-                  onClick={() => {
-                    void pickFile().then((picked) => {
-                      if (picked) onMode({ pastePath: picked });
-                    });
-                  }}
-                  className={BUTTON_CLASS}
-                >
-                  {i18n._({ id: "Pick file", comment: "open the OS file picker" })}
-                </button>
-              ) : null}
-            </span>
-          </label>
-        ) : null}
+        <label className="flex flex-col gap-0.5 text-sm">
+          <span className="text-xs text-neutral-500">{i18n._("Source file path (overrides the text)")}</span>
+          <span className="flex items-center gap-1.5">
+            <input
+              data-testid="paste-path"
+              value={mode.pastePath}
+              onChange={(event) => onMode({ pastePath: event.target.value })}
+              // The placeholder is the shape of a path, not a phrase.
+              placeholder="/path/to/workflow.md"
+              className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
+            />
+            {pickFile ? (
+              <button
+                type="button"
+                data-testid="paste-pick"
+                onClick={() => {
+                  void pickFile().then((picked) => {
+                    if (picked) onMode({ pastePath: picked });
+                  });
+                }}
+                className={BUTTON_CLASS}
+              >
+                {i18n._({ id: "Pick file", comment: "open the OS file picker" })}
+              </button>
+            ) : null}
+          </span>
+        </label>
         {pasteError ? (
           <div
             role="alert"
@@ -238,7 +230,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            title={pathEntry ? i18n._("Paste a source or pick a file") : i18n._("Paste a source")}
+            title={i18n._("Paste a source or pick a file")}
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >
@@ -286,11 +278,7 @@ export function DraftSourceTab({
           <button
             type="button"
             data-testid="source-paste"
-            title={
-              pathEntry
-                ? i18n._("Replace the source with pasted text or a file")
-                : i18n._("Replace the source with pasted text")
-            }
+            title={i18n._("Replace the source with pasted text or a file")}
             onClick={() => onMode({ mode: "paste" })}
             className={BUTTON_CLASS}
           >

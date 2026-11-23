@@ -7,6 +7,7 @@
 
 Accepted (2026-11-02) on the owner's request to enter several usernames when that can use the existing membership operation without a large new feature.
 Amends [DR-190](190-membership-with-a-clear-scope.md) in the invitation's one-username limit, submission and outcome; its permission model, role guidance, immediate access and group deletion are unchanged.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

@@ -8,8 +8,8 @@
 // install record and `skills/` — move under the environment's root's
 // `.spex/` where the record matches the lock, else are deleted for the
 // lock to install from the store. A file moved or standing without
-// `space` gains it naming the clone's placement's instance. Your own
-// group's clone keeps its two files. It runs under the root lease at
+// `space` gains it naming the clone's placement's instance. The global records
+// repository keeps its two files. It runs under the root lease at
 // the core's start and at each pairing, leaving one receipt of kind
 // `environment` under `local/migrations/`, as the groups migration does
 // (storage-9); a restart repeats nothing, since a clone it moved holds
@@ -74,13 +74,13 @@ export interface MigratedRepository {
   key: string;
   /** Its clone. */
   clone: string;
-  /** Your own group's, which keeps its two files. */
+  /** Whether this is the global records repository, which keeps its two files. */
   own: boolean;
   /** A project's working folder on this device; null where none is
    * paired. */
   folder: string | null;
-  /** The instance its clone is placed at (storage-31) — your own
-   * group's, the one its own repository's remote names; null for one
+  /** The instance its clone is placed at (storage-31) — for the global records
+   * repository, the one its remote names; null for one
    * local only. */
   instance: string | null;
 }
@@ -227,8 +227,8 @@ function moveTrees(clone: string, root: string, lockText: string | null, store: 
 /**
  * Run the environment migration over the repositories given
  * (storage-24): each project's clone holding `spex.yaml` or `spex.lock`
- * whose working folder stands on this device, and your own group's
- * clone. Returns the keys whose environments it changed. A repository
+ * whose working folder stands on this device, and the global records
+ * repository. Returns the keys whose environments it changed. A repository
  * whose step fails is left as it stood, reported, the others going on.
  */
 export function migrateEnvironments(home: string, repositories: readonly MigratedRepository[], options: EnvironmentMigrationOptions = {}): string[] {

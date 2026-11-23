@@ -96,7 +96,7 @@ function startCore(root: string): Promise<CoreService> {
   });
 }
 
-/** A scratch home whose own group's environment installs `acme/kit`
+/** A scratch home whose global environment installs `acme/kit`
  * 1.0.0 through a real core, with a read-only stored file no lock
  * selects beside it. */
 async function homeWithStray(): Promise<{ root: string; store: ContentStore; lock: Lock; stray: string }> {

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- The `@sublang/spex` library drops group and member operations, team-server discovery, tickets and seat sign-in. This breaking change targets the next CLI major release. Personal Space sign-in and registry commands remain available.
+
 ### Fixed
 
 - `spex scaffold --lang zh` writes Chinese specs without translation-source

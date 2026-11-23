@@ -7,8 +7,8 @@
 // code is (space-1), the kinds' order and labels (space-7), the sync
 // steps' names (space-12), the catalog's sharing marks, each entry's
 // family word, and the families that stay on this computer (space-23,
-// space-25). Every phrase names a Space by its display name and this
-// place "this computer" (space-27). Pure functions; the surface renders
+// space-25). Phrases use the Space's display name and "this computer"
+// for the local device (space-27). Pure functions; the surface renders
 // them.
 //
 // Every word here is a message of the catalog (localization-4), so a
@@ -16,8 +16,7 @@
 // would freeze the language this module was imported in.
 
 import type {
-  CodeKind,
-  GroupsState,
+  SpaceState,
   InstanceState,
   PlacementBranch,
   PlacementState,
@@ -29,7 +28,6 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { isLocalPlace, type Place } from "../state/store.js";
 import { instanceNameAt, keyPlacement, placementLastSync, placementName, waitingOf } from "./placements.js";
 import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
@@ -40,10 +38,13 @@ export function tildify(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)(?=\/|$)/, "~");
 }
 
+export function rowName(repo: RepositoryState): string {
+  return repo.own ? i18n._("Your sessions") : projectName(repo.name);
+}
+
 /** Whether a spex repository's clone is on this computer (space-61): it
  * is local only or holds a placement; a row the host lists that this
- * computer lacks, or one in a group named like a login, which takes no
- * folder, holds none (space-30). */
+ * computer lacks holds no attached placement (space-30). */
 export function cloneHere(repo: RepositoryState): boolean {
   return repo.state === "local-only" || repo.placements.some((placement) => placement.attached);
 }
@@ -54,13 +55,12 @@ export function clonePath(home: string, key: string): string {
   return `${home.replace(/\/$/, "")}/workspace/${key}`;
 }
 
-/** The phrase a step waiting on someone else's rights reads on its
- * row (space-58, space-64): the step and the group, phrased here in the
- * reader's language; the host's own words ride the row's title. */
+/** Describe a waiting placement step in the reader's language
+ * (space-64), with the Space's own words in the row's title. */
 export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): string {
   return waiting.step === "create"
-    ? i18n._("Waiting for a member who can create it in {group}", { group: waiting.group })
-    : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
+    ? i18n._("Waiting for the Space to create the records")
+    : i18n._("Waiting for the Space to prepare the records branch");
 }
 
 /** A spex repository's last sync (space-61), its key placement's: this
@@ -124,33 +124,17 @@ export function signedOutPhrase(name: string): string {
   });
 }
 
-/** The server whose Space the surface shows at a seat's place, which
- * every phrase naming this computer names instead (space-112); none at
- * this computer. */
-export function seatName(place: Place): string | undefined {
-  return isLocalPlace(place) ? undefined : (place.name ?? place.key);
-}
-
-/** "Not on this computer", or at a seat's place "Not on <server>"
- * (space-87, space-112): `seat` names the server where the surface shows
- * a seat's place. */
-export function notHerePhrase(seat?: string): string {
-  return seat === undefined
-    ? i18n._({ id: "Not on this computer", comment: "a project's records, or a copy of them at a Space, not on this computer" })
-    : i18n._({
-        id: "Not on {place}",
-        values: { place: seat },
-        comment: "a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name",
-      });
+/** The records are not on this computer (space-87). */
+export function notHerePhrase(): string {
+  return i18n._({ id: "Not on this computer", comment: "a project's records, or a copy of them at a Space, not on this computer" });
 }
 
 /** What a spex repository's records read for their state (space-61): the
  * core's aggregate over its placements, a reachable one reading its key
  * placement's last sync, one local only reading nothing (space-120); a
  * waiting step reads on its placement's line instead (space-64,
- * space-87). `seat` names the server where the surface shows a seat's
- * place (space-112). */
-export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?: string): string {
+ * space-87). */
+export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
   switch (repo.state) {
     case "local-only":
       return "";
@@ -160,7 +144,7 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?:
     case "unreachable":
       return hostStatePhrase(repo.state, repo.reason);
     case "absent":
-      return notHerePhrase(seat);
+      return notHerePhrase();
     default:
       // A state the page does not know: the raw value is data.
       return repo.state;
@@ -187,7 +171,7 @@ export interface LinePhrase {
 /** How the phrases of one spex repository name its placements
  * (space-12, space-120): an instance by its display name, the path
  * placement by its remote; whether a line reads "Signed out of <display
- * name>"; and the server a seat's place shows (space-112). */
+ * name>". */
 export interface PhraseNames {
   /** A placement by its instance's origin, null naming the path
    * placement. */
@@ -195,14 +179,13 @@ export interface PhraseNames {
   /** Whether the line is unreachable because this computer is signed out
    * of its instance (space-61). */
   signedOut(line: PlacementState): boolean;
-  seat?: string;
 }
 
 /** The names a spex repository's phrases read (space-12, space-61): a
  * line by its instance's display name as the home last read it, else its
  * host name, the path placement by its remote; a line signed out while it
  * reads unreachable and its instance is signed out. */
-export function phraseNames(groups: GroupsState, repo: RepositoryState, seat?: string): PhraseNames {
+export function phraseNames(groups: SpaceState, repo: RepositoryState): PhraseNames {
   const instanceAt = (origin: string): InstanceState | undefined => groups.instances.find((instance) => instance.origin === origin);
   return {
     nameAt: (origin) => {
@@ -211,7 +194,6 @@ export function phraseNames(groups: GroupsState, repo: RepositoryState, seat?: s
       return origin === null ? "" : instanceNameAt(groups, origin);
     },
     signedOut: (line) => line.state === "unreachable" && line.instance !== null && instanceAt(line.instance)?.signedIn === false,
-    seat,
   };
 }
 
@@ -226,9 +208,7 @@ export function lineOutcome(
 ): PlacementState["outcome"] {
   const outcome = line.outcome;
   if (!outcome) return null;
-  // Old cores may leave a first-share acknowledgement outcome in a
-  // snapshot. The chosen destination already authorizes syncing
-  // (space-57, DR-215); it no longer asks the reader for an action.
+  // A waiting step is rendered from the placement's waiting state (space-64).
   if (outcome.kind === "waiting") return null;
   const putAway = dismissed !== undefined && dismissed === JSON.stringify(repo.sync);
   return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
@@ -242,8 +222,7 @@ export function lineOutcome(
  * its state, a reachable one reading its last sync (space-61), a
  * read-only one carrying it beside the host's reason, one at a Space
  * this computer is signed out of "Signed out of <display name>", one a
- * placement file names "Not on this computer" — at a seat's place "Not
- * on <server>" (space-112). Where its last check counted them, its own
+ * placement file names "Not on this computer". Where its last check counted them, its own
  * ahead and behind ride the title of a sync's outcome and of its state
  * (space-8). */
 export function placementPhrase(
@@ -335,7 +314,7 @@ export function placementPhrase(
       };
     }
     case "absent": {
-      const text = notHerePhrase(names.seat);
+      const text = notHerePhrase();
       return { text, title: text, tone: "idle" };
     }
     default:
@@ -422,16 +401,15 @@ const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
  * 9. its last sync — "Synced <age>", "Not synced since <moment>" or
  *    "Never synced".
  *
- * A row under "This computer" (`quiet`), local only, or not on this
- * computer reads none but the join running on it. Outcomes the reader
- * dismissed and those that need nothing of him — synced, behind — leave
+ * A local-only row or a row not on this device reads only an in-flight
+ * step, if any. Outcomes the reader dismissed and outcomes that require
+ * no action — synced, behind — leave
  * the state's phrase. */
 export function rowPhrase(
   repo: RepositoryState,
   now: number,
   dismissed: string | undefined,
   names: PhraseNames,
-  quiet = false,
 ): RowPhrase {
   const sync = repo.sync;
   if (sync.phase === "running") {
@@ -439,11 +417,10 @@ export function rowPhrase(
       const text = i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code are downloaded" });
       return { text, title: text, tone: "running" };
     }
-    if (quiet) return NO_PHRASE;
     const text = STEP_LINES[sync.step](sync.placement === undefined ? undefined : names.nameAt(sync.placement));
     return { text, title: text, tone: "running" };
   }
-  if (quiet || repo.state === "local-only" || repo.state === "absent") return NO_PHRASE;
+  if (repo.state === "local-only" || repo.state === "absent") return NO_PHRASE;
   if (repo.local.length > 0) {
     const { text, title } = toSendPhrase(repo.local);
     return { text, title, tone: "idle" };
@@ -490,16 +467,10 @@ export function rowPhrase(
   if (repo.state === "read-only") {
     const text = hostStatePhrase("read-only", repo.reason ?? lines.find((line) => line.state === "read-only")?.reason ?? null);
     const title =
-      names.seat === undefined
-        ? i18n._({
+      i18n._({
             id: "{state} · new sessions stay on this computer",
             values: { state: text },
             comment: "a read-only project's title: the sessions started from now on are not sent",
-          })
-        : i18n._({
-            id: "{state} · new sessions stay on {place}",
-            values: { state: text, place: names.seat },
-            comment: "a read-only row's title on a team server's Space: new sessions stay on the server; {place} is the server's name",
           });
     return { text, title, tone: "idle" };
   }
@@ -510,26 +481,11 @@ export function rowPhrase(
       return { text, title: text, tone: "idle" };
     }
     const text = hostStatePhrase("unreachable", repo.reason ?? lines.find((line) => line.state === "unreachable")?.reason ?? null);
-    return { text, title: text, tone: "attention" };
+    return { text, title: text, tone: "attention", act: { kind: "retry", placement: null } };
   }
   const last = lastSyncOf(repo);
   const text = lastSyncPhrase(last, now);
   return { text, title: last ? absoluteTitle(last.at) : text, tone: "idle" };
-}
-
-/** A project's code status (space-1): the core's phrase, "Code:
- * <where>" or "Code remote not configured", with what it says of the
- * configured remote — at a Space, elsewhere, or none, in the neutral
- * tone; nothing
- * while the core does not know yet, the records hold no `project.json`,
- * or the row stands under "This computer" (`local`), which nobody shares
- * yet. */
-export function codeOf(
-  repo: RepositoryState,
-  local: boolean,
-): { kind: Exclude<CodeKind, "unknown">; phrase: string; tone: "idle" | "attention" } | null {
-  if (local || repo.codeKind === "unknown" || repo.code === null) return null;
-  return { kind: repo.codeKind, phrase: repo.code, tone: "idle" };
 }
 
 /** A project's name from its spex repository's (space-1, space-46):
@@ -538,10 +494,7 @@ export function projectName(name: string): string {
   return name.replace(/-spex$/i, "") || name;
 }
 
-/** A project opening at a place (run-view-168, space-63): a spex
- * repository whose join runs there, named as its code is, with the step
- * in flight — or one whose join stopped, with its cause. Its id is the
- * row's key, which the project bears once that place's core lists it. */
+/** A Space project opening here (run-view-200, run-view-201). */
 export interface OpeningProject {
   id: string;
   name: string;
@@ -550,9 +503,7 @@ export interface OpeningProject {
   stopped?: string;
 }
 
-/** What a row says of its open (run-view-168): the join running or
- * stopped on it; nothing for any other row. */
-export function openingOf(repo: RepositoryState | undefined): OpeningProject | undefined {
+function openingOf(repo: RepositoryState | undefined): OpeningProject | undefined {
   if (!repo) return undefined;
   const sync = repo.sync;
   if (sync.phase === "running" && sync.op === "join") return { id: repo.key, name: projectName(repo.name), step: sync.step };
@@ -560,72 +511,26 @@ export function openingOf(repo: RepositoryState | undefined): OpeningProject | u
   return undefined;
 }
 
-/** Every row a Groups state lists; a state read in part lists what it
- * holds. */
-function rowsOf(state: GroupsState): RepositoryState[] {
-  return [...(state.own?.repositories ?? []), ...(state.instances ?? []).flatMap((instance) => instance.groups.flatMap((group) => group.repositories))];
-}
-
-/** The projects opening at a place (run-view-168): every row of its
- * Groups state whose join runs, left out once its core lists the
- * project. */
-export function openingProjects(state: GroupsState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
+/** The sidebar's opening rows (run-view-200). */
+export function openingProjects(state: SpaceState | undefined, projects: readonly { id: string }[]): OpeningProject[] {
   if (!state) return [];
-  return rowsOf(state)
+  return state.repositories
     .map((repo) => openingOf(repo))
     .filter((entry): entry is OpeningProject => entry !== undefined && entry.stopped === undefined && !projects.some((project) => project.id === entry.id));
 }
 
-/** What a place says of opening the project keyed `id` (run-view-168):
- * its join running or stopped, nothing otherwise. */
-export function openingAt(state: GroupsState | undefined, id: string | undefined): OpeningProject | undefined {
+/** The selected project's opening or stopped state (run-view-200, run-view-201). */
+export function openingAt(state: SpaceState | undefined, id: string | undefined): OpeningProject | undefined {
   if (!state || id === undefined) return undefined;
-  return openingOf(rowsOf(state).find((repo) => repo.key === id));
+  return openingOf(state.repositories.find((repo) => repo.key === id));
 }
 
-/** "Personal" (space-1, DR-172): your own records and your namespace
- * at a Space, as a heading and a picker's first choice. */
-export const personalLabel = (): string =>
-  i18n._({ id: "Personal", comment: "your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into" });
-
-/** "This computer" (space-1, DR-172): the heading of what stands in no
- * group — your sessions before any sign-in, and each project not yet
- * shared. */
+/** The local projects section (space-1). */
 export const thisComputerLabel = (): string =>
-  i18n._({ id: "This computer", comment: "the heading of the projects and sessions kept on this computer alone, in no group at any Space" });
-
-/** A row's name (space-1, DR-159): the spex repository's with its
- * `-spex` dropped, a group's own reading "Group sessions" and your own
- * group's own "Your sessions". */
-export function rowName(group: { fullPath: string }, repo: RepositoryState): string {
-  if (repo.own) {
-    return i18n._({ id: "Your sessions", comment: "the row of your own group's own records: your sessions outside any project" });
-  }
-  if (isGroupRepository(group, repo)) {
-    return i18n._({ id: "Group sessions", comment: "the row of a group's own records: the group's sessions outside any project" });
-  }
-  return projectName(repo.name);
-}
-
-/** A group's own spex repository rather than a project's (DR-103):
- * your own group's, or the one named `<group>-spex` in its group, after
- * the last segment of the group's path as the core names it (space-65),
- * whatever the group's name — a project of that name is refused at
- * creation, the name being taken. */
-export function isGroupRepository(group: { fullPath: string }, repo: RepositoryState): boolean {
-  return repo.own || repo.name === `${lastSegment(group.fullPath)}-spex`;
-}
-
-/** A project's spex repository cloned at the place with no working
- * folder pairing it: a clone whose code found none here, paired later
- * (space-63) — or, at a remote place, one whose code clone failed,
- * joined again into the folder its core allocated (space-103). */
-export function awaitsFolder(group: { fullPath: string }, repo: RepositoryState): boolean {
-  return cloneHere(repo) && !isGroupRepository(group, repo) && repo.folder === null && repo.state !== "local-only";
-}
+  i18n._({ id: "This computer", comment: "the heading of the projects kept on this computer alone" });
 
 /** Whether a spex repository a Space lists may hold the records of a
- * project here (space-58): its code read alike — the core names where a
+ * project here (space-97): its code read alike — the core names where a
  * project's code is, never its remote (space-1) — at a Space or
  * elsewhere, and the same project name, compared as the reader reads
  * them. */
@@ -641,7 +546,7 @@ export function sameCode(listed: RepositoryState, local: RepositoryState): boole
 }
 
 /** A path's last segment: a working folder's name, the default name
- * of the spex repository made for it (space-58). */
+ * of the spex repository made for it (space-97). */
 export function lastSegment(path: string): string {
   return path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? path;
 }
@@ -809,21 +714,13 @@ export function familyName(family: string): string {
   return FAMILY_LABELS[family]?.() ?? family;
 }
 
-/** Every ignored family with its one plain reason (space-25), the
- * server named where this computer would be at a seat's place
- * (space-112); read at render, never at module load. */
-export function staysHere(seat?: string): readonly { family: string; reason: string }[] {
+/** Every ignored family with its plain reason (space-25), read at render. */
+export function staysHere(): readonly { family: string; reason: string }[] {
   return [
     {
       family: i18n._({ id: "provider hints", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("resume tokens for this computer's agent conversations; they work nowhere else")
-          : i18n._({
-              id: "resume tokens for {place}'s agent conversations; they work nowhere else",
-              values: { place: seat },
-              comment: "why provider hints stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("resume tokens for this computer's agent conversations; they work nowhere else"),
     },
     {
       family: i18n._({ id: "in-use files", comment: "a file family that stays on this computer: the files marking which Spex is writing now" }),
@@ -835,24 +732,12 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
         comment: "a file family that stays on this computer",
       }),
       reason:
-        seat === undefined
-          ? i18n._("copies installed from spex.lock; every computer installs its own")
-          : i18n._({
-              id: "copies installed from spex.lock; {place} installs its own",
-              values: { place: seat },
-              comment: "why installed packages stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("copies installed from spex.lock; every computer installs its own"),
     },
     {
       family: i18n._({ id: "where projects live", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("where your project folders are on this computer, in the home file")
-          : i18n._({
-              id: "where your project folders are on {place}, in the home file",
-              values: { place: seat },
-              comment: "why where projects live stays on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("where your project folders are on this computer, in the home file"),
     },
     {
       family: i18n._({ id: "preferences", comment: "a file family that stays on this computer" }),
@@ -861,13 +746,7 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
     {
       family: i18n._({ id: "credentials", comment: "a file family that stays on this computer" }),
       reason:
-        seat === undefined
-          ? i18n._("this computer's sign-in to each Space")
-          : i18n._({
-              id: "{place}'s sign-in to each Space",
-              values: { place: seat },
-              comment: "why credentials stay on a team server's seat; {place} is the server's name",
-            }),
+        i18n._("this computer's sign-in to each Space"),
     },
     {
       family: i18n._({

@@ -17,7 +17,7 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import type { RegistryState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { openExternalBridge } from "../lib/space.js";
 import { hostNameOf } from "../lib/instances.js";
 import { usePopover } from "../lib/usePopover.js";
@@ -55,7 +55,7 @@ function registryNameOf(origin: string, state: RegistryState | undefined): strin
  * state `registry.get` replies naming no origin, the core's broadcast
  * keeping it current; undefined until that reply. */
 function usePublicRegistry(): RegistryState | undefined {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const [answered, setAnswered] = useState<RegistryState>();
   useEffect(() => {
     let active = true;
@@ -79,7 +79,7 @@ function usePublicRegistry(): RegistryState | undefined {
  * a flow this control started reads as running until the state says
  * otherwise. Each act reports a refusal as `error`. */
 export function useRegistrySignIn(origin: string | undefined, { read = false }: { read?: boolean } = {}) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const broadcast = store((state) => (origin ? state.registryAccounts?.[origin] : undefined));
   const [answered, setAnswered] = useState<RegistryState>();
   const [started, setStarted] = useState<{ origin: string; flow: RegistryFlow }>();
@@ -210,14 +210,14 @@ export function RegistryFlowLine({ running, name, testId }: { running: RegistryF
  * a choice or a flow adds — the address field, the flow's line, a
  * refusal — wraps onto a line of its own beneath it. */
 export function RegistryAccount({ repository }: { repository: string }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const registry = store((state) => state.environments[repository]?.registry);
   if (!registry) return null;
   return <RegistryHeading key={registry.origin} repository={repository} origin={registry.origin} legacy={registry.legacy} />;
 }
 
 function RegistryHeading({ repository, origin, legacy }: { repository: string; origin: string; legacy: boolean }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const account = useRegistrySignIn(origin, { read: true });
   const publicRegistry = usePublicRegistry();
   const name = registryNameOf(origin, account.state);

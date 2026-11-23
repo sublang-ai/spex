@@ -42,7 +42,7 @@ import {
 import { occupied } from "./clone-moves.js";
 import { discardTree, makePrivateDirectory, moveFolder, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
-import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
+import { filedIn, formerPlacementPrefKey, placementPrefKey, readPlacementFiles, readPlacements } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
@@ -109,25 +109,24 @@ export interface StoreOptions {
   legacyDbPath?: string;
   /** The environment Git and the host URL are read from. */
   env?: NodeJS.ProcessEnv;
-  /** The local home for sign-in and routing, or a seat's scoped Codex
-   * home for routing its snapshot (core-service-3). */
+  /** The local home used for sign-in and model routing (core-service-3). */
   home?: SeedHome;
   /** The agents the seed counts as set up, confirmed before the store
    * opens; the credential variables alone where absent (core-service-3). */
   seedCredentials?: SeedCredentials;
-  /** Your own group's folder name for a new home; this device's user
+  /** The personal records folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
   /** The home's compiled-playbook library, for the migration's checks. */
   libraryDir?: string;
-  /** Publish a config a former location holds at your own group's
-   * config path before the starter is seeded there (core-service-66). */
+  /** Publish a config a former location holds at the global config path before the starter is
+   * seeded there (core-service-66). */
   relocateConfig?: (configPath: string) => void;
   /** Internal: Store.open runs the migration the constructor defers. */
   deferMigration?: boolean;
   /** Write the environment at `root`, naming `space` as the
    * environment's instance wherever the spex repository is placed at one
-   * (environments-2, DR-165): `global`, your own group's clone, when the
+   * (environments-2, DR-165): `global`, the global records clone, when the
    * home is made — as its config is seeded, before its first commit —
    * requesting the built-in spec package, locked at `registryOrigin`, the
    * environment's registry (environments-11, DR-127, DR-176); else a new
@@ -455,20 +454,14 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
 /** The home's preference file (storage-5). */
 export function prefsFileOf(dir: string): string { return join(dir, "local", "prefs.json"); }
 
-/** What a Spex before DR-128 recorded for a repository, one record per
- * kind, moved under its placement `name` where that holds none of its
- * own, the former keys leaving (storage-5); whether anything changed. */
+/** Move the older repository-level sync receipt to the first placement. */
 function adoptFormerPlacementPrefs(prefs: Map<string, unknown>, key: string, name: string): boolean {
-  let changed = false;
-  for (const kind of PLACEMENT_PREF_KINDS) {
-    const former = formerPlacementPrefKey(key, kind);
-    if (!prefs.has(former)) continue;
-    const own = placementPrefKey(key, name, kind);
-    if (!prefs.has(own)) prefs.set(own, prefs.get(former));
-    prefs.delete(former);
-    changed = true;
-  }
-  return changed;
+  const former = formerPlacementPrefKey(key);
+  if (!prefs.has(former)) return false;
+  const own = placementPrefKey(key, name);
+  if (!prefs.has(own)) prefs.set(own, prefs.get(former));
+  prefs.delete(former);
+  return true;
 }
 
 /** The rebuildable forge cache, on this device alone (storage-1). */
@@ -580,7 +573,7 @@ export class Store {
   /** Whether a legacy store was imported into the former layout this
    * open, which the groups migration carries into the home. */
   private legacyImported = false;
-  /** Whether this open seeded the starter into your own group's clone. */
+  /** Whether this open seeded the starter into the global records clone. */
   seededConfig = false;
 
   private meta: StoreMeta = { version: META_VERSION };
@@ -727,8 +720,7 @@ export class Store {
   /** The home file this store serves, as `home.yaml` reads now. */
   get home(): Home { this.refreshHome(); return this.homeFile; }
 
-  /** Read or create `home.yaml`, make sure your own group's spex
-   * repository stands, and index every clone under `workspace/`. */
+  /** Read or create `home.yaml`, make sure the global records repository stands, and index every clone under `workspace/`. */
   private openHome(): void {
     if (Home.exists(this.dir)) {
       try { this.homeFile = Home.load(this.dir); }
@@ -761,7 +753,7 @@ export class Store {
     }).map((move) => ({ ...move }));
   }
 
-  /** Your own group's clone always stands, its config seeded from the
+  /** The global records clone always stands, its config seeded from the
    * starter and its `spex` branch begun with one commit (storage-6); the
    * seed's run requests the built-in spec package in the global
    * environment, once, so a later removal stands (environments-11). */
@@ -842,11 +834,10 @@ export class Store {
     catch (error) { console.error(`spex: ${dir} is not a repository yet: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
-  /** Every clone under `workspace/` as the folders stand now: a folder
-   * named `<name>-spex` inside plain group folders mirroring the Git host
-   * (storage-1), under an instance's folder or your own group's, its key
-   * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
-   * again keeps its descriptor, and one gone leaves the map. */
+  /** Walk non-hidden folders under `workspace/` up to WORKSPACE_DEPTH
+   * segments. A folder whose relative path is a valid repository key
+   * ends that branch of the walk. Keep descriptors for clones found
+   * again and drop those whose folders are gone. */
   private currentRepositories(): Map<string, SpexRepository> {
     const found = new Map<string, string>();
     const walk = (dir: string, depth: number): void => {
@@ -891,7 +882,7 @@ export class Store {
   }
 
   private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
-    const { instance, group, name } = splitKey(repository.key);
+    const { name } = splitKey(repository.key);
     let registeredAt = 0;
     try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
     return {
@@ -899,9 +890,7 @@ export class Store {
       path,
       name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
-      // Your own group's folder lies outside every instance's: a namespace
-      // at an instance bearing its name is not it (DR-127).
-      repository: { key: repository.key, name, group, own: instance === null && group === this.homeFile.ownName },
+      repository: { key: repository.key, name },
     };
   }
 
@@ -912,7 +901,7 @@ export class Store {
 
   repository(key: string): SpexRepository | undefined { return this.currentRepositories().get(key); }
 
-  /** Your own group's spex repository: made at the store's open alone
+  /** The global records repository: made at the store's open alone
    * (storage-6), and refused, never made again, where it went since. */
   ownRepository(): SpexRepository {
     this.refreshHome();
@@ -922,7 +911,7 @@ export class Store {
   private requireRepository(key: string): SpexRepository {
     const repository = this.repository(key);
     if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no records {key} on this computer",
-      comment: "Refusal: the key names no project's or group's records under workspace/; {key} is their path", values: { key } }));
+      comment: "Refusal: the key names no project records under workspace/; {key} is their path", values: { key } }));
     return repository;
   }
 
@@ -1064,7 +1053,7 @@ export class Store {
 
   // -- sessions, one shared store per clone (storage-14) --------------------
 
-  /** A clone's session store; your own group's by default: where the
+  /** A clone's session store; the global records repository’s by default: where the
    * XDG import lands (storage-18) and what a session-less caller reads.
    * A key naming no clone now is refused, never served by another's. */
   sessionStore(key?: string): SharedSessionStore {
@@ -1776,8 +1765,8 @@ export class Store {
 
   // -- projects (projects-10, storage-6) ------------------------------------
 
-  /** Pair a working folder with a new local spex repository in your own
-   * group, or select the pair it already has (storage-6). */
+  /** Pair a working folder with a new local spex repository under the personal records
+   * folder, or select the pair it already has (storage-6). */
   registerProject(path: string, name: string, _at?: number): ProjectInfo {
     this.assertProjectsWritable();
     const normalized = resolve(path);
@@ -1834,19 +1823,18 @@ export class Store {
     this.saveHome();
   }
 
-  /** A listed instance's display name as its last read named it
-   * (storage-2), written only where it changed; a home that does not
-   * read keeps it unwritten until a later read. */
-  setDisplayName(origin: string, displayName: string): void {
+  /** Persist a listed Space's display name and Git address (storage-2)
+   * when either changes and the current home file can be read. */
+  setSpaceDescription(origin: string, displayName: string, gitOrigin: string): void {
     this.refreshHome();
     if (this.homeProblem) return;
     const entry = this.homeFile.instance(origin);
-    if (!entry || entry.displayName === displayName) return;
-    this.homeFile.setDisplayName(origin, displayName);
+    if (!entry || (entry.displayName === displayName && entry.gitOrigin === gitOrigin)) return;
+    this.homeFile.setDisplayName(origin, displayName, gitOrigin);
     this.saveHome();
   }
 
-  /** This device's user name as your own group's folder name: the name a
+  /** This device's user name as the personal records folder name: the name a
    * new home's folder takes, which a sign-in renames while the folder
    * still bears it (storage-2, space-59). */
   deviceOwnName(): string {
@@ -1884,8 +1872,7 @@ export class Store {
 
   /**
    * Clones the caller already moved on disk (space-59, space-60): every
-   * pair naming a moved key names its new one in `home.yaml`, your own
-   * group's name follows where it was renamed, and the indexes — clones,
+   * pair naming a moved key names its new one in `home.yaml`, the personal records folder name follows where it was renamed, and the indexes — clones,
    * sessions, the preferences keyed by repository — follow in the same
    * step, so no reader sees a key that names nothing; intents are read
    * where their clones now lie. Only the write of `home.yaml` throws: one
@@ -1923,7 +1910,7 @@ export class Store {
       this.changePrefs((prefs) => {
         let changed = false;
         for (const { from, to: next } of moves) {
-          for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`))) {
+          for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`) && name.endsWith(":last"))) {
             prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, prefs.get(key));
             prefs.delete(key);
             changed = true;
@@ -2052,10 +2039,10 @@ export class Store {
     for (const repository of repositories) {
       if (paired.has(repository.key)) continue;
       const held = [...this.sessions.values()].filter((meta) => meta.projectId === repository.key);
-      // Your own group's clone needs a folder only once it holds sessions.
+      // The global records clone needs a folder only once it holds sessions.
       if (repository.key === this.homeFile.own() && held.length === 0) continue;
       const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
-      const { group, name } = splitKey(repository.key);
+      const { name } = splitKey(repository.key);
       const projectName = this.readProjectFile(repository).file?.name;
       const label = projectName ?? name;
       const conversations = held.map((meta) => {
@@ -2075,7 +2062,7 @@ export class Store {
         file: relative(this.dir, repository.dir),
         reason: unpairedReason(label),
         blocking: false,
-        repair: { kind: "repository", repository: repository.key, name, group,
+        repair: { kind: "repository", repository: repository.key, name,
           ...(projectName !== undefined ? { projectName } : {}), ...(conversations.length ? { conversations } : {}),
           directories, sessions: held.length, key: repairKey(repository.key, directories) },
       });
@@ -2755,26 +2742,21 @@ export class Store {
    * (storage-5): under its remote's name, else, for the clone's first
    * placement (`first`), what a Spex before DR-128 recorded for the
    * repository. */
-  placementPref<T>(key: string, name: string, kind: PlacementPrefKind, first: boolean): T | undefined {
+  placementPref<T>(key: string, name: string, first: boolean): T | undefined {
     const prefs = this.currentPrefs();
-    const own = placementPrefKey(key, name, kind);
+    const own = placementPrefKey(key, name);
     if (prefs.has(own)) return prefs.get(own) as T;
-    const former = formerPlacementPrefKey(key, kind);
+    const former = formerPlacementPrefKey(key);
     return first && prefs.has(former) ? (prefs.get(former) as T) : undefined;
   }
 
-  /** Record one of a placement's records (storage-5), in one step with
-   * the read: for the clone's first placement (`first`), what a Spex
-   * before DR-128 recorded for the repository becomes its own first —
-   * the record written replacing its kind, the other moved under the
-   * placement's name where none stands there — and the former keys
-   * leave, so no later first placement reads them. */
-  setPlacementPref(key: string, name: string, kind: PlacementPrefKind, value: unknown, first: boolean): void {
+  /** Record a completed sync and retire its older repository-level receipt. */
+  setPlacementPref(key: string, name: string, value: unknown, first: boolean): void {
     this.currentPrefs();
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
     this.changePrefs((prefs) => {
       if (first) adoptFormerPlacementPrefs(prefs, key, name);
-      prefs.set(placementPrefKey(key, name, kind), value);
+      prefs.set(placementPrefKey(key, name), value);
       return true;
     });
   }
@@ -2793,32 +2775,21 @@ export class Store {
   renamePlacementPrefs(key: string, from: string, to: string): void {
     if (from === to) return;
     this.changePrefs((prefs) => {
-      let changed = false;
-      for (const kind of PLACEMENT_PREF_KINDS) {
-        const was = placementPrefKey(key, from, kind);
-        const next = placementPrefKey(key, to, kind);
-        if (prefs.has(was)) {
-          prefs.set(next, prefs.get(was));
-          prefs.delete(was);
-          changed = true;
-        } else if (prefs.delete(next)) changed = true;
-      }
-      return changed;
+      const was = placementPrefKey(key, from);
+      const next = placementPrefKey(key, to);
+      if (!prefs.has(was)) return prefs.delete(next);
+      prefs.set(next, prefs.get(was));
+      prefs.delete(was);
+      return true;
     });
   }
 
-  /** A placement's records leave with its remote (storage-5, space-5):
-   * in one step, those under its name, and, for the clone's first
-   * placement (`first`), what a Spex before DR-128 recorded for the
-   * repository; `kinds` limits them. */
-  dropPlacementPrefs(key: string, name: string, first: boolean, kinds: readonly PlacementPrefKind[] = PLACEMENT_PREF_KINDS): void {
+  /** The last sync receipt leaves with its placement. */
+  dropPlacementPrefs(key: string, name: string, first: boolean): void {
     this.changePrefs((prefs) => {
-      let changed = false;
-      for (const kind of kinds) {
-        if (prefs.delete(placementPrefKey(key, name, kind))) changed = true;
-        if (first && prefs.delete(formerPlacementPrefKey(key, kind))) changed = true;
-      }
-      return changed;
+      const dropped = prefs.delete(placementPrefKey(key, name));
+      const droppedFormer = first && prefs.delete(formerPlacementPrefKey(key));
+      return dropped || droppedFormer;
     });
   }
 

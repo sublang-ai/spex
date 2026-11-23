@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Core coverage of the Groups surface (space-37, space-39, space-51):
+// Core coverage of the Space surface (space-37, space-39, space-51):
 // real cores with substitute agents on scratch homes whose configuration
-// lies in your own group's spex repository, each sync on one spex
+// lies in the personal global records repository, each sync on one spex
 // repository's clone, a bare repository standing in for the host's copy,
 // an isolated Git configuration through the core's environment, and a
 // sleeping GIT_SSH_COMMAND for the transport limit and Stop. The sync
@@ -20,7 +20,7 @@ import { WebSocket } from "ws";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
 import type { SpaceHost } from "./space.js";
-import type { Command, GroupsState, ServerMessage } from "./protocol.js";
+import type { Command, SpaceState, ServerMessage } from "./protocol.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
@@ -28,10 +28,10 @@ const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, holdingGit, s
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
-// space-37: your own group, its repositories, and the first sync
+// space-37: personal records, local projects, and the first sync
 // ---------------------------------------------------------------------------
 
-test("space-37: a fresh home lists your own group alone with its own repository, and the git guidance without git", async (t) => {
+test("space-37: a fresh home lists its personal records repository, and the git guidance without git", async (t) => {
   const home = await startHome("fresh", { project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
@@ -39,9 +39,8 @@ test("space-37: a fresh home lists your own group alone with its own repository,
   assert.equal(state.home, home.dataDir);
   assert.deepEqual(state.instances, [], "no instance listed");
   assert.deepEqual(state.signIn, { phase: "idle" });
-  assert.equal(state.own.name, OWN, "your own group alone");
-  assert.deepEqual(state.own.repositories.map((repository) => repository.key), [OWN_KEY]);
-  const own = state.own.repositories[0];
+  assert.deepEqual(state.repositories.map((repository) => repository.key), [OWN_KEY]);
+  const own = state.repositories[0];
   assert.equal(own.name, `${OWN}-spex`);
   assert.equal(own.own, true);
   assert.equal(own.state, "local-only");
@@ -68,10 +67,9 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   const key = project.id;
   const clone = clonePath(home.dataDir, key);
   assert.equal(key, `${OWN}/${basename(home.projectDir)}-spex`);
-  assert.deepEqual(project.repository, { key, name: `${basename(home.projectDir)}-spex`, group: OWN, own: true });
+  assert.deepEqual(project.repository, { key, name: `${basename(home.projectDir)}-spex` });
   const state = await home.client.expectOk("space.get", {});
-  assert.deepEqual([state.own.name, state.instances], [OWN, []]);
-  assert.deepEqual(state.own.repositories.map((repository) => repository.key), [OWN_KEY, key], "your own group's repository first");
+  assert.deepEqual(state.repositories.map((repository) => repository.key).sort(), [OWN_KEY, key].sort());
   const row = repositoryOf(state, key);
   assert.equal(row.state, "local-only");
   assert.equal(row.own, false);
@@ -116,9 +114,9 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const home = await startHome("remote");
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  // A clone no instance holds reaches one by a group picked for it
+  // A local-only clone needs a sync destination
   // (space-11).
-  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Add it to a group first$/);
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Choose a Space to sync first$/);
   await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /^nowhere is not on this computer — Refresh, then Retry$/);
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
@@ -145,7 +143,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
   assert.deepEqual(cleared.placements, []);
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Add it to a group first$/);
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Choose a Space to sync first$/);
 });
 
 test("space-37, space-22, storage-5: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:<placement>:last under its path placement origin; naming another path placement removes it", async (t) => {
@@ -573,8 +571,8 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   // The explorer.
   mkdirSync(join(clone, "packages", "builtin"), { recursive: true });
   writeFileSync(join(clone, "packages", "builtin", "spex.yaml"), "format: 1\n");
-  // The installed tree of a group's own environment, a manifest inside
-  // it no spec package folder (environments-26, storage-1).
+  // An installed package’s manifest is outside the project’s editable
+  // spec package folders (environments-26, storage-1).
   mkdirSync(join(clone, ".spex", "packages", "acme", "kit"), { recursive: true });
   writeFileSync(join(clone, ".spex", "packages", "acme", "kit", "meta.yaml"), "format: 2\n");
   mkdirSync(join(clone, "intents", `${intent.id}.assets`), { recursive: true });
@@ -690,7 +688,7 @@ test("space-130: overlapping reads share one recomputation, and a session's file
   const calls = (command: string): string[] => readFileSync(log, "utf8").split("\n")
     .filter((line) => line.split(" ")[1] === clone && line.split(" ").slice(2).join(" ").startsWith(command));
   const recomputed = (): number => calls("add -A -- .").length;
-  const titled = (state: GroupsState): string | undefined => repositoryOf(state, key).local.find((unit) => unit.kind === "session")?.label;
+  const titled = (state: SpaceState): string | undefined => repositoryOf(state, key).local.find((unit) => unit.kind === "session")?.label;
   const before = { recomputed: recomputed(), batches: calls("cat-file --batch").length };
   shim.hold();
   const first = home.client.expectOk("space.get", {});
@@ -732,7 +730,6 @@ test("space-51: deferred folder review survives restart and changed checks, with
   assert.ok(repair, JSON.stringify(state.diagnostics));
   assert.equal(repair.repair?.kind, "repository");
   assert.equal(repair.repair?.name, `${basename(first.projectDir)}-spex`);
-  assert.equal(repair.repair?.group, OWN);
   assert.deepEqual(repair.repair?.directories, [first.projectDir]);
   assert.equal(repair.repair?.sessions, 1);
   assert.ok(repair.repair?.key.length, "a repair carries its own key (space-54)");
@@ -827,7 +824,7 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
   await home.stop();
   const unpaired = Home.load(dataDir); unpaired.unpair(projectKey); unpaired.save();
   home = await startHome("notice-unpaired", options);
-  const noticeIn = (state: GroupsState, file = source) => state.diagnostics.find((entry) => entry.file === file);
+  const noticeIn = (state: SpaceState, file = source) => state.diagnostics.find((entry) => entry.file === file);
   const all = await home.client.expectOk("space.get", {});
   const folderTask = all.diagnostics.find((entry) => entry.repair?.repository === projectKey)?.repair;
   assert.ok(folderTask);
@@ -842,7 +839,7 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
   const key = notice.notice.key;
   assert.deepEqual((await home.client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === source)?.notice, { key }, "the diagnostics command exposes the same dismissal capability");
   const status = git(ownClone(dataDir), "status", "--porcelain");
-  const observed: GroupsState[] = [];
+  const observed: SpaceState[] = [];
   const observe = async () => {
     const socket = new WebSocket(`ws://127.0.0.1:${home.service.port()}/?token=test`);
     socket.on("message", (bytes) => {
@@ -854,7 +851,7 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
   };
   let observer = await observe();
   t.after(() => observer.close());
-  const waitObserved = async (check: (state: GroupsState) => boolean) => {
+  const waitObserved = async (check: (state: SpaceState) => boolean) => {
     const deadline = Date.now() + 5_000;
     while (!observed.some(check) && Date.now() < deadline) await sleep(10);
     assert.ok(observed.some(check), "another connected reader receives the updated dismissal and count");

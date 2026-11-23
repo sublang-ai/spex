@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AgentSummary, CommandResults, MediaUploadOwner } from "@sublang/spex-core/protocol";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { subscribeBrowserProgress } from "./browser-progress.js";
 import type { BrowserControlProps } from "../components/BrowserControl.js";
@@ -14,7 +14,7 @@ type Preparation = BrowserControlProps["preparation"];
 /** Contextual facts belong to the core, never adapter-name heuristics in
  * the renderer. Preparing grants no tools and does not write a choice. */
 export function useBrowserTools(agent: AgentSummary, context?: MediaUploadOwner) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const connection = store((state) => state.connection);
   const [attempt, setAttempt] = useState(0);
   // A checkbox's value does not affect hypothetical browser admission.

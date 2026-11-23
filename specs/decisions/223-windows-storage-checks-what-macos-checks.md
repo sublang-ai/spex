@@ -9,6 +9,7 @@ Accepted (2026-11-04) on the owner's direction, after native Windows refused a p
 Amends [DR-178](178-native-windows-private-storage.md) in the storage it admits, the principals its check refuses, and the files its policy covers.
 
 Completed by [DR-224](224-playbook-18-1-4-adoption.md) for the storage Playbook keeps.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

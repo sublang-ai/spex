@@ -158,7 +158,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(signedIn.code, 0, signedIn.stderr);
   assert.match(signedIn.stdout, /Signed in at First as @ada \(default\)\.\n$/);
   let home = readHome();
-  assert.deepEqual(home.instances, [{ origin: first.url, clientId: "spex", account: { id: "1001", login: "ada", displayName: "Ada Lovelace" }, displayName: "First" }]);
+  assert.deepEqual(home.instances, [{ origin: first.url, gitOrigin: first.gitOrigin, clientId: "spex", account: { id: "1001", login: "ada", displayName: "Ada Lovelace" }, displayName: "First" }]);
   assert.equal(home.origin, first.url);
   assert.equal(existsSync(join(HOME, "workspace")), false, "the CLI makes no workspace");
   let credentials = readCredentials();
@@ -245,7 +245,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(second.script.liveDevices(), 0, "the second instance no longer lists the device");
   assert.equal(first.script.liveDevices(), 1, "the first instance's device stands");
   home = readHome();
-  assert.deepEqual(home.instances[1], { origin: second.url, clientId: "spex", account: { id: BOB.id, login: "bob", displayName: "Bob" }, displayName: "Second", signedOut: true });
+  assert.deepEqual(home.instances[1], { origin: second.url, gitOrigin: second.gitOrigin, clientId: "spex", account: { id: BOB.id, login: "bob", displayName: "Bob" }, displayName: "Second", signedOut: true });
   assert.equal(home.instances[0].signedOut, undefined);
   assert.deepEqual(Object.keys(readCredentials().hosts), [first.url]);
   const afterOut = await spex(["whoami", "--space", second.url]).done;

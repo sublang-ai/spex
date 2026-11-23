@@ -53,11 +53,10 @@ import {
   SEED_PREF,
   seedConfig,
   seedCredentials,
-  type SeedCredentials,
-  type SeedHome,
   summarizeConfig,
   validateProjectConfig,
   type ComposedConfig,
+  type SeedCredentials,
   type AdapterRuntimeCheck,
   type LoadModule,
   type PlaybookModules,
@@ -84,7 +83,7 @@ import {
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
 import { probeSignIn, type SignInProbe } from "./local-credentials.js";
-import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, runsNowhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
+import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { StartedProcesses, StopBound } from "./process-tree.js";
@@ -102,6 +101,7 @@ import {
   seedExampleProject,
   defaultRunCommand,
   isWorkTreeRoot,
+  workTreeLocation,
   isSeededAcademyProject,
   repoStatus,
   type ForgeAdapter,
@@ -152,16 +152,12 @@ import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { isUltracodeSupported } from "./config.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
-import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
-import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
-import { AGENT_CREDENTIAL_FORMS, codexAuthContent, unreadablePhrase, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
+import { DEFAULT_ADAPTER_IMPORTS, withRunSettings } from "./agent-runtime.js";
 import { RegistryManager } from "./registry.js";
 import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
-import { Places } from "./places.js";
-import { CredentialChanged, GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "@sublang/spex/git-host";
-import { relayHostError } from "./space-groups.js";
+import { CredentialChanged, GitHostClient, fileCredentialStore } from "@sublang/spex/git-host";
+import { relayHostError } from "./space-catalog.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
-import { configureSeatGit } from "./seat-git.js";
 import { displayRemote, validateRemoteUrl } from "./space-git.js";
 import { defaultAgentModels, isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -262,7 +258,7 @@ export interface CoreServiceOptions {
    * begun, before the runtime has begun it — so a suite can hold a turn
    * in that window (core-service-6). */
   sessionStatePublished?: (session: import("./protocol.js").SessionInfo) => void | Promise<void>;
-  /** Your own group's folder name for a new home; this device's user
+  /** The personal records folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
   /** The Git host's sign-in flow this deployment runs: `browser` on the
@@ -276,7 +272,7 @@ export interface CoreServiceOptions {
   /** The built-in spec package this app ships (environments-11): the
    * build's staged one by default; null ships none. A test seam. */
   builtinPackage?: BuiltinPackage | null;
-  /** Your agents' home folders' root, where your own group's skills are
+  /** Your agents' home folders' root, where the global environment’s skills are
    * exported (environments-8); null writes none. By default the given
    * `home`, or this user's home for the default Spex home at `~/.spex`;
    * a home elsewhere exports nothing there, so a scratch home never
@@ -294,174 +290,10 @@ export interface CoreServiceOptions {
    * A shell that bounds its own exit — Electron's — passes none. */
   agentProcesses?: () => number[] | Promise<number[]>;
   /** This runtime's label, stored beside the home's device at assignment
-   * for display alone (DR-134): the server's name on a seat, else this
-   * label, else the host name. */
+   * for display (DR-134). Defaults to the host name. */
   runtimeLabel?: string;
-  /**
-   * Seat mode (core-service-125, DR-132): this core runs on a team
-   * server for one member — the server's id and name and the admitted
-   * person's permanent account id at the instance. Its sign-in is the
-   * device flow naming the server and the person (git-host-27), your
-   * own group is placed at no instance (space-102), the commands naming
-   * a working folder are refused, and the runtime's label is the
-   * server's name. The ids are at most 64 characters. Its runs inherit
-   * the shared credential file's forms and the member's own credentials
-   * (core-service-126).
-   */
-  seat?: SeatOptions;
-  /** Test seam (DR-133): CA certificates, PEM, trusted beside the
-   * system's when the core presents a ticket at a team server's address;
-   * a stand-in hub's fixture CA. */
-  serverCertificateAuthorities?: readonly string[];
-  /** Test seam (core-service-128): the scale of the ninety seconds an
-   * admission is awaited, 1 by default, so a suite stands a fraction of
-   * a second in for each second. */
-  serverAdmitTimeScale?: number;
 }
 
-/** A seat's facts (core-service-125). */
-export interface SeatOptions {
-  serverId: string;
-  serverName: string;
-  personId: string;
-  /** The administrator's shared credential file, an absolute path: its
-   * `NAME=value` lines are read into the environment of every agent run
-   * (core-service-126). */
-  sharedCredentialFile?: string;
-}
-
-/** A seat's options checked at start: both ids hold 1 to 64 characters
- * (git-host-27), the name some text, and a shared credential file, where
- * one is given, an absolute path. A shell's mistake, in English. */
-function checkSeat(seat: SeatOptions): SeatOptions {
-  for (const [name, value] of [["serverId", seat.serverId], ["personId", seat.personId]] as const) {
-    if (typeof value !== "string" || value.length === 0 || value.length > SEAT_ID_MAX) {
-      throw new Error(`spex: a seat's ${name} must hold 1 to ${SEAT_ID_MAX} characters`);
-    }
-  }
-  const serverName = typeof seat.serverName === "string" ? seat.serverName.trim() : "";
-  if (serverName.length === 0) throw new Error("spex: a seat's serverName must hold some text");
-  const shared = seat.sharedCredentialFile;
-  if (shared !== undefined && (typeof shared !== "string" || !isAbsolute(shared))) {
-    throw new Error("spex: a seat's sharedCredentialFile must be an absolute path");
-  }
-  return { serverId: seat.serverId, serverName, personId: seat.personId, ...(shared !== undefined ? { sharedCredentialFile: shared } : {}) };
-}
-
-/** The refusal off a seat of a command on the member's own credentials
- * (settings-48). */
-const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "Credentials are set on a server only",
-  comment: "Refusal of a credentials command on a computer of one's own: Spex keeps a member's code-host and agent credentials only on a team server",
-}));
-
-/** The refusal off a seat of a sign-in naming a ticket (git-host-27):
- * only a seat's device request carries one. */
-const ticketOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "This sign-in is for a server only — sign in on Space",
-  comment: "Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space",
-}));
-
-// A credential command's fields, each checked before anything is written
-// (settings-48); a refusal never repeats what was given, which may hold
-// a secret.
-const blankCredentialName = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "A credential needs a name",
-  comment: "Refusal of a credential on a team server's seat: the host's or the agent's name, or a variable's name, is blank",
-}));
-const blankCredentialValue = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "A credential's value cannot be blank",
-  comment: "Refusal of a credential on a team server's seat: a token, a username or an agent's value is blank, or none is given",
-}));
-
-/** A code host as the member names it, in lowercase. */
-function credentialHost(name: string): string {
-  if (name.trim() === "") throw blankCredentialName();
-  const host = canonicalHost(name);
-  if (host === null) {
-    throw new CoreError("invalid_request", i18n._({
-      id: "That is not a host name: give the host alone, with a port where it needs one, and no scheme, path, user or spaces",
-      comment: "Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port",
-    }));
-  }
-  return host;
-}
-
-/** An agent as the member names it: one of the adapters. */
-function credentialAgent(name: string): AdapterName {
-  if (name.trim() === "") throw blankCredentialName();
-  if (!isAdapterName(name)) {
-    throw new CoreError("invalid_request", i18n._({
-      id: "That is not an agent: name one of {agents}",
-      comment: "Refusal of an agent's credential on a team server's seat: the name is no agent's; `agents` lists the agents' names as they are",
-      values: { agents: listed(adapterNameSchema.options) },
-    }));
-  }
-  return name;
-}
-
-/** A code host's credential: a token and an optional username, each one
- * line of text. */
-function hostCredentialOf(values: Record<string, string>): HostCredential {
-  if (Object.keys(values).some((field) => field !== "token" && field !== "username")) {
-    throw new CoreError("invalid_request", i18n._({
-      id: "A code host's credential is a token and, where the host asks for one, a username",
-      comment: "Refusal of a code host's credential on a team server's seat: it names a field other than the token and the username",
-    }));
-  }
-  const { token, username } = values;
-  if (token === undefined || token.trim() === "" || (username !== undefined && username.trim() === "")) throw blankCredentialValue();
-  if ([token, username ?? ""].some((value) => /[\u0000-\u001f\u007f]/.test(value))) {
-    throw new CoreError("invalid_request", i18n._({
-      id: "A code host's token and username are each one line of text",
-      comment: "Refusal of a code host's credential on a team server's seat: the token or the username holds a line break or another control character",
-    }));
-  }
-  return { token, ...(username !== undefined ? { username } : {}) };
-}
-
-/** An agent's own credential: values by the agent's forms (settings-49). */
-function agentCredentialOf(adapter: AdapterName, values: Record<string, string>): AgentCredential {
-  const names = Object.keys(values);
-  if (names.length === 0) throw blankCredentialValue();
-  const forms = AGENT_CREDENTIAL_FORMS[adapter].names;
-  for (const name of names) {
-    if (name.trim() === "") throw blankCredentialName();
-    if (!forms.includes(name)) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "{adapter} takes only {forms}",
-        comment: "Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are",
-        values: { adapter, forms: listed(forms) },
-      }));
-    }
-    const value = values[name] ?? "";
-    if (value.trim() === "") throw blankCredentialValue();
-    if (value.includes("\0")) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "An agent's credential cannot hold a NUL character",
-        comment: "Refusal of an agent's credential on a team server's seat: a value holds a NUL character, which no process environment carries",
-      }));
-    }
-  }
-  // A credential holds the agent's key form: Kimi's model name, base URL
-  // and provider type only accompany its key (settings-48, settings-49).
-  const keys = AGENT_CREDENTIAL_FORMS[adapter].keys;
-  if (!names.some((name) => keys.includes(name))) {
-    throw new CoreError("invalid_request", i18n._({
-      id: "A {adapter} credential needs {keys}",
-      comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
-      values: { adapter, keys: listed(keys) },
-    }));
-  }
-  if (adapter === "codex" && values.CODEX_AUTH_CONTENT !== undefined) {
-    try { return { ...values, CODEX_AUTH_CONTENT: codexAuthContent(values.CODEX_AUTH_CONTENT) }; }
-    catch { throw new CoreError("invalid_request", i18n._({
-      id: "Codex subscription credentials are invalid.",
-      comment: "Refusal of malformed access-only Codex subscription credentials; never repeats their contents",
-    })); }
-  }
-  return { ...values };
-}
 
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
@@ -581,10 +413,7 @@ export interface CoreServiceEvents {
   /** Local hook for an embedding shell (notifications, badges). */
   onRecord?: (envelope: RecordEnvelope) => void;
   onSessionState?: (session: import("./protocol.js").SessionInfo) => void;
-  /** The attention count moved — this core's ledger fold (DR-035) or
-   * a seat's counted badge (core-service-129): the shell re-reads
-   * `attentionCount()` for its badge, so the dock and the app never
-   * disagree. */
+  /** The shell reads attentionCount() when this core's ledger changes. */
   onLedgerChange?: () => void;
 }
 
@@ -663,28 +492,17 @@ class RecordsChangedError extends Error {
 
 export class CoreService {
   private readonly options: CoreServiceOptions;
-  /** Your own group's config, which follows its clone when your own
-   * group is renamed at sign-in (space-59); an explicit path stays. */
+  /** The global config, which follows its clone when the personal records folder is renamed
+   * at sign-in (space-59); an explicit path stays. */
   private configPath: string;
   /** The runtime the Git credential helper runs on (git-host-9). */
   private readonly hostRuntime: { execPath: string; electron: boolean };
-  /** This core's seat on a team server, where it runs as one
-   * (core-service-125); none on a machine of one's own. */
-  private readonly seat?: SeatOptions;
-  /** On a seat, the environment its agent runs inherit (core-service-126)
-   * and the member's own credentials (storage-44). */
-  private readonly seatEnvironment?: SeatEnvironment;
   /** Claude Code's user-settings variables, in the environment every run
    * inherits (core-service-155). */
-  private readonly claudeSettings?: ClaudeSettingsEnvironment;
-  private readonly codeCredentials?: CodeCredentialStore;
-  /** The adapter imports every agent run loads: on a seat, each run
-   * first writes its environment (core-service-126). */
-  private readonly adapterImports?: PlayerAdapterImports;
+  private readonly adapterImports: PlayerAdapterImports;
+  private readonly claudeSettings: ClaudeSettingsEnvironment;
   /** This runtime's label for display (core-service-4, DR-134): the
-   * server's name on a seat, else the given label, else this machine's
-   * host name; its name is the home's device, read when a record is
-   * assigned. */
+   * given label or the host name. */
   private readonly runtimeLabel: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
@@ -708,8 +526,7 @@ export class CoreService {
   /** The applets open on the endpoint, by capability (applets-3). */
   private readonly applets: AppletServer;
   /** What the core watches within the clones: their sessions
-   * (core-service-60) and configs (core-service-2), your own group's
-   * among them. */
+   * (core-service-60) and configs (core-service-2), including the global records repository. */
   private readonly watches: CloneWatches;
   /** Which sessions are read again as the clones' `sessions/` change,
    * and when (core-service-158). */
@@ -735,11 +552,8 @@ export class CoreService {
   /** Projects whose ledger changed since the last broadcast (DR-035). */
   private readonly ledgerChanged = new Set<string>();
   private ledgerTimer?: NodeJS.Timeout;
-  /** Monotonic reload identity; a superseded reload commits nothing. */
+  /** A superseded reload commits nothing. */
   private reloadGeneration = 0;
-  /** Each readiness push a change of the member's agent credentials
-   * started, the newest alone announced (settings-49). */
-  private credentialPushes = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
   private readonly migrationDiagnostics: StorageDiagnostic[] = [];
@@ -752,11 +566,9 @@ export class CoreService {
   private readonly handoffs = new Map<string, string>();
   /** Manual and automatic sends share one admission per conversation. */
   private readonly submitting = new Map<string, Promise<void>>();
-  /** Groups' engine (DR-103): one sync machine per spex repository. */
+  /** Space sync runs one machine per spex repository. */
   private readonly space: SpaceManager;
   private readonly registry: RegistryManager;
-  /** The seats this core holds on team servers (core-service-128). */
-  private readonly places: Places;
   /** Every spex repository's environment (DR-104). */
   private readonly environments: EnvironmentManager;
   /** Set once start finished: environment changes then reload. */
@@ -777,36 +589,21 @@ export class CoreService {
     store: Store,
     /** The processes this core started (core-service-39). */
     private readonly startedProcesses: StartedProcesses,
-    seat?: { credentials: CodeCredentialStore; environment: SeatEnvironment },
   ) {
     this.options = options;
-    if (options.seat) this.seat = options.seat;
-    this.runtimeLabel = options.seat?.serverName ?? (options.runtimeLabel || hostname());
+    this.runtimeLabel = options.runtimeLabel || hostname();
     this.env = options.env ?? process.env;
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
-    if (options.seat) {
-      // A seat's runs take the member's or the shared credentials alone,
-      // as its readiness reads them: the server account's own settings
-      // are written into no run (core-service-155).
-      const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
-      this.codeCredentials = credentials;
-      this.seatEnvironment = environment;
-      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, (adapter) => {
-        const sources = environment.prepare();
-        if (adapter === "codex" && sources.codexUnreadable) throw new Error(unreadablePhrase());
-      });
-    } else {
-      // Applied now, so discovery and readiness read what a run
-      // inherits, and again before each run, as Claude Code applies its
-      // settings over the variables it inherits (core-service-155). Runs
-      // inherit the process's environment.
-      const claudeSettings = new ClaudeSettingsEnvironment(process.env, () => claudeSettingsEnv(this.env, this.home));
-      this.claudeSettings = claudeSettings;
-      claudeSettings.apply();
-      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { claudeSettings.apply(); });
-    }
-    // Your own group's config, inside its clone (storage-1, DR-103); an
+    // Applied now, so discovery and readiness read what a run
+    // inherits, and again before each run, as Claude Code applies its
+    // settings over the variables it inherits (core-service-155). Runs
+    // inherit the process's environment.
+    const claudeSettings = new ClaudeSettingsEnvironment(process.env, () => claudeSettingsEnv(this.env, this.home));
+    this.claudeSettings = claudeSettings;
+    claudeSettings.apply();
+    this.adapterImports = withRunSettings(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { claudeSettings.apply(); });
+    // The global config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
     this.sessionScans = new SessionScans({
@@ -887,7 +684,7 @@ export class CoreService {
         this.queueLedgerChange([handoff.projectId]);
       });
     };
-    this.registry = new RegistryManager({ home: this.store.dir, label: `Spex on ${this.runtimeLabel}`, flow: options.seat ? "device" : options.signIn ?? "device", ...(options.registryFetch ? { fetch: options.registryFetch } : {}), broadcast: (state) => this.broadcast({ type: "registry.state", state }) });
+    this.registry = new RegistryManager({ home: this.store.dir, label: `Spex on ${this.runtimeLabel}`, flow: options.signIn ?? "device", ...(options.registryFetch ? { fetch: options.registryFetch } : {}), broadcast: (state) => this.broadcast({ type: "registry.state", state }) });
     this.environments = new EnvironmentManager({
       store: this.store,
       userHome: CoreService.userHomeOf(options, this.env, this.home),
@@ -957,7 +754,7 @@ export class CoreService {
       env: this.env,
       store: this.store,
       libraryDir: this.libraryDir(),
-      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.credentialDiagnostics()]),
+      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
       checkRepairs: (diagnostics) => checkRepairs(
         diagnostics,
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
@@ -983,41 +780,17 @@ export class CoreService {
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       clientFor: (origin: string) => this.hostClientFor(origin),
-      // A seat signs in through the device flow alone (core-service-125).
-      signInFlow: options.seat ? "device" : options.signIn ?? "device",
-      seat: options.seat !== undefined,
-      // On a seat, the member's own token for a code host, read from
-      // its file before each transport to that host; an entry that will
-      // not read is refused, serving no transport, the storage
-      // diagnostics reporting it and a failed code clone saying so
-      // (git-host-9, storage-44, space-103).
-      ...(this.codeCredentials ? {
-        hostToken: (host: string) => this.codeCredentials?.readHost(host) ?? null,
-      } : {}),
+      signInFlow: options.signIn ?? "device",
       hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
       releaseClones: (keys) => this.letGoOfClones(keys),
     };
     this.space = new SpaceManager(spaceHost);
-    // The seats on team servers (core-service-128, DR-133): each
-    // signed-in instance's servers read through the client this core
-    // keeps for it, every change of the open seats announced.
-    this.places = new Places({
-      homeDir: this.store.dir,
-      signedInOrigins: () => this.space.signedInOrigins(),
-      signedInInstance: (named) => this.space.signedInInstance(named),
-      clientOf: (origin) => this.space.clientOf(origin),
-      instanceName: (origin) => this.space.instanceName(origin),
-      broadcast: (seats) => this.broadcast({ type: "server.state", seats }),
-      attentionChanged: () => this.events.onLedgerChange?.(),
-      ...(options.serverCertificateAuthorities ? { certificateAuthorities: options.serverCertificateAuthorities } : {}),
-      ...(options.serverAdmitTimeScale !== undefined ? { admitTimeScale: options.serverAdmitTimeScale } : {}),
-    });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
     // (environments-10). The global environment's sessions live with
-    // your own group's records, its clone their working folder
+    // the global records, its clone their working folder
     // (core-service-96).
     this.drafts = new DraftStore(() =>
       this.store.listRepositories().map((repository) => ({
@@ -1033,7 +806,7 @@ export class CoreService {
       cancelApprovals: (draftId, instance, invocationId) => this.approvals.cancel({kind: "draft", id: draftId, instance}, invocationId),
       store: this.store,
       drafts: this.drafts,
-      // Read when used: your own group's config moves with its clone.
+      // Read when used: the global config moves with its clone.
       get configPath() { return service.configPath; },
       env: this.env,
       agentEnv: () => service.agentRunEnv(),
@@ -1110,7 +883,7 @@ export class CoreService {
     try { return builtinPackage(); } catch { return null; }
   }
 
-  /** Where your own group's skills are exported (environments-8): the
+  /** Where the global environment’s skills are exported (environments-8): the
    * given root; else the given `home`; else, for the default Spex home
    * at `~/.spex`, this user's home; a home elsewhere writes none there. */
   private static userHomeOf(options: CoreServiceOptions, env: NodeJS.ProcessEnv, home: string): string | null {
@@ -1120,47 +893,14 @@ export class CoreService {
     return null;
   }
 
-  /** The environment an agent run the core spawns itself inherits — a
-   * compile's slc and the agent it drives (playbook-library-42), a
-   * model discovery: on a seat, the shared credential file and the
-   * member's own credentials read afresh first, as before every agent
-   * run (core-service-126). */
+  /** Apply the user settings to processes started by the core. */
   private agentRunEnv(): NodeJS.ProcessEnv {
-    const seat = this.seatEnvironment;
-    if (seat) {
-      seat.prepare();
-      return seat.envFor(this.env);
-    }
-    this.claudeSettings?.apply();
+    this.claudeSettings.apply();
     // A run spawned with an environment of its own takes the settings'
     // variables over it too (core-service-155); the process's own
     // already holds them.
     const settings = claudeSettingsEnv(this.env, this.home);
     return this.env === process.env || Object.keys(settings).length === 0 ? this.env : { ...this.env, ...settings };
-  }
-
-  /** On a seat, write the seat account's own Git configuration naming
-   * the app's helper in its member mode (core-service-125, git-host-9):
-   * an agent's push from a project's work tree then carries the member's
-   * token. Nothing is written off a seat; a failure is logged, blocking
-   * nothing else, and no secret enters either file or the log. */
-  private async configureSeatGit(): Promise<void> {
-    if (!this.seat) return;
-    try {
-      await configureSeatGit({ home: this.home, env: this.env, runtime: this.hostRuntime, storePath: codeCredentialsPath(this.store.dir) });
-    } catch (error) {
-      console.error(`spex: the seat's Git configuration was not written: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /** On a seat, the member's credentials file refused or its malformed
-   * entries (storage-44), as the file stands now. */
-  private credentialDiagnostics(): StorageDiagnostic[] {
-    try {
-      return this.codeCredentials?.diagnostics() ?? [];
-    } catch {
-      return [];
-    }
   }
 
   /** This runtime (DR-134): one core on one home, named by the home's
@@ -1195,14 +935,11 @@ export class CoreService {
    * origin in `local/credentials.yaml`, this device and app as its label,
    * a refusal that signs the device out of that instance alone, its
    * entry marked so (git-host-4), and a rate limit holding that
-   * instance's calls, offering Stop on the steps that wait (git-host-21).
-   * On a seat, the label names the server and the device request the
-   * server and the person (git-host-27). */
+   * instance’s calls (git-host-21). */
   private hostClientFor(origin: string): GitHostClient {
     return new GitHostClient({
       url: origin,
       label: `Spex on ${this.runtimeLabel}`,
-      ...(this.seat ? { server: { id: this.seat.serverId, personId: this.seat.personId } } : {}),
       credentials: fileCredentialStore(this.store.dir, origin),
       onSignedOut: () => this.space.signedOutByHost(origin),
       onHold: () => this.space.holdBegan(origin),
@@ -1211,7 +948,7 @@ export class CoreService {
   }
 
   /** Playbook ids a new authoring session of a project may not take:
-   * every playbook the project's or your own group's environment
+   * every playbook the project's or the global environment
    * exports, but the one a folder `spex-packages/<org>/<id>/` left by a
    * deleted session exports, which the new session takes over
    * (playbook-library-51). */
@@ -1242,8 +979,8 @@ export class CoreService {
     return [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
   }
 
-  /** An environment's files or exports changed (environments-17): your
-   * own group's config composes anew; a session's enabled mark may move. */
+  /** An environment's files or exports changed (environments-17): the global config composes
+   * anew; a session's enabled mark may move. */
   private environmentChanged(repository: string): void {
     if (!this.started || this.stopping) return;
     if (repository === this.store.home.own()) void this.reloadConfig();
@@ -1257,7 +994,7 @@ export class CoreService {
     this.authors.republish();
   }
 
-  /** Where your own group's config, or a project's session, finds each
+  /** Where the global config, or a project's session, finds each
    * enabled playbook's module (environments-9). */
   private modules(projectId: string | null): PlaybookModules {
     return this.environments.modulesFor(projectId);
@@ -1317,8 +1054,8 @@ export class CoreService {
     };
   }
 
-  /** The players every project's file names that your own group's
-   * roster lacks (core-service-2, settings-46), listed on the valid
+  /** The players every project's file names that the global roster lacks (core-service-2,
+   * settings-46), listed on the valid
    * config state; a project's session raises them when it opens. */
   private missingPlayers(ownTop: unknown, inputs: ConfigInputs): import("./protocol.js").MissingPlayer[] {
     const own = this.store.home.own();
@@ -1384,8 +1121,7 @@ export class CoreService {
    * `check` is the removal's own instant: called synchronously inside
    * the removal itself, with nothing awaited before the deletion, it
    * refuses as a change meanwhile a session that appeared while the
-   * leases were taken, or a clone moved or replaced since. Your own
-   * group's clone is never deleted.
+   * leases were taken, or a clone moved or replaced since. The global records clone is never deleted.
    */
   private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void; changed(): CoreError }> {
     const repository = this.store.repository(key);
@@ -1459,12 +1195,9 @@ export class CoreService {
     }, 200);
   }
 
-  /** The one attention count the shell's badge shows
-   * (core-service-129): this core's badge (core-service-49) plus each
-   * seat's last read badge while its relay stands open or closed, none
-   * for a mismatched seat. */
+  /** Attention owed on this core. */
   attentionCount(): number {
-    return this.ledger().badge + this.places.badges();
+    return this.ledger().badge;
   }
 
   /** The one ledger fold (DR-035). */
@@ -1472,11 +1205,7 @@ export class CoreService {
     return foldLedger({
       store: this.store,
       lanes: this.ledgerLanes(),
-      // This runtime's: another's records summon nothing here, and run
-      // nowhere but there (DR-134); on a seat an intent holding no
-      // runtime runs nowhere (core-service-125).
       device: this.store.home.device,
-      seat: !!this.seat,
       now: Date.now,
     });
   }
@@ -1498,14 +1227,6 @@ export class CoreService {
     return started.run(() => CoreService.boot(options, started));
   }
 
-  /** A seat's credential store and the environment its runs inherit
-   * (core-service-126), for the seat's home. */
-  private static seatCredentials(options: CoreServiceOptions, dir: string): { credentials: CodeCredentialStore; environment: SeatEnvironment } {
-    const credentials = codeCredentialStore(dir);
-    const environment = new SeatEnvironment(process.env, options.seat?.sharedCredentialFile, () => credentials.readAgents(), join(dir, "local", "codex"));
-    return { credentials, environment };
-  }
-
   private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
     if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
       throw new Error(i18n._({
@@ -1517,8 +1238,6 @@ export class CoreService {
       await prepareWindowsStorageDirectory(options.dataDir);
       ApplicationMedia.assertStagingParents(options.dataDir);
     }
-    // A seat's facts are checked before anything opens (core-service-125).
-    if (options.seat) options = { ...options, seat: checkSeat(options.seat) };
     const env = options.env ?? process.env;
     // The store's load composes diagnostics, so the home's stored
     // language is spoken before it opens (core-service-111); the full
@@ -1558,62 +1277,43 @@ export class CoreService {
       }
     }
     // The home opens under its lease, migrating the former layout once
-    // before any writer is admitted (storage-9, core-service-15). Your own
-    // group's clone requests the built-in spec package as the home is
+    // before any writer is admitted (storage-9, core-service-15). The global records clone
+    // requests the built-in spec package as the home is
     // made, before its first commit, and a project paired here is
     // written an environment requesting nothing (storage-6,
     // environments-11, DR-176).
     const builtin = CoreService.shippedBuiltin(options);
-    // A seat reads its credentials into the environment before the
-    // store seeds your own group's config from them (core-service-126,
-    // core-service-3).
-    const seat = options.seat && dataDir ? CoreService.seatCredentials(options, resolve(dataDir)) : undefined;
-    seat?.environment.prepare();
-    // A start that fails before the service stands puts the environment
-    // back, as a stop does (core-service-126).
-    let store: Store;
-    let credentials: SeedCredentials;
-    try {
-      // The seed counts the credentials confirmed now, never a home
-      // folder alone (core-service-3, DR-205).
-      credentials = await seedCredentials(seat ? seat.environment.envFor(env) : env, seat ? null : options.home ?? env.HOME ?? homedir(), options.agentSignIn);
-      store = await Store.open({
-        seedCredentials: credentials,
-        ...(options.dataDir ? { dir: options.dataDir } : {}),
-        ...(machineIdentity !== undefined ? { machineIdentity } : {}),
-        ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
-        ...(options.own ? { own: options.own } : {}),
-        env: seat ? seat.environment.envFor(env) : env,
-        ...(seat ? { home: seat.environment.modelHome() } : options.home !== undefined ? { home: options.home } : {}),
-        ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
-        ...(relocateConfig ? { relocateConfig } : {}),
-        prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null, global: boolean) => {
-          if (!global) prepareProjectEnvironment(dir, space);
-          else if (builtin) prepareBuiltinEnvironment(dir, builtin, registryOrigin, space);
-        },
-      });
-    } catch (error) { seat?.environment.restore(); throw error; }
+    const credentials = await seedCredentials(env, options.home ?? env.HOME ?? homedir(), options.agentSignIn);
+    const store = await Store.open({
+      seedCredentials: credentials,
+      ...(options.dataDir ? { dir: options.dataDir } : {}),
+      ...(machineIdentity !== undefined ? { machineIdentity } : {}),
+      ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
+      ...(options.own ? { own: options.own } : {}),
+      env,
+      ...(options.home !== undefined ? { home: options.home } : {}),
+      ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
+      ...(relocateConfig ? { relocateConfig } : {}),
+      prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null, global: boolean) => {
+        if (!global) prepareProjectEnvironment(dir, space);
+        else if (builtin) prepareBuiltinEnvironment(dir, builtin, registryOrigin, space);
+      },
+    });
     let service: CoreService;
-    try { service = new CoreService(options, store, started, seat); }
+    try { service = new CoreService(options, store, started); }
     catch (error) {
-      try { store.close(); } finally { seat?.environment.restore(); }
+      store.close();
       throw error;
     }
-    // A seat reads its credentials into the environment at start
-    // (core-service-126).
-    service.seatEnvironment?.prepare();
     try {
-    // A seat's account names the app's helper in its member mode, for
-    // the Git its agents run (core-service-125, git-host-9).
-    await service.configureSeatGit();
     // Store construction already holds the exclusive home lease. Never
     // reclaim another live core's incomplete uploads before that boundary.
     await service.media.prepare();
     service.store.markAllSessionsNotLive();
     service.relocateLegacyLibrary();
-    // The store seeds your own group's config as the clone stands up;
+    // The store seeds the global config as the clone stands up;
     // the core reports that starter as its own seed (settings-9).
-    const version = seedConfig(service.configPath, service.seedEnv(), service.seedHome(), credentials);
+    const version = seedConfig(service.configPath, service.env, service.home, credentials);
     if (version !== null) store.recordSeed(service.configPath, version);
     service.seeded = version !== null ||
       (service.configPath === store.ownRepository().configPath && store.seededConfig);
@@ -1644,9 +1344,6 @@ export class CoreService {
       catch (error) { console.error(`spex: sync rules of ${repository.key} not refreshed: ${String(error)}`); }
     }
     service.watches.update();
-    // Every seat the seats file holds is read and announced
-    // (core-service-128); each client is sent them as it connects.
-    service.places.start();
     await service.listen(options.port ?? 0);
     service.started = true;
     return service;
@@ -1720,8 +1417,7 @@ export class CoreService {
     if (joined.length > 0) await this.sessions.completeRestores(joined);
   }
 
-  /** The playbook CLI's former XDG sessions import once into your own
-   * group's spex repository (storage-18). */
+  /** The playbook CLI's former XDG sessions import once into the global records repository (storage-18). */
   private async migrateLegacySessionDefault(): Promise<void> {
     if (!this.options.dataDir || this.env.SPEX_HOME?.trim() ||
       resolve(this.options.dataDir) !== resolve(this.home,".spex")) return;
@@ -1868,9 +1564,6 @@ export class CoreService {
     });
     try {
       this.approvals.stop();
-      // Every seat's relay ends; the seats stand in their file, reopened at
-      // the next start (DR-133).
-      this.places.stop();
       for (const entry of this.browserPreparations.values()) entry.controller.abort();
       await bound.within(Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done)));
       this.watches.close();
@@ -1927,9 +1620,8 @@ export class CoreService {
     } finally {
       bound.clear();
       // The forms go back as the process started with them, however far
-      // the stop got (core-service-126), Claude's settings' first.
-      this.claudeSettings?.restore();
-      this.seatEnvironment?.restore();
+      // the stop got (core-service-155).
+      this.claudeSettings.restore();
     }
   }
 
@@ -2012,7 +1704,7 @@ export class CoreService {
 
   /**
    * The configuration a session of this project runs with
-   * (core-service-2): your own group's, with the project's own file on
+   * (core-service-2): the global config, with the project's own file on
    * top where its spex repository holds one, and every playbook the
    * project's or the global environment places on its default binding
    * where no entry binds it. A project's file that breaks the rules is a
@@ -2054,7 +1746,7 @@ export class CoreService {
     const repository = this.store.repository(projectId);
     if (!repository) return own();
     // The session's playbooks come from the project's environment before
-    // your own group's (environments-9), whether or not the project's
+    // the global environment (environments-9), whether or not the project's
     // own file enables any; one not yet resolved resolves first.
     if (ready) await this.environments.ready(projectId);
     for (let attempt = 0; ; attempt += 1) {
@@ -2116,8 +1808,8 @@ export class CoreService {
   /**
    * The configuration a session of this project runs with, as a state
    * a client reads (core-service-2, DR-104: every member gets the same
-   * tools): your own group's summary with the project's file on top and
-   * its environment's playbooks first; your own group's state while that
+   * tools): the global config summary with the project's file on top and
+   * its environment's playbooks first; the global config state while that
    * is not valid; and invalid, naming the cause, where the project's
    * file is refused.
    */
@@ -2128,13 +1820,13 @@ export class CoreService {
     try {
       const inputs = this.configInputs;
       const composed = await this.composeProject(projectId, ready);
-      // Your own group's state, its notifications and theme, as its files
+      // The global config state, its notifications and theme, as its files
       // still stand after composing.
       const changed = this.cacheChanged(inputs);
       if (changed !== undefined) throw changedMeanwhile(changed);
       const own = this.configState;
       if (own.status !== "valid" || composed === this.composed) return own;
-      // Notifications and theme are your own group's alone.
+      // Notifications and theme are global settings.
       const summary = summarizeConfig({ path: own.summary.path, raw: null, composed });
       return {
         ...own,
@@ -2157,7 +1849,7 @@ export class CoreService {
   }
 
   /** Every project's composed configuration, for the broadcast; none
-   * while your own group's is not valid. */
+   * while the global config is invalid. */
   private async projectConfigStates(): Promise<Record<string, ConfigState> | undefined> {
     if (this.configState.status !== "valid") return undefined;
     const out: Record<string, ConfigState> = {};
@@ -2265,7 +1957,7 @@ export class CoreService {
   }
 
   /** The first file the published config state no longer stands on;
-   * your own group's config where no load has been published. */
+   * the global config where no load has been published. */
   private cacheChanged(inputs = this.configInputs): string | undefined {
     return inputs === undefined ? this.configPath : changedInput(inputs);
   }
@@ -2303,33 +1995,22 @@ export class CoreService {
     }
   }
 
-  /** The environment a seed reads: on a seat, the one its runs inherit
-   * (core-service-3, core-service-126). */
-  private seedEnv(): NodeJS.ProcessEnv {
-    return this.seatEnvironment ? this.seatEnvironment.envFor(this.env) : this.env;
-  }
-
-  /** The local user's home, or the seat's scoped routing settings (core-service-3). */
-  private seedHome(): SeedHome {
-    return this.seatEnvironment ? this.seatEnvironment.modelHome() : this.home;
-  }
-
   /** Reseed from the credentials read now, probing none where no seed
    * is recorded (core-service-137); true where it was rewritten. */
   private async reseedNow(signIn = this.options.agentSignIn): Promise<boolean> {
     const record = this.store.getPref<unknown>(SEED_PREF);
     if (!isSeedRecord(record) || record.path !== this.configPath) return false;
-    return this.reseed(await seedCredentials(this.seedEnv(), this.seedHome(), signIn));
+    return this.reseed(await seedCredentials(this.env, this.home, signIn));
   }
 
-  /** Reseed your own group's config while it stands at the version the
+  /** Reseed the global config while it stands at the version the
    * core seeded (core-service-137, DR-156); true where it was rewritten.
    * A file no longer at that version loses its record for good. */
   private reseed(credentials: SeedCredentials): boolean {
     const record = this.store.getPref<unknown>(SEED_PREF);
     if (!isSeedRecord(record) || record.path !== this.configPath) return false;
     let result: ReturnType<typeof reseedConfig>;
-    try { result = reseedConfig(this.configPath, record.version, this.seedEnv(), this.seedHome(), credentials); }
+    try { result = reseedConfig(this.configPath, record.version, this.env, this.home, credentials); }
     catch { return false; }
     if (result.outcome === "edited") {
       try { this.store.deletePref(SEED_PREF); } catch { /* the next start drops it */ }
@@ -2340,7 +2021,7 @@ export class CoreService {
     return true;
   }
 
-  /** Your own group's config state, recording each file read in `inputs`. */
+  /** The global config state, recording each file read in `inputs`. */
   private async loadOwnConfig(inputs: ConfigInputs): Promise<{ state: ConfigState; composed: ComposedConfig | undefined }> {
     let nextState: ConfigState;
     let nextComposed: ComposedConfig | undefined;
@@ -2350,7 +2031,7 @@ export class CoreService {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
-      // Your own group's playbooks run on the app's engine, whichever
+      // Global playbooks run on the app's engine, whichever
       // host installed them (environments-9, playbook-library-46).
       await this.environments.prepareForUse(null);
       try {
@@ -2390,7 +2071,7 @@ export class CoreService {
   async readiness(signIn = this.options.agentSignIn): Promise<ReadinessEntry[]> {
     // A variable the settings no longer set leaves the environment
     // before it is read (core-service-155).
-    this.claudeSettings?.apply();
+    this.claudeSettings.apply();
     // Adapter-keyed and deduplicated (DR-019): readiness is a
     // property of the adapter's auth, not of any one agent block.
     // Each entry names the positions using the adapter so guidance
@@ -2416,16 +2097,7 @@ export class CoreService {
       if (player.boundBy.length === 0) continue;
       note(player.agent.adapter, `${player.id} (${player.boundBy.join(", ")})`);
     }
-    // On a seat the credential half is the forms a run would inherit
-    // now, read as before a run (settings-49, core-service-126).
-    const seat = this.seatEnvironment;
-    const sources: SeatCredentialSources | undefined = seat?.prepare();
-    const modelEnv = seat ? seat.envFor(this.env) : { ...this.env, ...claudeSettingsEnv(this.env, this.home) };
-    const credentialHalf = seat && sources
-      ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
-      : undefined;
-    // Manual steps are written for the computer that follows them; a
-    // seat's base URL is its own and none of the reader's (DR-204).
+    const modelEnv = { ...this.env, ...claudeSettingsEnv(this.env, this.home) };
     const shell = this.env.SHELL ? basename(this.env.SHELL) : undefined;
     const host = { platform: process.platform, ...(shell ? { shell } : {}) };
     return Promise.all(
@@ -2435,7 +2107,6 @@ export class CoreService {
           this.env,
           this.home,
           this.options.adapterRuntime ?? checkAdapterRuntime,
-          credentialHalf,
           signIn,
         );
         this.readinessByAdapter.set(adapter, readiness.ready);
@@ -2446,10 +2117,9 @@ export class CoreService {
             ? { requirement: readiness.requirement }
             : {}),
           faults: readiness.faults,
-          ...(readiness.credential ? { credential: readiness.credential } : {}),
           ...(readiness.unconfirmed !== undefined ? { unconfirmed: readiness.unconfirmed } : {}),
-          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl(modelEnv) } : {}),
-          defaultModels: defaultAgentModels(adapter, seat ? modelEnv : this.env, this.seedHome() ?? undefined),
+          ...(adapter === "claude" ? { baseUrl: anthropicBaseUrl(modelEnv) } : {}),
+          defaultModels: defaultAgentModels(adapter, this.env, this.home ?? undefined),
           ...host,
           usedBy,
           // The embedded runtime declares which adapters take fast mode
@@ -2503,10 +2173,8 @@ export class CoreService {
       ) {
         return false;
       }
-      // The path `/`, or an open seat's relay path, admitted alike
-      // (core-service-24, core-service-129); every other path refused.
       const path = requestPath(info.req.url);
-      if (path !== "/" && !this.places.relaying(path)) return false;
+      if (path !== "/") return false;
       const query = new URL(info.req.url ?? "/", "ws://127.0.0.1").searchParams;
       return query.get("token") === this.authToken;
     };
@@ -2529,14 +2197,7 @@ export class CoreService {
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
     };
     server.on("upgrade", this.upgradeListener);
-    this.wss.on("connection", (socket, req) => {
-      // A relay path's connection is the seat's: piped there, frames
-      // unread, with no word of this core's (core-service-129).
-      const path = requestPath(req.url);
-      if (path !== "/") {
-        this.places.pipe(path, socket);
-        return;
-      }
+    this.wss.on("connection", (socket) => {
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
       socket.on("close", () => {
@@ -2556,7 +2217,6 @@ export class CoreService {
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
-      this.send(socket, {type: "server.state", seats: this.places.state()});
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
@@ -2682,27 +2342,8 @@ export class CoreService {
     if (this.stopping && ["session.create", "turn.submit", "session.restore", "session.control"].includes(command.type)) {
       throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during core shutdown"}));
     }
-    // On a seat no command names a working folder (core-service-125): a
-    // project is opened from its group, the core allocating its folder.
-    if (this.seat && (command.type === "project.register" || command.type === "project.rebind" || command.type === "project.create" ||
-      (command.type === "space.join" && command.folder !== undefined))) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "Projects on a server are opened from their group",
-        comment: "Refusal on a team server's seat of a command naming a working folder: the server allocates every project's folder itself",
-      }));
-    }
-    // A seat holds no seats of its own (core-service-125): its
-    // `server.open` is refused before anything is asked; `server.list`,
-    // `server.close` and `server.signin` answer as on any core.
-    if (this.seat && command.type === "server.open") {
-      throw new CoreError("invalid_request", i18n._({
-        id: "Already on a server — open it from your computer",
-        comment: "Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer",
-      }));
-    }
     // No operation refuses a command (space-21): each write is checked
-    // at its own instant, against its file's version or its session's
-    // lease.
+
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
     if (command.type === "session.restore" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
@@ -2756,52 +2397,17 @@ export class CoreService {
         if (command.projectId === undefined) return this.configState;
         try { return await this.projectConfigState(command.projectId, true); }
         catch (error) {
-          // Your own group's state stands on the projects' files too, by
+          // The global config state stands on the projects' files too, by
           // the players they name (settings-46): one changed while the
           // project composed is read once more (DR-111).
           if (!(error instanceof CoreError) || error.code !== "conflict") throw error;
           await this.settledConfig();
           return this.projectConfigState(command.projectId, true);
         }
-      case "credential.list": {
-        const credentials = this.codeCredentials;
-        if (!credentials) throw credentialsOffSeat();
-        return credentials.list();
-      }
-      case "credential.set":
-      case "credential.remove": {
-        // Each field is checked before anything is written; the entry is
-        // replaced as read, in one synchronous step (settings-48,
-        // storage-44).
-        const credentials = this.codeCredentials;
-        if (!credentials) throw credentialsOffSeat();
-        if (command.kind === "host") {
-          const host = credentialHost(command.name);
-          const next = command.type === "credential.set" ? hostCredentialOf(command.values) : null;
-          if (!credentials.replaceHost(host, credentials.readHost(host), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
-        } else {
-          const adapter = credentialAgent(command.name);
-          const next = command.type === "credential.set" ? agentCredentialOf(adapter, command.values) : null;
-          if (!credentials.replaceAgent(adapter, credentials.readAgent(adapter), next)) throw changedMeanwhile(codeCredentialsPath(this.store.dir));
-          // An untouched seed follows the member's credentials
-          // (core-service-137), read into the environment first.
-          this.seatEnvironment?.prepare();
-          if (await this.reseedNow()) { this.reseeded = true; await this.reloadConfig(); }
-          // The agent's credential class follows (settings-49): pushed
-          // unless a newer change or a reload answers after it.
-          const generation = this.reloadGeneration;
-          const push = ++this.credentialPushes;
-          void this.readiness().then((entries) => {
-            if (generation === this.reloadGeneration && push === this.credentialPushes) this.broadcast({ type: "readiness.state", entries });
-          }).catch(() => {});
-        }
-        return credentials.list();
-      }
       case "readiness.get": {
         // A re-check finds what a start would: an untouched seed follows
         // the credentials it reads now (core-service-137).
-        this.claudeSettings?.apply();
-        this.seatEnvironment?.prepare();
+        this.claudeSettings.apply();
         // One request probes each sign-in once: the seed, a reload and
         // the answer read the same state.
         const signIn = onceEach(this.options.agentSignIn ?? probeSignIn);
@@ -2831,12 +2437,36 @@ export class CoreService {
             }),
           );
         }
-        if (!(await isWorkTreeRoot(path, this.runCommand))) {
-          // English, deliberately (core-service-111): the page matches
-          // this phrase to offer Create instead, so it is wire text.
+        const workTree = await workTreeLocation(path, this.runCommand);
+        if (workTree.kind === "no_repository") {
           throw new CoreError(
             "invalid_request",
-            `${path} is not the root of a git work tree (run git init first, or use project.create)`,
+            i18n._({
+              id: "“{path}” is outside a Git work tree. Use Create to start a repository there.",
+              comment: "Refusal when Add is given a directory outside Git; Create is the action in the project palette",
+              values: { path },
+            }),
+          );
+        }
+        if (workTree.kind === "unavailable") {
+          throw new CoreError(
+            "invalid_request",
+            i18n._({
+              id: "Git could not inspect “{path}” as a project folder. Choose the top-level folder of a Git work tree.",
+              comment: "Refusal when Git cannot inspect a directory as a work tree, such as a bare repository",
+              values: { path },
+            }),
+            workTree.output ? { output: workTree.output } : undefined,
+          );
+        }
+        if (!workTree.isRoot) {
+          throw new CoreError(
+            "invalid_request",
+            i18n._({
+              id: "“{path}” is inside a Git work tree. Add its top-level folder instead: “{top}”.",
+              comment: "Refusal when Add is given a subdirectory; {top} is the folder to select with Add",
+              values: { path, top: workTree.top },
+            }),
           );
         }
         // The code's remote is written without a credential, and one
@@ -2847,8 +2477,8 @@ export class CoreService {
           const checked = validateRemoteUrl(remote);
           if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
         }
-        // The folder pairs with a local spex repository in your own group
-        // until a group is picked (storage-6).
+        // The folder pairs with a local spex repository under the personal records folder
+        // until its first Space placement (storage-6).
         const pairedAlready = this.store.home.keyForFolder(resolve(path)) !== undefined;
         const registered = this.store.registerProject(path, basename(path), Date.now());
         // A folder newly paired: its environment — the one it holds, or
@@ -2858,10 +2488,7 @@ export class CoreService {
         if (!pairedAlready) void this.environments.paired(registered.id).catch(() => {});
         this.afterRepositoriesChanged();
         await this.syncForeignSessions();
-        // A folder paired with a group's own spex repository brings that
-        // repository to the host as its first session would (space-65).
-        void this.space.ensureGroupRepository(registered.id);
-        this.announceGroups();
+        this.announceSpace();
         return registered;
       }
       case "project.rebind": {
@@ -2891,11 +2518,11 @@ export class CoreService {
           this.broadcast({type: "session.state", session});
           this.events.onSessionState?.(session);
         }
-        this.announceGroups();
+        this.announceSpace();
         return project;
       }
       case "storage.diagnostics":
-        return this.space.markDiagnostics(foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]));
+        return this.space.markDiagnostics(foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]));
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);
@@ -2953,7 +2580,7 @@ export class CoreService {
         const created = this.store.registerProject(path, basename(path), Date.now());
         void this.environments.paired(created.id).catch(() => {});
         this.afterRepositoriesChanged();
-        this.announceGroups();
+        this.announceSpace();
         return created;
       }
       case "project.status": {
@@ -3089,7 +2716,7 @@ export class CoreService {
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
-        this.announceGroups();
+        this.announceSpace();
         return null;
       }
       case "session.list":
@@ -3102,10 +2729,6 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
-        // A project's group gains its own spex repository at session
-        // start where it has none (DR-103); it checks for itself and
-        // never throws.
-        void this.ensureGroupRepository(project.id).catch(() => {});
         // Yours with the project.s own on top (core-service-2).
         const composed = await this.composedFor(project.id);
         const assertCurrent = () => {
@@ -3279,9 +2902,9 @@ export class CoreService {
           }));
         }
         const op = command.op as ConfigEditOp;
-        // A project's or another group's file (playbook-library-3): its
-        // playbook entries alone, composed on top of yours with the
-        // modules its environment exports before yours.
+        // A project's file (playbook-library-3): its playbook entries
+        // alone, composed on top of the global entries with the modules
+        // its environment exports before the global modules.
         const target = command.repository !== undefined && command.repository !== this.store.home.own()
           ? this.store.repository(command.repository)
           : undefined;
@@ -3315,7 +2938,7 @@ export class CoreService {
         return this.configState;
       }
       case "config.batch": {
-        // Your own group's file alone, all or none, against the config
+        // The global config file alone, all or none, against the config
         // the client saw (core-service-44, DR-204).
         const result = await editConfigBatch(
           this.configPath,
@@ -3369,8 +2992,7 @@ export class CoreService {
         return resolveArtifacts({ id: command.playbookId, from }, this.env);
       }
       case "library.builtins": {
-        // The built-in spec package's playbooks your own group's
-        // environment installs, each `configured` where the config
+        // The built-in spec package's playbooks the global environment installs, each `configured` where the config
         // enables it (playbook-library-34), as its files stand (DR-111).
         await this.settledConfig();
         const configuredIds = new Set(
@@ -3453,7 +3075,7 @@ export class CoreService {
               command: command.command,
               intent: command.intent,
               libraryDir,
-              // The compile's agent is an agent run (core-service-126).
+              // Pass the current agent environment to the compiler (core-service-155).
               env: this.agentRunEnv(),
               // The form's compile runs on the Captain's block
               // (playbook-library-42).
@@ -3818,19 +3440,6 @@ export class CoreService {
         }
         return { language };
       }
-      // Team servers (core-service-128, DR-133): the servers each signed-in
-      // instance lists, and the seats this core opens and closes on them.
-      case "server.list":
-        return this.places.list();
-      case "server.open":
-        return this.places.open({ instance: command.instance, serverId: command.serverId, ...(command.consented !== undefined ? { consented: command.consented } : {}) });
-      case "server.close":
-        return this.places.close({ instance: command.instance, serverId: command.serverId });
-      case "server.signin":
-        return this.places.signIn({ instance: command.instance, serverId: command.serverId });
-      // Groups (space-29): the core performs every Git operation, one
-      // spex repository at a time; long commands reply accepted and
-      // report as state.
       case "registry.get":
         return this.registry.get(command.origin ?? (command.repository ? this.environments.registryOf(command.repository).origin : undefined));
       case "registry.signin.start":
@@ -3847,14 +3456,11 @@ export class CoreService {
         return this.environments.setRegistry(command.repository, command.origin);
       case "space.get":
         return this.requireSpace().get();
-      // The Git host (git-host-2..10, space-3..6, space-58..65): sign-in
-      // and its set-up, the host read, picks, joins and members.
+      // The Git host (git-host-2..10, space-3..6, space-63, space-64, space-65, space-97): sign-in
+      // and its setup, the Space read, and personal repository selection and joins.
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":
-        // A ticket goes with a seat's device request alone; off a seat it
-        // is refused before anything is asked (git-host-27).
-        if (command.ticket !== undefined && !this.seat) throw ticketOffSeat();
         return this.requireSpace().signInStart(command.url, command.reportCompletion ? {
           owner: client,
           id: command.id,
@@ -3869,7 +3475,7 @@ export class CoreService {
               }
             });
           },
-        } : undefined, command.ticket);
+        } : undefined);
       case "space.signin.cancel":
         return { stopped: this.requireSpace().signInCancel(client, command.startId) };
       // Each command names the instance it acts at by its origin
@@ -3879,11 +3485,11 @@ export class CoreService {
       case "space.forget":
         return this.requireSpace().forget(command.instance);
       case "space.pick":
-        return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
+        return this.requireSpace().pick(command.repository, command.choice);
       // A placement at another instance, an operation of the clone's
       // machine (space-97, DR-128).
       case "space.place":
-        return this.requireSpace().place(command.repository, command.choice, command.noticed === true);
+        return this.requireSpace().place(command.repository, command.choice);
       // A placement left, an operation of the clone's machine (space-98,
       // DR-128).
       case "space.leave":
@@ -3891,34 +3497,9 @@ export class CoreService {
       // A placement a file names, attached as an operation of the clone's
       // machine (space-99, DR-128).
       case "space.attach":
-        return this.requireSpace().attach(command.repository, command.instance, command.noticed);
+        return this.requireSpace().attach(command.repository, command.instance);
       case "space.join":
         return this.requireSpace().join(command.instance, command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
-      case "space.members":
-        return this.requireSpace().members({ instance: command.instance, repository: command.repository, group: command.group });
-      // Groups and sharing (git-host-15..17, DR-114): the host is asked,
-      // and its answer is the reply.
-      case "space.group.create":
-        return this.requireSpace().createGroup(command.instance, command.name, command.path, command.parent);
-      // Undo in Spex (git-host-18..20, DR-120): the host is asked, and its
-      // answer is the reply.
-      case "space.group.rename":
-        return this.requireSpace().renameGroup(command.instance, command.group, {
-          ...(command.name !== undefined ? { name: command.name } : {}),
-          ...(command.path !== undefined ? { path: command.path } : {}),
-        });
-      case "space.group.delete":
-        return this.requireSpace().deleteGroup(command.instance, command.group, command.confirmPath);
-      case "space.group.deletionCheck":
-        return this.requireSpace().checkGroupDeletion(command.instance, command.group);
-      case "space.group.restore":
-        return this.requireSpace().restoreGroup(command.instance, command.group);
-      case "space.repository.move":
-        return this.requireSpace().moveRepository(command.repository, command.groupId, command.instance);
-      case "space.share":
-        return this.requireSpace().share({ instance: command.instance, repository: command.repository, group: command.group, login: command.login, role: command.role });
-      case "space.unshare":
-        return this.requireSpace().unshare({ instance: command.instance, repository: command.repository, group: command.group, login: command.login });
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);
       case "space.fetch":
@@ -3928,7 +3509,6 @@ export class CoreService {
           ...(command.placement !== undefined ? { placement: command.placement } : {}),
           ...(command.choices ? { choices: command.choices } : {}),
           ...(command.join !== undefined ? { join: command.join } : {}),
-          ...(command.noticed !== undefined ? { noticed: command.noticed } : {}),
         });
       case "space.cancel":
         return { stopped: this.requireSpace().cancel(command.repository) };
@@ -4172,7 +3752,7 @@ export class CoreService {
   }
 
   /** A playbook's installed module on this device, from any spex
-   * repository's environment, your own group's first. */
+   * repository's environment, the global environment first. */
   private installedModule(playbookId: string): string | undefined {
     const own = this.store.home.own();
     const keys = [own, ...this.store.listRepositories().map((repository) => repository.key).filter((key) => key !== own)];
@@ -4384,8 +3964,7 @@ export class CoreService {
    * the config's fail-closed rules before anything is written
    * (playbook-library-15, playbook-library-20); request the spec package
    * by path from the environment named — the session's, the project's or
-   * the global — and install it; write the players your own group's
-   * roster lacks; write the `playbooks.<id>` entry, no `from`, into that
+   * the global — and install it; write the players the global roster lacks; write the `playbooks.<id>` entry, no `from`, into that
    * environment's config; reload. Each write is versioned on its own
    * file; one refused after others leaves them written, named in the
    * refusal (DR-111).
@@ -4395,8 +3974,8 @@ export class CoreService {
     result: CompileResult;
     bindings: Record<string, string>;
     newPlayers: Record<string, AgentBlock> | undefined;
-    /** The environment to add to: a project's spex repository, or your
-     * own group's — the global (core-service-96). */
+    /** The environment to add to: a project's spex repository, or the global records
+     * repository (core-service-96). */
     repository: string;
     packageDir: string;
   }): Promise<ConfigState> {
@@ -4407,7 +3986,7 @@ export class CoreService {
     const target = this.store.repository(targetKey);
     if (!target) throw noProject(targetKey);
     // A request by path is relative to the environment's path root:
-    // your own group's clone, or the working folder (environments-2).
+    // the global records clone, or the working folder (environments-2).
     const targetFolder = this.environments.pathRoot(targetKey);
     const relativePath = targetFolder === null ? undefined : relative(resolve(targetFolder), resolve(input.packageDir));
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
@@ -4529,9 +4108,8 @@ export class CoreService {
   }
 
   /** The environment a new authoring session would belong to — a
-   * project's, or the global, named by your own group's key — with its
-   * spex repository and its working folder: the project's, or your own
-   * group's clone; `invalid_request` where that folder is not on this
+   * project's, or the global, named by the global records repository’s key — with its
+   * spex repository and its working folder: the project's, or the global records clone; `invalid_request` where that folder is not on this
    * device (core-service-96). */
   private draftHome(key: string): { repository: SpexRepository; workingFolder: string } {
     if (key === this.store.home.own()) {
@@ -4563,9 +4141,9 @@ export class CoreService {
   }
 
   /**
-   * Clones moved under `workspace/` — your own group renamed at sign-in
+   * Clones moved under `workspace/` — the personal records folder renamed at sign-in
    * (space-59), a rename or transfer followed (space-60) — the store
-   * already re-keyed: your own group's config is read where it now lies,
+   * already re-keyed: the global config is read where it now lies,
    * every moved clone's sessions are watched there, and each moved
    * session and ledger is announced under its new key.
    */
@@ -4586,22 +4164,11 @@ export class CoreService {
     this.queueLedgerChange(moves.flatMap((move) => [move.from, move.to]));
   }
 
-  /**
-   * A group's spex repository on the Git host at its first session
-   * (space-65): where the working folder a session starts in pairs a
-   * group's own key, its repository is joined where the host lists one,
-   * else created there and pushed; a refusal leaves it local only and
-   * the session running. It never throws.
-   */
-  ensureGroupRepository(key: string): Promise<"unchanged" | "local" | "joined" | "created" | "waiting"> {
-    return this.space.ensureGroupRepository(key);
-  }
-
   /** A project was added, paired or removed: the Space surface re-reads
    * on its announcement (space-2). */
-  private announceGroups(): void {
+  private announceSpace(): void {
     this.space.publish().catch((error: unknown) => {
-      console.error(`spex: groups state failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`spex: Space state failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -4795,12 +4362,7 @@ export class CoreService {
 
   private validateIntentDispatch(sessionId: string, intentId: string): void {
     const intent = this.requireOpenIntent(intentId);
-    // Another runtime's intent runs there alone (core-service-47, DR-134),
-    // and on a seat one holding no runtime runs nowhere (core-service-125,
-    // DR-132); its edit and close stay allowed (core-service-43,
-    // core-service-46).
     this.requireOwnIntent(intent);
-    if (this.seat && intent.runtime === undefined) throw runsNowhereRefusal();
     const session = this.store.describeSession(sessionId);
     if (!session || session.projectId !== intent.projectId) {
       throw new CoreError("invalid_request", i18n._({

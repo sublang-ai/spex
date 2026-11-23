@@ -29,6 +29,7 @@ Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where packages are ma
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its manifest, its selection and its exports: a manifest declares what it `provides`; an install places each provided artifact where its kind goes, a provided spec in the project's `specs/packages/`; a release cites another release by an address that never leaves a release.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in where a playbook is enabled: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
 Amended by [DR-241](241-reviewable-builtin-gears.md) in the global registry-sourced built-in package alone: startup selects the newer release the app ships, while other environment selections remain explicit.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of group environments. Global and project package sources keep their existing roots.
 
 ## Context
 

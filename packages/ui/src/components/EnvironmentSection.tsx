@@ -29,8 +29,8 @@ import type {
   PlaybookAvailability,
 } from "@sublang/spex-core/protocol";
 
-import { isLocalPlace, type RegistryResult } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { type RegistryResult } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import {
   PACKAGES_FOLDER,
   SPEC_PACKAGE_NAME_RULE,
@@ -199,7 +199,7 @@ function PackageRow({
   onAdded?: (name: string) => void;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const linesId = useId();
   // A row expands to its artifacts, one line each with its one act
   // (playbook-library-92); it stands folded until the reader opens it.
@@ -551,7 +551,7 @@ export function EnvironmentSection({
   beneath?: (name: string) => ReactNode;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const global = projectId === undefined;
   const state = store((current) => current.environments[repository]);
   const registryAccounts = store((current) => current.registryAccounts);
@@ -847,7 +847,7 @@ function AddPopover({
   onAdded: (name: string) => void;
   onRefused: (message: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const request = store((current) => current.requestSpecPackage);
   const folder = store((current) => current.environments[repository]?.pathRoot ?? null);
   const [open, setOpen] = useState(false);
@@ -999,7 +999,7 @@ function RegistryTab({
   repository: string;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const search = store((current) => current.searchRegistry);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RegistryResult[]>();
@@ -1253,7 +1253,7 @@ function FolderTab({
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
   cancel: ReactNode;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const preview = store((current) => current.previewFolderPackage);
   const [path, setPath] = useState(PACKAGES_FOLDER);
   const [name, setName] = useState("");
@@ -1263,10 +1263,8 @@ function FolderTab({
   const pathRef = useRef<HTMLInputElement>(null);
   const typed = path.trim().replace(/\/+$/u, "");
   const chosen = typed.length > 0 && `${typed}/` !== PACKAGES_FOLDER ? typed : "";
-  // The shell's picker reads this computer's folders: a remote place's
-  // project is on its server, so none is offered there (run-view-169).
-  const local = isLocalPlace(store.place);
-  const pickDirectory = local ? window.spexNative?.pickDirectory : undefined;
+  // The desktop shell's picker reads this computer's folders (app-shell-4).
+  const pickDirectory = window.spexNative?.pickDirectory;
 
   useEffect(() => {
     const timer = setTimeout(() => pathRef.current?.focus(), 0);

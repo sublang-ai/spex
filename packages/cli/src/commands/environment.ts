@@ -10,9 +10,7 @@
 // no folder check; the store and the cache are the ones the app's core
 // uses under it, so both hosts share one store (environments-7). No
 // clone, lease, session or record of the home is read or written: a
-// root inside the home, other than a seat's project under `projects/`,
-// is refused, as is the user's home folder, whose agent folders are the
-// user-level ones your own group's export writes (environments-8).
+// root inside the Spex home is refused, as is the user's home folder.
 
 import { spawnSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
@@ -71,13 +69,13 @@ function within(outer: string, inner: string): boolean {
 }
 
 /** Why a folder cannot be an environment's root (cli-1), or null: the
- * user's home folder, a folder inside the Spex home other than a seat's
- * project below `projects/`, and a folder whose `.spex` holds the home. */
+ * user's home folder, a folder inside the Spex home, and a folder whose
+ * `.spex` holds the home. */
 export function refusedRoot(dir: string, home: string): string | null {
   const at = actualPath(dir);
   const spexHome = actualPath(home);
   if (at === actualPath(homedir())) return "is your home folder, where spex manages no packages";
-  if (within(spexHome, at) && !(within(join(spexHome, "projects"), at) && at !== join(spexHome, "projects"))) {
+  if (within(spexHome, at)) {
     return `lies in the Spex home ${home}, which the app keeps`;
   }
   if (within(join(at, ".spex"), spexHome)) return `holds the Spex home ${home} as its .spex`;

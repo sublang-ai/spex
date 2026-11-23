@@ -143,7 +143,7 @@ export interface FakeAdapterStats {
     attachments?: readonly Attachment[];
     browser?: boolean;
     /** The process environment as the run started, which a real
-     * adapter's runtime inherits at spawn (core-service-126). */
+     * adapter's runtime inherits at spawn (core-service-155). */
     env: NodeJS.ProcessEnv;
   }[];
 }

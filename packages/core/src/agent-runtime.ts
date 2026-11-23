@@ -17,3 +17,29 @@ export const DEFAULT_ADAPTER_IMPORTS: PlayerAdapterImports = {
 export async function loadAgentAdapter(adapter: AdapterName, imports = DEFAULT_ADAPTER_IMPORTS): Promise<new () => AgentAdapter<string, boolean, string, string>> {
   return await imports[adapter]() as new () => AgentAdapter<string, boolean, string, string>;
 }
+
+/** Apply the current user settings before each agent run. */
+export function withRunSettings(imports: PlayerAdapterImports, before: (adapter: string) => void): PlayerAdapterImports {
+  type Runner = new (...args: any[]) => { run(...args: unknown[]): unknown };
+  const wrapped = new Map<string, WeakMap<Runner, Runner>>();
+  const loaders: Record<string, () => Promise<Runner>> = {};
+  for (const [adapter, load] of Object.entries(imports) as [string, () => Promise<Runner>][]) {
+    loaders[adapter] = async () => {
+      const Adapter = await load();
+      let cache = wrapped.get(adapter);
+      if (!cache) { cache = new WeakMap(); wrapped.set(adapter, cache); }
+      let WithSettings = cache.get(Adapter);
+      if (!WithSettings) {
+        WithSettings = class extends Adapter {
+          run(...args: unknown[]): unknown {
+            before(adapter);
+            return super.run(...args);
+          }
+        };
+        cache.set(Adapter, WithSettings);
+      }
+      return WithSettings;
+    };
+  }
+  return loaders as unknown as PlayerAdapterImports;
+}

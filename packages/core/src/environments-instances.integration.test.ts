@@ -31,7 +31,7 @@ import {
   type Resolution,
 } from "@sublang/spex/environment";
 import { builtinPackage } from "./builtins.js";
-import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
+import type { EnvironmentState, SpaceState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "@sublang/spex/git-host";
 import { holdingFetch } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
@@ -54,7 +54,7 @@ async function startHome(name: string, options: Parameters<typeof fixture.startH
 }
 function seedLegacy(clone: string): void {
   mkdirSync(clone, { recursive: true });
-  // Your own group's environment as an earlier core left it: the
+  // The global environment as an earlier core left it: the
   // built-in spec package requested, no registry setting, no lock yet
   // (environments-11).
   writeFileSync(join(clone, "spex.yaml"), `format: 1\npackages:\n  ${BUILTIN_PACKAGE_NAME}:\n    version: ^${builtinPackage().version}\n`);
@@ -94,7 +94,7 @@ async function selectRegistry(home: Home, key: string, origin: string): Promise<
   assert.equal(state.error, null);
 }
 
-/** The stand-ins' default person, and your own group's repository once
+/** The stand-ins' default person, and the global records repository once
  * signed in as them. */
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
@@ -135,11 +135,10 @@ async function environmentOf(home: Home, key: string, check: (state: Environment
 const installedFrom = (state: EnvironmentState, name: string, registry: string): boolean =>
   state.packages.some((pkg) => pkg.name === name && pkg.installed && pkg.source.detail === registry);
 
-/** A repository's row in the Groups state, under your own group or an
- * instance's heading (space-30), asserted to stand there. */
-function rowOf(state: GroupsState, key: string): RepositoryState {
+/** A repository row expected in the Space state (space-30). */
+function rowOf(state: SpaceState, key: string): RepositoryState {
   const row = rowsOf(state).find((candidate) => candidate.key === key);
-  assert.ok(row, `${key} is listed under your own group or an instance's heading`);
+  assert.ok(row, `${key} is listed in Space state`);
   return row;
 }
 
@@ -166,8 +165,8 @@ function receivedFor(registry: StandinRegistry, from: number, name: string): [st
     .map((request) => [request.path, request.instance, request.account, request.bearer]);
 }
 
-/** Resolve one registry request against a registry outside any core, as
- * another member's home would have locked it: its resolution. */
+/** Resolve a registry request outside the core to supply the
+ * resolution recorded by another home. */
 async function resolvedAt(registry: RegistryClient, name: string, version: string): Promise<Resolution> {
   const text = `format: 1\npackages:\n  ${name}:\n    version: ${version}\n`;
   const result = await resolve({ requests: parseRequests(text), requestsText: text, registry, pathRoot: null, git: gitSource(join(scratch, "resolve-cache")) });
@@ -206,21 +205,21 @@ function pairedAlone(home: Home, key: string): boolean {
     && existsSync(join(environmentRoot(home.dataDir, key), "spex.lock"));
 }
 
-/** Pick a project into your namespace at an instance (space-58), its
+/** Pick a project into your namespace at a Space (space-97), its
  * clone moved under that instance's folder (storage-35): its key. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
   const key = hostKey(host, `${LOGIN}/${name}-spex`);
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: null, name } });
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, name } });
   const row = await home.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.deepEqual([row.sync.phase, row.instance], ["done", host.url], JSON.stringify(row.sync));
   return key;
 }
 
-/** Join a repository a group at an instance holds (space-63), pairing
+/** Join a repository in the Space account’s namespace (space-63), pairing
  * `folder` where given: its key, once its row reads reachable. */
 async function joinAt(home: Home, host: StandinHost, path: string, folder?: string): Promise<string> {
-  const repository = host.script.addRepository({ group: "acme", name: path.split("/").pop()! });
+  const repository = host.script.addRepository({ group: LOGIN, name: path.split("/").pop()! });
   const key = hostKey(host, path);
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -369,10 +368,13 @@ test("environments-38, environments-5, environments-12, environments-3, environm
   // until paired; each new pairing writes one naming the public
   // registry and its Space, requesting nothing — the built-in spec
   // package is global (environments-11, storage-6).
-  const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
+  // Both Spaces see the same personal namespace on the shared backing store.
+  // Keep only the second signed in so it supplies these fixtures and their binding.
+  await signOut(home, first);
+  const joined = await joinAt(home, second, "ada/joined-spex", gitFolder("joined"));
   await environmentOf(home, joined, () => pairedAlone(home, joined));
   assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
-  const rebound = await joinAt(home, second, "acme/rebound-spex");
+  const rebound = await joinAt(home, second, "ada/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   assert.equal((await home.client.expectOk("environment.get", { repository: rebound })).committed, null, "[environments-14] no working folder on this device: committed is unknown, not false");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
@@ -381,7 +383,8 @@ test("environments-38, environments-5, environments-12, environments-3, environm
   // One joined at the first, the default instance, with its working
   // folder paired records that Space separately and uses the public registry
   // (environments-11, environments-2).
-  const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
+  await signIn(home, first);
+  const atFirst = await joinAt(home, first, "ada/at-first-spex", gitFolder("at-first"));
   await environmentOf(home, atFirst, () => pairedAlone(home, atFirst));
   assert.equal(spaceOf(home, atFirst), first.url, "a fresh independent environment records collaboration separately from its public registry");
   // A local-only project picked into the first, the default instance,
@@ -685,7 +688,7 @@ test("environments-38, environments-17, environments-12: searches use explicit r
 
   // The local-only project, which has no instance, searches the first's
   // registry, the default instance's, with the first's token; so does
-  // your own group, whose own repository's remote names the first
+  // the global environment, whose records repository's remote names the first
   // (environments-17, environments-12).
   for (const key of [local, HOST_OWN]) {
     one = R1.script.received.length;
@@ -703,7 +706,7 @@ test("environments-38, environments-17, environments-12: searches use explicit r
   // (environments-17).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.search", { repository: hostKey(second, "acme/none-spex"), query: "search" }, "not_found");
+  await home.client.expectError("environment.search", { repository: hostKey(second, "ada/none-spex"), query: "search" }, "not_found");
   assert.deepEqual([searched(R1, one), searched(R2, two)], [[], []]);
 
   // The second's registry refusing the second's token refuses the
@@ -796,7 +799,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
   // Signed in to the second again, the first signed out and forgotten:
-  // your own group's own repository, created at the first, follows the
+  // the global records repository, created at the first, follows the
   // second — the second lists it over the shared Git backend — and syncs
   // with it.
   await registrySignIn(home, second);
@@ -817,7 +820,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.ok(await fileCredentialStore(home.dataDir, first.url, "registry").read(), "Space sign-out preserves its registry grant");
   await home.client.expectOk("environment.registry.set", { repository: HOST_OWN, origin: second.url });
 
-  // After the explicit registry choice, your own group's environment
+  // After the explicit registry choice, the global environment
   // resolves a spec package newly requested at the second's registry, with the second's token — the
   // release private there to it — its lock recording the second's
   // origin; the built-in keeps the origin its lock records, as it
@@ -838,7 +841,7 @@ test("environments-38, environments-10, environments-17, environments-5: publish
   assert.ok(asked.every(([, instance, account, bearer]) => instance === second.url && account === LOGIN && bearer), JSON.stringify(asked));
   assert.equal(R1.script.received.length, one, "the first's registry is asked nothing");
 
-  // A publish from your own group lands at the second's registry, as the
+  // A publish from the global environment lands at the second's registry, as the
   // second's account; the first's registry is asked nothing
   // (environments-10).
   one = R1.script.received.length;
@@ -882,10 +885,10 @@ test("environments-34, environments-27: the orgs asked for the second's project 
   assert.deepEqual(orgsAsked(R2, two), []);
 });
 
-test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone makes it again, requesting the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and the global records repository following the second by its remote, a start finding the global environment gone makes it again, requesting the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
   const { first, second, home } = await twoInstances(t, "own-prepare");
 
-  // The first signed out, the second read again: your own group's own
+  // The first signed out, the second read again: the global records
   // repository, created at the first, follows the second — the second
   // lists it over the shared Git backend — its remote renamed to the
   // second's folder by its next sync (space-60, storage-34).
@@ -902,8 +905,8 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.deepEqual(remoteNamesOf(ownClone(home.dataDir)), [hostFolder(second)]);
 
   // Stopped, its environment taken away, then started again: the first
-  // is still the home's default instance, signed out, and your own
-  // group's own repository reads as the second's by its remote
+  // is still the home's default instance, signed out, and the global records
+  // repository reads as the second's by its remote
   // (storage-31).
   await home.stop();
   for (const file of ["spex.yaml", "spex.lock"]) rmSync(join(ownClone(home.dataDir), file));
@@ -915,7 +918,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.equal(rowOf(state, HOST_OWN).instance, second.url);
 
   // A home holding no global environment has it made, as a home is:
-  // the start requests the built-in spec package in your own group's
+  // the start requests the built-in spec package in the global
   // environment again, locked at the public registry while its Space
   // still follows the remote at the second (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");

@@ -8,6 +8,7 @@
 Accepted (2026-10-31) on the owner's direction to use the Space username consistently.
 Amends [DR-120](120-the-instance-is-the-space.md) in member presentation: a member's personal name is their Space login alone.
 Extends [DR-127](127-a-home-signed-in-to-several-instances.md) in personal attribution: the selected account's login supplies every new commit and intent author name.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

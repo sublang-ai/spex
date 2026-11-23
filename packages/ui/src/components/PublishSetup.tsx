@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { DraftInfo } from "@sublang/spex-core/protocol";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { isPackageOrg, packageOrgRuleText } from "../lib/drafts.js";
 import type { PublishTarget } from "../lib/environments.js";
@@ -15,7 +15,7 @@ import { PublishControl } from "./PublishControl.js";
 /** Publishing defaults are read only after Publish is chosen. Manually
  * edited values survive refreshed registry/account replies (DR-218). */
 export function usePublicationFields(repository: string | undefined, existingOrg: string, existingLicense?: string) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const connection = store((state) => state.connection);
   const loadDraftDefaults = store((state) => state.loadDraftDefaults);
   const loadEnvironment = store((state) => state.loadEnvironment);

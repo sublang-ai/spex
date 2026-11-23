@@ -336,7 +336,7 @@ export function hostWords(stderr: string): string | null {
  * (space-15, git-host-11). */
 export function noLongerShared(): string {
   return i18n._({
-    id: "No longer shared with you",
+    id: "These records are no longer available in your Space account",
     comment: "A spex repository's state or a stopped transfer: the Space no longer lists it for this account",
   });
 }
@@ -356,13 +356,11 @@ export function hostRefused(host: string, words: string | null): string {
       });
 }
 
-/** Where membership decides (space-50, DR-190): Invite members, or a member who
- * may manage access, in Spex — no role claimed, no act the host did not name,
- * and no page of the host. */
-export function membersDecide(): string {
+/** Guidance when the Space refuses a records write. */
+export function spaceWriteRefused(): string {
   return i18n._({
-    id: "Membership decides who may send here: use Invite members, or ask someone who can manage members.",
-    comment: "Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role",
+    id: "Check access in your Space, then retry.",
+    comment: "Guidance after a Space refused a records write",
   });
 }
 
@@ -468,12 +466,12 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
     };
   }
   if (/returned error: 403|HTTP 403|Permission denied|protected branch|You are not allowed/i.test(text)) {
-    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
+    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: spaceWriteRefused(), retry: true };
   }
   const size = contentSizeFailure(text, host);
   if (size) return size;
   if (/pre-receive hook declined/i.test(text)) {
-    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
+    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: spaceWriteRefused(), retry: true };
   }
   // An HTTP status no rule above reads is the host's own error, never
   // Git's words (space-15, DR-064); Git's own failures keep their lines.

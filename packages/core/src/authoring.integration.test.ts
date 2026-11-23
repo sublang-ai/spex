@@ -587,7 +587,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
 // core-service-96: an authoring session of the global environment
 // ---------------------------------------------------------------------------
 
-test("core-service-96: a session of the global environment keeps its package in your own group's clone, and its Add requests it there and writes the global config", { timeout: 120_000 }, async () => {
+test("core-service-96: a session of the global environment keeps its package in the global records repository, and its Add requests it there and writes the global config", { timeout: 120_000 }, async () => {
   const harness = await startHarness({ script: { rules: [], fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Triager', 'Verifier']") });
   const { configPath } = harness;
   const global = "tester/tester-spex";
@@ -595,14 +595,14 @@ test("core-service-96: a session of the global environment keeps its package in 
   const client = new Client(harness.service.port());
   await client.open();
   try {
-    // Your own group's key stands in a project's place (core-service-96).
+    // The global records repository's key stands in a project's place (core-service-96).
     const defaults = await client.expectOk("draft.defaults", { projectId: global });
     assert.equal(typeof defaults.org, "string");
     const created = await client.expectOk("draft.create", { projectId: global, draftId: "triage", ...NEW_PACKAGE });
     assert.equal(created.projectId, global);
     assert.equal(created.packagePath, "spex-packages/acme/triage");
     assert.equal(created.added, false);
-    assert.ok(existsSync(join(ownClone, "spex-packages", "acme", "triage", "meta.yaml")), "[core-service-96] the spec package in your own group's clone");
+    assert.ok(existsSync(join(ownClone, "spex-packages", "acme", "triage", "meta.yaml")), "[core-service-96] the spec package in the global records repository");
     assert.ok(existsSync(authoringFiles(ownClone, "triage").record), "[core-service-96] the session kept with the global records");
     await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
     await client.expectOk("draft.source.write", { projectId: global, draftId: "triage", content: SOURCE });
@@ -631,7 +631,7 @@ test("core-service-96: a session of the global environment keeps its package in 
     const inProject = await client.expectOk("environment.playbooks", { projectId: harness.projectId });
     assert.equal(inProject.own.find((row) => row.id === "triage")?.runs, true);
 
-    // With your own group's clone gone from this device, the global
+    // With the global records repository gone from this device, the global
     // environment takes no new session and no defaults (core-service-96).
     const away = `${ownClone}-away`;
     renameSync(ownClone, away);
@@ -1301,11 +1301,11 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 // playbook-library-104: a new playbook's org and license
 // ---------------------------------------------------------------------------
 
-test("playbook-library-104: New playbook uses the first authorized registry namespace or a blank Org, independently of Space groups, and explicit authoring remains available offline", { timeout: 120_000 }, async (t) => {
+test("playbook-library-104: New playbook uses the first authorized registry namespace or a blank Org regardless of the project path, and explicit authoring remains available offline", { timeout: 120_000 }, async (t) => {
   // A home signed in to two stand-in registries, each standing as its
   // instance, the first the home's default instance, with a project
-  // paired at each instance two groups deeper than the home's own, its
-  // key led by the instance's folder, which names no org (DR-127).
+  // paired at each instance with a nested repository path and the
+  // instance folder prefix (DR-127).
   const first = await startStandinRegistry({ dir: scratchDir("spex-defaults-first-") });
   const second = await startStandinRegistry({ dir: scratchDir("spex-defaults-second-") });
   t.after(() => Promise.all([first.close(), second.close()]));
@@ -1344,8 +1344,8 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   await client.expectOk("environment.registry.set", { repository: atSecond, origin: second.url });
   const folder = join(dir, "project");
   const license = join(folder, "LICENSE");
-  assert.equal(projectId, "tester/project-spex", "the harness's project lives in the home's own group, local only");
-  // A namespace whose path matches the Space group confers no priority
+  assert.equal(projectId, "tester/project-spex", "the local-only project lives in the personal records folder");
+  // A namespace matching the project's repository path prefix gets no priority
   // over the registry's first authorized namespace.
   second.script.setOrgs("second-token", [
     { name: "alpha-two", path: "alpha", role: "owner" },
@@ -1371,7 +1371,7 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   ];
 
   // LICENSE is read at each reply. A registry refusal leaves Org blank,
-  // with no Space group or local-username fallback.
+  // regardless of the project's repository path or the local username.
   const cases: [string | null, string | null][] = [
     ["﻿\n                                 Apache License\n                           Version 2.0, January 2004\n", "Apache-2.0"],
     ["MIT License\n\nCopyright (c) 2026 Acme\n", "MIT"],
@@ -1393,8 +1393,8 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   // One listed is it, wherever its path.
   first.script.setOrgs("first-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
   assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011", "alpha-two"], "one listed");
-  // Of several, the first listed name wins for every project, even
-  // when another namespace's path matches its Space group.
+  // Use the registry's first authorized namespace even when another
+  // namespace matches the project's repository path prefix.
   first.script.setOrgs("first-token", [
     { name: "workshop", path: "acme/workshop", role: "developer" },
     { name: "alpha", path: "alpha", role: "owner" },

@@ -64,10 +64,10 @@ export interface ResolveInput {
   requestsText?: string;
   registry: RegistrySource;
   /** The folder a request's `path` is relative to (environments-2): the
-   * paired working folder's root, or your own group's clone's; null
+   * paired working folder's root, or the global records repository's; null
    * where this device has none. */
   pathRoot: string | null;
-  /** Whether `pathRoot` is your own group's clone, whose requests by
+  /** Whether `pathRoot` is the global records repository, whose requests by
    * path name only a folder that syncs with it (environments-32). */
   confined?: boolean;
   git: GitSource;
@@ -88,7 +88,7 @@ export type ResolveErrorKind = "no_working_folder" | "path_outside" | "path_conf
  * the request's folder or Git repository at its revision; whether the
  * folder itself is missing; the package a folder holds in place of the
  * one asked; the issues of a `meta.yaml` that does not read; and the
- * reason your own group's clone refuses a folder (environments-32). */
+ * reason the global records repository refuses a folder (environments-32). */
 export interface ResolveErrorDetail {
   path?: string;
   git?: string;
@@ -150,7 +150,7 @@ function selectionHolds(selection: readonly Selection[], artifacts: Candidate["a
   });
 }
 
-/** A path your own group's clone refuses, in the library's words
+/** A path the global records repository refuses, in the library's words
  * (environments-32), with its reason for a host to phrase. */
 function confinedError(name: string, path: string, issue: OwnPathIssue): ResolveError {
   return new ResolveError("path_confined", name, ownPathMessage(name, path, issue), { path, confined: issue });
@@ -189,7 +189,7 @@ async function loadFixed(name: string, request: Request, input: ResolveInput): P
     const real = relative(realpathSync(root), realpathSync(dir));
     if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${path} leads out of ${place} through a link`, { path });
     const release = await readRequested(name, dir, path, { path });
-    // Everything your own group's folder holds syncs with its clone.
+    // The global records repository syncs the files it tracks.
     if (input.confined) {
       const issue = ownFolderIssue(root, request.path, release.files.map((file) => file.path));
       if (issue) throw confinedError(name, request.path, issue);

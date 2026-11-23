@@ -1,27 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Signing in to a Space from the Space surface (space-3, space-115,
-// DR-127, DR-172): while the home lists no Space, the header is one
-// card titled by its act, "Sign in to a Space" — the chooser of the
-// directory's Spaces with "Other Space…" revealing "Space address"
-// (SpaceDirectory), Sign in its one primary control, and no sentence;
-// while it lists any, "Add a Space…" at the list's foot opens the same
-// card in its place, and a signed-out Space's heading starts it again at
-// its own origin (SpaceInstance). Wherever it started, the flow in
-// flight reads there as "Continue in your browser" with the link "Open
-// <Space>" — the sign-in page on the desktop, which the bridge opened
-// (app-shell-37), or the device flow's verification page, whose URL
-// carries the code, which is never shown — and a flow that ended without
-// an account reads the core's cause. The outcome is state: the surface
-// reads `signIn` and the Spaces as the core sends them and keeps only
-// the start's reply, which state does not carry. A team server's Space
-// reads the same card.
+// Space sign-in state, browser approval and chooser.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
+import type { CommandResults, SpaceState } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { instanceOf, originOf } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
@@ -72,8 +57,8 @@ export interface SignInFlow {
 
 /** The one sign-in of the surface (space-3, git-host-2): at most one
  * runs, whichever Space it names. */
-export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignInFlow {
-  const store = usePlaceStore();
+export function useSignIn(groups: SpaceState | undefined, onNote: Note): SignInFlow {
+  const store = useAppStore;
   const spaceSignIn = store((state) => state.spaceSignIn);
   const spaceSignInCancel = store((state) => state.spaceSignInCancel);
   const [started, setStarted] = useState<StartReply & { opened?: boolean }>();
@@ -354,7 +339,7 @@ export function SignInCard({
   signIn,
   connected,
 }: {
-  groups: GroupsState;
+  groups: SpaceState;
   signIn: SignInFlow;
   connected: boolean;
 }) {

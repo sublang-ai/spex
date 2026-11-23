@@ -45,6 +45,7 @@ Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the Spac
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
 
 Amended by [DR-215](215-add-to-a-group-and-start-working.md) in the separate first-sharing acknowledgement.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

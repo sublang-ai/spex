@@ -11,11 +11,6 @@
 // runtime, so the brokered secret is neither looked up in nor stored to
 // any other helper. A brokered credential carries its permitted origin,
 // which the helper matches on every get, including LFS endpoint requests.
-//
-// On a seat the same script serves in its member mode too, named by the
-// seat account's own Git configuration (core-service-125): it answers
-// from the member's credential store (storage-44) for the Git a person's
-// agent runs outside the app, with no secret in the command.
 
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -63,25 +58,6 @@ function shellWord(what: string, path: string): string {
     throw new Error(`The ${what} path cannot be quoted for Git's credential helper: ${JSON.stringify(path)}`);
   }
   return `'${path.replace(/'/g, "'\\''")}'`;
-}
-
-/** The argument putting the helper in its member mode, the store's path
- * following it (git-host-9, storage-44). */
-const MEMBER_MODE_ARG = "--member";
-
-/** The helper in its member mode as a seat account's Git configuration
- * names it (core-service-125, git-host-9): a shell command running the
- * script on the app's own runtime, which needs no running core, and
- * reading the member's store at `storePath` when Git asks; no secret is
- * in it. */
-export function memberHelperCommand(
-  runtime: { execPath: string; electron: boolean },
-  storePath: string,
-  options: { helperPath?: string } = {},
-): string {
-  const helperPath = options.helperPath ?? gitCredentialHelperPath();
-  const words = [shellWord("runtime", runtime.execPath), shellWord("helper", helperPath), MEMBER_MODE_ARG, shellWord("store", storePath)];
-  return `!${runtime.electron ? "ELECTRON_RUN_AS_NODE=1 " : ""}${words.join(" ")}`;
 }
 
 export async function withGitCredential(

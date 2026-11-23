@@ -8,6 +8,7 @@
 Accepted (2026-11-03) following the owner's review of the wide and narrow application screenshots and approval to merge and push.
 Amends [DR-211](211-a-panel-carries-its-own-way-out.md) in header dismissal presentation.
 The dismissal, focus, pending-operation and attention-preservation behavior of [DR-211](211-a-panel-carries-its-own-way-out.md) remains.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
 
 ## Context
 

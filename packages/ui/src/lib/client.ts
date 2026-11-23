@@ -34,19 +34,10 @@ interface Pending {
  * the default suits a reply the core composes itself (DR-010 §5). */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Commands that need a longer reply window than ordinary local reads. A seat's open
- * reads the instance's listing, asks it for a ticket and waits ninety
- * seconds for the server's admission, which may make the seat's account
- * and start it; its close, queued behind an open of the same place,
- * ends that relay. The page waits for either longer than the core waits
- * on the admission, so it waits as long as the admission may take
- * (run-view-170, core-service-128). */
 const COMMAND_TIMEOUT_MS: Partial<Record<Command["type"], number>> = {
   // Creation owns configuration/runtime initialization. Wait for its reply
   // or connection failure; a UI deadline cannot cancel that owned work.
   "session.create": 0,
-  "server.open": 120_000,
-  "server.close": 120_000,
 };
 
 export class SpexCommandError extends Error {
@@ -137,9 +128,7 @@ export class SpexClient {
     });
   }
 
-  /** End the connection for good: a redial still waiting is called
-   * off, so a place dropped mid-backoff never dials again
-   * (run-view-168). */
+  /** End the connection and cancel any pending redial. */
   close(): void {
     this.closedByUser = true;
     clearTimeout(this.reconnectTimer);

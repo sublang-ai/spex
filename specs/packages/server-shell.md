@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Spex server shell — the headless CLI in `apps/server` that serves the Spex GUI to a remote browser: one TCP port carrying both the built UI bundle and the core service's WebSocket endpoint, guarded by the core's handshake token, with optional TLS ([DR-033](../decisions/033-remote-gui-serving.md)) — including its source-development launch.
-It is a single-user deployment of the same core and UI the desktop app embeds ([DR-002](../decisions/002-desktop-app-architecture.md)), one per person: a team server runs one such shell per member, a seat behind a hub ([DR-132](../decisions/132-team-servers.md)) [[hub-4](hub.md#hub-4)].
+It is a single-user deployment of the same core and UI the desktop app embeds ([DR-002](../decisions/002-desktop-app-architecture.md), [DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
 
 ## External Behavior
 
@@ -43,15 +43,6 @@ Where the requested bind host is not a loopback address and no TLS material is c
 Where TLS certificate and key files are both configured, the server shell shall serve HTTPS on its port and accept `wss:` WebSocket handshakes on the same port:
 
 - Exactly one of the pair configured is refused at startup, naming the missing half.
-
-#### server-shell-25
-
-Where the server shell starts as a seat — `--seat` with `--server-id`, `--server-name`, `--person-id`, `--token-file` and `--socket`, and optionally `--shared-env` — when it starts, it shall boot the core in seat mode [[core-service-125](core-service.md#core-service-125)] listening on the Unix socket named, the handshake token read from the file, and print no access URL, the token appearing in no output ([DR-132](../decisions/132-team-servers.md)):
-
-- `--token` beside `--token-file`, a missing id or name, an unreadable token file or an empty token refuses startup naming the mistake; `--host`, `--port`, the TLS pair and `--insecure` are refused beside `--socket`, since the hub alone reaches the socket [[hub-3](hub.md#hub-3)];
-- the device label is "Spex on <server name>";
-- the socket's directory is made by whoever starts the shell, the hub's helper [[hub-4](hub.md#hub-4)]; the shell removes a stale socket file there before listening — one that refuses a connection — refuses startup at a socket that answers, "in use", or at a path holding another kind of file, and makes the socket it binds group-accessible;
-- a socket that cannot be bound refuses startup naming the cause, as the flag mistakes do.
 
 ### Serving
 
@@ -202,7 +193,7 @@ Where built server artifacts and a controlled npm executable are available on a 
 
 #### server-shell-23
 
-Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to your own group's spex repository's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler and a project created over it with the scaffold option scaffolds with the npm registry unreachable [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to the global records repository's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler and a project created over it with the scaffold option scaffolds with the npm registry unreachable [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
 
 - the same socket then carries the smoke's first-run walk of the installed core, as the release rules describe it.
 
@@ -241,7 +232,3 @@ When the server's test suite reads the package manifest and resolves the compile
 #### server-shell-21
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) starts the server shell from code with core overrides naming the fake adapter, a ready adapter runtime, and the scripted Captain, when a browser opens the shell's token URL, the test suite shall assert that the page connects to its own origin and drops the token from the address bar, that a reload reconnects without the token [[server-shell-5](#server-shell-5)], and that the served core answers through the overrides — readiness reporting the fake environment ready and a turn running the scripted narration [[server-shell-20](#server-shell-20)].
-
-#### server-shell-26
-
-Where the server shell is started as a seat from code and as a real child against a stand-in instance, the test suite shall assert that the token is read from the file and absent from the output, that the socket admits a handshake with the token and refuses one without, that the device request names the server and the person, and each startup refusal [[server-shell-25](#server-shell-25)].

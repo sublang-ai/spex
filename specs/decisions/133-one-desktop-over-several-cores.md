@@ -16,6 +16,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-033](033-remote-gui-serving.md) in "the browser is a pure protocol client": a served page may hold the same relayed connections through its own core.
 
 Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in rendering the first-open contract.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

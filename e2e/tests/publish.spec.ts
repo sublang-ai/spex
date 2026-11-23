@@ -31,7 +31,7 @@ import {
   packageRow,
   packageSource,
   packagesSection,
-  pickGroup,
+  pickPersonalSpace,
   playbookCard,
   projectTab,
   publishFromRow,
@@ -133,7 +133,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   // instance, and the project picked into the account's namespace at
   // the second, so a publish from it goes to the second (arrange only).
   await signInCore(app, second);
-  const project = await pickGroup(app, { host: second, namespace: true });
+  const project = await pickPersonalSpace(app, { host: second });
   await selectRegistryCore(app, second.url, project.key);
   await signInRegistryCore(app, second);
   secondRegistry.script.setOrgs(second.url, [{ name: HOST_LOGIN, path: HOST_LOGIN, role: "Owner" }]);
@@ -252,7 +252,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   const [firstRegistry, registry] = app.registries;
   if (!first || !second || !firstRegistry || !registry) throw new Error("two configured instances and registries");
   await signInCore(app, second);
-  const project = await pickGroup(app, { host: second, namespace: true });
+  const project = await pickPersonalSpace(app, { host: second });
   await selectRegistryCore(app, second.url, project.key);
   await signInRegistryCore(app, second);
   registry.script.setOrgs(second.url, [{ name: HOST_LOGIN, path: HOST_LOGIN, role: "Owner" }]);

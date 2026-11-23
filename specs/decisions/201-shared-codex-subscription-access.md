@@ -8,6 +8,7 @@
 Accepted (2026-11-02) on the owner's direction to share the administrator's Claude and Codex subscriptions across a team server.
 Amends [DR-132](132-team-servers.md) in Codex's shared subscription form and in its access-only credential materialization; its account, history and refresh isolation remain.
 Amends [DR-154](154-the-seed-follows-playbooks-rule.md) only in the seed-only presence projection for a materialized Codex snapshot.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

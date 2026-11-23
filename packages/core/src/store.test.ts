@@ -949,7 +949,7 @@ test("storage-14: a live core of the former layout holding .lock keeps this one 
   new Store({ machineIdentity, dir, own: "tester" }).close();
 });
 
-test("storage-2: a new home writes home.yaml with this device, the origin it was created with, no instance and your own group", () => {
+test("storage-2: a new home writes home.yaml with this device, the origin it was created with, no instance and the local records folder name", () => {
   const dir = tempRoot();
   const store = new Store({ machineIdentity, dir, own: "tester", env: { ...process.env, SPEX_HOST_URL: "HTTPS://Host.test:443/" } });
   const project = store.registerProject(join(tmpdir(), "spex-home-file"), "Home File", 1);
@@ -963,10 +963,10 @@ test("storage-2: a new home writes home.yaml with this device, the origin it was
   assert.equal(file.own, "tester");
   assert.equal(project.id, "tester/home-file-spex");
   assert.deepEqual(file.folders, [{ path: join(tmpdir(), "spex-home-file"), repository: "tester/home-file-spex" }]);
-  assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex", group: "tester", own: true });
+  assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex" });
   // The project file names the code's remote, none here (storage-3).
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "workspace", "tester", "home-file-spex", "project.json"), "utf8")), { format: 1, name: "Home File", remote: null });
-  // Your own group's spex repository stands on its spex branch, seeded.
+  // The global records repository stands on its spex branch, seeded.
   const own = join(dir, "workspace", "tester", "tester-spex");
   assert.ok(existsSync(join(own, "config", "playbook.config.yaml")));
   assert.equal(execFileSync("git", ["-C", own, "symbolic-ref", "--short", "HEAD"], { encoding: "utf8" }).trim(), "spex");
@@ -1057,7 +1057,11 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   assert.equal(refusal(valid), "accepted");
   assert.equal(refusal({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "tester", folders: [] }),
     "format 1: the migration to several Spaces has not run; preserved unchanged");
-  assert.equal(refusal({ ...valid, format: 3 }), "unsupported format 3; preserved unchanged");
+  const instances = [{ ...valid.instances[0], gitOrigin: "https://git.spex.pub/repos" }];
+  assert.equal(refusal({ ...valid, format: 3, instances }), "accepted");
+  assert.equal(ownConfigPath(dir), join(dir, "workspace", "tester", "tester-spex", "config", "playbook.config.yaml"));
+  assert.match(refusal({ ...valid, instances }), /^expected fields /, "format 2 does not allow a Git address");
+  assert.equal(refusal({ ...valid, format: 4 }), "unsupported format 4; preserved unchanged");
   assert.equal(refusal({ ...valid, origin: "https://spex.pub/" }), "https://spex.pub/ is not a Space's address");
   assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex", account }] }), "https://Spex.pub is not a Space's address");
   assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex", account }] }), "https://…@spex.pub is not a Space's address");
@@ -1068,7 +1072,7 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   assert.match(refusal({ ...valid, instances: [{ url: "https://spex.pub", clientId: "spex", account }] }), /^expected fields /, "an entry names its origin as origin");
   assert.match(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex" }] }), /^expected fields /, "an entry carries its account");
   assert.match(refusal({ ...valid, host: valid.instances[0] }), /^expected fields /);
-  // Your own group's config path reads either format's folder name.
+  // The global config also resolves from a home awaiting migration.
   write({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "bob", folders: [] });
   assert.equal(ownConfigPath(dir), join(dir, "workspace", "bob", "bob-spex", "config", "playbook.config.yaml"));
 });
@@ -1093,20 +1097,19 @@ test("projects-10: removal forgets the pair and deletes the clone; the working f
   reopened.close();
 });
 
-test("storage-1: a clone whose group and name the host spells with capitals, dots and underscores pairs under that key", () => {
+test("storage-1: a clone nested under a key with capitals, dots and underscores pairs under that key", () => {
   const dir = tempRoot();
   const store = new Store({ machineIdentity, dir, own: "tester" });
   const project = store.registerProject(join(tmpdir(), "spex-spelled"), "spelled", 1);
   store.close();
-  // The host's own spelling of the group and the repository, as a sync
-  // that followed a transfer would leave them (space-60).
+  // Move the clone and update the pair to a nested key on disk.
   const key = "Acme.Corp/platform_team/web.app-spex";
   mkdirSync(join(dir, "workspace", "Acme.Corp", "platform_team"), { recursive: true });
   renameSync(join(dir, "workspace", ...project.id.split("/")), join(dir, "workspace", ...key.split("/")));
   const home = parseYaml(readFileSync(join(dir, "home.yaml"), "utf8")) as { folders: { repository: string }[] };
   for (const folder of home.folders) if (folder.repository === project.id) folder.repository = key;
   writeFileSync(join(dir, "home.yaml"), stringifyYaml(home));
-  // A dot folder is never a group or a clone.
+  // The walk skips hidden folders.
   mkdirSync(join(dir, "workspace", ".trash", "old-spex"), { recursive: true });
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   assert.deepEqual(reopened.listProjects().map((entry) => entry.id), [key]);
@@ -1147,7 +1150,7 @@ test("storage-12: an unpaired clone and a pair whose clone is missing are repair
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   const repairs = reopened.storageDiagnostics().map((entry) => entry.repair);
   assert.deepEqual(repairs.find((repair) => repair?.kind === "repository"),
-    { kind: "repository", repository: kept.id, name: "kept-spex", group: "tester", projectName: "kept", directories: [], sessions: 0, key: `${kept.id}|` });
+    { kind: "repository", repository: kept.id, name: "kept-spex", projectName: "kept", directories: [], sessions: 0, key: `${kept.id}|` });
   assert.deepEqual(repairs.find((repair) => repair?.kind === "folder"),
     { kind: "folder", repository: lost.id, directories: [join(tmpdir(), "spex-lost")], sessions: 0, key: `${lost.id}|${join(tmpdir(), "spex-lost")}` });
   assert.deepEqual(reopened.listProjects(), []);

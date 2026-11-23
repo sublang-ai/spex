@@ -7,7 +7,7 @@
 // that origin in the same step. Its clones step: every clone at the
 // instance moves under the instance's folder, its remote named by that
 // folder where it records the host's id, its pairs, sync preferences and
-// forge cache entry following; your own group's own repository renames
+// forge cache entry following; the global records repository renames
 // its remote and keeps its folder; the clones never at an instance stay.
 // A restart finishes what remains, a divergent destination stops it
 // unchanged, a clone a session's lease holds is deferred to a later
@@ -208,8 +208,8 @@ function formerClone(root: string, key: string, options: { remote?: string; id?:
 }
 
 /** A one-instance home a Spex before DR-127 left, with a clone for every
- * row of the migration's table: your own group's own repository; in
- * your own group's folder, a project in your namespace there recording
+ * row of the migration's table: the global records repository; in
+ * the personal records folder, a project in your namespace there recording
  * the host's id, a local-only clone and one with a remote the reader
  * named; elsewhere, a subgroup's and another account's repository
  * recording it, one with a remote the reader named, and a group's
@@ -238,9 +238,7 @@ function formerHomeWithClones(): string {
   writeFileSync(join(root, "local", "prefs.json"), JSON.stringify({ format: 1, prefs: {
     language: "en",
     "sync:acme/platform/web-spex:last": { at: 1, sent: 1, received: 0 },
-    "sync:acme/platform/web-spex:noticed": true,
     "sync:ada/notes-spex:last": { at: 2, sent: 0, received: 1 },
-    "sync:ada/scratch-spex:noticed": true,
   } }));
   const forge = (repo: string) => ({ at: 5, state: { adapter: "github", authenticated: true, repo, issues: [], prs: [], at: 5 } });
   writeFileSync(join(root, "local", "forge-cache.json"), JSON.stringify({ format: 1, entries: {
@@ -249,7 +247,7 @@ function formerHomeWithClones(): string {
   return root;
 }
 
-test("instances migration: every clone at the instance moves under its folder, its remote named by the folder where it records the host's id, its pair, sync preferences and forge cache entry following; your own group's own repository renames its remote in place; the clones never at an instance stay", async () => {
+test("instances migration: every clone at the instance moves under its folder, its remote named by the folder where it records the host's id, its pair, sync preferences and forge cache entry following; the global records repository renames its remote in place; the clones never at an instance stay", async () => {
   const root = formerHomeWithClones();
   const t = 1_700_000_000_000;
   const sessionId = await seedHistorySession(join(workspace(root, "acme/platform/web-spex"), "sessions"), join(root, "work", "web"), [
@@ -290,7 +288,7 @@ test("instances migration: every clone at the instance moves under its folder, i
     // The host's remote takes the instance's folder's name, its fetched
     // spex and its upstream with it, and the host's id, and a creation
     // mark, move from the top level into its section (storage-34); a
-    // remote the reader named keeps its own; your own group's own
+    // remote the reader named keeps its own; the global records
     // repository renames its remote in place; a clone already under the
     // folder is not touched.
     for (const [key, id] of [["ada/ada-spex", "100"], [`${FOLDER}/ada/notes-spex`, "101"], [`${FOLDER}/acme/platform/web-spex`, "102"], [`${FOLDER}/bob/shared-spex`, "103"]]) {
@@ -327,17 +325,14 @@ test("instances migration: every clone at the instance moves under its folder, i
     assert.deepEqual(await fileCredentialStore(root, "https://spex.pub").read(), { access: "ada-token", accessExpiresAt: 2, refresh: "ada-refresh" });
 
     // The sync preferences and the forge cache follow each moved clone;
-    // a clone that stays keeps its own; the seed your own group's config
+    // a clone that stays keeps its own; the seed the global config
     // took as the home opened stands aside (storage-5).
     const { "config:seed": _seed, ...prefs } = prefsIn(root);
     assert.deepEqual(prefs, {
       language: "en",
       [`sync:${FOLDER}/acme/platform/web-spex:last`]: { at: 1, sent: 1, received: 0 },
-      [`sync:${FOLDER}/acme/platform/web-spex:noticed`]: true,
       [`sync:${FOLDER}/ada/notes-spex:last`]: { at: 2, sent: 0, received: 1 },
-      "sync:ada/scratch-spex:noticed": true,
     });
-    assert.equal(store.getPref<boolean>(`sync:${FOLDER}/acme/platform/web-spex:noticed`), true);
     assert.equal(store.getForgeCache(`${FOLDER}/acme/platform/web-spex`)?.state.repo, "acme/web");
     assert.equal(store.getForgeCache("acme/platform/web-spex"), undefined);
     assert.equal(store.getForgeCache("ada/scratch-spex")?.state.repo, "ada/scratch");
@@ -469,8 +464,7 @@ test("instances migration: a restart after a clone's rename, before its records 
   // (storage-34).
   assert.equal(git(dir, "config", "--get", `remote.${FOLDER}.spexId`), "102");
   assert.equal(spawnSync("git", ["-C", dir, "config", "--get", "spex.repositoryId"], { env: gitEnv }).status, 1);
-  assert.equal(prefsIn(root)[`sync:${to}:noticed`], true);
-  assert.equal(prefsIn(root)["sync:acme/platform/web-spex:noticed"], undefined);
+  assert.deepEqual(prefsIn(root)[`sync:${to}:last`], { at: 1, sent: 1, received: 0 });
 });
 
 test("instances migration: a clone a live session's lease holds is deferred, keeping its key and remote, named in the receipt and listed by the store; once that lease is released the next open moves it, a dead owner's lease with it, in the same receipt", async () => {
@@ -496,7 +490,7 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
       assert.equal(git(workspace(root, held), "config", "--get", "spex.repositoryId"), "102");
       assert.equal(spawnSync("git", ["-C", workspace(root, held), "config", "--get", "remote.origin.spexId"], { env: gitEnv }).status, 1);
       assert.equal(store.home.keyForFolder(join(root, "work", "web")), held, "its pair stays");
-      assert.equal(prefsIn(root)[`sync:${held}:noticed`], true, "its preferences stay");
+      assert.deepEqual(prefsIn(root)[`sync:${held}:last`], { at: 1, sent: 1, received: 0 }, "its preferences stay");
       assert.deepEqual(store.deferredMoves(), [{ from: held, to, id: "102", url: `${GIT_ORIGIN}/${held}.git` }]);
       assert.ok(store.listRepositories().some((repository) => repository.key === held));
       // Every other clone moved.
@@ -525,7 +519,7 @@ test("instances migration: a clone a live session's lease holds is deferred, kee
       assert.equal(git(workspace(root, to), "config", "--get", `remote.${FOLDER}.spexId`), "102");
       assert.equal(spawnSync("git", ["-C", workspace(root, to), "config", "--get", "spex.repositoryId"], { env: gitEnv }).status, 1);
       assert.equal(store2.home.keyForFolder(join(root, "work", "web")), to);
-      assert.equal(prefsIn(root)[`sync:${to}:noticed`], true);
+      assert.deepEqual(prefsIn(root)[`sync:${to}:last`], { at: 1, sent: 1, received: 0 });
       assert.equal(store2.getForgeCache(to)?.state.repo, "acme/web");
       assert.deepEqual(store2.deferredMoves(), []);
     } finally { store2.close(); }

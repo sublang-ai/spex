@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Your own group's requests by path (environments-32, DR-125): the path
+// Global environment requests by path (environments-32, DR-125): the path
 // is relative to its clone's root, and names a folder below it that lies
 // outside Spex's own paths, is reached through no link, lies in no Git
 // repository of its own, and holds nothing the clone's sync drops or
@@ -15,7 +15,7 @@ import { join, posix } from "node:path";
 import { portable } from "../files.js";
 import { isInsidePath } from "./requests.js";
 
-/** Why a folder of your own group's clone cannot be a path source; an
+/** Why a folder of the global records repository cannot be a path source; an
  * `entry` or a `file` is its path in the clone. */
 export type OwnPathIssue =
   | { reason: "root" }
@@ -73,8 +73,8 @@ export function ignoredInClone(clone: string, paths: readonly string[]): string[
 }
 
 /**
- * The first reason `path` cannot name a path source of your own group's
- * clone by what its path shows (environments-32): below the root,
+ * The first reason `path` cannot name a path source in the global
+ * records repository by what its path shows (environments-32): below the root,
  * outside Spex's own paths, not ignored, reached through no link and in
  * no Git repository of its own. Null where none: a folder not made yet
  * is checked by these alone.
@@ -102,8 +102,8 @@ export function ownPathIssue(clone: string, path: string): OwnPathIssue | null {
 }
 
 /**
- * The first reason the folder at `path`, standing in your own group's
- * clone, holds what its sync drops or refuses (environments-32): a file
+ * The first reason the folder at `path`, in the global records
+ * repository, holds what its sync drops or refuses (environments-32): a file
  * of its release, `files` relative to the folder, the clone's Git rules
  * ignore or of an ignored family a Save refuses to share (space-15); or,
  * at any depth and where those rules do not ignore it, a Git repository
@@ -145,10 +145,8 @@ export function ownFolderIssue(clone: string, path: string, files: readonly stri
   return found.find((item) => !kept.has(item.probe))?.issue ?? null;
 }
 
-/** A path your own group's clone refuses, in the library's words
- * (environments-32), after the spec package's name: your own group is
- * Personal and its clone your Personal records on every surface
- * (DR-172); a host phrases the reason with what to do from the issue. */
+/** A path source refusal for the global records repository in CLI wording
+ * (environments-32). The app phrases the guidance from the issue. */
 export function ownPathMessage(name: string, path: string, issue: OwnPathIssue): string {
   switch (issue.reason) {
     case "root": return `${name}: ${path} is not a folder inside your Personal records`;

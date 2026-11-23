@@ -9,7 +9,7 @@ Done (2026-10-17).
 
 ## Intent
 
-Implement the "not done anything yet" condition of [DR-114](../decisions/114-groups-and-sharing-from-spex.md) exactly through [[space-59](../packages/space.md#space-59)]: a sign-in Save can carry authored configuration or environment changes, and a set-up commit subject can cover preexisting files, so neither proves that taking the instance's side loses nothing.
+Implement the "not done anything yet" condition of [DR-114](../decisions/114-groups-and-sharing-from-spex.md) exactly through `space-59`: a sign-in Save can carry authored configuration or environment changes, and a set-up commit subject can cover preexisting files, so neither proves that taking the instance's side loses nothing.
 The existing migrated workshop homes carry a migration commit and are outside the defective automatic-adoption case.
 
 ## Deliverables

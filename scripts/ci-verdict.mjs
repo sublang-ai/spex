@@ -51,7 +51,7 @@ export function verifyChecks(needs) {
     throw new Error("full validation has an incomplete selection");
   }
   const fullApp = full && outputs.channel === "app";
-  const expected = { test: !docsOnly, journeys: fullApp, "desktop-browser": fullApp, "hub-lane": fullApp };
+  const expected = { test: !docsOnly, journeys: fullApp, "desktop-browser": fullApp };
   const results = [];
   for (const [name, selected] of Object.entries(expected)) {
     const wanted = selected ? "success" : "skipped";

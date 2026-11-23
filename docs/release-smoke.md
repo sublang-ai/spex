@@ -9,9 +9,9 @@ What to run before tagging, by tier
 Full automated validation belongs to the release workflow: pushing a tag
 runs the channel's full CI on that exact tree before publication
 (release-18, [DR-199](../specs/decisions/199-release-gated-full-validation.md)).
-App validation includes the platform matrix, browser journeys, native
-browser acceptance and privileged hub lane; CLI validation runs its CLI
-suite across the platform matrix and script suites on Linux and macOS.
+App validation includes the platform matrix, browser journeys and native
+browser acceptance. CLI validation runs its suite across the platform
+matrix and the script suites on Linux and macOS.
 Nothing below repeats those suites, and a prior CI run is not required
 before tagging.
 
@@ -54,7 +54,7 @@ the README on this machine:
   port (`--port=0`) so it never meets a server already on 8137. It is
   walked over its printed token URL — the default loopback host with a
   generated token: the page served, the socket's hello, the config
-  seeded in your own group's spex repository under the home and valid with
+  seeded in your global records repository under the home and valid with
   every template playbook, the built-in catalog and the `/code`
   artifacts, readiness for the Captain's and each bound player's adapter
   (this machine's sign-ins; none is asserted ready and no agent is
@@ -258,4 +258,4 @@ publishes. Missing downloads or a failed build prevent that job.
 Mac downloads require Developer ID signing, Accepted Apple notarization and
 stapled tickets. Windows downloads remain unsigned; notes disclose this. Agent authentication remains the user's own setup.
 CLI tags require full CLI validation before building and inspecting the CLI
-tarball and publishing it; they do not run the app's browser or hub checks.
+tarball and publishing it.

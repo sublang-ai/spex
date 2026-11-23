@@ -3,9 +3,8 @@
 
 // What the core watches inside the clones under `workspace/`: each
 // clone's `sessions/`, so sessions another host writes appear as they are
-// written (core-service-60); each clone's config beside your own group's —
-// its `config/`, or the clone itself until that appears — and your own
-// group's config folder, so a changed config reloads (core-service-2).
+// written (core-service-60); each project's `config/` folder (or its clone
+// until that folder appears) and the global config folder, so a changed config reloads (core-service-2).
 //
 // On Windows a watch holds every folder above it where it lies: no rename
 // or removal of a folder holding a watched one is admitted there. A step
@@ -26,15 +25,15 @@ export interface CloneWatchesOptions {
   active: () => boolean;
   /** The clones as the store lists them now. */
   repositories: () => SpexRepository[];
-  /** Your own group's key. */
+  /** The global records repository's key. */
   own: () => string;
-  /** Your own group's config file as the core reads it now, which follows
-   * your own group's clone when it moves (space-59). */
+  /** The global config file as the core reads it now, which follows
+   * the global records repository when it moves (space-59). */
   configPath: () => string;
   /** Something changed in a clone's `sessions/`: the file it names, where
    * the platform names one. */
   sessionsChanged: (filename: string | null) => void;
-  /** A config file changed: your own group's, or a clone's beside it. */
+  /** A config file changed: the global config or a project's config. */
   configChanged: () => void;
   /** Watching resumed after a release: what a watch let go of would have
    * reported meanwhile is read once. */
@@ -56,7 +55,7 @@ export class CloneWatches {
   private readonly sessions = new Map<string, Watched>();
   private readonly configs = new Map<string, Watched>();
   /** The clones a release holds let go of, by key, with how many
-   * releases hold each; your own group's config folder likewise. */
+   * releases hold each; the global config folder likewise. */
   private readonly held = new Map<string, number>();
   private ownHeld = 0;
   private closed = false;
@@ -65,7 +64,7 @@ export class CloneWatches {
 
   /** Watch the clones as the store lists them now: a clone that appeared,
    * or moved, is watched where it lies, one that left loses its watches,
-   * your own group's config folder is watched where it now stands; what
+   * the global config folder is watched where it now stands; what
    * a release holds stays let go of. */
   update(): void {
     if (this.closed || !this.options.active()) return;
@@ -76,8 +75,8 @@ export class CloneWatches {
   }
 
   /**
-   * Let go of everything watched within the clones at `keys` — your own
-   * group's config folder too where it lies in one of them — and keep it
+   * Let go of everything watched within the clones at `keys` — the global
+   * config folder too where it lies in one of them — and keep it
    * let go of, whatever `update` is asked meanwhile, until the function
    * returned is called. That call watches the clones again wherever they
    * then lie, and has what a watch let go of would have reported read
@@ -123,7 +122,7 @@ export class CloneWatches {
     this.configs.clear();
   }
 
-  /** Your own group's config folder, watched while it stands where the
+  /** The global config folder, watched while it stands where the
    * config is now read. */
   private updateOwn(): void {
     const dir = dirname(this.options.configPath());
@@ -154,7 +153,7 @@ export class CloneWatches {
     }
   }
 
-  /** One watch per clone's config beside your own group's: its
+  /** One config watch per project: its
    * `config/`, or the clone until that appears, then inside it. */
   private updateConfigs(repositories: readonly SpexRepository[]): void {
     const own = resolve(this.options.configPath());

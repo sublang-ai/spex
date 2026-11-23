@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain home (DR-007, DR-135, DR-141): a welcome page until a
-// project exists — at a team server, its server form (DR-133) — then a
-// scoped task start with slash discovery. Props-driven so RUN-29/31
-// exercise it without a live core.
+// Welcome, project discovery and the Captain's task starter.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
@@ -21,8 +18,7 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { isLocalPlace, useAppStore, type StagedIntent } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore, type StagedIntent } from "../state/store.js";
 import { anySignedIn } from "../lib/instances.js";
 import { STEP_LINES, stoppedPhrase, type OpeningProject } from "../lib/space.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
@@ -69,7 +65,7 @@ export interface CaptainHomeProps {
   onRecheckReadiness?: () => Promise<unknown>;
   /** Settings at an adapter's agent card (run-view-45, settings-70). */
   onOpenAgentCard?: (adapter: string) => void;
-  /** The current project while this place opens it (run-view-168):
+  /** The current project while it opens on this computer (run-view-200):
    * its name over the join's step, or the join's cause where it
    * stopped, in place of the welcome page and the greeting. */
   opening?: OpeningProject;
@@ -78,12 +74,7 @@ export interface CaptainHomeProps {
   /** The welcome page's own-project path opens the palette without
    * repeating the Academy choice. */
   onOpenOwnProject?: () => void;
-  /** The welcome page's "Open a project from your groups" opens the
-   * palette at this place's "From your groups" (run-view-172,
-   * run-view-174); the plain palette where absent. */
-  onOpenFromGroups?: () => void;
-  /** Go to a surface at the place this home shows (run-view-168):
-   * the server form's "Open Space" opens Space there (run-view-174),
+  /** Go to a surface in this IDE,
    * and the local form's "Sign in to your Space" the Space surface's
    * sign-in (run-view-172); "Playbooks" opens the project's Playbooks
    * tab (DR-172). */
@@ -172,22 +163,15 @@ const WELCOME_PRIMARY =
 const WELCOME_SECONDARY =
   "rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
 
-/** The welcome page's one layout (run-view-172), which the server
- * form wears with the server's words (run-view-174): the badge, the
- * headline, the three connected steps, the actions, and the notices
- * the page keeps beneath them. */
+/** First-run project and sign-in actions. */
 function WelcomeFrame({
   headline,
   steps,
-  notice,
   actions,
   children,
 }: {
   headline: string;
   steps: WelcomeStep[];
-  /** A line standing above the actions: the server form's sign-in while
-   * the seat's runs (run-view-174). */
-  notice?: ReactNode;
   actions: ReactNode;
   children?: ReactNode;
 }) {
@@ -217,10 +201,9 @@ function WelcomeFrame({
             </li>
           ))}
         </ol>
-        {notice ? <div className="mt-6 max-w-lg text-sm leading-6 text-neutral-700 dark:text-neutral-200">{notice}</div> : null}
         {/* The actions stand in one row where they fit and wrap where
             they do not, never past the page's measure (DR-041). */}
-        <div className={`${notice ? "mt-4" : "mt-8"} flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center`}>
+        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           {actions}
         </div>
         {children}
@@ -230,7 +213,7 @@ function WelcomeFrame({
 }
 
 export function CaptainHome(props: CaptainHomeProps) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const { playbooks, captain, readiness, connected } = props;
   const [localText, setLocalText] = useState("");
   // Draft lives in the store when the host wires it (DR-010: surface
@@ -257,22 +240,20 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [captainPopover, setCaptainPopover] =
     useState<ReturnType<typeof popoverRoom>>();
   // With nothing registered the greeting itself carries the ways in
-  // (run-view-25); seeding is the store action the palette uses. The
-  // example is seeded at a folder this page names, so it is this
-  // computer's alone (run-view-169).
+  // (run-view-25), including the palette's Academy example action (projects-27).
   const openAcademyExample = store((state) => state.openAcademyExample);
-  const localGroups = useAppStore((state) => state.space);
+  const personalSpace = useAppStore((state) => state.space);
   const loadLocalSpace = useAppStore((state) => state.loadSpace);
   const [seeding, setSeeding] = useState(false);
-  // The welcome page offers the groups' projects while the home is
+  // The welcome page offers the personal projects while the home is
   // signed in to an instance and the sign-in while it is not
-  // (run-view-172): this computer's Groups state is read where nothing
+  // (run-view-172): this computer's Space state is read where nothing
   // has read it yet, the action waiting on that read.
   const localWelcome = !props.hasProject && !props.hasProjects;
-  const groupsUnread = localGroups === undefined;
+  const spaceUnread = personalSpace === undefined;
   useEffect(() => {
-    if (localWelcome && connected && groupsUnread) void loadLocalSpace().catch(() => {});
-  }, [localWelcome, connected, groupsUnread, loadLocalSpace]);
+    if (localWelcome && connected && spaceUnread) void loadLocalSpace().catch(() => {});
+  }, [localWelcome, connected, spaceUnread, loadLocalSpace]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
 
@@ -415,10 +396,8 @@ export function CaptainHome(props: CaptainHomeProps) {
   // Any real content reverts to the IM bottom-docked layout (DR-010 §8).
   const emptyCanvas = !configBroken && !error;
 
-  // The project this place is opening (run-view-168): named over the
-  // step in flight until its core lists it, when its own home takes
-  // over; a join that stopped reads its cause here, the Space row
-  // holding the way on (space-63).
+  // Show the selected opening until the core lists its project (run-view-200).
+  // A stopped opening keeps its cause and a way back to Space (run-view-201).
   if (!props.hasProject && props.opening) {
     const { name, step, stopped } = props.opening;
     return (
@@ -458,8 +437,6 @@ export function CaptainHome(props: CaptainHomeProps) {
   }
 
   if (!props.hasProject && !props.hasProjects) {
-    // The welcome page has its local form alone (run-view-172, DR-175): a
-    // seat holding no project has no page of its own.
     const delivery: WelcomeStep = {
       label: i18n._("Delivery"),
       text: i18n._("AI builds and reviews changes, with a record of each step"),
@@ -493,19 +470,16 @@ export function CaptainHome(props: CaptainHomeProps) {
                 ? i18n._("Opening…")
                 : i18n._("Open the Academy example")}
             </button>
-            {/* Beside them, the member's groups (run-view-172): their
-                projects while the home is signed in to an instance, the
-                Space surface's sign-in while it is not. */}
-            {localGroups === undefined ? null : anySignedIn(localGroups) ? (
+            {personalSpace === undefined ? null : anySignedIn(personalSpace) ? (
               <button
                 type="button"
-                data-testid="home-open-from-groups"
-                onClick={props.onOpenFromGroups ?? props.onOpenPalette}
+                data-testid="home-open-from-space"
+                onClick={() => props.onNavigate("Space")}
                 className={WELCOME_SECONDARY}
               >
                 {i18n._({
-                  id: "Open a project from your groups",
-                  comment: "welcome page action: opens the project palette at the projects of your groups this computer can open",
+                  id: "Open a project from Space",
+                  comment: "welcome page action: opens the Space surface to show projects available from a Space",
                 })}
               </button>
             ) : (
@@ -697,7 +671,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               {/* The next step its agent card gives (settings-63). */}
               {captainReadiness
                 ? faultsOf(captainReadiness).map((fault) => {
-                    const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP, seat: !isLocalPlace(store.place) });
+                    const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP });
                     return (
                       <span key={`${fault.kind}:${fault.requirement}`} title={guidance.text ? guidance.core : undefined}>
                         {" "}
@@ -839,9 +813,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The project's Playbooks tab lands on its id field
-                // (playbook-library-51), at the place shown here
-                // (run-view-168, DR-172).
+                // Open the project's new playbook form (playbook-library-51).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}

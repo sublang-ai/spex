@@ -4,7 +4,7 @@
 // The home file's encoding and its instances (storage-2, DR-103, DR-127,
 // DR-165): `home.yaml` names this device, the origin the home was
 // created with, every instance it has signed in to with its account,
-// your own group's folder name, and each working folder paired with its
+// the personal records folder's name, and each working folder paired with its
 // spex repository's key. This module reads and checks the file, and
 // adds, updates and removes an instance's entry; the pairings are the
 // app's, which checks them where it reads them. Either host changes the
@@ -32,11 +32,11 @@ const GROUP_NAME = /^[a-z0-9][a-z0-9-]*$/;
 export interface HomeAccount { id: string; login: string; displayName: string | null }
 /** An instance the home has signed in to (DR-127), by its canonical
  * origin: its client, the account it signed in as, whether it was
- * signed out since, and its display name as last read. */
-export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string }
+ * signed out since, and the display name and Git address last reported. */
+export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string; gitOrigin?: string }
 export interface HomeFolder { path: string; repository: string; aliases?: string[] }
 export interface HomeFile {
-  format: 2;
+  format: 2 | 3;
   device: string;
   /** The origin the home was created with: the default instance while
    * no instance is listed. */
@@ -65,14 +65,14 @@ export function kebab(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/** This device's user name as a group folder name (storage-2). */
+/** This device's user name as a personal records folder name (storage-2). */
 export function defaultOwnName(env: NodeJS.ProcessEnv = process.env): string {
   let name = "";
   try { name = userInfo().username; } catch { name = env.USER ?? env.USERNAME ?? ""; }
   return kebab(name) || "me";
 }
 
-/** Whether a name may stand as a group folder under `workspace/`. */
+/** Whether a name may stand as the personal records folder under `workspace/`. */
 export function isGroupName(value: string): boolean {
   return GROUP_NAME.test(value);
 }
@@ -96,11 +96,18 @@ function isOrigin(value: unknown): value is string {
   try { return canonicalOrigin(value) === value; } catch { return false; }
 }
 
-/** `home.yaml`'s format, refused unless it is this Spex's: format 1 says
- * the instances migration has not run (storage-1). */
+/** The reported Git endpoint can include a path but never credentials. */
+export function isSpaceGitOrigin(value: unknown): value is string {
+  if (typeof value !== "string" || !/^https?:\/\/[^/?#@\s]+(?:[/?#]|$)/i.test(value) || /[\s\x00-\x1f\x7f?#]/.test(value)) return false;
+  const url = URL.parse(value);
+  return url !== null && !url.username && !url.password;
+}
+
+/** Format 3 adds the saved Git address. Format 1 still requires the
+ * instances migration (storage-30). */
 function homeFormat(value: Record<string, unknown>, file: string): void {
   need(value.format !== 1, file, words().homeBeforeInstances());
-  knownFormat(value, file, 2);
+  knownFormat(value, file, [2, 3]);
 }
 
 function parseAccount(value: unknown, file: string): void {
@@ -113,7 +120,7 @@ export type FoldersCheck = (folders: readonly unknown[], file: string) => void;
 
 /**
  * `home.yaml`'s value checked field by field (storage-2): its format,
- * device, origin, your own group's name and every instance's entry —
+ * device, origin, the personal records folder's name and every instance's entry —
  * one per origin, and no two origins at one folder — and the pairings a
  * list, each entry checked by `checkFolders` where the host supplies it.
  * A malformed or unknown file is refused, never guessed at.
@@ -127,8 +134,10 @@ export function parseHomeFile(value: unknown, file: string, checkFolders?: Folde
   need(isOrigin(value.origin), file, notAnOrigin(value.origin));
   const folders = new Map<string, string>();
   for (const instance of value.instances) {
-    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName"], file);
+    closed(instance, ["origin", "clientId", "account"],
+      value.format === 3 ? ["signedOut", "displayName", "gitOrigin"] : ["signedOut", "displayName"], file);
     need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
+      (instance.gitOrigin === undefined || isSpaceGitOrigin(instance.gitOrigin)) &&
       (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
       (instance.displayName === undefined || typeof instance.displayName === "string"), file, invalidHome());
     need(isOrigin(instance.origin), file, notAnOrigin(instance.origin));
@@ -164,7 +173,7 @@ function originOf(origin: string, file: string): string {
 
 /** A new home, not yet written: a fresh device id unless one is
  * supplied, the origin the environment names, no instance signed in
- * to, and this device's user name as your own group. A URL the
+ * to, and this device's user name for its personal records folder. A URL the
  * environment names that is no instance's origin is refused as a
  * storage diagnostic of `file`. */
 export function newHomeFile(file: string, options: { own?: string; env?: NodeJS.ProcessEnv; device?: string } = {}): HomeFile {
@@ -237,6 +246,7 @@ export function withSignIn(home: HomeFile, origin: string, account: HomeAccount,
   const entry: HomeInstance = {
     origin: canonical, clientId: CLIENT_ID,
     account: { id: account.id, login: account.login, displayName: account.displayName },
+    ...(prior?.gitOrigin !== undefined ? { gitOrigin: prior.gitOrigin } : {}),
     ...(prior?.displayName !== undefined ? { displayName: prior.displayName } : {}),
   };
   const instances = index < 0 ? [...home.instances, entry] : home.instances.map((item, at) => at === index ? entry : item);
@@ -264,14 +274,15 @@ export function withoutInstance(home: HomeFile, origin: string): HomeFile | null
   return { ...home, instances: home.instances.filter((_, at) => at !== index) };
 }
 
-/** The home with an instance's display name as last read; null where it
- * is not listed. */
-export function withDisplayName(home: HomeFile, origin: string, displayName: string | null): HomeFile | null {
+/** The home with a listed Space's last display name and, when supplied,
+ * its Git address. Null where the Space is not listed. */
+export function withDisplayName(home: HomeFile, origin: string, displayName: string | null, gitOrigin?: string): HomeFile | null {
   const index = indexOf(home, origin);
   if (index < 0) return null;
   const { displayName: _, ...rest } = home.instances[index];
-  const entry: HomeInstance = displayName === null ? rest : { ...rest, displayName };
-  return { ...home, instances: home.instances.map((item, at) => at === index ? entry : item) };
+  const entry: HomeInstance = { ...rest, ...(displayName === null ? {} : { displayName }), ...(gitOrigin === undefined ? {} : { gitOrigin }) };
+  return { ...home, format: gitOrigin === undefined ? home.format : 3,
+    instances: home.instances.map((item, at) => at === index ? entry : item) };
 }
 
 // -- one step ----------------------------------------------------------------

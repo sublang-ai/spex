@@ -22,7 +22,7 @@ import { splitKey } from "./home.js";
 import type { HostRepository } from "@sublang/spex/git-host";
 import { UUID } from "@sublang/spex/files";
 import { INSTANCE_FOLDER_PATTERN as PROTOCOL_INSTANCE_FOLDER, REPOSITORY_KEY_PATTERN, UUID_PATTERN } from "./protocol.js";
-import { hostKey } from "./space-groups.js";
+import { hostKey } from "./space-catalog.js";
 
 // input, canonical origin, folder
 const CANONICAL: Array<[string, string, string]> = [
@@ -154,7 +154,7 @@ test("keys: a key splits into its instance's folder, the group path in that inst
   assert.deepEqual(splitKey("@spex.pub/acme/platform/a-spex"), { instance: "@spex.pub", group: "acme/platform", name: "a-spex" });
   assert.deepEqual(splitKey("@127.0.0.1_4100/ada/x-spex"), { instance: "@127.0.0.1_4100", group: "ada", name: "x-spex" });
   assert.deepEqual(splitKey("@spex.pub/a-spex"), { instance: "@spex.pub", group: "", name: "a-spex" });
-  // Your own group's and the local-only clones lie outside every
+  // The global and local project clones lie outside every
   // instance's folder.
   assert.deepEqual(splitKey("me/me-spex"), { instance: null, group: "me", name: "me-spex" });
   assert.deepEqual(splitKey("acme/platform/b-spex"), { instance: null, group: "acme/platform", name: "b-spex" });
@@ -169,9 +169,8 @@ test("keys: a key splits into its instance's folder, the group path in that inst
 
 test("keys: a listed repository's key is its path in the instance, under the instance's folder where one is named", () => {
   const listed = (fullPath: string, path: string): HostRepository => ({
-    id: "17", name: path, path, remoteUrl: "", visibility: "private", archived: false, empty: false, lfs: false, spexBranch: true, project: null,
-    group: { id: "3", fullPath, name: fullPath, kind: "group", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false } },
-    can: { manageMembers: false, transfer: false },
+    id: "17", name: path, path, remoteUrl: "", archived: false, empty: false, lfs: false, spexBranch: true, project: null,
+    group: { fullPath, kind: "user" },
   });
   assert.equal(hostKey(listed("acme/platform", "a-spex")), "acme/platform/a-spex");
   assert.equal(hostKey(listed("acme/platform", "a-spex"), "@spex.pub"), "@spex.pub/acme/platform/a-spex");

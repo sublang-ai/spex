@@ -14,6 +14,7 @@ Amended by [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) i
 Amended by [DR-205](205-agent-cards-read-alike.md): behind a third-party Claude service the seed's Claude agents take the provider's default in place of an official model name; the seed reads confirmed credentials, never an agent's home folder alone.
 
 Amended by [DR-201](201-shared-codex-subscription-access.md) only for a seed-only presence projection of a materialized access-only Codex snapshot; the launcher still chooses every agent setting.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the global records repository that holds the seeded configuration.
 
 ## Context
 

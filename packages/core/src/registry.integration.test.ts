@@ -114,7 +114,7 @@ test("core-service-144/storage-52: same-origin registry and Space grants stay in
   assert.ok(instanceOf(await restarted.client.expectOk("space.get", {}), host.url)?.signedIn);
 });
 
-test("core-service-144/hub-13: a self-managed Space seat installs canonical public packages but needs its own registry grant for private packages", { timeout: 120_000 }, async (t) => {
+test("core-service-144: a standalone core signed into a private Space installs canonical public packages but needs its own registry grant for private packages", { timeout: 120_000 }, async (t) => {
   const registryDir = join(harness.scratch, "independent-registry");mkdirSync(registryDir);
   const registry = await startStandinRegistry({ dir: registryDir });t.after(() => registry.close());
   const publicHost = await harness.startHost({ registry, displayName: "Public registry" }); publicHost.script.deviceInterval = 0;
@@ -130,23 +130,23 @@ test("core-service-144/hub-13: a self-managed Space seat installs canonical publ
     const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
     return fetch(url.origin === PUBLIC_REGISTRY_ORIGIN ? `${publicHost.url}${url.pathname}${url.search}` : input, init);
   };
-  const seat = await harness.startHome("registry-seat", { host: selfhost, project: false, extra: { registryFetch, seat: { serverId: "team-server", serverName: "Team", personId: "1001" } } });t.after(() => seat.stop());
-  await harness.signIn(seat, selfhost);
-  const projects = await seat.client.expectOk("space.get", {}); const own = projects.own.repositories.find((r) => r.own)!.key;
-  const env = await seat.client.expectOk("environment.get", { repository: own });
+  const home = await harness.startHome("registry-independent", { host: selfhost, project: false, extra: { registryFetch } });
+  t.after(() => home.stop());
+  await harness.signIn(home, selfhost);
+  const projects = await home.client.expectOk("space.get", {}); const own = projects.repositories.find((r) => r.own)!.key;
+  const env = await home.client.expectOk("environment.get", { repository: own });
   assert.deepEqual(env.registry, { origin: PUBLIC_REGISTRY_ORIGIN, legacy: false });
-  const state = await seat.client.expectOk("registry.get", { repository: own });assert.equal(state.account, null);
-  const publicInstall = await seat.client.expectOk("environment.request", { repository: own, name: "public/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.ok(publicInstall);
-  const denied = await seat.client.command("environment.request", { repository: own, name: "private/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.equal(denied.ok, false);
+  const state = await home.client.expectOk("registry.get", { repository: own });assert.equal(state.account, null);
+  const publicInstall = await home.client.expectOk("environment.request", { repository: own, name: "public/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.ok(publicInstall);
+  const denied = await home.client.command("environment.request", { repository: own, name: "private/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.equal(denied.ok, false);
   // [core-service-145] the registry by its descriptor's display name, with what to do.
-  assert.equal((await seat.client.expectOk("environment.get", { repository: own })).error, "private/guide is private or not at Public registry — Sign in to Public registry");
-  assert.equal(await fileCredentialStore(seat.dataDir, PUBLIC_REGISTRY_ORIGIN, "registry").read(), null);
-  await registrySignIn(seat, PUBLIC_REGISTRY_ORIGIN, publicHost);
-  assert.equal(publicHost.script.deviceRequests.at(-1)?.serverId, null, "registry sign-in inherits no seat grant");
-  const allowed = await seat.client.expectOk("environment.resolve", { repository: own, wait: true });assert.ok(allowed);
-  const installed = await seat.client.expectOk("environment.get", { repository: own });assert.ok(installed.packages.find((p) => p.name === "private/guide")?.installed);
-  assert.deepEqual((await seat.client.expectOk("registry.orgs", { repository: own })).orgs.map((org) => org.name), ["other", "private"]);
-  assert.ok(instanceOf(await seat.client.expectOk("space.get", {}), selfhost.url)?.signedIn);
+  assert.equal((await home.client.expectOk("environment.get", { repository: own })).error, "private/guide is private or not at Public registry — Sign in to Public registry");
+  assert.equal(await fileCredentialStore(home.dataDir, PUBLIC_REGISTRY_ORIGIN, "registry").read(), null);
+  await registrySignIn(home, PUBLIC_REGISTRY_ORIGIN, publicHost);
+  const allowed = await home.client.expectOk("environment.resolve", { repository: own, wait: true });assert.ok(allowed);
+  const installed = await home.client.expectOk("environment.get", { repository: own });assert.ok(installed.packages.find((p) => p.name === "private/guide")?.installed);
+  assert.deepEqual((await home.client.expectOk("registry.orgs", { repository: own })).orgs.map((org) => org.name), ["other", "private"]);
+  assert.ok(instanceOf(await home.client.expectOk("space.get", {}), selfhost.url)?.signedIn);
 });
 
 
@@ -194,8 +194,8 @@ test("core-service-144/environments-26: project registry selection edits its wor
   assert.deepEqual(readFileSync(join(root, "spex.lock")), lock, "selecting a registry leaves the exact working-root lock unchanged");
   for (const file of ["spex.yaml", "spex.lock"]) assert.equal(existsSync(join(project.clone, file)), false, `${file} is absent from the records clone`);
 
-  const bare = host.script.addRepository({ group: "acme", name: "unpaired-registry-spex" });
-  const key = hostKey(host, "acme/unpaired-registry-spex");
+  const bare = host.script.addRepository({ group: "ada", name: "unpaired-registry-spex" });
+  const key = hostKey(host, "ada/unpaired-registry-spex");
   let mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
   await home.client.waitSpace(mark, (value) => rowsOf(value).some((row) => row.key === key), 30_000);
@@ -245,7 +245,7 @@ test("space-118: placement changes only the Space binding and a current lock dig
     const requested = readFileSync(join(root, "spex.yaml"), "utf8");
     assert.match(requested, /^registry: https:\/\/spex.sublang.ai$/m);
     const from = home.client.messages.length;
-    await home.client.expectOk("space.pick", { repository: project.key, choice: { kind: "create", instance: second.url, groupId: "2002", name } });
+    await home.client.expectOk("space.pick", { repository: project.key, choice: { kind: "create", instance: second.url, name } });
     const message = await home.client.waitFor((entry) => home.client.messages.indexOf(entry) >= from && entry.type === "environment.state" && entry.state.pathRoot === folder && entry.state.instance === second.url);
     assert.equal(message.type, "environment.state");if (message.type !== "environment.state") throw new Error("Expected the placed environment");
     assert.deepEqual(message.state.registry, { origin: PUBLIC_REGISTRY_ORIGIN, legacy: false });

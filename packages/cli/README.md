@@ -90,9 +90,8 @@ refreshes the copy. The dry run shows the registry, the version and the
 files, and publishes nothing. Replace `my-org` with a namespace your
 registry account can use; check
 [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry) when using
-Spex Space. Your personal namespace may already be available after
-sign-in, so creating a Space group or claiming an organization is not a
-prerequisite.
+Spex Space. You can publish under your personal namespace when it is
+available after registry sign-in.
 
 ## spex.yaml and spex.lock
 
@@ -313,7 +312,7 @@ them in full.
   Space, check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry)
   in your registry account. A valid, available sign-in name becomes your
   personal namespace automatically; you can also claim an organization
-  you own. A Space group grants no publishing namespace.
+  you own.
 - Packages are public by default. **Private packages** restricts a
   namespace's packages to its personal owner or organization members.
 - A signed-in dry run and every publication check that the registry
@@ -366,8 +365,7 @@ spex logout --registry https://spex.sublang.ai
   your registry sign-in. A Space you signed out of stays listed as
   `signed out`.
 - Public packages need no sign-in. Private packages and publishing need
-  a registry sign-in on the computer running the command, a team server
-  included; a Space sign-in gives none.
+  a registry sign-in on the computer running the command.
 - A `<url>` is just the address, like `https://spex.sublang.ai`: the
   host, with a port where it is not the default, and no path. `http` is
   accepted only for a loopback address such as `localhost`.

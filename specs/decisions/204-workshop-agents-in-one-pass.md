@@ -10,6 +10,7 @@ Amends [DR-004](004-config-and-persistence.md) in its readiness: the credential 
 Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is reported: a kind of its own, never joined to the credential's reason.
 Amended by [DR-205](205-agent-cards-read-alike.md): one not-ready tone whoever uses the agent, one frame for every card, a Recommended tag until Claude is ready, the section's verdict, what is missing in plain text, and the online service's action enabled before its address; Claude Code's user settings reach every run through the core, since a run isolated from settings files reads none.
 Amended by [DR-206](206-the-workshop-points-to-its-guide.md): a not-ready card offers the setup guide alone, with no online service.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

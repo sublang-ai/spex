@@ -8,6 +8,7 @@
 Accepted (2026-11-08) under the owner's delegation to resolve Playbooks scrolling, Space width and the distance between a row and its records.
 Extends [DR-041](041-chrome-that-fits.md) with the content and scroll bounds of global Playbooks and Space, [DR-159](159-projects-in-groups-opened-where-you-work.md) with records expanded beneath their row, and [DR-198](198-consistent-inline-group-actions.md)'s attached presentation to those records.
 The dismissal and pending-operation contracts of [DR-211](211-a-panel-carries-its-own-way-out.md) and [DR-212](212-panel-dismissal-as-quiet-chrome.md) apply within the expansion.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for records attached to personal project rows.
 
 ## Context
 

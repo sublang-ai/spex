@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Playbooks and Packages tabs' fixtures (playbook-library, DR-104):
-// a home with your own group's spex repository and one project's, the
+// a home with your personal spex repository and one project's, the
 // own config's roster, the environments each installs, and what they
 // export — the shapes the core answers over the protocol, so a test
 // drives the real store and tabs against a stand-in client.
@@ -12,7 +12,7 @@ import {
   type ConfigState,
   type EnvironmentPackage,
   type EnvironmentState,
-  type GroupsState,
+  type SpaceState,
   type InstanceState,
   type PlaybookAvailability,
   type ProjectInfo,
@@ -20,7 +20,7 @@ import {
   type RepositoryState,
 } from "@sublang/spex-core/protocol";
 
-import { groupsState, instanceState, namespace, rowOf, type RowOver } from "./groups-state.js";
+import { spaceState, instanceState, rowOf, type RowOver } from "./space-state.js";
 
 export const NOW = Date.UTC(2026, 9, 6, 12);
 export const PROJECT_ID = "me/demo-spex";
@@ -31,10 +31,10 @@ export const PROJECT: ProjectInfo = {
   path: "/work/demo",
   name: "demo",
   registeredAt: NOW - 30 * 3_600_000,
-  repository: { key: PROJECT_ID, name: "demo-spex", group: "me", own: true },
+  repository: { key: PROJECT_ID, name: "demo-spex", },
 };
 
-/** Your own group's config: the roster every side's bindings name. */
+/** Your personal config: the roster every side's bindings name. */
 export const CONFIG_STATE: ConfigState = {
   status: "valid",
   seeded: false,
@@ -101,42 +101,37 @@ export function repository(over: RowOver = {}): RepositoryState {
     mergePending: false,
     placedAt: [],
     waiting: null,
-    members: 1,
-    visibility: "private",
     branch: null,
     local: [],
     incoming: [],
     conflicts: [],
     lastSync: null,
-    noticed: true,
     sync: { phase: "idle" },
-    can: { manageMembers: false, transfer: false },
     ...over,
   });
 }
 
-/** The home: your own group's spex repository and the project's, the
+/** The home: your personal spex repository and the project's, the
  * account signed in unless a test says otherwise — signed in nowhere,
- * the home lists no instance and the project's clone stands under your
- * own group. */
+ * the home lists no instance and the project's clone is local. */
 export function home(
   options: { syncing?: string; account?: InstanceState["account"] | null } = {},
-): GroupsState {
+): SpaceState {
   const sync = (key: string): RepositoryState["sync"] =>
     options.syncing === key
       ? { phase: "running", op: "sync", step: "check", since: NOW, cancelable: true }
       : { phase: "idle" };
-  const account = options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account;
+  const account = options.account === undefined ? { id: "7", login: "me", displayName: "Me" } : options.account;
   const own = repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) });
   const project = repository({ sync: sync(PROJECT_ID) });
-  return groupsState({
+  return spaceState({
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
     defaultInstance: "https://spex.example",
-    own: { name: "me", named: account === null, repositories: account === null ? [own, project] : [own] },
+    repositories: [own, project],
     instances: account === null
       ? []
-      : [instanceState("https://spex.example", { displayName: "Spex Example", account, readAt: NOW, groups: [namespace("me", [project])] })],
+      : [instanceState("https://spex.example", { displayName: "Spex Example", account, readAt: NOW })],
   });
 }
 

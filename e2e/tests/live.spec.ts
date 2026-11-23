@@ -202,7 +202,7 @@ test.describe("the app's own example", () => {
 
     // The tab lists it under the project's name, the authoring session
     // staying (playbook-library-10, playbook-library-61); the project's
-    // config names its players, your own group's says what they run on,
+    // config names its players, and the global config says what they run on,
     // and both roles run on claude.
     await expect(page.getByTestId("playbooks-project").getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId(`draft-row-${EXAMPLE_ID}`).getByTestId("draft-chip")).toContainText("Added");
@@ -399,7 +399,7 @@ test.describe("the changelog playbook", () => {
     await expect(page.getByTestId("playbooks-project").getByTestId("playbook-card-changelog")).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("draft-row-changelog").getByTestId("draft-chip")).toContainText("Added");
     await expect.poll(() => app.readProjectConfig()).toContain("changelog:");
-    // The project's config names the players, your own group's says
+    // The project's config names the players, and the global config says
     // what each runs on.
     const config = {
       players: (parse(app.readConfig()) as { players: Record<string, Block> }).players,

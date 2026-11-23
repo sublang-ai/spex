@@ -229,20 +229,17 @@ test.describe("players to set up", () => {
     await nav(page, "Settings").click();
     await expect(page.getByTestId("players-section")).toBeVisible();
 
-    // The project's config binds review's reviewer to a player your
-    // own group's roster lacks, by name alone (core-service-2), as a
-    // teammate's file arrives while the core runs: it reloads on the
-    // change, with no restart. The global environment places /inspect,
+    // The project's config binds review's reviewer to a player the
+    // global roster lacks, by name alone (core-service-2), as an
+    // updated file arrives while the core runs. The core reloads it. The global environment places /inspect,
     // which no entry binds: its role plays the default `dev.inspector`,
     // which the roster lacks too.
     mkdirSync(dirname(projectConfig), { recursive: true });
     writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
     expect(parse(app.readConfig()).playbooks.inspect).toBeUndefined();
 
-    // The surface names the file it writes — your own group's — by its
-    // path alone: no spex repository, and no project file offered as
-    // editable here, a project's playbooks and role bindings being its
-    // Playbooks tab's (settings-46).
+    // Settings edits the global config. Project playbooks and role
+    // bindings are edited in the project's Playbooks tab (settings-46).
     await expect(page.getByTestId("settings-scope")).toHaveCount(0);
     await expect(page.getByText(/Your own group's config|edited in Playbooks/)).toHaveCount(0);
     await expect(page.locator('[title*="edited in Playbooks"]')).toHaveCount(0);

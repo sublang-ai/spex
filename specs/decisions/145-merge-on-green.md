@@ -12,6 +12,7 @@ Amended by [DR-166](166-pull-requests-run-without-macos.md) in the pull request'
 Amended by [DR-185](185-the-suites-a-change-reaches.md) in the pull request's matrix and the suites it runs: the Linux test job on Node 22 alone, the journeys in three shards, and the test job running the suites the change reaches.
 
 Amended by [DR-199](199-release-gated-full-validation.md) in the merge gate and validation timing: one required `checks` result covers selected pull-request work; full validation runs for publication or explicit requests, with no automatic main or nightly run.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the retirement of the privileged hub validation lane.
 
 ## Context
 

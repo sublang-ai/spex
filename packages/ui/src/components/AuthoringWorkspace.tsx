@@ -26,11 +26,10 @@ import {
   DRAFT_STACK_DEFAULT,
   DRAFT_STACK_MAX,
   DRAFT_STACK_MIN,
-  isLocalPlace,
   type DraftRegisterForm,
   type DraftSourceMode,
 } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { draftChipTitle, draftChipTone, draftChipWord, draftMediaOwner, draftPackagePath } from "../lib/drafts.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import { i18n } from "../i18n.js";
@@ -137,7 +136,7 @@ export function AuthoringWorkspace({
    * publish leads to Space (playbook-library-93). */
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const draft = store((state) => state.drafts[draftId]);
   const media = useComposerAttachments(
     draftAttachmentKey(draftId),
@@ -262,11 +261,8 @@ export function AuthoringWorkspace({
     add: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
-  // A picked file and a pasted path name this computer's disk: a remote
-  // place's draft is on its server, so neither is offered there
-  // (run-view-169).
-  const local = isLocalPlace(store.place);
-  const pickFile = local && window.spexNative?.pickFile
+  // Use the shell's file picker when available (playbook-library-5).
+  const pickFile = window.spexNative?.pickFile
     ? () => window.spexNative!.pickFile!()
     : undefined;
 
@@ -527,7 +523,6 @@ export function AuthoringWorkspace({
                   editor={editor}
                   connected={connected}
                   pickFile={pickFile}
-                  pathEntry={local}
                   onMode={forShown((next: Partial<DraftSourceMode>) => setDraftSourceMode(draftId, next))}
                   onEditor={forShown((next: SpecEditorState | undefined) => setDraftEditor(draftId, next))}
                   onWrite={(input) => writeDraftSource(draftId, input)}

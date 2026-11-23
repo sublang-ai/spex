@@ -320,7 +320,7 @@ function violationOf(error: unknown, ops: readonly ConfigBatchOp[], top: unknown
 }
 
 /**
- * Apply a batch to your own group's file all or none (core-service-44):
+ * Apply a batch to the global config file all or none (core-service-44):
  * refused as a conflict where the file no longer stands at `revision`,
  * the operations applied in order and the result validated once, as a
  * whole, then written under the version read — a file changed
@@ -348,15 +348,15 @@ export async function editConfigBatch(
   return writeCandidate(path, candidate, version);
 }
 
-/** The operations a project's or another group's file takes: only its
+/** The operations a project's config file takes: only its
  * playbook entries, each naming its roles' players (core-service-2). */
 const PROJECT_OPS = new Set<ConfigEditOp["kind"]>(["playbook.add", "playbook.delete", "playbook.role.bind", "playbook.option.set"]);
 
 /**
- * Edit a project's or another group's config file (playbook-library-3,
+ * Edit a project's config file (playbook-library-3,
  * playbook-library-16): the operation applied comment-preservingly, the
- * candidate checked as a project's file and composed on top of your own
- * group's, written only when both pass. A missing file starts empty.
+ * candidate checked as a project's file and composed on top of the global
+ * config, written only when both pass. A missing file starts empty.
  */
 export async function editProjectConfigFile(
   path: string,
@@ -371,7 +371,7 @@ export async function editProjectConfigFile(
       ok: false,
       error: i18n._({
         id: "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings",
-        comment: "Refusal: an edit to a project's config file that only your own group's file may take",
+        comment: "Refusal: an edit to a project's config file that only the global config file may take",
       }),
     };
   }

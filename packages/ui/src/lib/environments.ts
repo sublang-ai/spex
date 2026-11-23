@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Packages and Playbooks pages' reading of environments (DR-104,
-// DR-176): your own group's spex repository, the global environment's
+// DR-176): your personal spex repository, the global environment's
 // place, where a publish goes, the words for sources, version requirements, Add, what a package
 // provides and the core's busy states, the built-in package, lists joined
 // in the reader's language, and the two name rules the tabs check in place.
@@ -13,7 +13,7 @@ import type {
   EnvironmentPackage,
   EnvironmentRequestSummary,
   EnvironmentState,
-  GroupsState,
+  SpaceState,
   PlaybookAvailability,
   RegistryState,
 } from "@sublang/spex-core/protocol";
@@ -30,13 +30,12 @@ export const SPEC_PACKAGE_NAME_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[
 export const PLAYBOOK_ID_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const PLAYBOOK_ID_MAX = 64;
 
-/** Your own group's spex repository: as Space reads it under your own
- * group (space-1), else as the playbook list names it. */
+/** The global records repository as Space or the playbook list names it. */
 export function ownRepositoryKey(
-  space: GroupsState | undefined,
+  space: SpaceState | undefined,
   own: readonly PlaybookAvailability[] | undefined,
 ): string | undefined {
-  return space?.own?.repositories?.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
+  return space?.repositories?.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
 /** The independent registry destination and publication account: the

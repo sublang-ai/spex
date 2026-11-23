@@ -31,7 +31,7 @@ When a page starts, the page shall paint in the choice it last read, kept in its
 
 #### localization-11
 
-When the home's choice changes [[core-service-109](core-service.md#core-service-109)] — whether or not this page's own resolution [[localization-2](#localization-2)] moves with it — a page shall re-read the live state it holds — the config, readiness, the Space, the diagnostics and the spec trees it caches with their notices — so every phrase the core composed for it [[core-service-111](core-service.md#core-service-111)] reads in the new language, while a record already written keeps the language it was written in ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md)); a remote place's state is the phrases its own core composed, re-read from it alone [[run-view-168](run-view.md#run-view-168)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
+When the home's choice changes [[core-service-109](core-service.md#core-service-109)] — whether or not this page's own resolution [[localization-2](#localization-2)] moves with it — a page shall re-read the live state it holds — the config, readiness, the Space, the diagnostics and the spec trees it caches with their notices — so every phrase the core composed for it [[core-service-111](core-service.md#core-service-111)] reads in the new language, while a record already written keeps the language it was written in ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md)).
 
 ### Rendering
 
@@ -57,7 +57,7 @@ Each package that composes text for the reader — the UI bundle, the desktop sh
 - entries are ordered by message, and extraction removes entries no source uses;
 - a glossary beside the UI bundle's catalogs fixes the Chinese term for each product noun, and every translation follows it ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
   - the role names Playbook defines, and Space, stay as authored;
-  - group is 群组, Personal 个人, Global 全局 ([DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)), project 项目, records 记录, this computer 本机, server 服务器, package and spec package 规约包, and registry 注册中心;
+  - Global is 全局 ([DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)), project 项目, records 记录, this computer 本机, package and spec package 规约包, and registry 注册中心;
   - the acts Update, Install, Add, Remove, Publish, Sync, Resolve and Combine are 更新, 安装, 添加, 移除, 发布, 同步, 解决 and 合并;
   - 实例, 托管平台, 注册表, 软件包, 放置 and 此设备 are no translation's term.
 

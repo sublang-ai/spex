@@ -27,6 +27,7 @@ Amended by [DR-192](192-choose-a-group-before-adding.md) in the group picker: a 
 Amended by [DR-203](203-groups-within-groups-and-deletion-review.md) in restoring creation inside a permitted group through its New group action.
 
 Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row vocabulary and actions: explicit record counts, neutral missing-code-remote status, and one overflow for all secondary acts.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
 
 ## Context
 

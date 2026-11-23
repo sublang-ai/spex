@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Git host client (git-host-1..21, DR-103, DR-114, DR-120): signs a
-// person in as a public client — the browser flow with PKCE on the
-// desktop, the device flow on the server shell — keeps the app token
-// current in `local/credentials.yaml` (storage-19), and reads and writes
-// the host's JSON routes under `/api/v1`: groups, spex repositories and
-// members, with what the host says the person may do and the roles it
-// grants, and the undo writes — a group renamed or deleted, a spex
-// repository moved — and the team servers a person may open a seat on
-// with the tickets that open one (git-host-29). A rate limit the host
-// answers holds a sync step's calls and the host read until the instant
-// it asked for, and refuses every other call meanwhile with the seconds
-// that remain (git-host-21).
+// Sign-in, credential storage and personal records requests for a Space.
+// Browser sign-in uses PKCE; device sign-in also works without a local
+// browser. The client keeps the grant current under local/credentials.yaml.
+// A rate limit holds opted-in calls until the Space's retry time.
 // It composes no reader-facing prose: a failure is a `HostError` carrying
 // its kind and the host's own words, which the core phrases where it
 // speaks (git-host-11). No secret ever enters an error message or a log
@@ -47,10 +39,6 @@ export const RATE_LIMIT_HOLD_MAX_MS = 120_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SLOW_DOWN_STEP_MS = 5_000;
 const LABEL_MAX = 80;
-/** The longest a server's id or a person's id may be in a device
- * request (git-host-27; the instance's own bound). */
-export const SEAT_ID_MAX = 64;
-
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH = MONTHS.join("|");
 /** The three forms of an HTTP date (RFC 9110 §5.6.7), always GMT. */
@@ -99,83 +87,31 @@ function trimUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-/** The person as the host reports them; `canCreateGroup` is whether the
- * host lets them create a group at the top (git-host-5, DR-114), false
- * where it says nothing. */
-export interface HostAccount { id: string; login: string; displayName: string | null; canCreateGroup: boolean }
+export interface HostAccount { id: string; login: string; displayName: string | null }
 
-/** What the host lets the person do in a group (git-host-5, DR-114,
- * DR-120): create a group inside it, add and remove its members, rename
- * it and delete it; false where the host says nothing, as for a
- * repository's group or your own. */
-export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean; restore?: boolean }
+export interface HostDescription { displayName: string; gitOrigin: string }
 
-/** A group as the host answers it (git-host-5): `fullPath` its path in
- * the instance, taken as given (DR-120); `kind` `user` for an account's
- * own group, the person's or another's. No page of the host is held. */
-export interface HostGroup { id: string | null; fullPath: string; name: string; kind: "user" | "group"; can: HostGroupCan; pendingDeletion?: boolean; deletionRoot?: string }
-
-export type HostGroupDeletion = { status: "scheduled"; group: HostGroup } | { status: "deleted" };
-export interface HostGroupContent { kind: "project" | "group" | "records" | "server"; name: string }
-
-/** One of the host's own roles (git-host-16): the id a client sends
- * back, the host's name for it, and whether it may push. */
-export interface HostRole { id: string; name: string; mayPush: boolean }
-
-/** The host's description (git-host-5): its name, its Git origin, and
- * the roles it grants in its own order, empty where it lists none. */
-export interface HostDescription { displayName: string; gitOrigin: string; roles: HostRole[] }
-
-/** A group or a spex repository at the host, by the host's id, whose
- * members are read, added or removed (git-host-8, git-host-16,
- * git-host-17). */
-export interface MembersTarget { kind: "group" | "repository"; id: string }
+/** Namespace identity as reported by the Space. */
+export interface HostNamespace { fullPath: string; kind: "user" | "group" }
 
 export interface HostRepository {
   id: string;
   name: string;
   path: string;
-  group: HostGroup;
+  group: HostNamespace;
   /** The Git URL the core hands to Git alone (git-host-5, DR-120). */
   remoteUrl: string;
-  visibility: string;
   archived: boolean;
   empty: boolean;
   lfs: boolean;
   spexBranch: boolean;
   project: Record<string, unknown> | null;
-  /** Whether the host lets the person add and remove its members
-   * (git-host-5, DR-114) and move it to another group (DR-120); false
-   * where it says nothing. */
-  can: { manageMembers: boolean; transfer: boolean };
 }
 
 export interface HostRepositoryDetail extends HostRepository {
   readOnly: null | { reason: "archived" | "access"; message: string };
   branch: { present: boolean; canPush: boolean | null; protected: boolean | null; blocked: boolean };
 }
-
-/** A member as the host lists them (git-host-8): `direct` where the
- * membership is the group's or repository's own, else `via` the path in
- * the instance of the group it comes through. */
-export interface HostMember { id: string; login: string; displayName: string | null; role: string; direct: boolean; via: string | null }
-
-/** A team server the person may open a seat on, as the instance lists it
- * (git-host-29, DR-133): its id, name and address — the https origin it
- * listens at — and its group by the instance's id, path, name and kind,
- * with no abilities. */
-export interface HostServer {
-  id: string;
-  name: string;
-  group: { id: string | null; fullPath: string; name: string; kind: "user" | "group" };
-  address: string;
-}
-
-/** A ticket the instance minted for a seat on one of its servers
- * (git-host-29): single use and short-lived — `expiresIn` its seconds —
- * presented to the server at its address. A secret: never held after the
- * caller presents it, never in a log or a message. */
-export interface HostTicket { ticket: string; expiresIn: number; server: { id: string; name: string; address: string } }
 
 export type HostErrorKind =
   | "pending"
@@ -188,9 +124,8 @@ export type HostErrorKind =
   | "bad_request";
 
 /** Why a sign-in ended without an account (git-host-2, git-host-3):
- * `account` a person other than a listed instance's account, `person` a
- * person other than the one a seat's device request named (git-host-27). */
-export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account" | "person";
+ * `account` a person other than the account listed for that Space. */
+export type SignInCause = "denied" | "expired" | "stopped" | "refused" | "state" | "unreachable" | "account";
 
 /**
  * A host answer other than success (git-host-11). `words` is the host's
@@ -438,11 +373,6 @@ export interface GitHostClientOptions {
   /** Test seam (git-host-21): the hold and per-request recovery bounds;
    * 120 s by default. */
   holdMaxMs?: number;
-  /** On a seat (git-host-27): the server's id and the admitted person's
-   * permanent account id at the instance, which the device request
-   * carries as `server_id` and `person_id`; a sign-in whose person bears
-   * another id ends `failed`, storing nothing. */
-  server?: { id: string; personId: string };
 }
 
 /** Whether a sign-in may store its token for the person it read
@@ -454,13 +384,6 @@ export type AdmitAccount = (account: HostAccount) => HostError | null;
  * its entry's account (git-host-2): `words` carries the entry's login. */
 export function anotherAccountError(login: string): HostError {
   return signInError("account", { words: login });
-}
-
-/** The refusal of a seat's sign-in as a person other than the one its
- * device request named (git-host-27): `words` carries the login the
- * instance signed in. */
-export function anotherPersonError(login: string): HostError {
-  return signInError("person", { words: login });
 }
 
 /** A running browser sign-in (git-host-2). */
@@ -526,7 +449,6 @@ export class GitHostClient {
   private readonly requestTimeoutMs: number;
   private readonly onHold?: (until: number) => void;
   private readonly holdMaxMs: number;
-  private readonly server?: { id: string; personId: string };
   private refreshing: Promise<StoredCredential> | null = null;
   private signIn: object | null = null;
   /** The instant the host's last rate limit asked every call to wait
@@ -536,7 +458,6 @@ export class GitHostClient {
   constructor(options: GitHostClientOptions) {
     this.url = trimUrl(options.url);
     this.scope = options.scope ?? "space";
-    if (this.scope === "registry" && options.server) throw new HostError("bad_request", { code: "registry_seat_forbidden" });
     this.clientId = options.clientId ?? CLIENT_ID;
     const label = options.label.trim();
     this.label = (label.length > 0 ? label : "Spex").slice(0, LABEL_MAX);
@@ -547,7 +468,6 @@ export class GitHostClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.onHold = options.onHold;
     this.holdMaxMs = options.holdMaxMs ?? RATE_LIMIT_HOLD_MAX_MS;
-    if (options.server) this.server = { id: options.server.id, personId: options.server.personId };
   }
 
   /** Whether the host's rate limit holds the calls now (git-host-21). */
@@ -556,14 +476,12 @@ export class GitHostClient {
   }
 
   /** `GET /api/v1/host`: the host's display name, the Git origin its
-   * credentials are valid for, and the roles it grants (git-host-5). */
+   * credentials are valid for (git-host-5). */
   async describe(options: HostCallOptions = {}): Promise<HostDescription> {
     const answer = await this.send("GET", "/api/v1/host", options);
     if (answer.status !== 200) throw answerError(answer);
     const body = record(answer.json);
-    // A host that lists no roles grants none through Spex.
-    const roles = body.roles === undefined || body.roles === null ? [] : list(body.roles).map(roleFrom);
-    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin), roles };
+    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin) };
   }
 
   /** Whether this device holds an app token for the host. */
@@ -697,20 +615,12 @@ export class GitHostClient {
    * The device flow (git-host-3): the host's user code and verification
    * URL, completed with the code where the host gives it, then polling the token endpoint at its interval, five seconds
    * slower on each `slow_down`, until the token, a denial or the expiry.
-   * On a seat, `ticket` is the one the member's client presented for it,
-   * on which the host may grant the code without its page (git-host-27).
    */
-  async startDeviceSignIn(options: { admit?: AdmitAccount; ticket?: string } = {}): Promise<DeviceSignIn> {
+  async startDeviceSignIn(options: { admit?: AdmitAccount } = {}): Promise<DeviceSignIn> {
     const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
-      // A seat names its server and the person it was opened for, both
-      // or neither, and the ticket where its start named one; off a seat
-      // no ticket is sent (git-host-27).
-      const seat = this.server
-        ? { server_id: this.server.id, person_id: this.server.personId, ...(options.ticket ? { ticket: options.ticket } : {}) }
-        : {};
-      const answer = await this.send("POST", "/api/v1/auth/device", { body: { scope: this.scope, client_id: this.clientId, label: this.label, ...seat } });
+      const answer = await this.send("POST", "/api/v1/auth/device", { body: { scope: this.scope, client_id: this.clientId, label: this.label } });
       if (answer.status !== 200) throw answerError(answer);
       const body = record(answer.json);
       start = {
@@ -873,13 +783,6 @@ export class GitHostClient {
     return accountFrom((await this.call("GET", (this.scope === "registry" ? "/api/v1/whoami?scope=registry" : "/api/v1/host/me"), undefined, options)).json);
   }
 
-  /** `GET /api/v1/host/groups`: the person's own group and every group
-   * they belong to. */
-  async groups(options: HostCallOptions = {}): Promise<HostGroup[]> {
-    const body = record((await this.call("GET", "/api/v1/host/groups", undefined, options)).json);
-    return list(body.groups).map(groupFrom);
-  }
-
   /** `GET /api/v1/host/repositories`, every page. */
   async repositories(options: HostCallOptions = {}): Promise<HostRepository[]> {
     const all: HostRepository[] = [];
@@ -906,115 +809,12 @@ export class GitHostClient {
     return detailFrom(body);
   }
 
-  /** `GET /api/v1/host/repositories/:id/members` or
-   * `GET /api/v1/host/groups/:id/members` (git-host-8): every member with
-   * the host's role name and source. */
-  async members(target: MembersTarget, options: HostCallOptions = {}): Promise<{ members: HostMember[] }> {
-    const body = record((await this.call("GET", membersPath(target), undefined, options)).json);
-    return { members: list(body.members).map(memberFrom) };
-  }
-
-  /**
-   * `POST /api/v1/host/groups` (git-host-15): a private group named
-   * `name` at the path `path`, inside the group `parentId` or at the top
-   * where it is null. A taken name throws `name_taken`, the host's
-   * refusal `host_refused` with its words.
-   */
-  async createGroup(input: { name: string; path: string; parentId: string | null }): Promise<HostGroup> {
-    const body = record((await this.call("POST", "/api/v1/host/groups", { name: input.name, path: input.path, parent_id: input.parentId })).json);
-    return groupFrom(body.group);
-  }
-
-  /**
-   * `PATCH /api/v1/host/groups/:id` (git-host-18): give a group of the
-   * instance the name, the path segment, or both, given. A path taken
-   * there throws `name_taken`, the host's refusal `host_refused` with
-   * its words.
-   */
-  async renameGroup(id: string, input: { name?: string; path?: string }): Promise<HostGroup> {
-    const fields: Record<string, string> = {};
-    if (input.name !== undefined) fields.name = input.name;
-    if (input.path !== undefined) fields.path = input.path;
-    const body = record((await this.call("PATCH", `/api/v1/host/groups/${encodeURIComponent(id)}`, fields)).json);
-    return groupFrom(body.group);
-  }
-
-  /** Request normal deletion through the confirmation-aware route
-   * (git-host-19). Older deployments are refused, never retried through
-   * the legacy route, whose behavior may permanently delete a group. */
-  async deleteGroup(id: string, confirmPath?: string): Promise<HostGroupDeletion> {
-    if (confirmPath === undefined || confirmPath.trim().length === 0) throw new HostError("bad_request", { code: "confirmation_required", words: "Confirm the group's path before deleting it." });
-    const body = record((await this.call("POST", `/api/v1/host/groups/${encodeURIComponent(id)}/deletion`, { confirm_path: confirmPath })).json);
-    if (body.status === "deleted") return { status: "deleted" };
-    if (body.status === "scheduled") {
-      const group = groupFrom(body.group);
-      if (group.id === id && group.pendingDeletion && group.deletionRoot) return { status: "scheduled", group };
-    }
-    throw new HostError("unreachable", { code: "malformed_answer" });
-  }
-
-  /** Read the Space's current contents, including contents omitted from
-   * the records listing. Members are not contents. */
-  async inspectGroupDeletion(id: string): Promise<{ group: HostGroup; contents: HostGroupContent[] }> {
-    const body = record((await this.call("GET", `/api/v1/host/groups/${encodeURIComponent(id)}/deletion`)).json);
-    const group = groupFrom(body.group);
-    if (group.id !== id || !Array.isArray(body.contents)) throw new HostError("unreachable", { code: "malformed_answer" });
-    const contents = body.contents.map((value): HostGroupContent => {
-      const item = record(value);
-      if (!["project", "group", "records", "server"].includes(String(item.kind)) || typeof item.name !== "string" || item.name.length === 0) throw new HostError("unreachable", { code: "malformed_answer" });
-      return { kind: item.kind as HostGroupContent["kind"], name: item.name };
-    });
-    return { group, contents };
-  }
-
-  /** Restore the group's normal scheduled deletion, where the Space
-   * permits it; no retention period is inferred by the client. */
-  async restoreGroup(id: string): Promise<HostGroup> {
-    const body = record((await this.call("POST", `/api/v1/host/groups/${encodeURIComponent(id)}/restore`, {})).json);
-    const group = groupFrom(body.group);
-    if (group.id !== id || group.pendingDeletion) throw new HostError("unreachable", { code: "malformed_answer" });
-    return group;
-  }
-
-  /**
-   * `POST /api/v1/host/repositories/:id/transfer` (git-host-20): move a
-   * spex repository into the group `groupId`, or the person's own group
-   * where it is null. A name taken there throws `name_taken`, the host's
-   * refusal `host_refused` with its words.
-   */
-  async transferRepository(id: string, groupId: string | null): Promise<HostRepository> {
-    const body = record((await this.call("POST", `/api/v1/host/repositories/${encodeURIComponent(id)}/transfer`, { group_id: groupId })).json);
-    return repositoryFrom(body.repository);
-  }
-
-  /**
-   * `POST …/members` (git-host-16): add the account the host lists under
-   * exactly `login` to the group or repository at the role whose id is
-   * `role`. No such account throws `not_found` with the host's words
-   * naming the login; a refusal `host_refused` with its words.
-   */
-  async addMember(target: MembersTarget, input: { login: string; role: string }): Promise<HostMember> {
-    const body = record((await this.call("POST", membersPath(target), { login: input.login, role: input.role })).json);
-    return memberFrom(body.member);
-  }
-
-  /**
-   * `DELETE …/members/:login` (git-host-17): remove the account under
-   * `login` from the group's or repository's own members. No account, or
-   * no membership of its own there, throws `not_found` with the host's
-   * words; a refusal `host_refused` with its words.
-   */
-  async removeMember(target: MembersTarget, login: string): Promise<void> {
-    await this.call("DELETE", `${membersPath(target)}/${encodeURIComponent(login)}`);
-  }
-
   /**
    * `POST /api/v1/host/repositories` (git-host-6): `name` is the whole
-   * repository name, `<name>-spex`; `groupId` null means the person's own
-   * group. A taken name throws `name_taken`.
+   * repository name, `<name>-spex`; creation uses the authenticated account’s namespace. A taken name throws `name_taken`.
    */
-  async create(input: { groupId: string | null; name: string; description: string }): Promise<{ status: "created"; repository: HostRepository } | { status: "pending"; message: string }> {
-    const answer = await this.call("POST", "/api/v1/host/repositories", { group_id: input.groupId, name: input.name, description: input.description });
+  async create(input: { name: string; description: string }): Promise<{ status: "created"; repository: HostRepository } | { status: "pending"; message: string }> {
+    const answer = await this.call("POST", "/api/v1/host/repositories", { group_id: null, name: input.name, description: input.description });
     const body = record(answer.json);
     if (answer.status === 202) return { status: "pending", message: pendingWords(body) };
     if (body.status !== "created") throw new HostError("unreachable", { code: "malformed_answer", status: answer.status });
@@ -1028,33 +828,6 @@ export class GitHostClient {
     if (answer.status === 202) return { status: "pending", message: pendingWords(body) };
     if (body.status !== "ready") throw new HostError("unreachable", { code: "malformed_answer", status: answer.status });
     return { status: "ready" };
-  }
-
-  /**
-   * `GET /api/v1/host/servers` (git-host-29): the servers the person may
-   * open a seat on, as the instance answers them, in its order. The
-   * client keeps nothing of the answer.
-   */
-  async servers(options: HostCallOptions = {}): Promise<HostServer[]> {
-    const body = record((await this.call("GET", "/api/v1/host/servers", undefined, options)).json);
-    return list(body.servers).map(serverFrom);
-  }
-
-  /**
-   * `POST /api/v1/host/servers/:id/tickets` (git-host-29): a ticket for a
-   * seat on the server `id`, as the instance answers it; the client keeps
-   * nothing of it. A server the instance does not list for the person
-   * throws `not_found`, a membership below the role it needs
-   * `host_refused`, each with the instance's words.
-   */
-  async ticket(id: string, options: HostCallOptions = {}): Promise<HostTicket> {
-    const body = record((await this.call("POST", `/api/v1/host/servers/${encodeURIComponent(id)}/tickets`, {}, options)).json);
-    const server = record(body.server);
-    return {
-      ticket: text(body.ticket),
-      expiresIn: positive(body.expires_in, 0),
-      server: { id: text(server.id), name: text(server.name), address: text(server.address) },
-    };
   }
 
   /** `POST /api/v1/host/credential` (git-host-9): the Git credential for
@@ -1134,14 +907,11 @@ export class GitHostClient {
   }
 
   /** Store an issued token in place of the pair its sign-in began over;
-   * the caller ends the sign-in in the same turn. On a seat, a person
-   * bearing another permanent id than the one the request named ends it
-   * naming the account signed in (git-host-27); a person `admit` refuses
+   * the caller ends the sign-in in the same turn. A person `admit` refuses
    * ends it with that refusal; and another pair stored meanwhile ends it
    * `stopped`, that pair kept: each stores nothing (git-host-2). */
   private publish(expected: StoredCredential | null, issued: Issued, admit?: AdmitAccount): { account: HostAccount } | { error: HostError } {
     try {
-      if (this.server && issued.account.id !== this.server.personId) return { error: anotherPersonError(issued.account.login) };
       const refused = admit?.(issued.account);
       if (refused) return { error: refused };
       return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
@@ -1162,7 +932,7 @@ export class GitHostClient {
     let refreshed = false;
     let recovery: ReadRecovery | undefined;
     const retryableRead = options.retryRead === true && waits && method === "GET"
-      && /^\/api\/v1\/host\/(?:me|groups|repositories(?:\?[^/]*|\/[^/?]+)?)$/.test(path);
+      && /^\/api\/v1\/host\/(?:me|repositories(?:\?[^/]*|\/[^/?]+)?)$/.test(path);
     const unchanged = (): void => {
       if (options.signal?.aborted) throw new HostWaitStopped();
       if (!this.credentials.replace(credential, credential)) throw new CredentialChanged();
@@ -1391,54 +1161,23 @@ function positive(value: unknown, fallback: number): number {
 
 function accountFrom(value: unknown): HostAccount {
   const body = record(value);
-  return { id: text(body.id), login: text(body.login), displayName: optionalText(body.display_name), canCreateGroup: flag(body.can_create_group) };
-}
-
-function groupFrom(value: unknown): HostGroup {
-  const body = record(value);
-  const can: Record<string, unknown> = isRecord(body.can) ? body.can : {};
-  return {
-    id: optionalText(body.id),
-    fullPath: text(body.full_path),
-    name: text(body.name),
-    kind: body.kind === "user" ? "user" : "group",
-    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete), ...(can.restore === true ? { restore: true } : {}) },
-    ...(body.pending_deletion === true ? { pendingDeletion: true } : {}),
-    ...(typeof body.deletion_root === "string" ? { deletionRoot: body.deletion_root } : {}),
-  };
-}
-
-function serverFrom(value: unknown): HostServer {
-  const body = record(value);
-  const { can: _can, ...group } = groupFrom(body.group);
-  return { id: text(body.id), name: text(body.name), group, address: text(body.address) };
-}
-
-function roleFrom(value: unknown): HostRole {
-  const body = record(value);
-  return { id: text(body.id), name: text(body.name), mayPush: flag(body.may_push) };
-}
-
-/** The members route of a group or a repository at the host. */
-function membersPath(target: MembersTarget): string {
-  return `/api/v1/host/${target.kind === "group" ? "groups" : "repositories"}/${encodeURIComponent(target.id)}/members`;
+  return { id: text(body.id), login: text(body.login), displayName: optionalText(body.display_name) };
 }
 
 function repositoryFrom(value: unknown): HostRepository {
   const body = record(value);
+  const namespace = record(body.group);
   return {
     id: text(body.id),
     name: text(body.name),
     path: text(body.path),
-    group: groupFrom(body.group),
+    group: { fullPath: text(namespace.full_path), kind: namespace.kind === "user" ? "user" : "group" },
     remoteUrl: text(body.remote_url),
-    visibility: text(body.visibility),
     archived: flag(body.archived),
     empty: flag(body.empty),
     lfs: flag(body.lfs),
     spexBranch: flag(body.spex_branch),
     project: isRecord(body.project) ? body.project : null,
-    can: { manageMembers: isRecord(body.can) && flag(body.can.manage_members), transfer: isRecord(body.can) && flag(body.can.transfer) },
   };
 }
 
@@ -1456,20 +1195,6 @@ function detailFrom(body: Record<string, unknown>): HostRepositoryDetail {
       protected: optionalFlag(branch.protected),
       blocked: flag(branch.blocked),
     },
-  };
-}
-
-function memberFrom(value: unknown): HostMember {
-  const body = record(value);
-  return {
-    id: text(body.id),
-    login: text(body.login),
-    displayName: optionalText(body.display_name),
-    role: text(body.role),
-    // A host that says nothing of the source lists the member as the
-    // group's or repository's own.
-    direct: typeof body.direct === "boolean" ? body.direct : true,
-    via: body.direct === false ? optionalText(body.via) : null,
   };
 }
 

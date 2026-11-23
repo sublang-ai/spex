@@ -104,8 +104,7 @@ export interface AuthorManagerOptions {
   configPath: string;
   env: NodeJS.ProcessEnv;
   /** The environment a compile's agent run inherits, read as each
-   * compile is asked for: on a seat, its credentials as they stand then
-   * (core-service-126); `env` where absent. */
+   * compile starts. Defaults to `env`. */
   agentEnv?: () => NodeJS.ProcessEnv;
   adapterImports?: PlayerAdapterImports;
   compileSpawner?: LineSpawner;
@@ -115,7 +114,7 @@ export interface AuthorManagerOptions {
    * once as each turn or compile starts (DR-111); it keeps what it read. */
   prepareConfig?: () => Promise<void>;
   readiness: (adapter: AdapterName) => boolean | null;
-  /** Ids a playbook of the project's or your own group's environment
+  /** Ids a playbook of the project's or the global environment
    * holds; a new session never takes one (playbook-library-51). */
   reservedIds: (projectId: string) => string[];
   /** The home's interface language as the core resolves it for its own
@@ -1817,7 +1816,7 @@ export class AuthorManager {
         command: id,
         intent: "(draft)",
         libraryDir: join(packageDir, "playbooks", this.drafts.language(id)),
-        // The compile's agent is an agent run (core-service-126).
+        // Pass the current agent environment to the compiler (core-service-155).
         env: this.options.agentEnv?.() ?? this.options.env,
         // Once admitted: the marker, the config as its files stand, and
         // the block that answers the draft as the compile's agent

@@ -58,7 +58,7 @@ test("playbook-library-123: the surface adds, binds and removes the global packa
   const projectId = app.projectId!;
 
   // A playbook authored in the global environment and added there: its
-  // spec package under development in your own group's clone, requested
+  // spec package under development in the global records clone, requested
   // by path from the global environment (playbook-library-51, -61).
   // Anonymous registry defaults intentionally suggest no org; this scenario
   // supplies the author's explicit choice, as the authoring UI permits.

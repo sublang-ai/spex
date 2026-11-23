@@ -4,7 +4,7 @@
 // Applets through a real core (applets-7, DR-161): a project whose
 // environment installs, from the stand-in registry, a release holding
 // an applet, and requests by path a folder of its working folder
-// holding an applet of another id, with your own group's environment
+// holding an applet of another id, with the global environment
 // installing the first release too. `applet.open` answers each
 // capability path, and real HTTP requests to the core's own endpoint
 // read what the table of applets-4 serves and refuse the rest, the
@@ -202,10 +202,10 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   assert.equal((await client.expectOk("applet.open", { repository: key, applet: APPLET_ID, project: key })).path, path, "[applets-3] the same ask answers the same path");
   const ownPath = (await client.expectOk("applet.open", { repository: own, applet: APPLET_ID, project: key })).path;
   assert.match(ownPath, CAPABILITY_PATH);
-  assert.notEqual(ownPath, path, "[applets-3] your own group's applet of the same id has a capability of its own");
+  assert.notEqual(ownPath, path, "[applets-3] the global environment's applet of the same id has a capability of its own");
   await client.expectError("applet.open", { repository: key, applet: "absent", project: key }, "not_found");
   await client.expectError("applet.open", { repository: "nobody/none-spex", applet: APPLET_ID, project: key }, "not_found");
-  // Your own group's spex repository pairs no working folder here.
+  // The global records repository pairs no working folder here.
   await client.expectError("applet.open", { repository: key, applet: APPLET_ID, project: own }, "not_found");
 
   // Served by the table, with the policy naming the request's own
@@ -305,7 +305,7 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
 
   // A working folder holding the home opens no window on it
   // (applets-4): the scratch root, which holds this core's home at
-  // `state/`, is a project too, your own group's applet shown for it.
+  // `state/`, is a project too, the global environment's applet shown for it.
   symlinkSync(join(dir, "state"), join(dir, "home-link"));
   const { id: outerKey } = await client.expectOk("project.register", { path: gitFolder(dir) });
   const outerPath = (await client.expectOk("applet.open", { repository: own, applet: APPLET_ID, project: outerKey })).path;
@@ -335,7 +335,7 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   await refused(notesPath, 404);
 
   // Once environment.remove and its install took the release away,
-  // its capability answers 404; your own group's still serves
+  // its capability answers 404; the applet from the global environment still serves
   // (applets-4). The missing path source goes first: a resolution
   // stops at it.
   await client.expectOk("environment.remove", { repository: key, name: "acme/notes-view", wait: true });

@@ -7,12 +7,11 @@
 // exists is always on screen while the tabs hold only what is open.
 // Two widgets, not one — a navigation list for the surfaces and one
 // ARIA tree for the projects — because "current surface" and
-// "selected session" are different words (run-view-67). Where any seat
-// is open, the tree lists each place's projects under a heading naming
-// the place, this computer's first, the heading a row of its own that
-// shows its place on the Projects surface (run-view-168).
+// "selected session" are different words (run-view-67).
+// Personal Space projects opening here appear as selectable rows
+// while the core registers them (run-view-200).
 
-import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
 import {
@@ -21,8 +20,7 @@ import {
   PROJECT_ATTENTION_WORDS,
   type AttentionItem,
 } from "../state/dashboard.js";
-import { useEachPlace } from "../state/place-context.js";
-import { LOCAL_PLACE_KEY } from "../state/store.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { isHistory } from "../lib/sessions.js";
 import { keyLabel } from "../lib/shortcuts.js";
@@ -68,7 +66,7 @@ export const SURFACE_LABELS: Record<Surface, () => string> = {
       id: "Playbooks",
       comment: "the rail's Playbooks destination: the global playbooks, which run in every project of yours",
     }),
-  Space: () => i18n._({ id: "Space", comment: "the Space destination: groups, projects and their shared records" }),
+  Space: () => i18n._({ id: "Space", comment: "the Space surface for personal projects and records" }),
   Settings: () => i18n._("Settings"),
 };
 
@@ -89,32 +87,19 @@ const SURFACE_ICONS: Record<Surface, IconName> = {
   Settings: "gear",
 };
 
-/** One place's projects in the tree (run-view-67, run-view-168): its
- * core's own state, and acts taken at that core. */
-export interface NavPlace {
-  /** The place's key: "local", or a seat's. */
-  key: string;
-  /** What the place is shown by: "This computer", or the server's name. */
-  label: string;
+/** The sidebar's project tree (run-view-67). */
+export interface ProjectTree {
   projects: ProjectInfo[];
-  /** The projects opening at this place (run-view-168): each listed
-   * after the projects, reading "Opening…" until the place's core lists
-   * it, selected while it is the current project. */
+  /** Projects still opening (run-view-200), listed after registered projects. */
   opening?: OpeningProject[];
   sessions: SessionInfo[];
   /** Non-idle attention by session id, the same derivation the badge
    * and the tab dots use (run-view-73). */
   attention: Map<string, AttentionItem>;
-  /** The place's current project, which starts disclosed. */
+  /** The current project, which starts disclosed. */
   currentProjectId?: string;
-  /** The session whose tab is showing at this place, if any. */
+  /** The session whose tab is showing, if any. */
   activeSessionId?: string;
-  /** Whether the Projects surface shows this place: only then is its
-   * current project's row the selected one. */
-  shown: boolean;
-  /** Show this place on the Projects surface — its current project's
-   * view, or its welcome page where it holds no project (run-view-168). */
-  onShow(): void;
   /** Explicit disclosure; a project with no entry follows current. */
   expanded: Record<string, boolean>;
   onExpanded(projectId: string, expanded: boolean): void;
@@ -131,13 +116,13 @@ export interface NavPlace {
 export interface NavRailProps {
   surface: Surface;
   onSurface(surface: Surface): void;
-  /** Cross-project attention count, every place's; rides the
+  /** Cross-project attention count shown on the
    * Dashboard entry. */
   attentionCount: number;
   collapsed: boolean;
   onCollapsed(collapsed: boolean): void;
-  /** Every place, this computer's first (run-view-168). */
-  places: NavPlace[];
+  /** Project rows and openings supplied by the IDE's core (run-view-67, run-view-200). */
+  projects: ProjectTree;
   onAddProject(): void;
   /** Config status / playbook count, the foot's other tenant. */
   foot?: ReactNode;
@@ -254,55 +239,25 @@ function projectRowName(
 
 interface Row {
   key: string;
-  kind: "place" | "project" | "session" | "action";
-  /** The place the row stands at. */
-  place: NavPlace;
-  /** The key of the project row this row belongs to; a place's
-   * heading row is its own. */
+  kind: "project" | "session" | "action";
+  /** The key of the project row this row belongs to. */
   projectRow: string;
   projectId: string;
-  /** What type-ahead matches: a place's name, a project's name or a
-   * session's title. */
+  /** What type-ahead matches: a project's name or a session's title. */
   label: string;
   activate(): void;
-}
-
-/** The key of a place's heading row (run-view-168). */
-function headingRowOf(place: NavPlace): string {
-  return `h:${place.key}`;
-}
-
-/** A place's key for one of its rows (run-view-168): the local place's
- * is the row's own, so this computer's rows read as they always have;
- * a seat's is qualified by its place, since one repository cloned at
- * two places has one project id at both. */
-function placed(place: NavPlace, key: string): string {
-  return place.key === LOCAL_PLACE_KEY ? key : `${key}@${place.key}`;
 }
 
 type Buckets = Map<string, { live: SessionInfo[]; idle: SessionInfo[] }>;
 
 export function NavRail(props: NavRailProps) {
-  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places: allPlaces } = props;
-  // A place stands in the tree while a seat holds a project or is
-  // opening one (run-view-67, run-view-168): this computer always, a
-  // seat only then, so a seat holding nothing adds no heading.
-  const places = useMemo(
-    () =>
-      allPlaces.filter(
-        (place) => place.key === LOCAL_PLACE_KEY || place.projects.length > 0 || (place.opening?.length ?? 0) > 0,
-      ),
-    [allPlaces],
-  );
-  // Keyed by each row's placed key (run-view-168): a project or a
-  // session at two places keeps two of each.
+  const { surface, onSurface, attentionCount, collapsed, onCollapsed, projects: treeState } = props;
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [focusKey, setFocusKey] = useState<string>();
   // A delete confirm names an unsent draft it would take (DR-010 §4),
-  // read from the session's own place.
-  const composers = useEachPlace((state) => state.composers);
-  const draftOf = (place: NavPlace, sessionId: string): string | undefined =>
-    composers.find((entry) => entry.store.place.key === place.key)?.value[sessionId]?.draft;
+  // read from the session.
+  const composers = useAppStore((state) => state.composers);
+  const draftOf = (sessionId: string): string | undefined => composers[sessionId]?.draft;
   // Deletion is destructive and irreversible, so it keeps one inline
   // confirmation at the row (DR-038, DR-010 §4).
   const [confirmDelete, setConfirmDelete] = useState<string>();
@@ -312,126 +267,96 @@ export function NavRail(props: NavRailProps) {
   const typeahead = useRef({ text: "", at: 0 });
   // One clock per render keeps every row's age consistent.
   const now = Date.now();
-  // A heading per place while any seat holds a project or is opening
-  // one (run-view-67): one place alone needs no heading.
-  const headed = places.length > 1;
-
-  const isExpanded = (place: NavPlace, projectId: string): boolean =>
-    place.expanded[projectId] ?? projectId === place.currentProjectId;
+  const isExpanded = (projectId: string): boolean =>
+    treeState.expanded[projectId] ?? projectId === treeState.currentProjectId;
 
   // A working session first, then the rest by last activity
   // (run-view-67): the recent window applies to the idle ones only.
-  // Each place's sessions bucket under that place's projects alone.
-  const byPlace = useMemo(() => {
-    const result = new Map<string, { buckets: Buckets; worst: Map<string, AttentionItem["kind"]> }>();
-    for (const place of places) {
-      const buckets: Buckets = new Map();
-      for (const project of place.projects) buckets.set(project.id, { live: [], idle: [] });
-      for (const session of place.sessions) {
-        const bucket = buckets.get(session.projectId);
-        if (!bucket) continue;
-        if (session.live || session.externalWriter) bucket.live.push(session);
-        else bucket.idle.push(session);
-      }
-      for (const bucket of buckets.values()) {
-        bucket.live.sort((a, b) => b.createdAt - a.createdAt);
-        bucket.idle.sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt));
-      }
-      const worst = new Map<string, AttentionItem["kind"]>();
-      for (const session of place.sessions) {
-        const item = place.attention.get(session.id);
-        if (!item) continue;
-        const prior = worst.get(session.projectId);
-        if (!prior || ATTENTION_RANK[item.kind] < ATTENTION_RANK[prior]) {
-          worst.set(session.projectId, item.kind);
-        }
-      }
-      result.set(place.key, { buckets, worst });
+  // Bucket each session under its project.
+  const { buckets, worst } = useMemo(() => {
+    const buckets: Buckets = new Map();
+    for (const project of treeState.projects) buckets.set(project.id, { live: [], idle: [] });
+    for (const session of treeState.sessions) {
+      const bucket = buckets.get(session.projectId);
+      if (!bucket) continue;
+      if (session.live || session.externalWriter) bucket.live.push(session);
+      else bucket.idle.push(session);
     }
-    return result;
-  }, [places]);
-  const bucketOf = (place: NavPlace, projectId: string) =>
-    byPlace.get(place.key)?.buckets.get(projectId) ?? { live: [], idle: [] };
+    for (const bucket of buckets.values()) {
+      bucket.live.sort((a, b) => b.createdAt - a.createdAt);
+      bucket.idle.sort((a, b) => (b.endedAt ?? b.createdAt) - (a.endedAt ?? a.createdAt));
+    }
+    const worst = new Map<string, AttentionItem["kind"]>();
+    for (const session of treeState.sessions) {
+      const item = treeState.attention.get(session.id);
+      if (!item) continue;
+      const prior = worst.get(session.projectId);
+      if (!prior || ATTENTION_RANK[item.kind] < ATTENTION_RANK[prior]) {
+        worst.set(session.projectId, item.kind);
+      }
+    }
+    return { buckets, worst };
+  }, [treeState.projects, treeState.sessions, treeState.attention]);
+  const bucketOf = (projectId: string) =>
+    buckets.get(projectId) ?? { live: [], idle: [] };
 
   // The rows the tree can reach right now, in visual order — the one
-  // list arrow keys, Home/End and type-ahead all walk, across places.
+  // list arrow keys, Home/End and type-ahead walk.
   const rows: Row[] = [];
-  for (const place of places) {
-    // A place's heading is a row too (run-view-168): the way to a place
-    // holding no project is its heading alone.
-    if (headed) {
-      const key = headingRowOf(place);
+  for (const project of treeState.projects) {
+    const projectRow = `p:${project.id}`;
+    const projectKey = project.id;
+    rows.push({
+      key: projectRow,
+      kind: "project",
+      projectRow,
+      projectId: project.id,
+      label: project.name,
+      activate: () => treeState.onPickProject(project.id),
+    });
+    if (!isExpanded(project.id)) continue;
+    const bucket = bucketOf(project.id);
+    const ended = showAll[projectKey] ? bucket.idle : bucket.idle.slice(0, RECENT_WINDOW);
+    for (const session of [...bucket.live, ...ended]) {
       rows.push({
-        key,
-        kind: "place",
-        place,
-        projectRow: key,
-        projectId: "",
-        label: place.label,
-        activate: () => place.onShow(),
-      });
-    }
-    for (const project of place.projects) {
-      const projectRow = placed(place, `p:${project.id}`);
-      const projectKey = placed(place, project.id);
-      rows.push({
-        key: projectRow,
-        kind: "project",
-        place,
+        key: `s:${session.id}`,
+        kind: "session",
         projectRow,
         projectId: project.id,
-        label: project.name,
-        activate: () => place.onPickProject(project.id),
+        label: session.title ?? "",
+        activate: () => treeState.onActivateSession(session.id),
       });
-      if (!isExpanded(place, project.id)) continue;
-      const bucket = bucketOf(place, project.id);
-      const ended = showAll[projectKey] ? bucket.idle : bucket.idle.slice(0, RECENT_WINDOW);
-      for (const session of [...bucket.live, ...ended]) {
-        rows.push({
-          key: placed(place, `s:${session.id}`),
-          kind: "session",
-          place,
-          projectRow,
-          projectId: project.id,
-          label: session.title ?? "",
-          activate: () => place.onActivateSession(session.id),
-        });
-      }
-      if (!showAll[projectKey] && bucket.idle.length > RECENT_WINDOW) {
-        rows.push({
-          key: placed(place, `m:${project.id}`),
-          kind: "action",
-          place,
-          projectRow,
-          projectId: project.id,
-          label: "",
-          activate: () => setShowAll((current) => ({ ...current, [projectKey]: true })),
-        });
-      }
+    }
+    if (!showAll[projectKey] && bucket.idle.length > RECENT_WINDOW) {
       rows.push({
-        key: placed(place, `n:${project.id}`),
+        key: `m:${project.id}`,
         kind: "action",
-        place,
         projectRow,
         projectId: project.id,
         label: "",
-        activate: () => place.onNewSession(project.id),
+        activate: () => setShowAll((current) => ({ ...current, [projectKey]: true })),
       });
     }
-    // A project opening at the place (run-view-168): a row with no
-    // sessions yet, reached and activated as a project's is.
-    for (const entry of place.opening ?? []) {
-      const projectRow = placed(place, `o:${entry.id}`);
-      rows.push({
-        key: projectRow,
-        kind: "project",
-        place,
-        projectRow,
-        projectId: entry.id,
-        label: entry.name,
-        activate: () => place.onPickProject(entry.id),
-      });
-    }
+    rows.push({
+      key: `n:${project.id}`,
+      kind: "action",
+      projectRow,
+      projectId: project.id,
+      label: "",
+      activate: () => treeState.onNewSession(project.id),
+    });
+  }
+  // Opening projects remain selectable (run-view-200).
+  for (const entry of treeState.opening ?? []) {
+    const projectRow = `o:${entry.id}`;
+    rows.push({
+      key: projectRow,
+      kind: "project",
+      projectRow,
+      projectId: entry.id,
+      label: entry.name,
+      activate: () => treeState.onPickProject(entry.id),
+    });
   }
   const focused = rows.some((row) => row.key === focusKey)
     ? focusKey
@@ -452,7 +377,7 @@ export function NavRail(props: NavRailProps) {
 
   function onTreeKeyDown(event: React.KeyboardEvent): void {
     // The focused row comes from the event, not from state: a burst of
-    // keys must not all navigate from the same stale place.
+    // keys need the latest focus position.
     const from =
       (event.target as HTMLElement | null)?.dataset?.row ?? focused;
     const index = rows.findIndex((row) => row.key === from);
@@ -478,14 +403,14 @@ export function NavRail(props: NavRailProps) {
       case "ArrowRight":
         if (row.kind === "project") {
           event.preventDefault();
-          if (!isExpanded(row.place, row.projectId)) row.place.onExpanded(row.projectId, true);
+          if (!isExpanded(row.projectId)) treeState.onExpanded(row.projectId, true);
           else if (rows[index + 1]) moveFocus(rows[index + 1].key);
         }
         return;
       case "ArrowLeft":
         event.preventDefault();
-        if (row.kind === "project" && isExpanded(row.place, row.projectId)) {
-          row.place.onExpanded(row.projectId, false);
+        if (row.kind === "project" && isExpanded(row.projectId)) {
+          treeState.onExpanded(row.projectId, false);
         } else {
           moveFocus(row.projectRow);
         }
@@ -516,14 +441,13 @@ export function NavRail(props: NavRailProps) {
     }
   }
 
-  /** Delete a session at its own place; its row's state is kept by
-   * its placed key. */
-  function deleteSession(place: NavPlace, sessionId: string): void {
-    const key = placed(place, sessionId);
+  /** Delete a session and track its row state by session ID. */
+  function deleteSession(sessionId: string): void {
+    const key = sessionId;
     setConfirmDelete(undefined);
     setDeleting((current) => ({ ...current, [key]: true }));
     setDeleteErrors(({ [key]: _, ...rest }) => rest);
-    void place
+    void treeState
       .onDeleteSession(sessionId)
       .catch((cause: Error) =>
         setDeleteErrors((current) => ({
@@ -595,14 +519,13 @@ export function NavRail(props: NavRailProps) {
 
   // Selection says where the reader is, so it follows the surface
   // (run-view-67): off Projects the surface's own entry is the only
-  // current place, and the remembered project lights again when
+  // current entry, and the remembered project is selected again when
   // Projects comes back.
-  // Of the places, only the one the surface shows has a selected row.
   const inWorkspace = surface === "Workspace";
-  const selectedProjectOf = (place: NavPlace): string | undefined =>
-    inWorkspace && place.shown ? place.currentProjectId : undefined;
-  const shownSessionOf = (place: NavPlace): string | undefined =>
-    inWorkspace && place.shown ? place.activeSessionId : undefined;
+  const selectedProjectOf = (): string | undefined =>
+    inWorkspace ? treeState.currentProjectId : undefined;
+  const shownSessionOf = (): string | undefined =>
+    inWorkspace ? treeState.activeSessionId : undefined;
 
   /** One selection voice: the active row wears the interaction hue,
    * the treatment the surface entries already use (run-view-73). */
@@ -630,19 +553,19 @@ export function NavRail(props: NavRailProps) {
   );
 
   /** One project node and, disclosed, its sessions — every row's key
-   * and test id placed (run-view-168), this computer's as they were. */
-  const projectNode = (place: NavPlace, project: ProjectInfo) => {
-    const open = isExpanded(place, project.id);
-    const bucket = bucketOf(place, project.id);
-    const worst = byPlace.get(place.key)?.worst.get(project.id);
-    const projectKey = placed(place, project.id);
+   * and test id placed (run-view-200), this computer's as they were. */
+  const projectNode = (project: ProjectInfo) => {
+    const open = isExpanded(project.id);
+    const bucket = bucketOf(project.id);
+    const mark = worst.get(project.id);
+    const projectKey = project.id;
     const listed = showAll[projectKey]
       ? bucket.idle
       : bucket.idle.slice(0, RECENT_WINDOW);
     const hidden = bucket.idle.length - listed.length;
-    const selectedProjectId = selectedProjectOf(place);
-    const shownSessionId = shownSessionOf(place);
-    const projectRow = placed(place, `p:${project.id}`);
+    const selectedProjectId = selectedProjectOf();
+    const shownSessionId = shownSessionOf();
+    const projectRow = `p:${project.id}`;
     return (
       <div key={projectKey} className="flex flex-col">
         <div
@@ -650,16 +573,16 @@ export function NavRail(props: NavRailProps) {
           aria-expanded={open}
           aria-selected={project.id === selectedProjectId}
           data-row={projectRow}
-          data-testid={placed(place, `sidebar-project-${project.id}`)}
+          data-testid={`sidebar-project-${project.id}`}
           tabIndex={focused === projectRow ? 0 : -1}
           onFocus={() => setFocusKey(projectRow)}
-          onClick={() => place.onPickProject(project.id)}
+          onClick={() => treeState.onPickProject(project.id)}
           title={
-            worst
+            mark
               ? i18n._("{path} — needs you", { path: project.path })
               : project.path
           }
-          aria-label={projectRowName(project.name, worst)}
+          aria-label={projectRowName(project.name, mark)}
           className={`${rowClass(
             project.id === selectedProjectId && !shownSessionId,
           )} group pl-0.5`}
@@ -667,7 +590,7 @@ export function NavRail(props: NavRailProps) {
           <button
             type="button"
             tabIndex={-1}
-            data-testid={placed(place, `sidebar-disclose-${project.id}`)}
+            data-testid={`sidebar-disclose-${project.id}`}
             aria-label={
               open
                 ? i18n._("Hide sessions in {project}", {
@@ -681,7 +604,7 @@ export function NavRail(props: NavRailProps) {
               // Disclosure is its own axis (DR-027): opening a
               // project never moves the workspace into it.
               event.stopPropagation();
-              place.onExpanded(project.id, !open);
+              treeState.onExpanded(project.id, !open);
             }}
             // A 24px target inside a shorter row: the negative
             // margins keep the row's height (DR-010 §7).
@@ -694,12 +617,12 @@ export function NavRail(props: NavRailProps) {
           </button>
           <Icon name="folder" className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{project.name}</span>
-          {worst ? (
+          {mark ? (
             <span
-              data-testid={placed(place, `sidebar-project-attention-${project.id}`)}
+              data-testid={`sidebar-project-attention-${project.id}`}
               aria-hidden
-              className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[worst]}`}
-              title={PROJECT_ATTENTION_WORDS[worst]()}
+              className={`h-2 w-2 shrink-0 rounded-full ${ATTENTION_MARK_CLASS[mark]}`}
+              title={PROJECT_ATTENTION_WORDS[mark]()}
             />
           ) : null}
           {/* The project's specs, a sidebar's step away for the
@@ -710,15 +633,15 @@ export function NavRail(props: NavRailProps) {
           <button
             type="button"
             tabIndex={-1}
-            data-testid={placed(place, `sidebar-specs-${project.id}`)}
+            data-testid={`sidebar-specs-${project.id}`}
             aria-label={i18n._("Open the specs of {project}", { project: project.name })}
             title={i18n._("Open the specs of {project}", { project: project.name })}
             onClick={(event) => {
               event.stopPropagation();
-              place.onOpenSpecs(project.id);
+              treeState.onOpenSpecs(project.id);
             }}
             className={`-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-100 ${
-              project.id === place.currentProjectId ? "" : "opacity-0"
+              project.id === treeState.currentProjectId ? "" : "opacity-0"
             }`}
           >
             <Icon name="file" className="h-3.5 w-3.5" />
@@ -727,38 +650,38 @@ export function NavRail(props: NavRailProps) {
         {open ? (
           <div role="group" className="flex flex-col">
             {[...bucket.live, ...listed].map((session) => {
-              const item = place.attention.get(session.id);
+              const item = treeState.attention.get(session.id);
               const life = lifeOf(session, item);
               const active = session.id === shownSessionId;
               // External ownership must be known idle before deletion.
               const deletable = !session.live && !session.externalWriter;
-              const sessionKey = placed(place, session.id);
-              const sessionRow = placed(place, `s:${session.id}`);
+              const sessionKey = session.id;
+              const sessionRow = `s:${session.id}`;
               const confirming = deletable && confirmDelete === sessionKey;
-              const draft = draftOf(place, session.id)?.trim();
+              const draft = draftOf(session.id)?.trim();
               return (
                 <div
                   key={session.id}
                   role="treeitem"
                   aria-selected={active}
                   data-row={sessionRow}
-                  data-testid={placed(place, `sidebar-session-${session.id}`)}
+                  data-testid={`sidebar-session-${session.id}`}
                   tabIndex={focused === sessionRow ? 0 : -1}
                   onFocus={() => setFocusKey(sessionRow)}
-                  onClick={() => place.onActivateSession(session.id)}
+                  onClick={() => treeState.onActivateSession(session.id)}
                   aria-label={sessionLabel(session, life, now, item)}
                   title={sessionLabel(session, life, now, item)}
                   className={`${rowClass(active)} group pl-6`}
                 >
                   <span
                     aria-hidden
-                    data-testid={placed(place, `sidebar-mark-${session.id}`)}
+                    data-testid={`sidebar-mark-${session.id}`}
                     data-life={life}
                     className={`h-2 w-2 shrink-0 rounded-full ${LIFE_MARKS[life]}`}
                   />
                   {confirming ? (
                     <span
-                      data-testid={placed(place, `sidebar-delete-confirm-${session.id}`)}
+                      data-testid={`sidebar-delete-confirm-${session.id}`}
                       onClick={stop}
                       onKeyDown={stop}
                       className="min-w-0 flex-1"
@@ -793,7 +716,7 @@ export function NavRail(props: NavRailProps) {
                           comment:
                             "cancel a destructive confirm: leave things as they are",
                         })}
-                        onConfirm={() => deleteSession(place, session.id)}
+                        onConfirm={() => deleteSession(session.id)}
                         onCancel={() => setConfirmDelete(undefined)}
                       />
                     </span>
@@ -810,7 +733,7 @@ export function NavRail(props: NavRailProps) {
                       </span>
                       {deleteErrors[sessionKey] ? (
                         <span
-                          data-testid={placed(place, `sidebar-delete-error-${session.id}`)}
+                          data-testid={`sidebar-delete-error-${session.id}`}
                           title={deleteErrors[sessionKey]}
                           className="shrink-0 truncate text-xs text-red-600 dark:text-red-400"
                         >
@@ -820,7 +743,7 @@ export function NavRail(props: NavRailProps) {
                         // The one time vocabulary (run-view-73): a
                         // compact age with the exact moment on hover.
                         <span
-                          data-testid={placed(place, `sidebar-age-${session.id}`)}
+                          data-testid={`sidebar-age-${session.id}`}
                           title={absoluteTitle(
                             session.endedAt ?? session.createdAt,
                           )}
@@ -843,7 +766,7 @@ export function NavRail(props: NavRailProps) {
                         // Tab regardless (DR-010 §6).
                         <button
                           type="button"
-                          data-testid={placed(place, `sidebar-delete-${session.id}`)}
+                          data-testid={`sidebar-delete-${session.id}`}
                           aria-label={i18n._("Delete session {title}", {
                             title:
                               session.title ?? i18n._("no messages yet"),
@@ -871,10 +794,10 @@ export function NavRail(props: NavRailProps) {
               <div
                 role="treeitem"
                 aria-selected={false}
-                data-row={placed(place, `m:${project.id}`)}
-                data-testid={placed(place, `sidebar-more-${project.id}`)}
-                tabIndex={focused === placed(place, `m:${project.id}`) ? 0 : -1}
-                onFocus={() => setFocusKey(placed(place, `m:${project.id}`))}
+                data-row={`m:${project.id}`}
+                data-testid={`sidebar-more-${project.id}`}
+                tabIndex={focused === `m:${project.id}` ? 0 : -1}
+                onFocus={() => setFocusKey(`m:${project.id}`)}
                 onClick={() =>
                   setShowAll((current) => ({
                     ...current,
@@ -893,11 +816,11 @@ export function NavRail(props: NavRailProps) {
             <div
               role="treeitem"
               aria-selected={false}
-              data-row={placed(place, `n:${project.id}`)}
-              data-testid={placed(place, `sidebar-new-${project.id}`)}
-              tabIndex={focused === placed(place, `n:${project.id}`) ? 0 : -1}
-              onFocus={() => setFocusKey(placed(place, `n:${project.id}`))}
-              onClick={() => place.onNewSession(project.id)}
+              data-row={`n:${project.id}`}
+              data-testid={`sidebar-new-${project.id}`}
+              tabIndex={focused === `n:${project.id}` ? 0 : -1}
+              onFocus={() => setFocusKey(`n:${project.id}`)}
+              onClick={() => treeState.onNewSession(project.id)}
               aria-label={i18n._("New task in {project}", {
                 project: project.name,
               })}
@@ -912,13 +835,10 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  /** A project opening at its place (run-view-168): its name as its
-   * code's, "Opening…" beside it and the step in flight as its title,
-   * selected while it is the place's current project; it discloses
-   * nothing, holding no session yet. */
-  const openingNode = (place: NavPlace, entry: OpeningProject) => {
-    const projectRow = placed(place, `o:${entry.id}`);
-    const selected = entry.id === selectedProjectOf(place) && !shownSessionOf(place);
+  /** An opening project's row gives its current step as a tooltip (run-view-200). */
+  const openingNode = (entry: OpeningProject) => {
+    const projectRow = `o:${entry.id}`;
+    const selected = entry.id === selectedProjectOf() && !shownSessionOf();
     const opening = i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" });
     return (
       <div
@@ -926,10 +846,10 @@ export function NavRail(props: NavRailProps) {
         role="treeitem"
         aria-selected={selected}
         data-row={projectRow}
-        data-testid={placed(place, `sidebar-opening-${entry.id}`)}
+        data-testid={`sidebar-opening-${entry.id}`}
         tabIndex={focused === projectRow ? 0 : -1}
         onFocus={() => setFocusKey(projectRow)}
-        onClick={() => place.onPickProject(entry.id)}
+        onClick={() => treeState.onPickProject(entry.id)}
         title={STEP_LINES[entry.step]()}
         aria-label={`${entry.name}, ${opening}`}
         // The folder icon aligns with a project row's, past the width
@@ -943,11 +863,6 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  const placeNodes = (place: NavPlace) => [
-    ...place.projects.map((project) => projectNode(place, project)),
-    ...(place.opening ?? []).map((entry) => openingNode(place, entry)),
-  ];
-
   const tree = (
     <div
       ref={treeRef}
@@ -957,48 +872,8 @@ export function NavRail(props: NavRailProps) {
       onKeyDown={onTreeKeyDown}
       className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
-      {headed
-        ? // A heading per place (run-view-67, run-view-168): each
-          // place's projects form a group named by the place, the
-          // heading its visible name.
-          places.map((place) => {
-            const headingRow = headingRowOf(place);
-            // The place the Projects surface shows is the current one
-            // while that surface is up (run-view-67).
-            const current = inWorkspace && place.shown;
-            return (
-              <div
-                key={place.key}
-                role="group"
-                aria-label={place.label}
-                data-place-key={place.key}
-                className="flex flex-col"
-              >
-                {/* The heading shows its place (run-view-168): a row the
-                    tree's keys reach, activated as every row is. */}
-                <div
-                  role="treeitem"
-                  aria-selected={false}
-                  aria-current={current ? "location" : undefined}
-                  data-row={headingRow}
-                  data-testid="sidebar-place-heading"
-                  tabIndex={focused === headingRow ? 0 : -1}
-                  onFocus={() => setFocusKey(headingRow)}
-                  onClick={() => place.onShow()}
-                  title={place.label}
-                  className={`w-full cursor-default truncate rounded-md px-1 pb-0.5 pt-1.5 text-left text-[11px] font-medium outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-brand-400 dark:hover:bg-neutral-800 ${
-                    current
-                      ? "text-brand-700 dark:text-brand-300"
-                      : "text-neutral-500 dark:text-neutral-400"
-                  }`}
-                >
-                  {place.label}
-                </div>
-                {placeNodes(place)}
-              </div>
-            );
-          })
-        : places.map((place) => <Fragment key={place.key}>{placeNodes(place)}</Fragment>)}
+      {treeState.projects.map(projectNode)}
+      {treeState.opening?.map(openingNode)}
     </div>
   );
 

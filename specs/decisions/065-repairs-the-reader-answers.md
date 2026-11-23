@@ -22,6 +22,7 @@ Amends in [DR-063](063-space-setup-and-repair.md), its ground upheld rather than
 
 Amends [DR-011](011-project-workspace.md)'s rule that the project palette is the one place a project is added: a repair adds one too, from the folder it already names and the reader's own answer.
 The palette remains where projects are browsed, chosen and created.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the naming of folder repairs by project.
 
 ## Context
 

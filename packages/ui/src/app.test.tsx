@@ -30,7 +30,7 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
  * here. Add a command to this table rather than teaching a caller to
  * survive a reply the protocol forbids. */
 function defaultReply(type: string): object {
-  if (type === "server.list") return { servers: [], failures: [] };
+  if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
   return type === "specs.get"
     ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
     : type === "environment.get"
@@ -38,7 +38,7 @@ function defaultReply(type: string): object {
       : type === "environment.playbooks"
         ? { project: [], own: [] }
         : type === "space.get"
-          ? groupsState()
+          ? spaceState()
           : type === "draft.list"
             ? []
             : type === "draft.defaults"
@@ -46,12 +46,8 @@ function defaultReply(type: string): object {
               : {};
 }
 
-vi.mock("./state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./state/store.js")>();
-  return { ...actual, getClient: () => ({ command: commandMock }) };
-});
-
 import { App } from "./App.js";
+import type { AttentionEntry, LedgerState } from "@sublang/spex-core/protocol";
 import {
   deliverServerMessageForTests,
   setClientForTests,
@@ -61,7 +57,7 @@ import { applyRecords, initialSessionView, type SessionView } from "./state/redu
 import { SHORTCUTS, keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { currentLocale } from "./i18n.js";
-import { groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
+import { spaceState, instanceState, repositoryRow } from "./fixtures/space-state.js";
 
 // A live clock: the rows print ages relative to now.
 const NOW = Date.now();
@@ -143,7 +139,7 @@ const SESSIONS: SessionInfo[] = [
 
 // The one attention fold (DR-035): the badge and every dot re-source
 // from the core-derived ledger, so the fixture serves one.
-const LEDGER = {
+const LEDGER: LedgerState = {
   intents: [],
   attention: [
     {
@@ -164,15 +160,15 @@ const LEDGER = {
     },
   ],
   badge: 2,
-} as never;
+};
 
 function seed(): void {
   useAppStore.setState({
     connection: "open",
     everConnected: true,
     projects: [
-      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "p1", name: "alpha-spex", group: "me", own: true } },
-      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } },
+      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "p1", name: "alpha-spex" } },
+      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex" } },
     ] as never,
     projectMeta: {},
     space: undefined,
@@ -215,15 +211,46 @@ beforeEach(() => {
   // The App re-pulls the ledger once connected (DR-035): the default
   // reply must keep serving the seeded fold.
   commandMock.mockImplementation(async (type: string) =>
-    type === "ledger.get" ? (LEDGER as object) : defaultReply(type),
+    type === "ledger.get" ? LEDGER : defaultReply(type),
   );
-  // Store actions resolve the module-local client, which the module
-  // mock above cannot reach.
+  // Store actions resolve the client injected through this seam.
   setClientForTests({
     command: commandMock,
     subscribe: vi.fn(async () => {}),
   } as never);
   seed();
+});
+
+test("run-view-96: a Dashboard failure between turns lands on the line at its onset", async () => {
+  const sessionId = "a-failed";
+  const onset = NOW - 10_000;
+  const ledger: LedgerState = {
+    intents: [],
+    attention: [{
+      band: "interrupted", kind: "failure", title: "Release failed",
+      projectId: "p1", sessionId, since: onset,
+    }],
+    badge: 1,
+  };
+  const records = [
+    { seq: 1, record: { type: "runtime_error", turnId: null, timestamp: onset - 1_000, message: "An earlier failure" } },
+    { seq: 2, record: { type: "runtime_error", turnId: null, timestamp: onset, message: "The release failed between turns" } },
+    { seq: 3, record: { type: "runtime_error", turnId: null, timestamp: onset + 1_000, message: "A later failure" } },
+  ];
+  commandMock.mockImplementation(async (type: string) => {
+    if (type === "ledger.get") return ledger;
+    if (type === "history.get") return { records };
+    if (type === "ledger.history") return { intents: [], more: false };
+    return defaultReply(type);
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /^Dashboard/ }));
+  fireEvent.click(await screen.findByTestId(`attention-act-${sessionId}`));
+
+  const error = await screen.findByText("The release failed between turns");
+  await vi.waitFor(() => expect(error.closest("[data-focus-key]")?.getAttribute("data-focused")).toBe("1"));
+  expect(screen.getByText("An earlier failure").closest("[data-focus-key]")?.getAttribute("data-focused")).toBeNull();
+  expect(screen.getByText("A later failure").closest("[data-focus-key]")?.getAttribute("data-focused")).toBeNull();
 });
 
 describe("run-view-70: the sidebar navigates, the tabs hold what is open", () => {
@@ -311,7 +338,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     // and tooltip (run-view-108).
     act(() => {
       useAppStore.setState({
-        ledger: { ...(LEDGER as Record<string, unknown>), badge: 12 } as never,
+        ledger: { ...LEDGER, badge: 12 },
       });
     });
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("9+");
@@ -534,7 +561,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
 
 describe("dismissed folder choices remain reachable through Space (DR-214)", () => {
   test.each([false, true])("Space review preserves zero-count choices across visits and reload (collapsed: %s)", async (collapsed) => {
-    let space = groupsState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
+    let space = spaceState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
       file: `workspace/personal/${name}`, reason: "No project folder registered", blocking: false,
       repair: { kind: "repository" as const, repository: `personal/${name}`, projectName: name,
         key: `${name}|/old/${name}`, directories: [`/old/${name}`], sessions: 1,
@@ -559,7 +586,9 @@ describe("dismissed folder choices remain reachable through Space (DR-214)", () 
     await act(async () => {});
     // Recovery uses the existing named destination in either rail state.
     expect(screen.queryByTestId("sidebar-locate-files")).toBeNull();
-    expect(screen.queryByTestId("sidebar-place-heading")).toBeNull();
+    const tree = within(screen.getByRole("navigation", { name: "Spex navigation" })).queryByRole("tree", { name: "Projects and sessions" });
+    if (collapsed) expect(tree).toBeNull();
+    else expect(within(tree!).queryAllByRole("treeitem")).toEqual([]);
     const openSpace = async () => {
       const entry = screen.getByRole("button", { name: "Space" });
       entry.focus();
@@ -618,7 +647,7 @@ describe("saved conversations without project files (DR-195)", () => {
       id: "saved-unpaired", projectId: "personal/notes-spex", projectPath: "/old/notes",
       title: "Plan the launch", players: [], initialVisible: [], continuable: undefined,
     });
-    const space = groupsState({ diagnostics: [{
+    const space = spaceState({ diagnostics: [{
       file: "workspace/personal/notes-spex", reason: "No project folder is registered", blocking: false,
       repair: {
         kind: "repository", repository: saved.projectId, key: "notes|/old/notes",
@@ -857,6 +886,113 @@ describe("run-view-50: a boot that never connects says so, after its grace", () 
   });
 });
 
+describe("run-view-202: one app-wide region announces changes", () => {
+  test("announces one loss and restoration through retries, without announcing startup", async () => {
+    const ledger: LedgerState = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) => type === "ledger.get" ? ledger : defaultReply(type));
+    useAppStore.setState({ connection: "connecting", everConnected: false, ledger });
+    render(<App />);
+    const live = screen.getByTestId("app-live");
+    expect(live.getAttribute("role")).toBe("status");
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "open", everConnected: true }));
+    expect(live.textContent).toBe("");
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.textContent).toBe("Connection to the Spex core lost — reconnecting.");
+    const loss = live.firstElementChild;
+    act(() => useAppStore.setState({ connection: "connecting" }));
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect(live.firstElementChild).toBe(loss);
+    act(() => useAppStore.setState({ connection: "open" }));
+    expect(live.textContent).toBe("Connection restored.");
+    await act(async () => {});
+    expect(screen.getByTestId("app-live")).toBe(live);
+  });
+
+  test("baselines a populated first read and announces a new question once when its count rises", async () => {
+    useAppStore.setState({ ledger: undefined });
+    let initialRead: (ledger: LedgerState) => void = () => {};
+    commandMock.mockImplementation(async (type: string) =>
+      type === "ledger.get" ? new Promise<LedgerState>((resolve) => { initialRead = resolve; }) : defaultReply(type),
+    );
+    render(<App />);
+    const live = screen.getByTestId("app-live");
+    await act(async () => initialRead(LEDGER));
+    expect(live.textContent).toBe("");
+    const question: AttentionEntry = {
+      band: "interrupted", kind: "question", title: "Which branch?",
+      projectId: "p1", sessionId: "a-idle", since: NOW,
+    };
+    act(() => useAppStore.setState({
+      ledger: { ...LEDGER, attention: [...LEDGER.attention, question], badge: LEDGER.badge + 1 },
+    }));
+    expect(live.textContent).toBe("A player is waiting for your reply: Which branch?");
+  });
+
+  test("announces increases and new questions, including a question replacing existing attention", async () => {
+    const ledger: LedgerState = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string) => type === "ledger.get" ? ledger : defaultReply(type));
+    useAppStore.setState({ ledger });
+    render(<App />);
+    await act(async () => {});
+    const live = screen.getByTestId("app-live");
+    const review: AttentionEntry = {
+      band: "finished", kind: "review", title: "Review migration", projectId: "p1", sessionId: "a-live", since: 10,
+    };
+    const question: AttentionEntry = {
+      ...review, band: "interrupted", kind: "question", title: "Which migration?", since: 20,
+    };
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [review], badge: 1 } }));
+    expect(live.textContent).toBe("1 session needs your attention");
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [question], badge: 1 } }));
+    expect(live.textContent).toBe("A player is waiting for your reply: Which migration?");
+    const announcement = live.firstElementChild;
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [{ ...question }], badge: 1 } }));
+    expect(live.firstElementChild).toBe(announcement);
+    act(() => useAppStore.setState({ ledger }));
+    expect(live.firstElementChild).toBe(announcement);
+    act(() => useAppStore.setState({ ledger: { ...ledger, attention: [review], badge: 1 } }));
+    expect(live.textContent).toBe("1 session needs your attention");
+    expect(live.firstElementChild).not.toBe(announcement);
+  });
+});
+
+test("run-view-203: choose an opening project and recover a stopped opening in Space", async () => {
+  const key = "ada/incoming-spex";
+  const incoming = repositoryRow(key, {
+    name: "incoming-spex",
+    sync: { phase: "running", op: "join", step: "check", since: NOW, cancelable: false },
+  });
+  const space = spaceState({ repositories: [incoming] });
+  commandMock.mockImplementation(async (type: string) => type === "space.get" ? space : defaultReply(type));
+  useAppStore.setState({ space });
+  render(<App />);
+  const row = screen.getByRole("treeitem", { name: "incoming, Opening…" });
+  expect(row.getAttribute("aria-selected")).toBe("false");
+  fireEvent.click(row);
+  expect(row.getAttribute("aria-selected")).toBe("true");
+  const opening = screen.getByTestId("project-opening");
+  expect(within(opening).getByRole("heading", { name: "incoming" })).toBeTruthy();
+  expect(row.getAttribute("title")).toBe("Checking…");
+  expect(within(opening).getByRole("status").textContent).toBe("Checking…");
+  act(() => useAppStore.setState({
+    space: { ...space, repositories: [{
+      ...incoming,
+      sync: {
+        phase: "stopped", op: "join", step: "check", cause: "unreachable",
+        message: "Space is unavailable", guidance: "", retry: true,
+      },
+    }] },
+  }));
+  expect(screen.queryByRole("treeitem", { name: "incoming, Opening…" })).toBeNull();
+  expect(within(opening).getByRole("status").textContent).toBe("Checking stopped — Space is unavailable");
+  fireEvent.click(within(opening).getByRole("button", { name: "Open Space" }));
+  expect(await screen.findByTestId("space-surface")).toBeTruthy();
+});
+
 describe("run-view-81: the reader sets the Captain/players split", () => {
   // The split rides a custom property the side-by-side form reads;
   // stacked below 42rem the column is full width (run-view-107).
@@ -924,73 +1060,6 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-172: first-project welcome route", () => {
-  test("space-58: pending palette submission survives shortcuts, and feedback survives close and repeated refusals", async () => {
-    const added = {
-      id: "me/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 0,
-      repository: { key: "me/gamma-spex", name: "gamma-spex", group: "me", own: true },
-    };
-    const space = groupsState({
-      own: { name: "me", named: true, repositories: [repositoryRow(added.id, { folder: added.path })] },
-      instances: [instanceState("https://example.test", { displayName: "Example" })],
-    });
-    const ledger = { intents: [], attention: [], badge: 0 };
-    let picks = 0;
-    let finishPick!: () => void;
-    commandMock.mockImplementation(async (type: string) => {
-      if (type === "project.register") return added;
-      if (type === "project.list") return [added];
-      if (type === "space.get") return space;
-      if (type === "ledger.get") return ledger;
-      if (type === "space.pick") {
-        if (++picks < 3) throw new Error("Destination unavailable");
-        await new Promise<void>((resolve) => { finishPick = resolve; });
-        return { accepted: true };
-      }
-      return defaultReply(type);
-    });
-    useAppStore.setState({
-      projects: [], sessions: [], views: {}, currentProjectId: undefined,
-      activeSessionId: undefined, workspaceTabs: {}, openTabs: {},
-      ledger: ledger as never, space,
-    });
-    render(<App />);
-    fireEvent.click(screen.getByTestId("home-add-project"));
-    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: added.path } });
-    fireEvent.click(screen.getByTestId("palette-add"));
-    const picker = await screen.findByTestId(`space-picker-${added.id}`);
-    fireEvent.click(within(picker).getByTestId("space-pick-group-@me"));
-    const submit = within(picker).getByTestId(`space-pick-submit-${added.id}`);
-    const live = screen.getByTestId("app-live");
-    await vi.waitFor(() => expect(submit).toHaveProperty("disabled", false));
-    fireEvent.click(submit);
-    await vi.waitFor(() => expect(live.textContent).toBe("Destination unavailable"));
-    const previousAnnouncement = live.firstElementChild;
-    fireEvent.click(submit);
-    await vi.waitFor(() => {
-      expect(picks).toBe(2);
-      expect(live.textContent).toBe("Destination unavailable");
-      expect(live.firstElementChild).not.toBe(previousAnnouncement);
-    });
-    fireEvent.click(submit);
-    await vi.waitFor(() => expect(picks).toBe(3));
-    expect(document.activeElement).toBe(picker);
-    // These bubble to App's real palette-toggle shortcut unless the
-    // pending dialog consumes them. Neither may hide a running write.
-    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
-      fireEvent.keyDown(document.activeElement!, { key: "p", ...modifier });
-      expect(screen.getByTestId(`space-picker-${added.id}`)).toBe(picker);
-      expect(document.activeElement).toBe(picker);
-      expect(picks).toBe(3);
-    }
-    await act(async () => { finishPick(); });
-    await vi.waitFor(() => {
-      expect(screen.queryByTestId("project-palette")).toBeNull();
-      expect(live.textContent).toBe("Adding gamma to Personal at Example");
-    });
-    expect(live.isConnected).toBe(true);
-    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole("main", { name: "Space" })));
-  });
-
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],
@@ -1033,7 +1102,7 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
     useAppStore.setState({ configState: valid("code"), workspaceTabs: { p1: "start" } });
     render(<App />);
 
-    // Your own group's config enables /code alone; the project's on top
+    // Your personal config enables /code alone; the project's on top
     // adds /decide, which the Captain home's menu offers.
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: "p1" }),
@@ -1061,7 +1130,7 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
     expect(menu.textContent).not.toContain("/decide");
   });
 
-  test("a project whose composition is refused offers your own group's catalog", async () => {
+  test("a project whose composition is refused offers your personal catalog", async () => {
     commandMock.mockImplementation(async (type: string, fields: { projectId?: string }) =>
       type === "config.get" && fields?.projectId === "p1"
         ? { status: "invalid", path: "/p1/config", errors: ["dev.auditor is not set up"] }
@@ -1079,12 +1148,12 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
 
 describe("space-59, space-60, space-63: the page follows a project a move re-keys or a join adds", () => {
   const repo = (key: string, folder: string | null) => repositoryRow(key, { folder });
-  const groups = (...repositories: ReturnType<typeof repo>[]) => groupsState({ own: { name: "me", named: true, repositories } });
-  const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex", group: "acme", own: false } };
-  const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } };
-  const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex", group: "acme", own: false } };
+  const groups = (...repositories: ReturnType<typeof repo>[]) => spaceState({ repositories });
+  const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex" } };
+  const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex" } };
+  const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex" } };
 
-  test("a Groups state naming the projects the page holds re-reads nothing", () => {
+  test("a Space state naming the projects the page holds re-reads nothing", () => {
     render(<App />);
     act(() => {
       deliverServerMessageForTests({ type: "space.state", state: groups(repo("p1", "/tmp/alpha"), repo("p2", "/tmp/beta"), repo("acme/team-spex", null)) });
@@ -1092,27 +1161,13 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
     expect(commandMock).not.toHaveBeenCalledWith("project.list", {});
   });
 
-  test("space-59, space-60, space-63: a Groups state whose project row stands under a second instance re-reads nothing", () => {
+  test("space-59, space-60, space-63: a Space state whose project row stands under a second instance re-reads nothing", () => {
     render(<App />);
-    // alpha's row stands under the second instance's group, beta's under
-    // your own group: both are the page's projects, wherever the state
-    // heads them (space-1, DR-127).
-    const state = groupsState({
-      own: { name: "me", named: false, repositories: [repo("p2", "/tmp/beta")] },
-      instances: [
-        instanceState("https://host.test", { groups: [namespace("me")] }),
-        instanceState("https://second.test", {
-          groups: [
-            namespace("me"),
-            {
-              id: "30", login: null, mine: false, fullPath: "acme", name: "acme",
-              can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
-              placed: [],
-              repositories: [repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
-            },
-          ],
-        }),
-      ],
+    // Space lists alpha under the second instance and beta under This
+    // computer. Both are already registered locally (space-1, DR-127).
+    const state = spaceState({
+      repositories: [repo("p2", "/tmp/beta"), repositoryRow("p1", { instance: "https://second.test", folder: "/tmp/alpha", state: "reachable" })],
+      instances: [instanceState("https://host.test"), instanceState("https://second.test")],
     });
     act(() => {
       deliverServerMessageForTests({ type: "space.state", state });
@@ -1221,74 +1276,17 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     ).toContain("No GitHub remote");
   });
 
-  test("projects-4, space-61: the header's records field reads 'Records · <group> · <standing>', the group left out while the records are in none, a waiting creation's phrase standing for their standing, never the records' key", async () => {
-    const row = (state: "local-only" | "reachable", extra: Parameters<typeof repositoryRow>[1] = {}) =>
-      repositoryRow("p1", { name: "alpha-spex", folder: "/tmp/alpha", state, ...extra });
-    const SPEX = "https://host.test";
-    // Your own group's rows stand in no group (space-1).
-    const local = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", named: true, repositories: [repository] } });
-    // A Space holding the records in Personal, or in a group.
-    const at = (repository: ReturnType<typeof row>, where: "personal" | "acme") =>
-      groupsState({
-        own: { name: "me", named: false, repositories: [] },
-        instances: [
-          instanceState(SPEX, {
-            displayName: "Host",
-            groups:
-              where === "personal"
-                ? [namespace("me", [repository])]
-                : [namespace("me"), { id: "30", login: null, mine: false, fullPath: "acme/research", name: "Research", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false }, placed: [], repositories: [repository] }],
-          }),
-        ],
-      });
-    commandMock.mockImplementation(async (type: string) =>
-      type === "space.get"
-        ? local(row("local-only"))
-        : type === "ledger.get"
-          ? LEDGER
-          : type === "ledger.history"
-            ? { intents: [], more: false }
-            : defaultReply(type),
-    );
+  test("projects-4: the records field names the Space", async () => {
+    const origin = "https://host.test";
+    const space = spaceState({
+      repositories: [repositoryRow("p1", { instance: origin, name: "alpha-spex", folder: "/tmp/alpha", state: "reachable" })],
+      instances: [instanceState(origin, { displayName: "My Space" })],
+    });
+    commandMock.mockImplementation(async (type: string) => type === "space.get" ? space : type === "ledger.get" ? LEDGER : type === "ledger.history" ? { intents: [], more: false } : defaultReply(type));
     useAppStore.setState({ workspaceTabs: { p1: "overview" } });
     render(<App />);
-    const records = await screen.findByTestId("overview-records");
-
-    // The Space state is asked for; records in no group read the field's
-    // name alone — no group, no phrase (projects-4, space-61, space-120).
-    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("space.get", {}));
-    await vi.waitFor(() => expect(records.textContent).toBe("Records"));
-    expect(records.textContent).not.toContain("alpha-spex");
-    expect(records.hasAttribute("title")).toBe(false);
-
-    // A waiting creation reads its phrase, which the Space surface
-    // carries on its line alone (space-64).
-    act(() => {
-      deliverServerMessageForTests({
-        type: "space.state",
-        state: local(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })),
-      });
-    });
-    expect(screen.getByTestId("overview-records-state").textContent).toBe(
-      "Waiting for a member who can create it in acme",
-    );
-    expect(screen.queryByTestId("overview-records-group")).toBeNull();
-
-    // In Personal at a Space, its group reads "Personal" and its standing
-    // follows (projects-4).
-    act(() => {
-      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "personal") });
-    });
-    expect(screen.getByTestId("overview-records-group").textContent).toBe("Personal");
-    expect(records.textContent).toMatch(/^Records · Personal · /);
-
-    // In a group, the group by its name, its path in the title.
-    act(() => {
-      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "acme") });
-    });
-    expect(screen.getByTestId("overview-records-group").textContent).toBe("Research");
-    expect(records.title).toBe("acme/research");
-    expect(records.textContent).not.toMatch(/spex|@host/);
+    const records = await screen.findByTestId("overview-records-space");
+    expect(records.textContent).toBe("My Space");
   });
 
   test("projects-9: records that never reached a Space ask a second confirmation counting them", async () => {
@@ -1392,7 +1390,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
     // Open the idle session as a tab, so the removal has one to close.
     commandMock.mockImplementation(async (type: string) =>
       type === "ledger.get"
-        ? (LEDGER as object)
+        ? LEDGER
         : type === "history.get"
           ? { records: [] }
           : defaultReply(type),
@@ -1466,7 +1464,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
       if (type === "session.delete") {
         throw new Error("the session is live — end it first");
       }
-      return type === "ledger.get" ? (LEDGER as object) : defaultReply(type);
+      return type === "ledger.get" ? LEDGER : defaultReply(type);
     });
     render(<App />);
     fireEvent.click(screen.getByTestId("sidebar-delete-a-failed"));

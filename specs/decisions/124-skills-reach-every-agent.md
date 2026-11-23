@@ -11,6 +11,8 @@ Amends [DR-104](104-spec-package-format-and-client-environments.md) in its expor
 Amended by [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in where the table's project-level and user-level folders come from, Cligent's published native-skill support, and in which agents see the exports: Captain control and compiler calls no longer read them except where an agent offers no switch.
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in the agent table: it is kept as the library's own data, checked against Cligent's native-skill support by a test.
 
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in export scope: project environments export to their paired working folders, and the global environment supplies user-level skills.
+
 ## Context
 
 - Spex exports an environment's skills, playbook skills and specs into `.claude/skills` and `~/.claude/skills` alone, the one agent its table names until Cligent says where each agent reads skills.

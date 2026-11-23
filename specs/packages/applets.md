@@ -6,7 +6,7 @@
 ## Intent
 
 This package defines what the IDE and the core do with an installed applet under [DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md): the tab a project's workspace shows for it, the command that opens it and the capability the core serves it under on its own endpoint, what the page may read, how it is confined, and where its frame may go.
-An **applet** is the `applet` artifact of a spec package — a static web application in `applets/<id>/`, entered at `index.html` [[environments-1](environments.md#environments-1)] — installed by the environment of a project or of your own group [[environments-7](environments.md#environments-7)].
+An **applet** is the `applet` artifact of a spec package — a static web application in `applets/<id>/`, entered at `index.html` [[environments-1](environments.md#environments-1)] — installed by the environment of a project or of the global environment [[environments-7](environments.md#environments-7)].
 An applet's **project** is the project whose workspace shows it, and its **working folder** the one paired with that project's spex repository on this device [[storage-6](storage.md#storage-6)].
 A **capability** is the secret path segment under which the core serves one applet for one project.
 
@@ -16,10 +16,9 @@ A **capability** is the secret path segment under which the core serves one appl
 
 #### applets-1
 
-While a project of this computer is shown, the workspace shall show one tab per applet that its release provides [[environments-1](environments.md#environments-1)] and the project's environment or your own group's installs, and whose files are present on this device [[environments-14](environments.md#environments-14)], after the workspace's pinned tabs [[run-view-58](run-view.md#run-view-58)], named by the applet's id, standing while the applet is so installed and leaving with it ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
+While a project of this computer is shown, the workspace shall show one tab per applet that its release provides [[environments-1](environments.md#environments-1)] and either the project's environment or the global environment installs, and whose files are present on this device [[environments-14](environments.md#environments-14)], after the workspace's pinned tabs [[run-view-58](run-view.md#run-view-58)], named by the applet's id, standing while the applet is so installed and leaving with it ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
 
-- two environments each installing an applet of one id give two tabs, each naming its spec package;
-- a project open on a team server's seat [[run-view-169](run-view.md#run-view-169)] shows no applet tab.
+- two environments each installing an applet of one id give two tabs, each naming its spec package.
 
 #### applets-2
 
@@ -74,13 +73,13 @@ While an applet's frame is shown [[applets-2](#applets-2)], when the framed page
 
 #### applets-7
 
-When an integration suite starts a real core on a scratch home with a project whose environment installs, from the core's stand-in registry, a release holding an applet and requests by path a folder of the working folder holding an applet of another id, and your own group's environment installs the first release too, it shall assert:
+When an integration suite starts a real core on a scratch home with a project whose environment installs, from the core's stand-in registry, a release holding an applet and requests by path a folder of the working folder holding an applet of another id, and the global environment installs the first release too, it shall assert:
 
-- `applet.open` for the project's applet answers a path `/applets/<capability>/` whose capability is 43 base64url characters, the same path on a second ask, another path for your own group's applet of the same id, and `not_found` for an unknown applet, an unknown repository and a project pairing no working folder, and `invalid_request` for the path source's applet once its folder is removed [[applets-3](#applets-3)];
+- `applet.open` for the project's applet answers a path `/applets/<capability>/` whose capability is 43 base64url characters, the same path on a second ask, another path for the global environment’s applet of the same id, and `not_found` for an unknown applet, an unknown repository and a project pairing no working folder, and `invalid_request` for the path source's applet once its folder is removed [[applets-3](#applets-3)];
 - `GET` of `/`, `index.html`, a script beside it, `~/README.md` and `~/` — a listing naming the README and a folder, no link — each answer `200` with their bytes, content types, `no-store`, `nosniff`, DNS prefetching off and `Access-Control-Allow-Origin: *` [[applets-4](#applets-4)], the policy naming the request's own scheme and `Host` [[applets-5](#applets-5)], and `HEAD` the same headers without a body [[applets-4](#applets-4)];
 - `../index.html`, a percent-encoded `..`, a link in the working folder leading outside it, `~/.git/HEAD`, a folder's path without its slash, an unknown capability, a `Host` holding `_`, a WebSocket handshake under the path and a `POST` are refused as the table says, each with an empty body and DNS prefetching off, and a request presenting the endpoint's token gains nothing [[applets-4](#applets-4)], each refusal carrying the policy, with `'none'` as its origin for that `Host` [[applets-5](#applets-5)];
 - the path source's applet serves the working folder's bytes, an edit to its entry read on the next request [[applets-4](#applets-4)];
-- a second project whose working folder holds the home — the suite's scratch root — shown your own group's applet reads a file of its own through `~/` and is refused `404` for the home's `home.yaml`, the home's folder spelled in another case, the home's listing, and a file and a listing reached through a link leading into the home [[applets-4](#applets-4)];
+- a second project whose working folder holds the home — the suite's scratch root — shown the global environment’s applet reads a file of its own through `~/` and is refused `404` for the home's `home.yaml`, the home's folder spelled in another case, the home's listing, and a file and a listing reached through a link leading into the home [[applets-4](#applets-4)];
 - once `environment.remove` and its install took the first release away, its capability answers `404` [[applets-4](#applets-4)].
 
 #### applets-8

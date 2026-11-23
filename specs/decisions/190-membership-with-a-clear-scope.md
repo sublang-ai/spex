@@ -12,6 +12,7 @@ Amended by [DR-191](191-invite-several-members-together.md) in the one-username 
 Amended by [DR-193](193-group-deletion-follows-the-space-policy.md) in empty-group deletion: a fresh Space check names every blocking content item instead of relying on cached rows, and a safe request preserves scheduled state and restoration where allowed.
 
 Amended by [DR-198](198-consistent-inline-group-actions.md) in the Members panel’s attached presentation, visible Close, repeated activation and mutation guards.
+Superseded by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

@@ -5,7 +5,7 @@
 
 ## Status
 
-Implemented (2026-10-23), begun 2026-10-21, after execution ownership and beside spex.pub's servers; the live acceptance with two members on a real Linux server is still owed, waiting on the operator, so the intent is not done.
+Closed by [DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md) (2026-11-22). Team servers were implemented in October 2026. Retirement of team servers, seats and the privileged lane closes the outstanding live acceptance.
 
 ## Intent
 

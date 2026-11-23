@@ -19,6 +19,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-103](103-the-home-and-its-groups.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
 - [DR-105](105-playbook-17-5-0-adoption.md) and [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md) in the core's parity with the launcher: the default bindings and players the core composes for placed playbooks are its third exception, beside `from` and `skills`.
 - Extends [DR-069](069-key-phrases-not-sentences.md) with one principle: a page's acts match its scope.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
 
 ## Context
 

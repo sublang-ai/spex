@@ -15,11 +15,12 @@ Integration coverage exercises registration and card state against fixture repos
 
 #### projects-1
 
-When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
+When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below, showing the core's refusal in the home's interface language [[core-service-111](core-service.md#core-service-111)]:
 
-- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in to any instance, through the picker of each signed-in instance's matching spex repositories, your namespace there and its groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
-- Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
-- No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
+- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] locally, the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
+- Inside a work tree below its top level: the palette registers nothing and directs the user to add the work tree's top-level folder by its path.
+- Git reports no repository: the palette registers nothing and points at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path.
+- Git cannot inspect the directory or the directory belongs to Git metadata without a work tree: the palette registers nothing, directs the user to select a work tree's top-level folder, and shows Git's diagnostic when available, carried in the refusal's `output` detail.
 
 #### projects-2
 
@@ -74,7 +75,7 @@ When the core clones a project's code, it shall use the canonical HTTPS equivale
 
 #### projects-37
 
-When the core clones a project's code using its canonical remote URL [[projects-44](#projects-44)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it — except, on a seat, a remote at a host the member placed a token for, which the app's helper serves with that token [[git-host-9](git-host.md#git-host-9)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-132](../decisions/132-team-servers.md)).
+When the core clones a project's code using its canonical remote URL [[projects-44](#projects-44)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it.
 
 ### The Overview Tab
 
@@ -86,14 +87,14 @@ While a project is the workspace's current project, the Overview tab shall show 
 | --- | --- |
 | name | the project name |
 | path | the absolute repository path |
-| records | "Records · ⟨group⟩ · ⟨standing⟩": the group holding the project's records — "Personal" for the person's own, left out while they are in none — and their standing [[space-61](space.md#space-61)], naming no spex repository |
+| records | "Records", followed by the Space’s display name when the project has a Space and the current standing when available, separated by " · " [[space-61](space.md#space-61)] |
 | branch | the current branch name, or a detached-HEAD indicator |
 | dirty | an indicator shown while the work tree has uncommitted changes, and hidden while it is clean |
 | ahead/behind | commit counts relative to the upstream branch, hidden while no upstream is configured |
 
 #### projects-36
 
-When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the home's default instance [[storage-2](storage.md#storage-2)] and each instance it lists have reported their Git origins [[git-host-5](git-host.md#git-host-5)] and the code's remote lies outside every one of them, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+When a client sends `project.status`, the core shall reply with the project's locally collected repository state [[projects-11](#projects-11)], carrying `originUrl` only once the home's default instance [[storage-2](storage.md#storage-2)] and each instance it lists have reported Git origins, including those saved from earlier reads [[git-host-5](git-host.md#git-host-5)], and the code's remote lies outside every one of them, with any HTTP(S) user removed ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
 
 ### Forge Binding
 
@@ -116,7 +117,7 @@ Where a project has no GitHub binding, or the gh CLI is not installed or not aut
 | --- | --- |
 | no `origin` remote | "No GitHub remote — run git remote add origin … to see issues and PRs", the command a value the catalog never translates [[core-service-145](core-service.md#core-service-145)] |
 | an unbound `origin` remote under the reported Git origin [[git-host-5](git-host.md#git-host-5)] of the project's instance — its spex repository's [[storage-31](storage.md#storage-31)], or the home's default instance [[storage-2](storage.md#storage-2)] where it has none | "Issues and PRs come from GitHub · Code: ⟨Space⟩", ⟨Space⟩ being that instance's display name |
-| any other unbound `origin` remote while the home's default instance or an instance it lists has not reported its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub" |
+| any other unbound `origin` remote while the home's default instance or a listed instance lacks a current or saved report of its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub" |
 | any other `origin` remote not on GitHub | "Issues and PRs come from GitHub · Code: ⟨host⟩", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
 | gh not installed | names that gh is not installed |
 | gh not authenticated | names that gh is not authenticated |
@@ -147,13 +148,13 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 The local project palette shall distinguish adding an existing project from creating a new one, with tooltips explaining each action, and filter registered projects by name or path ([DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
 
 - Without a native picker, the switcher offers Add and Create on the typed path, both disabled until a path is entered; with a native picker, it offers the folder action for adding and leaves creation to the add form.
-- With no project registered across any connected place there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
+- With no project registered there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
-- every palette mode, including its group chooser, integrates a borderless cross labelled Close at the trailing edge of its existing title or search row, without a separate close-only strip ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)), with the same dismissal and opener-focus return as Escape or clicking the backdrop; a submitted group choice keeps all dismissal routes disabled until its outcome [[space-58](space.md#space-58)] ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
+- every palette mode integrates a borderless cross labelled Close at the trailing edge of its existing title or search row, without a separate close-only strip ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)), with the same dismissal and opener-focus return as Escape or clicking the backdrop.
 
 #### projects-42
 
-When the welcome page's local-project action [[run-view-172](run-view.md#run-view-172)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the local-project add form, regardless of the selected place or whether projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice where the native picker exists, or an existing-repository path where it does not, and a separate expandable new-project path with its specs-scaffold option ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
+When the welcome page's local-project action [[run-view-172](run-view.md#run-view-172)] or the sidebar's Projects plus [[run-view-67](run-view.md#run-view-67)] opens the local-project add form, whether or not projects are registered, the palette shall show a clearly clickable but neutral existing-folder choice where the native picker exists, or an existing-repository path where it does not, and a separate expandable new-project path with its specs-scaffold option ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md), [DR-137](../decisions/137-specs-first-welcome-and-distinct-project-paths.md), [DR-138](../decisions/138-welcome-flow-copy-and-scoped-academy-note.md), [DR-139](../decisions/139-quieter-welcome-flow-and-academy-choice.md), [DR-142](../decisions/142-desktop-existing-projects-use-folder-picker.md)):
 
 - when the native folder picker is available, the folder choice shall receive initial focus;
 - without a native folder picker, the existing-path field shall receive initial focus;
@@ -193,7 +194,7 @@ Where the core manages projects, the home file shall pair each working folder wi
 
 - removing a project forgets the pair and deletes the clone; the working folder remains;
 - the removal is one step at its instant: every session of the clone held under Playbook's management lease — a lease another writer holds refusing it `busy` — then, with nothing awaited, a session that appeared meanwhile or a clone moved or replaced since refusing it as changed meanwhile, as a home file that no longer reads does [[storage-2](storage.md#storage-2)], the clone set aside and the pair forgotten; it waits for no other work ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
-- the clone is set aside by one rename to a sibling `.removed-<uuid>`, named apart from the clone's own name so that a clone of the longest name a folder takes still moves, and which, beginning with `.`, no read of `workspace/` takes for a group or a clone, the core's own reading of the clone's sessions [[core-service-60](core-service.md#core-service-60)] and config [[core-service-2](core-service.md#core-service-2)] paused across the rename and each of its tries and resumed where the clone stays, and the attachments it reads within the clone closed, none opened there across its tries [[media-20](media.md#media-20)]; a rename refused — on Windows, while a file or folder of the clone is held open, the removal tried again, whole, up to twenty times 50 ms apart first, what no placement holds read again for the second confirmation [[projects-9](#projects-9)], and counted again, before its count is shown or the removal commits, where what that count read — the records, the placements and what they hold — changed since — refuses the removal with its cause and changes nothing, the pair, the clone and its sessions standing as they were, and a write of the home file failing, or finding the file changed since the core read it [[storage-2](storage.md#storage-2)], puts the clone back the same way and refuses the removal, a changed file as a conflict to retry, tried no more;
+- the clone is set aside by one rename to a sibling `.removed-<uuid>`, named apart from the clone's own name so that a clone of the longest name a folder takes still moves, and which, beginning with `.`, workspace scans skip, the core's own reading of the clone's sessions [[core-service-60](core-service.md#core-service-60)] and config [[core-service-2](core-service.md#core-service-2)] paused across the rename and each of its tries and resumed where the clone stays, and the attachments it reads within the clone closed, none opened there across its tries [[media-20](media.md#media-20)]; a rename refused — on Windows, while a file or folder of the clone is held open, the removal tried again, whole, up to twenty times 50 ms apart first, what no placement holds read again for the second confirmation [[projects-9](#projects-9)], and counted again, before its count is shown or the removal commits, where what that count read — the records, the placements and what they hold — changed since — refuses the removal with its cause and changes nothing, the pair, the clone and its sessions standing as they were, and a write of the home file failing, or finding the file changed since the core read it [[storage-2](storage.md#storage-2)], puts the clone back the same way and refuses the removal, a changed file as a conflict to retry, tried no more;
 - the set-aside clone is then deleted on every platform, Windows included, Git's read-only objects among its files; this deletion, and the clearing of the removed sessions' preferences, failing records a diagnostic naming its cause, the project removed and its sessions' removal announced;
 - a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
@@ -204,6 +205,10 @@ Where the core manages projects, the home file shall pair each working folder wi
 Where project repository state is collected — current branch or detached HEAD, dirty flag, ahead/behind counts, and `origin` remote URL — the repo-state provider shall obtain it exclusively by running local git commands against the project work tree:
 
 - The repo-state provider performs no network operation while collecting state, so ahead/behind counts reflect the locally recorded upstream ref.
+
+#### projects-48
+
+When a client sends `project.status` or `forge.items`, the core shall answer without requesting a Space read.
 
 #### projects-12
 
@@ -245,9 +250,9 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 
 - Confirming the same path again creates no duplicate entry [[projects-2](#projects-2)], the core's `conflict` carrying the registered path as a detail of its reply [[projects-27](#projects-27)].
 - Pairing a repair's spex repository with a folder keeps its key; a clone no pair names prompts the repair without silently pairing anything [[projects-10](#projects-10)].
-- Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
-- Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].
-- Signed in to two stand-in instances each holding a group `acme`: the picker offers the `acme` of each, and picking the second's pairs the folder with a spex repository the second stand-in lists and the first does not [[projects-1](#projects-1)].
+- Confirming a directory inside a work tree below its top level registers nothing and directs the user to add the top-level path [[projects-1](#projects-1)].
+- Confirming a directory where Git finds no repository registers nothing and points to the Create action [[projects-1](#projects-1)].
+- Confirming a directory with broken Git metadata, or a bare repository, registers nothing and displays the top-level-folder guidance with Git's diagnostic [[projects-1](#projects-1)].
 
 #### projects-18
 
@@ -287,19 +292,19 @@ Where a registered fixture repository's `origin` remote points at a GitHub repos
 Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `PATH`, or the registered repository has no `origin` remote or one not on GitHub, when the project's forge panel is loaded, the test suite shall assert that setup guidance naming the specific unmet condition is shown instead of issue and pull-request lists [[projects-7](#projects-7)], that the project card still shows repository state, and that the core keeps serving subsequent commands [[projects-16](#projects-16)]:
 
 - No `origin` remote: the guidance is the no-remote sentence exactly [[projects-7](#projects-7)].
-- An `origin` remote before the instance has reported its Git origin: the guidance is the generic remote sentence, carrying no URL or hostname [[projects-7](#projects-7)].
-- Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first host description serves the generic sentence from the same cache [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no host read for either local command [[projects-11](#projects-11)].
+- An `origin` remote while the instance has no current or saved Git origin: the guidance is the generic remote sentence, carrying no URL or hostname [[projects-7](#projects-7)].
+- Code cloned from the instance's reported Git origin: fresh and cached guidance are the instance sentence [[projects-7](#projects-7)], `project.status` omits `originUrl` while retaining its local branch state [[projects-36](#projects-36)], and a restarted core awaiting its first Space read serves the instance sentence from the same cache using the saved Git address [[projects-7](#projects-7)], exposes no origin in initial metadata [[projects-36](#projects-36)], and triggers no Space read for either local command [[projects-48](#projects-48)].
 - Code outside the instance's reported Git origin: the guidance names that remote's host [[projects-7](#projects-7)] and `project.status` carries its credential-free URL [[projects-36](#projects-36)].
 
 #### projects-38
 
-Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, the first being the home's default instance, with three projects at the first whose code is at the first's Git origin, at the second's, and at another origin, and a local-only project whose code is at the first's Git origin, when each project's forge panel and `project.status` are read once both instances have reported their Git origins, and again after a restart with the second signed out and the first read anew, the test suite shall assert the cases below:
+Where a real core on a scratch home is signed in to two stand-in instances over distinct Git backends, the first being the home's default instance, with three projects at the first whose code is at the first's Git origin, at the second's, and at another origin, and a local-only project whose code is at the first's Git origin, when each project's forge panel and `project.status` are read once both instances have reported their Git origins, and again before and after the first Space read following a restart with the second signed out, the test suite shall assert the cases below:
 
 | The project's code | Both reported | After the restart |
 | --- | --- | --- |
 | at the first's Git origin | the instance sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
 | at the second's Git origin | the generic remote sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
-| at another origin | that origin's host named [[projects-7](#projects-7)], its credential-free URL as `originUrl` [[projects-36](#projects-36)] | the generic remote sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] |
+| at another origin | that origin's host named [[projects-7](#projects-7)], its credential-free URL as `originUrl` [[projects-36](#projects-36)] | the same |
 | the local-only project's, at the first's Git origin | the instance sentence [[projects-7](#projects-7)], no `originUrl` [[projects-36](#projects-36)] | the same |
 
 #### projects-29
@@ -339,7 +344,7 @@ Where a project's session is held under a management lease taken out of band and
 When the integration suite starts a real core on a scratch home reading its clones' sessions and config as they change, with a project whose local-only clone holds its first commit and a session another host wrote, on every platform and on Windows on the Node the app ships, it shall assert:
 
 - removing the project leaves neither its clone nor anything set aside beside it, nor its pair, the clone's read-only Git objects removed with it, and so does removing one whose clone's name is 225 characters long, on POSIX [[projects-10](#projects-10)];
-- a removal whose rename is refused — the clone's group folder read-only on POSIX, a folder of the clone held open by another reader on Windows — is refused, the pair standing and the clone's files and Git as they were, and a session another host writes into the clone afterwards is listed [[projects-10](#projects-10)];
+- a removal whose rename is refused — the clone's parent folder read-only on POSIX, a folder of the clone held open by another reader on Windows — is refused, the pair standing and the clone's files and Git as they were, and a session another host writes into the clone afterwards is listed [[projects-10](#projects-10)];
 - once released, the removal completes [[projects-10](#projects-10)];
 - on Windows, a removal whose clone is held open as it begins and let go within its tries, while another project's clone gains a `config/` meanwhile, completes in that same request [[projects-10](#projects-10)];
 - a removal whose write of the home file fails — `home.yaml` read-only on Windows, the home's folder taking no new file on POSIX — is refused with the clone put back as it was and the pair standing, the clone set aside no more than once [[projects-10](#projects-10)];
@@ -366,7 +371,7 @@ Where the local project palette renders with a fixture client, the integration s
 - With or without registered projects, adding an existing project and creating a new one send their distinct actions; English and Chinese labels explain the two effects [[projects-42](#projects-42)] [[projects-25](#projects-25)].
 - With one project holding a live session and one without, only the live project's row shows its running count beside a pulsing dot [[projects-23](#projects-23)].
 - No text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
-- the normal picker, empty picker, local-project add form and group chooser place their accessible Close cross beside the title or search, without stealing the task's initial focus, close without submission and return focus to their actual opener; the palette group chooser's held submission disables Close, and refusal restores it with the destination retained [[projects-22](#projects-22)].
+- the normal picker, empty picker and local-project add form place their accessible Close cross beside the title or search, without stealing the task's initial focus, close without submission and return focus to their actual opener [[projects-22](#projects-22)].
 
 ### Refusal Coverage
 

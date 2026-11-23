@@ -25,11 +25,11 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Projects created in the Chinese interface now have Chinese specs free of translation hash comments, including `meta.md`.
 
-- Native Windows moves a project's records where Spex moves them: at the first sign-in, which names your own group's folder after your login, when a project is added to a group, when a Space renames or moves it, and when one of its places is left or followed; Spex's own watching of the records held them in place before. While another program holds them open, the move changes nothing and stops naming the project, with Retry.
+- Native Windows moves records at first sign-in, at a project's first sync to a Space, when a Space renames or moves the records, and when a placement is left or followed. Spex's file watcher previously blocked these moves. A move blocked by another program leaves the records in place and names the project with Retry.
 
 - Native Windows reloads a changed configuration where the folder holding it is reached through a short 8.3 name, as a temporary folder often is; the change was read as a file of another name and ignored before.
 
-- Native Windows reaches a Space's Git with the credential the Space brokers, so a group's project opens, its records sync and a Git source at a Space installs there; the app's own path, holding backslashes, was refused before. The credential's temporary file is created readable by you alone, whatever its folder grants others.
+- Native Windows reaches a Space's Git with the credential the Space brokers, so a personal project opens, its records sync and a Git source at a Space installs there; the app's own path, holding backslashes, was refused before. The credential's temporary file is created readable by you alone, whatever its folder grants others.
 
 - Native Windows removes a project's records, cleans up after a join or a new project's first commit fails, and keeps one mirror when two of its own fetches of a Git source meet; Git's read-only files, and Spex's own watching of a project's records, refused these before. A removal refused, such as while another program holds a file of the project's records open, leaves the project as it was. Replacing or removing installed packages no longer empties the folders their links point to, such as the app's own playbook engine.
 
@@ -43,6 +43,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- Space lists your own projects. Choose a Space to sync a project's records, then sign in on another device to open it there. Each IDE uses one core. [DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)
+
 - Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.
 
 - The built-in `/code` reviews a whole task once, after its last step, instead of after every step, so a task of several steps costs one review; a review that has not settled after three rounds stops and says so instead of running on. A long session no longer slows down as it grows, and a run you stop while Captain is thinking reads as stopped rather than as a fault to report.
@@ -55,15 +57,13 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - App beta.26 alone uses the owner-authorized limited release gate: green PR checks on the identical tree and both native packaged compiler checks. Unrelated full UI checks were not passed; prior runtime acceptance is reused. All other app tags retain full validation.
 
-- Scheduled groups collect in one collapsible section per Space, with a way to revisit restoration and clear guidance to Refresh after the Space’s deletion period. A group’s **More → New group…** creates a group inside it, with its parent and inherited access shown before creation.
-
 - Fork beta.24 rebases the native desktop changes onto official `e1cc06f1`, retaining upstream Git-source bytes/LF behavior and project navigation. Conflicting unreleased decision and test-item IDs are reassigned without changing official IDs. See [the verification record](docs/releases/0.9.0-beta.24-fork-latest-rebase.md).
 
 - Desktop and server builds adopt registry-published Cligent 0.36.2 and Playbook 18.1.1 with checksum-locked shared runtimes; app tags no longer consume local vendor archives.
 
 ### Added
 
-- Fresh agent configs and new players use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents on their direct providers. Custom routes keep provider-selected models, including on private seats. The bundled compiler receives the selected subagent and independent Claude Ultracode setting.
+- Fresh agent configs and new players use Claude Fable 5.2 with Opus 5.5 subagents or GPT-6 Astra with GPT-6.1 Sol subagents on their direct providers. Custom routes keep provider-selected models. The bundled compiler receives the selected subagent and independent Claude Ultracode setting.
 
 - Claude Ultracode can be set independently of reasoning effort. Existing Claude shorthand and Codex effort settings remain compatible.
 
@@ -89,7 +89,6 @@ source; run source with `npm ci` and `npm start` (desktop) or
   Package namespaces are chosen from every organization the registry
   account may publish to, independently of the project's Space. Registry
   and Space sign-out do not affect each other, including at one origin.
-  A server seat needs its own registry sign-in for private packages.
   Existing manifests and lock sources remain preserved until explicitly
   changed.
 - App tags build a macOS Apple Silicon DMG and a Windows x64 per-user
@@ -101,7 +100,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at
   `applets/<id>/index.html`; a folder without that entry is refused.
-  Once the project's environment or your own group's installs one, the
+  Once the project's environment or the global environment installs one, the
   project's workspace shows a tab named by the applet's id after
   Overview, and the page opens in an embedded frame under a line naming
   its spec package and version, with Reload. The page reads its own
@@ -111,8 +110,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   holds it. Its requests, forms and the frame's own navigation stay at
   that endpoint, the served page's policy and the desktop shell refusing
   the rest; it reaches neither the IDE nor its token, keeps no storage,
-  and its tab leaves with its package. A project open on a team server
-  shows no applet tab for now.
+  and its tab leaves with its package.
 
 - The command line and app share one package-manager library
   ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
@@ -140,19 +138,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
   its row in Settings for new sessions; a cause outside Spex keeps its
   words of what to do there.
 
-- Groups and sharing from Spex ([DR-114](specs/decisions/114-groups-and-sharing-from-spex.md)).
-  Signed in, "New group" heads the list where the instance says you may
-  create one, and a group's heading carries "New subgroup" where you
-  may; the editor asks a name and a path that follows the name as the
-  instance derives it, left for you when a name derives none, as a
-  Chinese one does. A members panel, on a group's heading or a
-  repository's row, lists each member with the instance's role and
-  "via <group>" where the membership is inherited, offers Share by login
-  with the instance's own roles, and Remove on members held directly,
-  each only where the instance says you may act. A group you create
-  lists at once, before the instance's next listing carries it.
 - A second device can join your account's records without choices when
-  its own-group clone is proven to be an unchanged generated bootstrap,
+  its global records clone is proven to be an unchanged generated bootstrap,
   also after a restart. Settings or environment edits made before sign-in,
   preexisting or migrated state and missing proof use ordinary comparison,
   with the choices that differing shared units require.
@@ -161,7 +148,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   `<pkg>` past 64 characters, or its alias; the exporter writes the
   spec file byte for byte as `<pkg>.md` beside a SKILL.md naming the
   spec package's org, name, version and description, a project's into
-  its working folder's agent folders and your own group's into the
+  its working folder's agent folders and the global environment's into the
   agents' home folders, and both leave with the lock. A lock resolved
   before this exports no spec until it is resolved again.
 - New playbook asks for "Org" and "License" beside the id, so a
@@ -172,18 +159,6 @@ source; run source with `npm ci` and `npm start` (desktop) or
   place naming the rule, and "New playbook" waits while either is
   empty. After an authoring session's enabling, the card keeps "Commit
   spex-packages/<org>/<id> with your code" until the surface is left.
-- Undo a misplacement in Spex ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
-  Where the instance says you may, a group's heading carries Rename,
-  which opens its name and path in place, and, while nothing stands in
-  the group, Delete, asked with Keep focused; a project's row carries
-  "Move to another group", whose picker offers your own group and every
-  group of the instance. The row lists under its new group at once and
-  its clone moves on its next sync. Each act is yours at the instance,
-  and a refusal stands in place with the instance's words. The protocol
-  gains `space.group.rename`, `space.group.delete` and
-  `space.repository.move`; a group's `can` gains `rename` and `delete`,
-  a spex repository's `transfer`.
-
 - The root lease names the machine ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md)).
   The core and the storage Git tool record Playbook's machine identity
   in the home's `.lease/owner.json` instead of the host name the network
@@ -201,33 +176,22 @@ source; run source with `npm ci` and `npm start` (desktop) or
   before the first new writer runs, after the home snapshot; an older
   binary reads the new lease as a foreign host's and refuses it.
 
-- Share a project's records through Spex Space ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
-  Sign in on **Space** to an instance — `spex.sublang.ai` by default, or the
-  address `SPEX_HOST_URL` names when a home is created — through your browser,
-  opened by the desktop or linked by the server shell with no code to
-  type, and Spex lists your
-  groups and the spex repositories you can read in each, creates your
-  own group's at the instance, and creates a project's in the group you pick.
-  The instance's members of a spex repository see its records, with the
-  instance's role names; Spex keeps no member list or access rule of its own. A step that needs rights you lack
-  waits for a member who has them, a rename or transfer at the instance is
-  followed, and a spex repository the instance stops listing turns
-  unreachable with nothing on the device deleted. Git receives the
-  instance's credential through Spex's own credential helper on the app's
-  runtime, never through a remote URL, and the device's token is kept
-  in `local/credentials.yaml`, readable by you alone. An app that starts
-  signed in reads the instance once something first shows your groups, so
-  they and Pick a group's choices need no Refresh, and when the instance
-  signs this device out, Space says so and offers to sign in again as
-  the same account ([DR-106](specs/decisions/106-groups-after-a-restart-and-a-host-sign-out.md)).
+- Sign in to Spex Space in the browser to sync personal records
+  ([DR-103](specs/decisions/103-the-home-and-its-groups.md), [DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
+  New homes default to `spex.sublang.ai`, or the address named by `SPEX_HOST_URL`.
+  The desktop opens the browser and the standalone browser shell links to sign-in.
+  A project the Space stops listing turns unreachable and its local records stay.
+  Git uses Spex's credential helper, and the device token stays in the
+  owner-only `local/credentials.yaml`. When you open Space after restarting while signed in, it loads your projects. If the Space signs this device out,
+  Space offers to sign in again as the same account.
 - Playbooks come in spec packages ([DR-104](specs/decisions/104-spec-package-format-and-client-environments.md)).
-  Each project and your own group has an environment: `spex.yaml` requests
+  Each project and the global records repository has an environment: `spex.yaml` requests
   spec packages from its selected registry, a Git repository or a local
   folder, and `spex.lock` pins the versions, languages and
-  files resolved, so every member and device installs the same. Installs
+  files resolved, so each device installs the same files. Installs
   go through one content-addressed store under the home, replace an
   environment's files at once, and export skills into each agent's
-  folder in the working folder and, for your own group, your home. The
+  folder in the working folder or, for the global environment, your home. The
   app ships the built-in spec package `sublang/playbooks`, seeded at the
   first start so the built-in playbooks run offline. **Playbooks** shows
   each environment's spec packages and the playbooks they export,
@@ -414,45 +378,11 @@ source; run source with `npm ci` and `npm start` (desktop) or
   17.7.0" with one **Update**, which resolves it again. `environment.get`
   and `environment.state` carry it as the optional
   `builtinUpdate: { shipped, locked }`; the protocol version is unchanged.
-- The core lists the team servers each signed-in instance offers you,
-  opens a seat on one once you accept its contract — the ticket asked of
-  the instance and presented at the server over TLS — keeps the seat in
-  `local/seats.yaml`, owner-only, and closes it ([DR-133](specs/decisions/133-one-desktop-over-several-cores.md)).
-  Protocol 28 adds `server.list`, `server.open`, `server.close` and the
-  `server.state` event. While a seat is open the core's own endpoint
-  relays to it at `/seats/<place>`, admitted as `/` is, presenting the
-  bearer to the server itself; it reconnects to each seat every second,
-  reads a seat speaking another protocol as mismatched, removes a seat
-  whose lease ended, and adds each seat's badge to the dock's count.
-  The place selector switches Settings, Playbooks, Space and environments
-  between this computer and an open seat, keeping their state separate.
-  Projects appear under their place; attention and approvals span the
-  connected places, and a disconnected place leaves the others usable.
-  A seat with no projects offers its groups; remote project and environment
-  forms offer no folder picker or path on this computer.
-- Administrators can install the Linux team-server hub, helper and systemd
-  units from a source checkout ([DR-132](specs/decisions/132-team-servers.md)).
-  An independent sweep stops seats whose recorded leases expired, even
-  while the hub is down, retaining their files
-  ([DR-148](specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)).
-
 ### Changed
 
-- Projects are shown where they are open ([DR-175](specs/decisions/175-projects-shown-where-they-are-open.md)).
-  The sidebar heads a server's projects only while a seat holds one, so
-  an empty server adds no heading and the server welcome page is gone.
-  The project palette lists the groups' projects once under "From your
-  groups", every row carrying its Space row's Open control ("Open here",
-  "Open on <server>", "Show"), and reads "No projects in your groups yet"
-  or "All your groups' projects are open here" when it lists none. A
-  server's line on Space offers no Connect: the seat opens on the first
-  "Open on <server>". A project whose code has no remote reads "Code only
-  on this computer" or "Code not on a Git host", its server entries are
-  disabled with "Needs the code on a Git host", and a seat refuses such
-  an open.
 - Package environments are complete in their root folder: `spex.yaml`,
   `spex.lock` and the ignored `.spex/` installation. A project's root is
-  its working folder; your own group's is its records clone. The CLI and
+  its working folder. The global environment lives in the global records clone. The CLI and
   app read the same files at each use, and the app prepares installed
   playbooks for its engine. The CLI's attached `auth`, `project`
   and `package` commands, `--server`, `SPEX_SERVER_URL` and endpoint
@@ -473,12 +403,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
   recovery. `space` binds collaboration
   independently of `registry`; old manifests without `registry` retain
   their former package destination until explicitly migrated.
-- On Playbooks, **Add from registry**, **Add from folder** and **Add from
-  Git** stand directly beneath the environment's list of spec packages,
-  above the playbooks, instead of at the page's foot. The environment's
-  heading names the project — "Environment of demo" — or "Environment of
-  your own group", and no longer shows a `<name>-spex` key
-  ([DR-159](specs/decisions/159-projects-in-groups-opened-where-you-work.md)).
+- The Playbooks surface and the project's Packages tab offer **Add…**
+  beside the registry and account, with sources from a registry, local
+  folder or Git.
 
 - The compiler and app share Playbook 18.1.0 through slc 0.20.0's required
   peer dependency. Both shells supply the engine, and dependency checks
@@ -493,10 +420,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
   changed.
 - A seeded config no one has changed follows the sign-ins it was chosen
   from ([DR-156](specs/decisions/156-an-untouched-seed-follows-the-credentials.md)):
-  at each start, and on a team server when a member places or removes an
-  agent credential, it is rewritten as the seed for the sign-ins then. A
-  team server seeds from its shared sign-ins, so a Codex-only server starts
-  on Codex. The first change to the file, of any kind, ends this for good.
+  at each start, Spex updates the seed to match the current sign-ins.
+  The first edit to the file ends automatic updates.
 - A new seed runs Codex on `gpt-6.1-sol` and every agent at effort
   `medium`, except a Codex `dev.reviewer` beside Claude agents at `high`
   ([DR-208](specs/decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)).
@@ -519,7 +444,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - The collaboration destination is **Space**, and the public server product is
   **Spex Space** at `spex.sublang.ai`. New homes use that address; existing
-  connections, groups and stored placements keep their identities.
+  accounts and personal placements keep their identities.
 
 - First-run guidance now explains specs and playbooks in plain language,
   invites a goal, and makes local project setup and task start clearer in
@@ -542,7 +467,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   The history notice retains that reason without a composer or recovery
   controls, and foreign queued rows offer only their provenance action.
   Foreign work does not occupy the local execution lane or attention queue.
-  Intent files now use format 2; upgrade every member's devices together
+  Intent files now use format 2; upgrade your devices together
   before syncing those records. Older records retain their existing rules.
 
 - Playbook 18 shared session persistence now uses bounded files and
@@ -567,11 +492,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
   published table.
 
 - A home can sign in to several instances, with each instance's account,
-  groups listing and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
+  personal project listings and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
   Existing homes and clones migrate to the instance-aware layout; a
-  refused credential signs out only its instance. A project's records can
-  be placed at several instances, with **Place at…**, **Attach** for a
-  placement another device named, and **Leave…**, which keeps its server copy.
+  refused credential signs out only its instance.
   Sync runs placement by placement, each with its own incoming changes,
   choices and outcome ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
 - Each environment searches, resolves and publishes at its selected
@@ -600,23 +523,10 @@ source; run source with `npm ci` and `npm start` (desktop) or
   rounds, the hand-over between roles and the ending belong to the
   behaviors' prose, so a compiled run no longer parks on a reply that
   waited for a later round.
-- Space names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
-  Space names the collaboration instance alone: it lists your own group,
-  the instance's groups you belong to by their paths in it, and the spex
-  repositories another person shares from their own group, under that
-  person's login. Keys and
-  workspace folders follow the paths the instance answers, so a clone
-  filed under the old storage path moves once, on its next sync. No
-  link leads to the Git system behind the instance — no "Open at …" in
-  a members panel, no "New group at …" — and where you may not create a
-  group, the list's head reads "Groups are made by the people who run
-  <instance>". A group named like your login stands apart and takes no
-  folder of yours. A stopped sync never prints a Git URL of the storage:
-  the clone's own address reads as its path in the instance, any other
-  as the instance's name, and an HTTP error no message reads stops as
-  "<instance> answered with an error". Where membership decides, the
-  guidance names Share. The protocol drops `groups[].url`, `Member.url`
-  and `membersUrl`.
+- Spex names only the Space, including in records errors, keys and
+  folders under the Spex home ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
+  A stopped sync identifies the project's Git destination by its path in
+  the Space, and another repository at the Space by the Space's name.
 - A failed workflow's notice folds its earlier steps behind one control ([DR-117](specs/decisions/117-the-earlier-steps-fold-behind-one-control.md)).
   The retry and Drop stand in the notice's row as before; every "Resume
   from: …" action waits behind "Resume from an earlier step…", which
@@ -646,8 +556,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
   and approval owners.
 - Every record lives in a spex repository ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Each project's sessions, intents and authoring sessions live in its own
-  clone, `workspace/<group>/<name>-spex/`, synced on its `spex` branch; your
-  settings and the sessions of no project live in your own group's,
+  clone, `<name>-spex` under `workspace/`, within the local records folder or a Space's
+  account folder, synced on its `spex` branch. Your settings and sessions
+  without a project live in the global records repository,
   `workspace/<you>/<you>-spex/`. `home.yaml` pairs each working folder with
   its spex repository, and the home itself is no longer a Git repository.
   A former home migrates once at startup, keeping its original bytes and its
@@ -929,26 +840,25 @@ source; run source with `npm ci` and `npm start` (desktop) or
   `approval.list` and `approval.respond` operate on live requests from
   `approval.state`, independently of durable ledger attention.
   Since then `space.signin.start`, `space.signin.cancel`,
-  `space.signout`, `space.refresh`, `space.pick`, `space.join`,
-  `space.members`, `space.share`, `space.unshare` and
-  `space.group.create` join, with `draft.defaults` and the
-  `environment.*` family, and `server.list`, `server.open` and
-  `server.close` with the `server.state` event for the seats a desktop
-  opens on team servers; `intent.move`, `intent.link` and `space.init`
+  `space.signout`, `space.refresh`, `space.pick` and `space.join` join,
+  with `draft.defaults` and the `environment.*` family.
+  `intent.move`, `intent.link` and `space.init`
   leave; and a draft's `malformedDirectives` entries carry `text` and
   `reason`. Registry account commands, directory discovery and
   `environment.registry.set` join independently of Space commands, with
   `registry.state` and a separate registry selection in environment
-  state. The protocol is 31.
+  state.
 
 - The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-116 unchanged.
 - The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
 - The app previously adopted Playbook 17.10.1, Cligent 0.34.0 and slc 0.18.0 ([DR-123](specs/decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)). A judge sees a field whose shape nobody recorded as `<value>`, not `<string>`, the published CODE GEARS carry no framework-owned Boss-question result, and a playbook compiled by slc 0.16.4 or later validates the options the Captain hands it; recompile a playbook slc 0.16.1 built whose options are required. Skills reach agents from the spec packages your environments install: a `skills` list in your configuration, which Playbook's own launcher now accepts, is refused with its entry named.
-- Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and your own group's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
+- Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and the global environment's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
 - A working folder paired with a project whose environment is already installed gets its skills, specs and playbooks at once, not at the next start, sync or environment command. The Playbooks surface lists what the last export left out under "Not exported": a skill kept out of an agent folder that already holds a folder of yours by that name, named with that folder, and a spec package whose files are not on this device; "Export again" exports once you have moved your folder or brought the files.
-- Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
+- The global environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of the global records repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" in the global environment asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A global request by a path in a paired working folder reads as missing until its folder moves into the clone. A project's paths stay relative to its working folder.
 
 ### Removed
+
+- Groups, membership, invitations, project sharing and team servers have been retired, including the hub, seats and IDE relay. The client protocol is now version 35. Development homes that relied on those features require a fresh start.
 
 - The core no longer keeps `local/endpoint.json` in the home, and its
   hello names the protocol version alone, without the attached CLI's
@@ -996,9 +906,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Space Refresh keeps completed work through repeated rate limits within
   a fixed two-minute recovery deadline for each eligible read, and stays
-  busy until started requests settle. Full views leave member counts
-  unknown without enumerating members; selected checks and Members still
-  read them when needed.
+  busy until started requests settle.
 
 - A narrow player pane no longer spills its header and transcript past
   its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends
@@ -1011,9 +919,6 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - Space status reads keep completed checks, incoming files and comparison
   plans consistent. An older read cannot overwrite newer results, and
   branch counts use the same captured commits as their comparison.
-
-- Expired team-server leases now invalidate their bearer and close relays
-  before stopping the seat, including renewal retries and retirement.
 
 - Reopening a removed Academy example preserves its committed and
   uncommitted edits and Git history; unrelated nonempty folders still
@@ -1064,7 +969,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   limit when unambiguous. Explicit access denials retain priority. This
   correction does not raise the storage limit.
 
-- A path source in your own group's clone reports the unreadable path
+- A path source in the global records repository reports the unreadable path
   and stops when a nonignored subtree cannot be inspected. Git-ignored
   subtrees and genuinely missing folders retain their existing behavior.
 
@@ -1084,14 +989,11 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Synchronizing one records repository no longer waits for unrelated
   repository details. Each check reads the complete namespace catalog and
-  only its destination's details, retaining collision, access, account-change
-  and first-sharing notice safeguards.
+  only its destination's details, retaining collision, access and account-change checks.
 
 - Joining private code at the instance's reported Git origin now uses
   the app's brokered credential helper, as records do. Code at another
   origin continues to use the device's own credentials.
-  On a seat, Git pushes from an agent's working folder use the member's
-  saved token for that code host, without putting it in a remote or log.
 - Code addresses hosted by the instance no longer expose its backing
   host in Space, project status or cached forge guidance. After a restart,
   a remote reads neutrally until the instance's description arrives; its
@@ -1124,15 +1026,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
   source's first `#` heading, so a source with a license comment above
   that heading no longer reads as the comment; a source with no heading
   still reads as its first line.
-- New playbook's Org starts from an org you may publish to, not from the
-  first segment of the project's spex repository key, which for a
-  project under a nested group is no registry org: signed in, Spex asks
-  the selected registry for your orgs and suggests the one whose path holds
-  the project's group, else the first. Every eligible namespace remains
-  selectable, independently of the project's Space; with none listed,
-  signed out, or no answer within two seconds, the key's first segment
-  stands as before.
-  A one-shot compile names the same org.
+- New playbook suggests an Org from the selected registry. Every eligible
+  namespace remains selectable. A one-shot compile uses the same suggestion.
 - An answer continues its intent ([DR-119](specs/decisions/119-an-answer-continues-its-intent.md)).
   A Dashboard row for a conversation serving no intent no longer reads
   the Boss's answer to a run's question — "Yes." for a `/release` — but
@@ -1149,7 +1044,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - An installed playbook folder gone by the time its engine links are provisioned — its clone moved by a sync meanwhile — takes no link and is not made again, so a sync's move leaves nothing of the old place behind (playbook-library-46).
 - The new-playbook form's Org and License keep what the person typed: a project default arriving after the typing, or read again on a reconnect, fills only a field the person has not edited since the project was chosen (playbook-library-51).
 - A run view status line that is only a machine's name reads as its words — `START_PROPOSE` as "start propose", `→ needsBossReply` as "→ needs boss reply" — with the name as written in its tooltip, so the room no longer reads the machine shouting (run-view-1).
-- A spex repository Spex creates on the host — by picking a group, say —
+- A records repository Spex creates at a Space
   no longer stops its first sync at Check with "<host> holds no default
   branch for it yet": the host answers a creation before the commit that
   makes its default branch lands, so that first sync reads the new
@@ -1383,24 +1278,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   and PRs come from GitHub and names the host its origin is at, never a
   credential the URL carries; a project with no `origin` remote keeps the
   sentence that asks for one (projects-7).
-- Your own group's spex repository, made at sign-in, and a project picked
-  into "Your own group" were asked of the instance by your own group's
-  id, which an instance looks up only among its own groups, so the
-  creation waited for ever. They now name no group, as the instance
-  expects (git-host-6).
-- One spex repository whose members the instance could not count failed
-  the whole read, so Refresh, set-up and every sync stopped while the
-  instance's own member reads failed. The read now holds that count as
-  unknown and goes on, and a first sync into a repository with an
-  unknown count still says the sharing notice (git-host-5, space-57).
-- Picking a team's spex repository for a project's records, on its row
-  in Space or as the project is added, no longer stops at "Read the
-  sharing notice before joining …" with nothing to read: where the
-  repository has other members, or its count is unknown, the picker says
-  the sharing notice beneath it, and Continue joins (space-57, space-58).
 - An authoring session's Compile control no longer says "30 to 120 minutes" but "a few minutes, longer for many roles", as compiles now take.
-- "Pick a group" reads each group by its name, then its path (space-58).
-- The group pickers read each group by its name, then its path (space-58, space-78).
 - An expanded package's intent in the Specs outline renders its links as an item body does, a record's ID opening the reader, and the collapsed line reads each link by its text, no longer printing `[DR-001](…)` as typed (spec-view-2).
 - The authoring preamble says that the runtime relays every Boss exchange — the question as asked and the answer verbatim — to every later role of the run, so a source need not say that a reviewer receives an answer, and names a later role as receiving it only where that role's step must carry the answer in its own data (playbook-library-35).
 - While the answer to a run's question runs, the session list and its state reports no longer read the session as interrupted — no `recovery`, no "Restore the interrupted turn first" — nor as still parked on the question, which leaves once the answer is accepted; Restore stands only for a turn cut off with none running (core-service-32).

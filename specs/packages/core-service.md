@@ -24,7 +24,7 @@ When started on a native platform other than macOS, Linux or Windows, the core s
 
 #### core-service-1
 
-Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], answer HTTP reads under `/applets/` for its open applets [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)), refusing any other path, and report the endpoint address to the host:
+Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, answer HTTP reads under `/applets/` for its open applets [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)), refusing any other path, and report the endpoint address to the host:
 
 - When a client connects, the core service sends a hello message naming the protocol version, and no client, before any other message, so clients can detect a protocol mismatch before issuing commands.
 
@@ -41,19 +41,18 @@ An Origin is not foreign only in these cases:
 | `http(s)://localhost` or `http(s)://127.0.0.1`, any port | a local dev page |
 | the host the handshake request itself addressed | a page the embedding shell serves ([DR-033](../decisions/033-remote-gui-serving.md)) |
 
-- A relay path of an open seat [[core-service-129](#core-service-129)] admits exactly as the path `/` does: the same token, the same origins ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
 ### Configuration
 
 #### core-service-2
 
-Where your own group's spex repository holds its `config/playbook.config.yaml` [[storage-1](storage.md#storage-1)], when the core service starts, the core service shall load and validate the config, composing a session's configuration from your own group's file with the session's spex repository's file on top [[storage-7](storage.md#storage-7)], reloading and revalidating without a restart whenever either file's content changes on disk while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)).
+Where the global records repository holds its `config/playbook.config.yaml` [[storage-1](storage.md#storage-1)], when the core service starts, the core service shall load and validate the config, composing a session's configuration from the global file with the session's spex repository's file on top [[storage-7](storage.md#storage-7)], reloading and revalidating without a restart whenever either file's content changes on disk while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
 On every load and reload:
 
-- Your own group's file — the global config — holds the captain, the players with what each runs on, the playbook entries it writes with the player each role uses, notifications, theme and layout; a project's or another group's file holds only playbook entries with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, a `from` in any file, or a `skills` list at the top of your own group's file, on its Captain or on a player, is a config error naming the entry.
+- The global config holds the captain, the players with what each runs on, the playbook entries it writes with the player each role uses, notifications, theme and layout; a project’s file holds only playbook entries with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, a `from` in any file, or a `skills` list at the top of the global file, on its Captain or on a player, is a config error naming the entry.
 - Every playbook the project's environment or the global places [[environments-9](environments.md#environments-9)] composes — by the project's entry where one stands, else the global entry, else a default binding of each required role to the player `dev.<role>`: the role lowercased, runs outside ASCII letters, digits, `_` and `-` replaced by `-`, a suffix kept that starts with a letter, else boundary `-` and `_` trimmed and `role-` prefixed, `role` when nothing remains — so two playbooks naming one role share one player by default ([DR-032](../decisions/032-session-players.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)); the defaults are composed, written to no file, and reach the launcher as `from` does [[core-service-16](#core-service-16)].
-- A player a binding names, written or default, and your own group's file lacks composes as the Captain's block without its `instruction`, under that id, and is reported in the summary as a player to set up [[settings-46](settings.md#settings-46)]; it refuses no session.
+- A player a binding names, written or default, and the global file lacks composes as the Captain's block without its `instruction`, under that id, and is reported in the summary as a player to set up [[settings-46](settings.md#settings-46)]; it refuses no session.
 - Two placed playbooks of one command: one composes — the project's over the global, a written entry over a default, else the first by package name — and the other stands aside, reported with the one that composes; a written entry naming a playbook no environment of the session places, or whose module is absent on this device [[environments-9](environments.md#environments-9)], stands aside the same way, reported with its cause, and composes nothing.
 - A playbook both environments place, by one id, composes once: by the project's entry where one stands, else the global.
 - While no playbook composes for a project, a session there is refused naming it: "No playbook runs in ⟨project⟩ — add a package that provides one".
@@ -71,8 +70,8 @@ On every load and reload:
 
 Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-208](../decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)):
 
-- The core passes confirmed credential presence to the Playbook seed for roster selection and supplies the actual agent environment separately for model selection. Local runs supply the user home. A seat supplies only its materialized Codex home when selected [[core-service-150](#core-service-150)] and never the server account’s home. The core preserves the returned settings and comments and removes each `playbooks.<id>.from` ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
-- That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start; on a seat, the credential forms of the environment its credentials were read into first [[core-service-126](#core-service-126)], with no user settings and no sign-in of the server account the core runs as, which are no member's — so the Captain's and each player's `adapter`, `model`, `subagentModel`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-205](../decisions/205-agent-cards-read-alike.md)):
+- The core passes confirmed credential presence to the Playbook seed for roster selection and supplies the actual agent environment separately for model selection. The core uses the user home and preserves the returned settings and comments and removes each `playbooks.<id>.from` ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
+- That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start — so the Captain's and each player's `adapter`, `model`, `subagentModel`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-205](../decisions/205-agent-cards-read-alike.md)):
 
 | Credentials | Seeded agents |
 | --- | --- |
@@ -84,7 +83,7 @@ Where no config file exists at the shared config path, when the core service sta
 
 #### core-service-137
 
-Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, when a client asks for readiness — a re-check among them [[settings-5](settings.md#settings-5)] — and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
+Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], during startup or a readiness request, including Re-check [[settings-5](settings.md#settings-5)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
 
 | The file | Outcome |
 | --- | --- |
@@ -101,11 +100,11 @@ Where the shared config path is the default one and holds nothing, when the core
 
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
-- A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
+- A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is the global records repository's [[storage-1](storage.md#storage-1)].
 
 #### core-service-44
 
-When a client sends `config.batch {ops, revision}` — one or more `captain.set`, `player.set` or `playbook.role.bind` operations over your own group's file and the revision of the config state the client saw [[core-service-45](#core-service-45)] — the core service shall apply them all or none ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
+When a client sends `config.batch {ops, revision}` — one or more `captain.set`, `player.set` or `playbook.role.bind` operations over the global file and the revision of the config state the client saw [[core-service-45](#core-service-45)] — the core service shall apply them all or none ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
 
 1. The file is read; where its revision differs from `revision`, the batch is refused `conflict` and nothing is composed or written.
 2. The operations apply in order, each as a Settings save applies it — a merge patch altering only the keys it provides and preserving comments, key order and hand-written fields — and the result is validated once, as a whole, by the shared rule set [[core-service-16](#core-service-16)].
@@ -113,11 +112,11 @@ When a client sends `config.batch {ops, revision}` — one or more `captain.set`
 4. The result is one versioned write, refused `conflict` where the file changed since the read ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 5. The reply is the config state the files stand at after the write, as a Settings save's is.
 
-- A batch holding another operation kind or none is a malformed command and changes nothing; a batch names no repository and writes your own group's file alone.
+- A batch holding another operation kind or none is a malformed command and changes nothing; a batch names no repository and writes the global file alone.
 
 #### core-service-45
 
-Where your own group's config is valid, its config state shall carry a `revision` — the digest of the bytes of your own group's config file the state was composed from — the same value for the same state in the reply to `config.get`, in the `config.state` broadcast and in the reply to a successful `config.edit` or `config.batch` [[core-service-44](#core-service-44)] ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
+Where the global config is valid, its config state shall carry a `revision` — the digest of the bytes of the global config file the state was composed from — the same value for the same state in the reply to `config.get`, in the `config.state` broadcast and in the reply to a successful `config.edit` or `config.batch` [[core-service-44](#core-service-44)] ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
 
 - any writer's change to the file's bytes changes the revision of the state composed after it.
 
@@ -131,7 +130,7 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 - Local admission and recovery reservations keep the project exclusive while ownership is revalidated [[core-service-73](#core-service-73)] or a recovery's released ownership is published [[core-service-83](#core-service-83)]; a refused request releases only its own reservation.
 - A Space operation running on the project's spex repository refuses no request [[space-21](space.md#space-21)].
 - Live sessions for distinct projects run concurrently.
-- A session is assigned to this runtime at creation: the core appends its runtime record [[storage-43](storage.md#storage-43)] before its first turn is admitted, with this runtime's label — the server's name on a seat, else the host name ([DR-134](../decisions/134-execution-ownership.md)).
+- A session is assigned to this runtime at creation: the core appends its runtime record [[storage-43](storage.md#storage-43)] before its first turn is admitted, with this runtime's label — the host name ([DR-134](../decisions/134-execution-ownership.md)).
 - While a session is live, a client's disposal request aborts its turn, persists the session's Captain snapshot [[core-service-72](#core-service-72)], disposes the session's runtime, and reports the session as no longer live; a Boss message continues it [[core-service-73](#core-service-73)].
 - Where disposal fails, the core reports the error and retains the session's lease and project reservation until cleanup is confirmed; stopping the owning process allows later recovery through the shared lease checks ([DR-048](../decisions/048-failed-session-cleanup.md)).
 
@@ -388,7 +387,7 @@ The core service shall accept the authoring command family — `draft.list`, `dr
 - a session made again under an id is another session, whose turn may run beside a former instance's in the same working folder;
 - `draft.compile` and `draft.register` are refused `busy`, naming the folder and the work running there, while another job of the core writes the session's artifact folder — a former instance's compile, a one-shot compile of its id, or an Add's repackaging — whatever turn runs [[playbook-library-99](playbook-library.md#playbook-library-99)];
 - a session's state carries its recorded instance [[storage-23](storage.md#storage-23)], or, where its file will not read, that file's version instead, and its `activity` — `turn` while its turn runs, else `compiling` while its compile runs, else `idle` — beside `compiling`, true while its compile runs, so a turn and a compile running at once are each reported; `draft.record` and `draft.source` name the instance, and `draft.removed` names it where the file read; every command but `draft.list`, `draft.defaults`, `draft.create`, `draft.open` and `draft.artifacts` names the instance it read, `draft.delete` the version where it read none, and replies `conflict`, changed meanwhile, where the session's file no longer records it;
-- `draft.create` may name the new spec package's `org` and `license`, otherwise using the local namespace `local` and no license without consulting a registry, and replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, a supplied org outside the manifest's name rule [[environments-1](environments.md#environments-1)], a supplied license that is empty or not one trimmed line, a project with no working folder on this device, or the global environment while its clone is not on this device, `draft.defaults` refusing the last two alike; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
+- `draft.create` may name the new spec package's `org` and `license`, otherwise using the local namespace `local` and no license without consulting a registry, and replies `invalid_request` for an id a playbook of the project's or the global environment holds, a supplied org outside the manifest's name rule [[environments-1](environments.md#environments-1)], a supplied license that is empty or not one trimmed line, a project with no working folder on this device, or the global environment while its clone is not on this device, `draft.defaults` refusing the last two alike; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
 - a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an added one stays and reads added;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
 
@@ -441,7 +440,7 @@ While an intent is closed [[core-service-46](#core-service-46)], when a client s
 
 While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, and queued — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
-- a submission whose intent fails validation is rejected and starts no turn; one whose intent is assigned to another runtime [[storage-4](storage.md#storage-4)], or holds no runtime while this core runs as a seat ([DR-132](../decisions/132-team-servers.md)), is rejected `conflict`, "Runs on <label>", or "Runs nowhere yet" for the latter ([DR-134](../decisions/134-execution-ownership.md));
+- a submission whose intent fails validation is rejected and starts no turn; one whose intent is assigned to another runtime [[storage-4](storage.md#storage-4)] is rejected `conflict` with "Runs on <label>" ([DR-134](../decisions/134-execution-ownership.md));
 - while a run of the session stands parked on a Boss question [[core-service-107](#core-service-107)], a submission carrying an intent id is rejected `conflict`, the intent staying queued: a dispatch is new work, never an answer ([DR-119](../decisions/119-an-answer-continues-its-intent.md));
 - a submission that never starts a turn stamps nothing, and the intent stays queued;
 - a later dispatch of the same intent re-writes the stamps;
@@ -492,7 +491,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 
 #### core-service-107
 
-When the core service derives a project's queue reading, it shall choose the oldest queued intent this runtime may run — assigned to it, or to none where this core does not run as a seat ([DR-132](../decisions/132-team-servers.md)) [[storage-4](storage.md#storage-4)] — by capture time, then by id, as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When the core service derives a project's queue reading, it shall choose the oldest queued intent this runtime may run — assigned to it, or unassigned [[storage-4](storage.md#storage-4)] — by capture time, then by id, as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | First matching lane condition | Standing | Manual start |
 | --- | --- | --- |
@@ -580,23 +579,22 @@ When serving a stored session, the core service shall resolve its immutable part
 
 When a client requests adapter readiness, the core service shall report an entry for `claude` and one for `codex` always and one deduplicated entry per other adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)), none where no position does — and carrying a readiness status derived from the adapter readiness rules — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-204](../decisions/204-workshop-agents-in-one-pass.md)) — naming the unmet requirement for each adapter that is not ready, reporting null readiness with verify-yourself guidance for an adapter with no preflight rule, and null readiness with the reason for a sign-in that could not be confirmed:
 
-- The entry carries the new-player model choices that Cligent supplies for this adapter for the environment and home used when seeding [[core-service-3](#core-service-3)], or an empty selection when that provider supplies its own defaults. These choices are available on a seat while its base URL stays hidden ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
+- The entry carries the new-player model choices that Cligent supplies for this adapter for the environment and home used when seeding [[core-service-3](#core-service-3)], or an empty selection when that provider supplies its own defaults ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
 - The runtime half is cligent's availability probe, which confirms the native executable a bundled SDK spawns as well as the SDK itself; when the probe fails and no published runtime target is at fault, the unmet requirement for `claude` or `codex` comes from cligent's executable lookup — a missing platform package, named with its platform and architecture and the repair of running `npm ci` in the checkout or reinstalling the app, or a host the SDK publishes no executable for, named with no repair — and otherwise states that the runtime failed to load ([DR-090](../decisions/090-readiness-names-what-cligent-finds-missing.md)).
 - While the config is missing or invalid, the `claude` and `codex` entries are the only ones, with no positions: no earlier config's positions carry over.
 - Each entry lists its faults, each of kind `runtime` or `credential` with its own requirement, and keeps the requirement string joining them.
-- The `claude` entry carries its base URL's state, `ANTHROPIC_BASE_URL` read where a Claude run reads it — the `env` of Claude Code's user settings file, `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude`, over the core's environment: `unset` where it is unset or names the host `api.anthropic.com`, `third-party` with the host name alone — no scheme, path or secret — where it names another host, `unknown` where it does not parse as a URL with a host, and `hidden` on a seat.
+- The `claude` entry carries its base URL's state, `ANTHROPIC_BASE_URL` read where a Claude run reads it — the `env` of Claude Code's user settings file, `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude`, over the core's environment: `unset` where it is unset or names the host `api.anthropic.com`, `third-party` with the host name alone — no scheme, path or secret — where it names another host, `unknown` where it does not parse as a URL with a host.
 - Every entry carries the core's platform and the file name of the environment's `SHELL`, where set.
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
 
 #### core-service-155
 
-Where the core service runs off a seat and the `env` of Claude Code's user settings file — `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude` — sets variables, when the core service starts, and before each agent run and each readiness report [[core-service-9](#core-service-9)], the core service shall write them into the environment its adapters inherit, over the values inherited, so that a call reading no settings file — the Captain's control calls — runs with the key, base URL and model a run reading them would ([DR-205](../decisions/205-agent-cards-read-alike.md)):
+Where the `env` of Claude Code's user settings file — `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude` — sets variables, when the core service starts, and before each agent run and each readiness report [[core-service-9](#core-service-9)], the core service shall write them into the environment its adapters inherit, over the values inherited, so that a call reading no settings file — the Captain's control calls — runs with the key, base URL and model a run reading them would ([DR-205](../decisions/205-agent-cards-read-alike.md)):
 
 - a run spawned with an environment of its own, and model discovery [[settings-35](settings.md#settings-35)], take them over that environment too;
 - a variable the file no longer sets goes back as it stood before the core first wrote it;
 - a stop puts every name it wrote back as the process held it.
 
-On a seat the core service shall write none of them: a seat's runs take the member's or the shared credentials alone, as its readiness reads them [[core-service-126](#core-service-126)], [[settings-49](settings.md#settings-49)], and the server account's settings are no member's; a player's Claude Code still reads that file itself, which this item does not prevent.
 
 ### Persistence
 
@@ -693,94 +691,18 @@ When the core service composes text for the reader — a refusal's message, a co
 When the core service composes text for the reader [[core-service-111](#core-service-111)], it shall say each case as one whole phrase in the person's words, one name per thing as every surface names it ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - a Space is named by its display name wherever the phrase would say the host or the instance, this computer wherever it would say the device or the machine, and records wherever it would say the spex repository or the clone;
-- no phrase says seat, ticket, home, placement, origin or unit;
-- a step to take is named as its control is, as in "Add it to a group first" and "Open here again";
+- no phrase says home, placement, origin or unit;
+- a step to take is named as its control is, as in "Open here again";
 - a failure says what happened and what to do, as in "spex.yaml cannot be read: <cause> — fix the file, then Retry" and "Another Spex is writing these files — wait, then Retry", what a tool or a file said travelling beside the phrase as its detail;
 - a Space's address the sign-in refuses by the origin rule [[git-host-2](git-host.md#git-host-2)] is answered "Enter just the Space's address, like https://spex.sublang.ai";
 - each case is one message of the catalog, never assembled from fragments, so its word order follows each language.
 
-### Seat Mode
-
-#### core-service-125
-
-Where the core runs as a seat — started with a server's id and name, the admitted person's permanent account id at the instance and, optionally, a shared credential file ([DR-132](../decisions/132-team-servers.md)) — the core service shall run for that person alone:
-
-- its sign-in is the device flow with the request naming the server and the person [[git-host-27](git-host.md#git-host-27)], and a sign-in whose account bears another permanent id than the person's ends `failed`, storing nothing;
-- your own group is placed at no instance [[space-102](space.md#space-102)];
-- every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
-- intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
-- `server.open` is refused `invalid_request`, "Already on a server — open it from your computer": a seat holds no seats of its own [[core-service-128](#core-service-128)] ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
-- the seat account's own Git configuration names the app's credential helper in its member mode, so the pushes agents make from a work tree carry the member's token [[git-host-9](git-host.md#git-host-9)];
-- the runtime's label is the server's name [[core-service-4](#core-service-4)].
-
-#### core-service-126
-
-Where the core runs as a seat with a shared credential file [[core-service-125](#core-service-125)], when it starts — before it seeds or reseeds your own group's config [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)] ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)) — and before each agent run, the core service shall read the file — `NAME=value` lines, the names of each agent's shared forms among them [[settings-49](settings.md#settings-49)] — into the environment its adapters inherit, so that a replaced value reaches the next run without a restart while a running agent process keeps the environment it started with ([DR-132](../decisions/132-team-servers.md)):
-
-- for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
-- an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
-- a stop, and a start that fails before the service stands, put every form name back as the process started with it;
-- no value of the file is logged or written elsewhere except the access-only Codex credential materialized for its seat [[core-service-150](#core-service-150)].
-
-#### core-service-150
-
-Where a seat selects a valid access-only Codex snapshot [[settings-56](settings.md#settings-56)], when the shared environment is prepared [[core-service-126](#core-service-126)], the core service shall atomically materialize only its external-token credential as owner-only `auth.json` in a private persistent Codex home under the seat's local storage [[storage-53](storage.md#storage-53)] and select it through `CODEX_HOME` ([DR-201](../decisions/201-shared-codex-subscription-access.md)):
-
-- each seat has a separate directory, with neither a symlink nor a shared writable credential or refresh token;
-- starter selection counts a successfully materialized snapshot as a Codex sign-in by a seed-only presence projection, containing no usable token and entering no agent run;
-- the native status command uses that home, as do the adapter's runs;
-- switching away from the snapshot removes its generated `auth.json`, keeps other native state and restores the process's prior `CODEX_HOME`;
-- stopping restores the process's prior `CODEX_HOME`, preserving the seat's private state.
-
-### Places
-
-#### core-service-128
-
-When a client sends `server.list`, `server.open` or `server.close`, the core service shall act on the seats the person holds on team servers ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
-
-| Command | Effect |
-| --- | --- |
-| `server.list` | reads each signed-in instance's servers listing [[git-host-29](git-host.md#git-host-29)] and replies `{servers, failures}` — every server by its `instance`, `id`, `name`, `group` (the group's full path) and `open`, whether a seat is open at it, and each instance whose read failed by its `instance` and `message`, so one instance's failure hides no other's servers [[git-host-11](git-host.md#git-host-11)] |
-| `server.open {instance, serverId, consented}` | with `consented` true — the person's explicit Open request, recorded by the client — reads the instance's servers listing for the server's name, group and address [[git-host-29](git-host.md#git-host-29)], a server the listing does not name being `not_found`, "No longer shared with you", with no ticket asked, then asks the instance for a ticket [[git-host-29](git-host.md#git-host-29)], presents it at the server's address for the admission, waiting ninety seconds for the answer — longer than the hub's own bound for an admission [[hub-2](hub.md#hub-2)], so that no admission the hub still runs is one this core gave up on — keeps the seat's endpoint, bearer and lease expiry under `local/` [[storage-45](storage.md#storage-45)], starts its relay [[core-service-129](#core-service-129)], keeps the ticket in memory for the seat's sign-in, which the relay's first hello starts with it [[core-service-142](#core-service-142)], and replies `{place, leaseExpiresAt}`, never the bearer, the endpoint or the ticket; `consented` absent or false is `invalid_request` and asks nothing; a place already holding a seat is admitted again, the new seat replacing the old |
-| `server.close {instance, serverId}` | ends the seat's relay and removes its entry, replying `{closed: true}`, `not_found` where no seat is open there; the seat's lease continues at the server while work runs there |
-| `server.signin {instance, serverId}` | starts the seat's sign-in again [[core-service-142](#core-service-142)], `not_found` where no seat is open there |
-
-- a refusal of the ticket or the admission is relayed with its cause [[git-host-11](git-host.md#git-host-11)], the instance's `host_refused` as refused and its `not_found` as no longer shared;
-- every change of the open seats is announced to every client as `server.state` — and the same message sent to a client as it connects — each seat by its `instance`, `serverId`, `name`, `group`, `place`, `leaseExpiresAt`, `relay` state — connecting until the watch's first hello, open after it, closed while the watch is down and reconnecting, or mismatched as an end state [[core-service-129](#core-service-129)] — and `signIn` state [[core-service-142](#core-service-142)]; the place is the seat's key, `<instance origin>#<server id>` [[storage-45](storage.md#storage-45)], shown by the server's name;
-- at start the core reopens every seat its file holds, a refusal removing the entry as a close does.
-
-#### core-service-142
-
-When a seat's relay first reads the seat's hello [[core-service-129](#core-service-129)], or a client sends `server.signin` for it, the core service shall read the seat's Groups state through a connection of its own to the seat, as any client reads it, and, where the seat is not signed in at the seat's instance, start its sign-in there over that connection — the device flow, the seat's request naming the server and the person and, where the relay's first hello starts the flow of an open this core made, carrying the ticket that open presented at the server, handed to the seat in the start and held no longer [[git-host-27](git-host.md#git-host-27)] — carrying the flow in the seat's `signIn` state of `server.state` [[core-service-128](#core-service-128)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-164](../decisions/164-the-seat-signs-in-on-its-ticket.md)):
-
-| `signIn` | While |
-| --- | --- |
-| `{state: "pending"}` | the seat's hello is not yet read, its Groups state not yet read, or a flow started with the ticket runs within the first poll interval the seat's reply names [[git-host-3](git-host.md#git-host-3)] plus two seconds, in which an instance granting on the ticket answers |
-| `{state: "running", verificationUri, expiresAt}` | the seat's flow runs with the instance asking for its page — from the seat's reply where the start carried no ticket, past that interval where it did: `verificationUri` the instance's page where the person approves "Spex on <server>" with the code carried in it [[git-host-3](git-host.md#git-host-3)] |
-| `{state: "signedIn"}` | the seat's Groups state lists its instance signed in |
-| `{state: "failed", cause}` | the flow ended denied, expired or refused, `cause` the seat's one-sentence cause [[git-host-27](git-host.md#git-host-27)] |
-
-- a flow the instance grants on the ticket passes from `pending` to `signedIn` with no `running` announced and no page opened; a sign-in started by `server.signin`, or by a relay reopened at start, carries no ticket — no grant can come — and reads `running` on the seat's reply;
-- the core starts the flow once per `server.open` and per `server.signin`, never again on its own while one runs, failed or stands signed in, and a seat reopened at start [[core-service-128](#core-service-128)] that is signed in already reads `signedIn` with no flow started;
-- the desktop shell opens `verificationUri` in the person's browser once per flow started, as it opens the local browser flow's page [[app-shell-37](app-shell.md#app-shell-37)], the served shell leaving it as a link;
-- the seat's sign-in is the seat's own: its app token stays on the server, and nothing of it reaches this core or a client beyond the states above.
-
-#### core-service-129
-
-While a seat is open [[core-service-128](#core-service-128)], the core service shall expose a relay path for it on its own endpoint, `/seats/<place>` with the place percent-encoded, admitted as the path `/` is [[core-service-24](#core-service-24)], and shall pipe each client connection there, frames unread both ways, through a connection of its own to the seat's endpoint over TLS presenting the bearer in the `Authorization` header and no `Origin` ([DR-133](../decisions/133-one-desktop-over-several-cores.md)):
-
-- one connection to the seat per client connection, so request ids and subscriptions stay the client's own; either side closing closes the other;
-- beside them one watch connection per seat, which relays nothing, reconnects every second as a client does, reads the seat's hello — a protocol version other than this core's marks the place mismatched and stops its reconnecting — and reads the seat's ledger badge on every `intents.changed` there; the watch stands as a connection at the hub, so the seat's lease renews while the desktop holds the seat open;
-- a close with the lease-end code `4401`, or the seat refusing the bearer at an upgrade, removes the seat as a close does and announces it, its relayed clients closed with `4401`; a relayed client is closed with `1000` at `server.close` or a re-admission, `1001` at the core's stop, and `1011` where the seat cannot be reached;
-- the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each seat's last read badge while its relay stands open or closed, none for a mismatched seat;
-- the bearer and the endpoint reach no client and no log.
-
 ### core-service-143
 
-The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 33 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using the shared protocol [[core-service-12](#core-service-12)] and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
-- sign-in uses the shell's existing browser or device flow with registry purpose, no seat ticket, and stores no Space entry or placement;
+- sign-in uses the shell's existing browser or device flow with registry purpose, and stores no Space entry or placement;
 - sign-out, refresh and a refused registry grant affect only its registry slot, even when a Space shares its origin; a start cancelled before its first reply stores no grant, and an old read or sign-in completion cannot restore an account after cancellation or sign-out;
 - `registry.orgs` reports every namespace the environment's registry account may publish to, with provider metadata, and directory discovery returns only public names, origins and sign-in kinds [[environments-39](environments.md#environments-39)];
 - explicit registry selection writes the environment's registry origin through a comment-preserving version-checked edit, retaining format, extension fields, Space, requests and existing lock provenance [[environments-38](environments.md#environments-38)].
@@ -799,7 +721,7 @@ The `packages/core` workspace package shall build as a headless Node package tha
 
 The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export it from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol from that one entry point and never redefines it:
 
-- When the protocol changes incompatibly, the protocol version carried by the hello message [[core-service-1](#core-service-1)] is bumped.
+- When the protocol changes incompatibly, the version carried by the hello message [[core-service-1](#core-service-1)] is bumped; the personal Space and single-core protocol is version 35 ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
 - A closed vocabulary a client must hold against the runtime's own — the embedded runtime's failure-code list — is re-exported here unchanged rather than copied into a client ([DR-076](../decisions/076-playbook-14-1-adoption.md)).
 
 #### core-service-13
@@ -1043,7 +965,7 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 
 #### core-service-122
 
-Where your own group's file is valid, when the core creates a session, the integration suite shall assert that the session records its Captain and players with no `skills` [[core-service-16](#core-service-16)].
+Where the global file is valid, when the core creates a session, the integration suite shall assert that the session records its Captain and players with no `skills` [[core-service-16](#core-service-16)].
 
 #### core-service-117
 
@@ -1071,7 +993,7 @@ Where the shared config path holds no file, the test suite shall start the core 
 
 #### core-service-157
 
-When the integration suite reads readiness locally under a direct provider and from a seat under a direct provider and a custom route, it shall assert the exact direct-provider model pair, empty defaults under the custom route, and absence of the private endpoint from the responses [[core-service-9](#core-service-9)], and after the seat’s custom-route recheck the actual seeded Codex reviewer omits both model pins [[core-service-3](#core-service-3)].
+When the integration suite reads readiness under a direct provider and a custom route, it shall assert the exact direct-provider model pair, empty defaults under the custom route, and absence of the private endpoint from the responses [[core-service-9](#core-service-9)], and after the custom-route recheck the actual seeded Codex reviewer omits both model pins [[core-service-3](#core-service-3)].
 
 #### core-service-138
 
@@ -1087,15 +1009,8 @@ Where the core seeded the shared config path under Claude credentials alone, the
 
 #### core-service-156
 
-Where Claude Code's user settings file in the core's home sets a key, a third-party base URL and `ANTHROPIC_MODEL`, none of them in the process environment, the test suite shall run a turn over the fixture adapter and fail unless the Captain's control call and the player's run each start with all three, a turn after the file drops the base URL and the model starts with neither and with the file's replaced key, and a stop leaves none of the names in the process environment; and on a seat whose server account's settings set a key, a token and a base URL, fail unless every run of a turn, the Captain's control call among them, starts with the member's own key and neither of the others, a replaced key standing after the file then drops a name [[core-service-155](#core-service-155)].
+Where Claude Code's user settings file in the core's home sets a key, a third-party base URL and `ANTHROPIC_MODEL`, none of them in the process environment, the test suite shall run a turn over the fixture adapter and fail unless the Captain's control call and the player's run each start with all three, a turn after the file drops the base URL and the model starts with neither and with the file's replaced key, and a stop leaves none of the names in the process environment [[core-service-155](#core-service-155)].
 
-#### core-service-139
-
-Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN` alone, with no credential in the process environment or the home, the test suite shall start it on a fresh home and fail unless the seeded config, as the clone's first commit records it, carries every agent on `codex` [[core-service-126](#core-service-126)] [[core-service-3](#core-service-3)], and unless, after the member sets their own Claude credential, the untouched config becomes the both-credentials seed [[core-service-137](#core-service-137)]; and where the server account's home holds a Claude key in its user settings and a Claude folder whose status command would answer signed in, fail unless the seed still carries every agent on `codex`, no status command is asked, and the member's own Codex credential leaves the file as it was.
-
-#### core-service-140
-
-Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN`, with no credential in the process environment, the test suite shall fail unless a start on a home another core already serves is refused, a stop whose media staging cannot be removed fails, and a stop whose root lease cannot be released fails, each leaving no form name of any agent in the process environment [[core-service-126](#core-service-126)].
 ### Persistence Coverage
 
 #### core-service-22
@@ -1201,7 +1116,7 @@ Where a core service runs with a config carrying an error and an adapter that is
 
 #### core-service-146
 
-When the core's test suite runs, the test suite shall assert that no message of the core's English catalog says seat, ticket, home, placement, origin, unit, device or spex repository as a word, and that `space.signin.start` naming `https://spex.sublang.ai/path` is refused with "Enter just the Space's address, like https://spex.sublang.ai", writing nothing [[core-service-145](#core-service-145)].
+When the core's test suite runs, the test suite shall assert that no message of the core's English catalog says home, placement, origin, unit, device or spex repository as a word, and that `space.signin.start` naming `https://spex.sublang.ai/path` is refused with "Enter just the Space's address, like https://spex.sublang.ai", writing nothing [[core-service-145](#core-service-145)].
 
 ### Intent Ledger Coverage
 
@@ -1346,11 +1261,11 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 
 #### core-service-152
 
-Where a client reads your own group's valid config, edits it with `config.edit` and then with `config.batch`, and another writer then changes the file, the test suite shall assert that `config.get`'s reply, the `config.state` broadcast after each write and each write's reply carry one revision for one state, a new one after each write, and that the revision read after the outside write differs from the one before it [[core-service-45](#core-service-45)].
+Where a client reads the global valid config, edits it with `config.edit` and then with `config.batch`, and another writer then changes the file, the test suite shall assert that `config.get`'s reply, the `config.state` broadcast after each write and each write's reply carry one revision for one state, a new one after each write, and that the revision read after the outside write differs from the one before it [[core-service-45](#core-service-45)].
 
 #### core-service-153
 
-Where your own group's commented config holds a Captain and players on `claude` and `codex`, the test suite shall submit `config.batch` for each case below and assert its refusal, with the file's bytes unchanged in every case:
+Where the global commented config holds a Captain and players on `claude` and `codex`, the test suite shall submit `config.batch` for each case below and assert its refusal, with the file's bytes unchanged in every case:
 
 | Case | Refusal |
 | --- | --- |
@@ -1363,7 +1278,7 @@ Where your own group's commented config holds a Captain and players on `claude` 
 
 #### core-service-154
 
-Where your own group's real config carries comments and hand-written fields, when one `config.batch` holds a `captain.set` and a `player.set` removing each `model` and a `playbook.role.bind` writing `model: false`, the test suite shall assert that the three `model` fields changed as asked with every comment and hand-written field kept, that the reply carries the reloaded state, and that the reloaded config resolves the Captain's and each role's model to Provider default [[core-service-44](#core-service-44)].
+Where the global real config carries comments and hand-written fields, when one `config.batch` holds a `captain.set` and a `player.set` removing each `model` and a `playbook.role.bind` writing `model: false`, the test suite shall assert that the three `model` fields changed as asked with every comment and hand-written field kept, that the reply carries the reloaded state, and that the reloaded config resolves the Captain's and each role's model to Provider default [[core-service-44](#core-service-44)].
 
 ### Compile Lifecycle Coverage
 
@@ -1492,21 +1407,9 @@ Where two homes pair one project at the same working-folder path and sync its re
 - a session and an intent carrying no runtime keep today's readings on both homes, and an intent without a runtime is next on either [[core-service-107](#core-service-107)];
 - deleting the first's session from the second succeeds as any deletion does.
 
-#### core-service-127
-
-Where the core runs as a seat against a stand-in instance with a fixture adapter recording its environment, the integration suite shall assert seat mode [[core-service-125](#core-service-125)]: the device request names the server and the person and a sign-in as another account stores nothing; your own group gains no placement; the path-naming commands are refused with the phrase; `server.open` is refused before anything is asked; a join names no folder; an intent holding no runtime is listed queued, never next while a newer intent the seat captured is, and refused `conflict`, "Runs nowhere yet", on a turn while its edit and close succeed; a `git push` run outside the app in a project's work tree reaches an `http` or `https` host the member placed a token for with that token and a host without one with none [[core-service-125](#core-service-125)]; and the shared credential file [[core-service-126](#core-service-126)]: its values reach a run's environment, a value replaced between runs reaches the next run while the running one keeps its own, a member's own credential displaces the shared names of its agent, and an unreadable file is reported without blocking.
-
-#### core-service-130
-
-Where a stand-in instance answers the servers routes and a stand-in hub admits a ticket and relays to a second core as a seat, the integration suite shall assert the places [[core-service-128](#core-service-128)] [[core-service-129](#core-service-129)]: `server.list` names the server; `server.open` with `consented` absent or false asks nothing; with true, the seat's entry is written owner-only and the reply carries no bearer; the relay path admits the local token and refuses a wrong one and a foreign origin; the relayed hello is the seat's and a `project.list` round-trips; a seat whose hello carries another version reads mismatched alone; the attention count includes the seat's badge; a lease-end close and `server.close` each remove the path and the entry and announce `server.state`; no frame to the client carries the bearer; a restarted core reopens the seat; the admission's wait outlasts a stand-in hub answering after seventy seconds and ends `unreachable` at ninety [[core-service-128](#core-service-128)]; and the seat's sign-in [[core-service-142](#core-service-142)]: the seat's hello read, `server.state` carries `signIn` `pending`, the seat's own `space.signin.start` having been sent once with the ticket the open presented, then `signedIn` with no `running` between where the stand-in grants on the ticket; where the stand-in is scripted to keep its page, `pending` through the first poll interval, then `running` with the stand-in's verification URL, then `signedIn` once the stand-in approves and `failed` with the seat's cause where it denies, `server.signin` starting a second flow with no ticket after a failure, read `running` within the interval, and none while one runs, a seat signed in before the open reading `signedIn` with no flow started, a core restarted over its seat starting its sign-in with no ticket, read `running` within the interval, and no app token of the seat's and no ticket in any frame to the client.
-
 #### core-service-141
 
 When a protocol integration client connects to the real core, the suite shall assert the hello names the current protocol version and no client before any other message [[core-service-1](#core-service-1)].
-
-### core-service-151
-
-Where a real seat core uses a Codex access-only snapshot, the integration suite shall replace that snapshot between agent runs, set and remove a member's own credential, remove the shared snapshot and stop the core, asserting that each next run and native status select the current private credential, a run already started retains its loaded access, a member's own form displaces all shared forms, removal clears the generated credential while keeping native history, and the earlier `CODEX_HOME` is restored on removal and stop [[core-service-126](#core-service-126)] [[core-service-150](#core-service-150)].
 
 ## References
 

@@ -11,10 +11,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo, ProjectInfo } from "@sublang/spex-core/protocol";
 
 import type { ProjectMeta } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { recordsStatePhrase } from "../lib/space.js";
-import { allRepositories, standingOf } from "../lib/instances.js";
+import { allRepositories, instanceNameAt } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
@@ -70,7 +70,7 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
  * only while that band is folded, since an open band says it itself
  * (DR-069: a surface explains nothing its controls show). */
 function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const folded = store((state) => state.foldedSources[projectId] ?? false);
   const forge = meta?.forge;
   if (!folded) return null;
@@ -97,15 +97,9 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
   );
 }
 
-/** Where the project's records are (projects-4, DR-172): "Records ·
- * <group> · <standing>" — the group holding them as the Space surface
- * heads it, "Personal" for the person's own and left out while they are
- * in none, and their standing as the Space surface words it (space-61),
- * or a waiting step where one waits (space-64) — read from the Space
- * state, which this line asks for when nothing has read it yet. No
- * records' key or repository name is named. */
+/** Show the Space name and current records status from the Space row (projects-4). */
 function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const space = store((state) => state.space);
   const loadSpace = store((state) => state.loadSpace);
   const connected = store((state) => state.connection === "open");
@@ -114,33 +108,18 @@ function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   }, [connected, loadSpace]);
   const { key } = project.repository;
   const row = space ? allRepositories(space).find((repository) => repository.key === key) : undefined;
-  const standing = space && row ? standingOf(space, key) : undefined;
-  // The group the records stand under (space-1): none while they are in
-  // no group — your own group's rows stand under "This computer".
-  const entry = standing && !standing.own ? standing.group : undefined;
-  const group = !entry
-    ? undefined
-    : entry.login !== null && entry.mine
-      ? i18n._({ id: "Personal", comment: "your own group at a Space, the place your own records go; never \"your namespace\"" })
-      : entry.login !== null
-        ? i18n._({
-            id: "Shared by @{login}",
-            values: { login: entry.login },
-            comment: "records another account keeps at a Space and shares with you; {login} is that account",
-          })
-        : entry.name;
+  const destination = row?.instance ? instanceNameAt(space, row.instance) : undefined;
   const state = row ? recordsStatePhrase(row, now) : "";
   return (
     <div
       data-testid="overview-records"
       className="truncate text-xs text-neutral-500"
-      title={entry && entry.login === null && entry.fullPath !== entry.name ? entry.fullPath : undefined}
     >
-      {i18n._({ id: "Records", comment: "the Overview's field naming where the project's records are: its group and their standing follow" })}
-      {group ? (
+      {i18n._({ id: "Records", comment: "the Overview's field naming where the project's records are: the Space name and sync state follow" })}
+      {destination ? (
         <>
           <span aria-hidden> · </span>
-          <span data-testid="overview-records-group">{group}</span>
+          <span data-testid="overview-records-space">{destination}</span>
         </>
       ) : null}
       {state ? (
@@ -180,7 +159,7 @@ export function OverviewTab({
   /** Stage an intent's dispatch (run-view-86). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const projects = store((state) => state.projects);
   const projectMeta = store((state) => state.projectMeta);
   const sessions = store((state) => state.sessions);

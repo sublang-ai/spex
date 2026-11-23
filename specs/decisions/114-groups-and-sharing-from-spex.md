@@ -15,6 +15,7 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in a s
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
 Amended by [DR-190](190-membership-with-a-clear-scope.md) in the members panel and editor: Invite members names the group or project, Username and Role carry visible guidance, and Add member grants an existing account access immediately.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 

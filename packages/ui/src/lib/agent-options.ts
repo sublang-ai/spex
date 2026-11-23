@@ -4,13 +4,13 @@
 import { useEffect, useState } from "react";
 import { adapterNameSchema, type AdapterName, type AgentModelOption, type AgentOptions } from "@sublang/spex-core/protocol";
 import { i18n } from "../i18n.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 
 /** A caller passing `epoch` reads the catalog again each time it changes,
  * keeping the earlier reading as `refreshing` until the new one lands;
  * a failed reading replaces it (settings-5, DR-217). */
 export function useAgentOptions(adapter: AdapterName, epoch?: number) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const load = store((state) => state.loadAgentOptions);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ adapter: AdapterName; attempt: number; epoch?: number; options?: AgentOptions; error?: string }>();
@@ -83,7 +83,7 @@ export function modelDisplayText(display: ModelDisplay): string {
  * behind an alias; keep the chosen variant when its ID extends that
  * resolution, e.g. a larger context window (settings-74). */
 export function useChipModel(adapter: string | undefined, value: string | undefined): string | undefined {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const known = adapterNameSchema.options.find((name) => name === adapter);
   const catalog = store((state) => known && state.modelCatalogs[known]);
   const connected = store((state) => state.connection === "open");

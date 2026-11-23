@@ -3,7 +3,7 @@
 
 # Synchronize a spex repository with Git
 
-Every project and group keeps its records in its own spex repository, cloned under `~/.spex/workspace/` and synced on its `spex` branch.
+Personal records and each project’s records live in separate spex repositories, cloned under `~/.spex/workspace/` and synced on its `spex` branch.
 The desktop and server app sync each one from the Space surface without stopping the core.
 The commands below are the command-line path for one spex repository and require the core stopped.
 

@@ -26,7 +26,7 @@ test.after(() => fixture.dispose());
 // space-38: the sync loop of one spex repository over two homes
 // ---------------------------------------------------------------------------
 
-test("space-38: your own group's repository joins with one Settings choice, and a project's session lands on the joining home", async (t) => {
+test("space-38: the global records repository joins with one Settings choice, and a project's session lands on the joining home", async (t) => {
   const bareOwn = bareRepo();
   const bareProject = bareRepo();
   const a = await startHome("a");
@@ -35,14 +35,14 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   writeFileSync(identity, "[user]\n\tname = Home B\n\temail = b@example.test\n[commit]\n\tgpgsign = true\n");
   const b = await startHome("b", { model: "claude-test-b", env: { GIT_CONFIG_GLOBAL: identity }, project: false });
   t.after(() => b.stop());
-  // A pushes a project's spex repository with a session, and its own group's.
+  // A pushes a project's spex repository with a session, and its global records.
   const { key } = await addFolder(a, a.projectDir);
   const sessionA = await runTurn(a, key, "Fix the login redirect");
   await a.client.expectOk("space.remote.set", { repository: key, url: bareProject });
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
   await a.client.expectOk("space.remote.set", { repository: OWN_KEY, url: bareOwn });
   assert.equal((await a.client.settle("space.sync", { repository: OWN_KEY })).sync.phase, "done");
-  // B's own group's repository, begun under B's own identity with signing
+  // B's global records repository, begun under B's own identity with signing
   // turned off, holds a different configuration and an unrelated history.
   assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%cn"), "Home B");
   await b.client.expectOk("space.remote.set", { repository: OWN_KEY, url: bareOwn });

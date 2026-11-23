@@ -1014,7 +1014,7 @@ test("seedConfig creates once and never overwrites", () => {
 });
 
 test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
-  // Your own group's config sits in its spex repository's clone
+  // The global config sits in the global records repository
   // (storage-1, DR-103), named after this device's user before the home
   // has its file.
   const own = defaultOwnName();
@@ -1023,7 +1023,7 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   assert.equal(resolveConfigPath({}, "/home/u"), inClone(join("/home/u", ".spex")));
   // A blank override is not a root; the home fallback still applies.
   assert.equal(resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"), inClone(join("/home/u", ".spex")));
-  // A written home names your own group itself.
+  // A written home specifies the personal records folder.
   const root = scratchDir("spex-config-path-");
   const home = Home.create(root, { own: "alice" }); home.save();
   assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));
@@ -1098,27 +1098,27 @@ test("adapter readiness takes a credential variable, else the agent's own sign-i
     asked.push({ adapter, home: env.HOME });
     return { state };
   };
-  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, undefined, answering("signed-out"))).ready, false);
-  assert.equal((await checkAdapterReadiness("codex", {}, home, usableRuntime, undefined, answering("signed-in"))).ready, true);
+  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, answering("signed-out"))).ready, false);
+  assert.equal((await checkAdapterReadiness("codex", {}, home, usableRuntime, answering("signed-in"))).ready, true);
   assert.deepEqual(asked, [{ adapter: "claude", home }, { adapter: "codex", home }], "asked as a run would be, in this home");
   asked.length = 0;
-  assert.equal((await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime, undefined, answering("signed-out"))).ready, true);
+  assert.equal((await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime, answering("signed-out"))).ready, true);
   assert.deepEqual(asked, [], "a credential variable needs no question");
-  const unsure = await checkAdapterReadiness("codex", {}, home, usableRuntime, undefined, async () => ({ state: "unconfirmed", reason: "slow" }));
+  const unsure = await checkAdapterReadiness("codex", {}, home, usableRuntime, async () => ({ state: "unconfirmed", reason: "slow" }));
   assert.equal(unsure.ready, null);
   assert.equal(unsure.unconfirmed, "slow");
   assert.deepEqual(unsure.faults, []);
   // No folder, no sign-in: nothing is asked, so the command creates none.
   asked.length = 0;
   const bare = scratchDir("spex-home-");
-  assert.equal((await checkAdapterReadiness("claude", {}, bare, usableRuntime, undefined, answering("signed-in"))).ready, false);
-  assert.equal((await checkAdapterReadiness("codex", {}, bare, usableRuntime, undefined, answering("signed-in"))).ready, false);
+  assert.equal((await checkAdapterReadiness("claude", {}, bare, usableRuntime, answering("signed-in"))).ready, false);
+  assert.equal((await checkAdapterReadiness("codex", {}, bare, usableRuntime, answering("signed-in"))).ready, false);
   assert.deepEqual(asked, []);
   // A configuration folder named elsewhere is the one looked for.
   const elsewhere = join(bare, "claude-config");
   mkdirSync(elsewhere);
-  assert.equal((await checkAdapterReadiness("claude", { CLAUDE_CONFIG_DIR: elsewhere }, bare, usableRuntime, undefined, answering("signed-in"))).ready, true);
-  assert.equal((await checkAdapterReadiness("codex", { CODEX_HOME: join(bare, "missing") }, home, usableRuntime, undefined, answering("signed-in"))).ready, false);
+  assert.equal((await checkAdapterReadiness("claude", { CLAUDE_CONFIG_DIR: elsewhere }, bare, usableRuntime, answering("signed-in"))).ready, true);
+  assert.equal((await checkAdapterReadiness("codex", { CODEX_HOME: join(bare, "missing") }, home, usableRuntime, answering("signed-in"))).ready, false);
   assert.equal((await checkAdapterReadiness("gemini", {}, home, usableRuntime)).ready, null);
   assert.equal((await checkAdapterReadiness("gemini", {}, home, usableRuntime)).unconfirmed, undefined, "no rule is no unconfirmed sign-in");
   assert.equal((await checkAdapterReadiness("kimi", {}, home, usableRuntime)).ready, null);
@@ -1132,7 +1132,7 @@ test("Claude's settings file counts: its credential and its base URL are a run's
   }));
   const asked: string[] = [];
   const signedOut = async (adapter: "claude" | "codex") => { asked.push(adapter); return { state: "signed-out" as const }; };
-  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, undefined, signedOut)).ready, true);
+  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, signedOut)).ready, true);
   assert.deepEqual(asked, [], "a credential its settings set needs no question");
   const settings = claudeSettingsEnv({}, home);
   assert.deepEqual(settings, { ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic", ANTHROPIC_AUTH_TOKEN: "k" }, "strings only");
@@ -1160,13 +1160,13 @@ test("a missing or stale runtime reports not ready, whatever the credential clas
   const gemini = await checkAdapterReadiness("gemini", {}, home, missing);
   assert.equal(gemini.ready, false);
   // Both halves unmet report both, not the first alone.
-  const both = await checkAdapterReadiness("claude", {}, scratchDir("spex-home-"), missing, undefined, async () => ({ state: "signed-out" }));
+  const both = await checkAdapterReadiness("claude", {}, scratchDir("spex-home-"), missing, async () => ({ state: "signed-out" }));
   assert.equal(both.ready, false);
   assert.match(both.requirement ?? "", /npm install -g/);
   assert.match(both.requirement ?? "", /ANTHROPIC_API_KEY/);
   // An unconfirmed sign-in over a missing runtime: not ready, the runtime alone named.
   mkdirSync(join(home, ".claude"));
-  const unsure = await checkAdapterReadiness("claude", {}, home, missing, undefined, async () => ({ state: "unconfirmed", reason: "slow" }));
+  const unsure = await checkAdapterReadiness("claude", {}, home, missing, async () => ({ state: "unconfirmed", reason: "slow" }));
   assert.equal(unsure.ready, false);
   assert.deepEqual(unsure.faults.map((fault) => fault.kind), ["runtime"]);
 });

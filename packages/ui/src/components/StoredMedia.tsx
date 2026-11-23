@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { MediaAsset, MediaOwner } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { readMediaAsset } from "../lib/media-client.js";
 import { i18n } from "../i18n.js";
 import { TrustedMedia, type TrustedMediaContent } from "./TrustedMedia.js";
@@ -26,7 +26,7 @@ export function assetReference(value: unknown): MediaAsset | undefined {
 }
 
 function useStoredAsset(asset: Pick<MediaAsset, "assetId"> & Partial<MediaAsset> | undefined, enabled = true) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const owner = useContext(OwnerContext);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; content: TrustedMediaContent }>();

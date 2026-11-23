@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// CLI entry: parse argv, start the shell, print the one access URL
-// (SERVER-SHELL-1) — or, as a seat, the socket it listens on and no URL,
-// its token in no output (SERVER-SHELL-25) — and stop the core before
-// exiting on SIGINT or SIGTERM, within twenty seconds, so no agent process is orphaned
-// (SERVER-SHELL-6).
+// Serve one single-user IDE until SIGINT or SIGTERM.
 
 import {
   describeError,
@@ -14,7 +10,6 @@ import {
   formatHost,
   isLoopback,
   parseArgs,
-  startSeat,
   startServer,
   type ServerShellOptions,
 } from "./server.js";
@@ -26,16 +21,6 @@ import {
 async function start(
   options: ServerShellOptions,
 ): Promise<{ close(): Promise<void> }> {
-  if (options.seat) {
-    const running = await startSeat(options);
-    console.log(
-      `[spex-server] seat of person ${options.seat.personId} on ${options.seat.serverName} listening at ${running.socket}`,
-    );
-    console.log(
-      `[spex-server] config: ${JSON.stringify(running.service.configStateSnapshot().status)}`,
-    );
-    return running;
-  }
   const running = await startServer(options);
   console.log(`[spex-server] serving at ${running.url}`);
   if (isLoopback(options.host)) {

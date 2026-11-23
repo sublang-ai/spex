@@ -15,7 +15,7 @@ export {
   type RecordEnvelope,
   type SessionManagerOptions,
 } from "./session.js";
-export { CoreService, createCoreService, type CoreServiceOptions, type SeatOptions } from "./service.js";
+export { CoreService, createCoreService, type CoreServiceOptions } from "./service.js";
 // The content types the server shell's bundle and the core's applets
 // are served with alike (server-shell-4, applets-4).
 export { CONTENT_TYPES } from "./applets.js";

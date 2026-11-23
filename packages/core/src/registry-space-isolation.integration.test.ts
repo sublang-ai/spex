@@ -58,7 +58,7 @@ test("environments-38, environments-40, environments-27: missing registry config
   const home = await harness.startHome("strict-public-default", { host: space, project: false, extra: { registryFetch } });
   t.after(() => home.stop());
   await harness.signIn(home, space);
-  const key = (await home.client.expectOk("space.get", {})).own.repositories.find((repository) => repository.own)!.key;
+  const key = (await home.client.expectOk("space.get", {})).repositories.find((repository) => repository.own)!.key;
   const root = ownClone(home.dataDir);
   const text = `# An older environment retains its collaboration choice.\nformat: 1\nspace: ${space.url}\npackages:\n  public/guide:\n    version: ^1.0.0\n`;
   writeFileSync(join(root, "spex.yaml"), text);
@@ -115,7 +115,7 @@ test("environments-38, environments-40: an old pinned package source needs its o
   const home = await harness.startHome("locked-source-reader", { host, project: false, extra: { registryFetch } });
   t.after(() => home.stop());
   await harness.signIn(home, host);
-  const key = (await home.client.expectOk("space.get", {})).own.repositories.find((repository) => repository.own)!.key;
+  const key = (await home.client.expectOk("space.get", {})).repositories.find((repository) => repository.own)!.key;
   const root = ownClone(home.dataDir);
   writeFileSync(join(root, "spex.yaml"), text);
   writeFileSync(join(root, "spex.lock"), lockedText);

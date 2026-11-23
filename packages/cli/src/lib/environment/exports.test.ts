@@ -18,7 +18,7 @@
 // derivation adopted on a fresh clone, one at a newer release's version
 // on a device whose record held the older hash, and one of a package
 // whose files are not here standing for the links citing it; a project
-// without `specs/` placing no spec and reporting it; your own group's
+// without `specs/` placing no spec and reporting it; the global environment
 // writing the generated skill; and each state read back from the files.
 
 import { after, test } from "node:test";
@@ -355,7 +355,7 @@ test("environments-43: a copy committed at a newer release's version reads as th
   assert.notEqual(entry.sha256, olderHash);
 });
 
-test("environments-8: a project without specs/ places its spec nowhere and reports it, and your own group's writes the generated skill", async () => {
+test("environments-8: a project without specs/ places its spec nowhere and reports it, and the global environment writes the generated skill", async () => {
   const project = scratchRoot(false);
   const release = specText("tools");
   const report = await place(project, { "acme/tools": specRelease(project, "acme/tools", "1.0.0") });
@@ -368,10 +368,10 @@ test("environments-8: a project without specs/ places its spec nowhere and repor
   assert.equal(existsSync(placedRecordPath(project)), false, "[environments-41] nothing recorded");
   assert.deepEqual(readSpecPlacements(project, lockOf({ "acme/tools": specRelease(project, "acme/tools", "1.0.0") })), [placement("acme/tools", "no-specs")]);
 
-  // Your own group's clone: no working folder is its root.
+  // The global records repository: no working folder is its root.
   const clone = scratchRoot(true);
   const own = await exportEnvironment({ root: clone, lock: lockOf({ "acme/tools": specRelease(clone, "acme/tools", "1.0.0") }), workingFolder: null, userHome: null, agents: [] });
-  assert.deepEqual(own.specs, [], "[environments-8] your own group's reports no spec placement");
+  assert.deepEqual(own.specs, [], "[environments-8] the global environment reports no spec placement");
   assert.deepEqual(own.skills, ["acme-tools"]);
   assert.equal(read(clone, ".spex/skills/acme-tools/tools.md"), release, "[environments-8] the generated skill, as before");
   assert.equal(existsSync(join(clone, "specs", "packages", "tools.md")), false, "[environments-8] nothing in its specs/");

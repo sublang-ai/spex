@@ -154,7 +154,7 @@ When preparing a release tag, the developer/agent shall verify that the tarball 
 
 When preparing a release tag, the developer/agent shall run the automated smoke (`npm run smoke`) ([DR-086](../decisions/086-tests-in-tiers.md)) and see it pass every stage — the build, the spec lint, the fresh install, and the CLI user pass, which packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin:
 
-- the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server`, given only the home and an ephemeral port, is walked over its printed token URL — the page served, the config seeded at your own group's spex repository's `config/playbook.config.yaml` and valid with every template playbook, the built-in catalog and the `/code` artifacts served, the readiness of the Captain's and each bound player's adapter reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode, its home storing English so the render's clicks by name hold on any system, and exits clean;
+- the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server`, given only the home and an ephemeral port, is walked over its printed token URL — the page served, the config seeded at the global records repository's `config/playbook.config.yaml` and valid with every template playbook, the built-in catalog and the `/code` artifacts served, the readiness of the Captain's and each bound player's adapter reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode, its home storing English so the render's clicks by name hold on any system, and exits clean;
 - the smoke refuses a working tree with uncommitted changes outside the release records under `docs/releases/` unless `--allow-dirty` is given: the build, the lint and the CLI user pass read the working tree while the fresh install clones the committed one, and a release's record is written while its gates run;
 - the smoke re-runs neither the unit and integration suites nor the browser journeys: the release's full channel validation supplies that evidence before publication [[release-18](#release-18)];
 - with `--live` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), a `live` stage follows the CLI user pass: the live desktop smoke [[release-22](#release-22)], its driver taken from the fresh install's clone and run inside it on the machine's signed-in agents and a scratch Spex home;
@@ -230,8 +230,8 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 | --- | --- |
 | Pull request changing documentation alone | CLI build and tests, plus spec lint |
 | Other pull request | Build, type, catalog and spec gates; script tests and selected workspace suites on Linux Node 22; Windows Node 22 only where the selection reaches the CLI, UI or core, running the selected CLI/UI suites and core native-storage/platform coverage, and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships |
-| Full app, requested manually or by a reusable call with `full: true`, `channel: app` | On Linux and macOS, every workspace suite and script tests; on Windows, the CLI/UI suites, core native-storage/platform coverage and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships; all browser journeys in three shards on Linux and macOS; native browser acceptance on Linux and macOS; privileged hub lane [[release-36](#release-36)] |
-| Full CLI, requested manually or by a reusable call with `full: true`, `channel: cli` | CLI tests on every supported platform/Node row, with script tests on Linux and macOS only; no app journeys, native browser acceptance or hub lane |
+| Full app, requested manually or by a reusable call with `full: true`, `channel: app` | On Linux and macOS, every workspace suite and script tests; on Windows, the CLI/UI suites, core native-storage/platform coverage and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships; all browser journeys in three shards on Linux and macOS; native browser acceptance on Linux and macOS |
+| Full CLI, requested manually or by a reusable call with `full: true`, `channel: cli` | CLI tests on every supported platform/Node row, with script tests on Linux and macOS only; no app journeys or native browser acceptance |
 
 - the full supported matrix is Linux and macOS on Node 22 and 24, and Windows on Node 22;
 - a Linux or macOS row whose selection reaches the core runs on five runners, each building: four run a part of the core's suite, its test files sorted largest first and dealt to the parts in turn so each file runs in exactly one part, and the fifth runs the script tests, every other selected suite and the type and spec gates ([DR-229](../decisions/229-the-cores-suite-in-four-parts.md));
@@ -245,10 +245,10 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 | Root paths | Owner seeds |
 | --- | --- |
-| `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/hub-lane.yml`, `.github/workflows/caches.yml`, `.github/actions/download-caches/action.yml` | Script tests alone |
+| `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/caches.yml`, `.github/actions/download-caches/action.yml` | Script tests alone |
 | `scripts/affected-tests.mjs`, `scripts/affected-tests.test.mjs`, `scripts/ci-verdict.mjs`, `scripts/ci-workflow.test.mjs`, `scripts/app-release-workflow.test.mjs`, `scripts/prepush.sh`, `scripts/merge-on-green.sh`, `scripts/test-linux.sh`, `scripts/linux-ci/Dockerfile` | Script tests alone |
 | `scripts/release-notes.mjs`, `scripts/release-notes.test.mjs`, `scripts/smoke.mjs`, `scripts/smoke.test.mjs`, `scripts/install-smoke.mjs`, `scripts/cli-smoke.mjs`, `scripts/desktop-smoke.mjs`, `scripts/migration-smoke.mjs` | Script tests alone |
-| `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/team-server-local.test.mjs`, `scripts/skill-atlas.test.mjs` | Script tests alone |
+| `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/skill-atlas.test.mjs` | Script tests alone |
 | every path under `skills/skill-atlas/` | `e2e` |
 | every other path under `skills/` | Script tests alone |
 | `scripts/start-desktop.mjs`, `scripts/desktop-runner.mjs` | `apps/desktop` |
@@ -260,17 +260,13 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 When a CI invocation reaches its final result, its `checks` job shall evaluate the selected plan even after a dependency fails or is skipped, succeeding only when classification and every selected job succeeded and every unselected job was skipped [[release-34](#release-34)], with any failure, cancellation, missing result or unexpected skip blocking success and no stand-in job impersonating a suite ([DR-199](../decisions/199-release-gated-full-validation.md)).
 
-#### release-36
-
-When the privileged hub lane is invoked by full app validation [[release-34](#release-34)] or explicitly on request, it shall run as root on the Linux runner, the invocation's exact tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keeping the lane's output as the run's artifact, with no scheduled, push or pull-request trigger ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md), [DR-199](../decisions/199-release-gated-full-validation.md)).
-
 #### release-35
 
 When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md)).
 
 #### release-43
 
-When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys, native browser acceptance or privileged hub lane ([DR-199](../decisions/199-release-gated-full-validation.md)).
+When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys or native browser acceptance ([DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-31
 
@@ -294,7 +290,6 @@ When a step of a CI or release workflow runs `npm ci`, its job shall first resto
 - Electron's archive is restored to the default download cache that Electron's installer and the app packager both read, neither naming another, so packaging reuses that archive once the checksums it still fetches from the release validate it, and downloads the archive again otherwise;
 - a successful job saves what a miss fetched under that key;
 - npm's package cache is saved only by a job that installs, so no job saves it empty under an install's key.
-- the privileged hub lane's install, which its install script runs as root inside the lane [[release-36](#release-36)], restores none of these caches.
 
 #### release-50
 
@@ -351,20 +346,20 @@ When the release-notes integration suite runs the actual notes command over isol
 
 #### release-33
 
-When the repository-system audit reads the CI, release, hub and cache workflows, the download-caches action, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
+When the repository-system audit reads the CI, release and cache workflows, the download-caches action, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
 
 | Case | Assertions |
 | --- | --- |
+| CI triggers | The validation workflow accepts pull requests, manual requests and reusable calls and has no schedule or push-to-main trigger [[release-34](#release-34)]. |
 | Pull-request lifecycle | A newer head cancels its prior run; full/manual validation is not cancelled by that rule [[release-30](#release-30)]. |
 | Documentation alone | CLI tests and spec lint run; the ordinary `checks` gate succeeds with unselected jobs skipped and no stand-in [[release-34](#release-34)] [[release-44](#release-44)]. |
 | Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool and root-folder mapping selects its specified owners, a skill's Markdown included; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
 | Local working-tree selection | Committed, staged, unstaged and untracked changes and both sides of renames contribute; documentation and code use the same selection and test commands as CI [[release-43](#release-43)]. |
-| Pull-request matrix | Linux Node 22 runs the selected suites and fast gates; a selection reaching the core runs the core's suite in four parts beside one runner for the rest and the gates, a fixture suite's files dealt largest first with each in exactly one part; Windows Node 22 runs only for selected CLI/UI/core work; journeys, native browser acceptance and the hub lane are skipped [[release-34](#release-34)]. |
-| Full app | The supported platform/Node suites, each Linux and macOS row in the core's four parts beside the rest, all journey shards, native browser acceptance and privileged hub lane are selected [[release-34](#release-34)] [[release-36](#release-36)]. |
-| Full CLI | CLI suites run on every supported platform/Node row and script suites on Linux and macOS only, with app journeys, native browser acceptance and the hub lane skipped [[release-34](#release-34)]. |
+| Pull-request matrix | Linux Node 22 runs the selected suites and fast gates; a selection reaching the core runs the core's suite in four parts beside one runner for the rest and the gates, a fixture suite's files dealt largest first with each in exactly one part; Windows Node 22 runs only for selected CLI/UI/core work; journeys and native browser acceptance are skipped [[release-34](#release-34)]. |
+| Full app | The supported platform/Node suites, each Linux and macOS row in the core's four parts beside the rest, all journey shards, and native browser acceptance are selected [[release-34](#release-34)]. |
+| Full CLI | CLI suites run on every supported platform/Node row and script suites on Linux and macOS only, with app journeys and native browser acceptance skipped [[release-34](#release-34)]. |
 | Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
 | Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
-| Automatic triggers | CI and the hub lane have no schedules or push-to-main trigger; the hub lane accepts only reusable full-app invocation or explicit requests [[release-34](#release-34)] [[release-36](#release-36)]. |
 | Download caches | Every workflow step running `npm ci` restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, Electron's where its installer's and the packager's own download libraries both default with no override set, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, refusing a request on any other ref with a message naming `main` before any platform runs, installing and fetching Electron in jobs of their own on all three platforms, neither failing fast nor continuing on error, each attempted up to three times with waits that grow, keeping between installs only a dugite archive matching the locked dugite's checksum, read from a copy installed apart and checked just before each retry, so an intact one survives and a partial one is dropped even once npm rolled the install back or the copy arrived only for that retry, and running nothing else [[release-50](#release-50)]. |
 | Existing local gates | Prepush rejects conflict markers [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
 
@@ -374,7 +369,7 @@ When the repository-system audit reads both channel release workflows and their 
 
 #### release-46
 
-When release metadata and artifact checks run over isolated fixtures and actual archives, the suite shall verify channel-only idempotent manifest/lock preparation, unchanged dependencies, invalid-tag and incomplete-metadata refusal, duplicate-release/npm-version and registry-error refusal [[release-16](#release-16)], and packed archive/native metadata/compiler-receipt version mismatches [[release-8](#release-8)], while workflow audits verify preparation before installs across reusable jobs and the archived hub tree [[release-18](#release-18)].
+When release metadata and artifact checks run over isolated fixtures and actual archives, the suite shall verify channel-only idempotent manifest/lock preparation, unchanged dependencies, invalid-tag and incomplete-metadata refusal, duplicate-release/npm-version and registry-error refusal [[release-16](#release-16)], and packed archive/native metadata/compiler-receipt version mismatches [[release-8](#release-8)], while workflow audits verify preparation before installs across reusable jobs [[release-18](#release-18)].
 
 #### release-47
 

@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The applet tabs of a project's workspace (applets-1, DR-161): one per
-// applet its release provides that the project's environment or your own
-// group's installs with its files on this device, the project's first, each environment's in
-// spec package and applet order. A tab's id names its environment and
+// applet its release provides that the project or global environment
+// installs with files on this device, the project's first, each in spec
+// package and applet order. A tab's id names its environment and
 // applet, so two environments installing one id give two tabs. Pure
 // functions; the workspace renders them.
 

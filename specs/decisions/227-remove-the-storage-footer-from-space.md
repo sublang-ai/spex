@@ -7,6 +7,7 @@
 
 Accepted (2026-11-08) on the owner's review of the home-directory line beneath Space's groups.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in Space's footer presentation.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the single Space surface and its flat project list.
 
 ## Context
 

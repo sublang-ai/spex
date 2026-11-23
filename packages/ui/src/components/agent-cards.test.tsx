@@ -58,8 +58,7 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 import { AgentCards } from "./AgentCards.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { SettingsSurface } from "./SettingsSurface.js";
-import { PlaceStoreContext } from "../state/place-context.js";
-import { createAppStore, deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
+import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import { SpexCommandError } from "../lib/client.js";
 import type { BaseUrlState, ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
 
@@ -128,7 +127,7 @@ const CROSSED: Valid = {
 const PROJECT = "alice/shop-spex";
 /** A project's composition over `own` as core-service-2 composes it:
  * the project's file enabling `fix` and binding its roles by player
- * name alone, the players and their models your own group's. */
+ * name alone, the players and their models your personal. */
 function projectComposition(own: Valid, roles: Record<string, string> = { coder: "dev.spare" }): ConfigState {
   return {
     ...own,
@@ -193,7 +192,7 @@ beforeEach(() => {
   catalogs.refresh.mockReset();
   commandMock.mockReset();
   setClientForTests({ command: commandMock } as never);
-  // The place's hold outlives a page; no case starts under another's.
+  // Reset the configuration re-read state between tests.
   useAppStore.setState({ configReread: undefined });
 });
 
@@ -278,35 +277,6 @@ describe("settings-65: each base-URL state", () => {
     });
   }
 
-  test("hidden, on a seat: no model service, no list, the class's phrase and the Credentials section", () => {
-    const seat = createAppStore({ key: "https://space.test#1", name: "lab-1" }, { command: commandMock } as never);
-    seat.setState({
-      configState: CROSSED,
-      projectConfigs: {},
-      readiness: [
-        notReady("claude", [{ kind: "credential", requirement: "sign in by setting your own credential for claude in the Credentials section" }], {
-          baseUrl: { state: "hidden" },
-          credential: { class: "none", phrase: "sign in by setting your own credential for claude in the Credentials section" },
-        }),
-        entry("codex"),
-      ],
-    });
-    render(<PlaceStoreContext.Provider value={seat}><AgentCards /></PlaceStoreContext.Provider>);
-    const card = screen.getByTestId("agent-card-claude");
-    // settings-5: nothing for hidden.
-    expect(within(card).queryByTestId("agent-service")).toBeNull();
-    // settings-61: no list.
-    expect(within(card).queryByTestId("agent-official")).toBeNull();
-    // settings-63: the class's phrase, no local step.
-    const fault = within(card).getByTestId("agent-fault-credential");
-    expect(fault.textContent).toContain("Credentials section");
-    expect(fault.textContent).not.toContain("quit Spex");
-    // settings-5: the seat's steps point to the Credentials section.
-    const howto = within(card).getByTestId("agent-howto-claude");
-    expect(howto.textContent).toContain("Credentials section");
-    expect(howto.textContent).not.toMatch(/setup script|export |setx/);
-  });
-
   test("a runtime fault reads as the core's words, and both kinds show both", () => {
     const runtime = { kind: "runtime" as const, requirement: "the claude runtime failed to load — reinstall the app, or run npm install in a checkout" };
     show(CROSSED, [notReady("claude", [runtime]), notReady("codex", [{ kind: "runtime", requirement: "the codex runtime failed to load" }, CODEX_CREDENTIAL])]);
@@ -341,7 +311,7 @@ describe("settings-65: each base-URL state", () => {
   });
 });
 
-describe("settings-66: how to configure, per place and computer", () => {
+describe("settings-66: configuration steps by platform and shell", () => {
   const computers: { platform: string; shell?: string; file: RegExp }[] = [
     { platform: "darwin", shell: "zsh", file: /~\/\.zshrc[\s\S]*export ANTHROPIC_API_KEY=/ },
     { platform: "darwin", shell: "bash", file: /~\/\.bash_profile[\s\S]*export ANTHROPIC_API_KEY=/ },
@@ -466,22 +436,6 @@ describe("settings-67: with no config to read", () => {
       // settings-59, settings-61: nothing to batch without a config.
       expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
       expect(screen.queryByTestId("agent-official")).toBeNull();
-    });
-
-    test(`${configState.status}, on a seat: the cards' steps point to a Credentials section that stands`, () => {
-      const seat = createAppStore({ key: "https://space.test#1", name: "lab-1" }, { command: commandMock } as never);
-      commandMock.mockResolvedValue({ hosts: [], agents: [] });
-      seat.setState({
-        configState,
-        projectConfigs: {},
-        readiness: [notReady("claude", [{ kind: "credential", requirement: "sign in by setting your own credential for claude in the Credentials section" }], { baseUrl: { state: "hidden" } }), entry("codex")],
-      });
-      render(<PlaceStoreContext.Provider value={seat}><SettingsSurface /></PlaceStoreContext.Provider>);
-      expect(screen.getByTestId("config-broken")).toBeTruthy();
-      // settings-5: the seat's steps name the Credentials section…
-      expect(screen.getByTestId("agent-howto-claude").textContent).toContain("Credentials section");
-      // settings-48: …and it is there, the config broken or not.
-      expect(screen.getByTestId("credentials-section")).toBeTruthy();
     });
   }
 });
@@ -847,8 +801,7 @@ describe("settings-69: official names behind a third-party service", () => {
     expect(apply().disabled).toBe(true);
     expect(fix().disabled).toBe(true);
     expect((screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement).disabled).toBe(true);
-    // Leaving Settings and entering again keeps the hold: it is the
-    // place's, not the page's.
+    // Reopening Settings keeps the hold in the app store.
     cleanup();
     render(<AgentCards />);
     expect(screen.getByTestId("agents-stale").textContent).toContain("could not be read again");

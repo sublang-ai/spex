@@ -59,10 +59,32 @@ export async function isWorkTreeRoot(
   path: string,
   run: RunCommand = defaultRunCommand,
 ): Promise<boolean> {
-  const result = await run("git", ["rev-parse", "--show-toplevel"], path);
-  if (result.code !== 0) return false;
-  const top = result.stdout.trim();
-  if (!top || !existsSync(path) || !existsSync(top)) return false;
+  const location = await workTreeLocation(path, run);
+  return location.kind === "work_tree" && location.isRoot;
+}
+
+type WorkTreeLocation =
+  | { kind: "work_tree"; top: string; isRoot: boolean }
+  | { kind: "no_repository" }
+  | { kind: "unavailable"; output?: string };
+
+export async function workTreeLocation(
+  path: string,
+  run: RunCommand = defaultRunCommand,
+): Promise<WorkTreeLocation> {
+  const result = await run("git", ["rev-parse", "--show-toplevel"], path, { LC_ALL: "C", LANGUAGE: "C" });
+  if (result.code !== 0) {
+    const output = result.stderr.trim();
+    // Git uses 128 for both failed discovery and an unreadable or unsafe
+    // repository. Only its discovery diagnostics warrant creating one.
+    if (result.code === 128 && (
+      output === "fatal: not a git repository (or any of the parent directories): .git" ||
+      /^fatal: not a git repository \(or any parent up to mount point [^\r\n]+\)\r?\nStopping at filesystem boundary \(GIT_DISCOVERY_ACROSS_FILESYSTEM not set\)\.$/.test(output)
+    )) return { kind: "no_repository" };
+    return output ? { kind: "unavailable", output } : { kind: "unavailable" };
+  }
+  const top = result.stdout.replace(/\r?\n$/, "");
+  if (!top) return { kind: "unavailable" };
   // git prints forward-slash paths and Windows temp dirs may surface
   // as 8.3 short names; canonicalize both sides before comparing.
   const canonical = (p: string): string => {
@@ -70,9 +92,9 @@ export async function isWorkTreeRoot(
     return process.platform === "win32" ? real.toLowerCase() : real;
   };
   try {
-    return canonical(top) === canonical(path);
+    return { kind: "work_tree", top, isRoot: canonical(top) === canonical(path) };
   } catch {
-    return false;
+    return { kind: "unavailable" };
   }
 }
 

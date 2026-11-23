@@ -7,14 +7,13 @@ export interface PublicationOptions {
   publication?: { org: string; license: string };
 }
 
-// App store: wires the protocol client into view state, one store per
-// core, each at its place (run-view-168). Composer
+// App store: wires the IDE's core into view state (app-shell-1). Composer
 // submissions queue client-side while a turn is active and dispatch
 // when it ends (RUN-8); the core enforces one turn at a time.
 // Reconnects re-subscribe every live session and backfill missed
 // records via history afterSeq, so panes never silently freeze.
 
-import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { hasPresentationHeader } from "@sublang/spex-core/protocol";
 import { isLanguage, resolveLanguage, type Language } from "@sublang/spex-core/language";
 import type {
@@ -43,14 +42,12 @@ import type {
   ProjectInfo,
   ReadinessEntry,
   RepoStatusInfo,
-  SeatState,
   ServerMessage,
   SessionInfo,
   SpaceChoice,
   SpaceEntry,
   SpaceReadResult,
-  GroupsState,
-  HostMemberInfo,
+  SpaceState,
   SpecTreeState,
   MachineGraph,
   TmuxPlayRecord,
@@ -130,19 +127,12 @@ export type PlaybookLists = CommandResults["environment.playbooks"] & {
 /** One spec package the registry's search found (playbook-library-92). */
 export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
-/** Whose members a Groups command names (space-62, space-29, DR-114,
- * DR-128): a group by its host id at its instance, by its origin, or a
- * spex repository by its key — one placement of it by its instance's
- * origin, its key placement where none is named. */
-export type SpaceMembersTarget = { instance: string; group: string } | { repository: string; instance?: string };
-
 /** Where a pick or a Place puts a spex repository at an instance
- * (space-58, space-88, space-29): a spex repository that instance lists,
- * by its host id, or a new `<name>-spex` in a group there by its host
- * id, your namespace there by none. */
-export type SpaceGroupChoice =
+ * (space-29, space-97): a listed personal repository by its id,
+ * or a new `<name>-spex` in the signed-in account's namespace. */
+export type SpaceDestination =
   | { kind: "join"; instance: string; hostId: string }
-  | { kind: "create"; instance: string; groupId: string | null; name: string };
+  | { kind: "create"; instance: string; name: string };
 
 /** What the page last asked of a clone's machine beyond a plain sync
  * (space-29, space-30): the placement a join named — its instance's
@@ -152,17 +142,13 @@ export type SpaceGroupChoice =
 export type SpaceLastAct =
   | { op: "join"; instance: string | null }
   | { op: "attach"; instance: string }
-  | { op: "place"; instance: string; choice: SpaceGroupChoice }
+  | { op: "place"; instance: string; choice: SpaceDestination }
   | { op: "leave"; instance: string; confirmed: boolean };
 
-/** The members of a group or a spex repository as the host lists them
- * (space-62): no page of the host (DR-120). */
-export type SpaceMembersReply = { members: HostMemberInfo[] };
-
-export interface ComposerState {
-  /** Submissions waiting for the turn to end (RUN-8). A staged
+/** Submissions waiting for the turn to end (RUN-8). A staged
    * intent's id rides its entry, so the chip follows the pending
    * bubble and the dispatch stamps when the turn starts (DR-035). */
+export interface ComposerState {
   queued: (MessageContent & { intentId?: string })[];
   /** Unsent composer text — survives tab and surface switches. */
   draft?: string;
@@ -208,16 +194,12 @@ export interface AppState extends AttachmentState {
   hideApprovals(): void;
   /** True once a connection has ever opened (first-paint banner). */
   everConnected: boolean;
-  /** The seats this core holds open, as its last `server.state` named
-   * them (core-service-128): the local core's are the page's remote
-   * places (run-view-168). */
-  seats: SeatState[];
   /** The core endpoint the client dials, named when it cannot be
    * reached (run-view-50). */
   coreUrl?: string;
   configState?: ConfigState;
   /** Each project's composed configuration, by project id
-   * (core-service-2): your own group's with the project's file on top,
+   * (core-service-2): your personal with the project's file on top,
    * the catalog a session of that project offers (playbook-library-34). */
   projectConfigs: Record<string, ConfigState>;
   /** Read one project's composed configuration (`config.get` with its
@@ -229,7 +211,7 @@ export interface AppState extends AttachmentState {
    * submits a batch, whichever card started it, the page left and
    * entered again or not. */
   configReread?: { reading: true } | { reading: false; error: string };
-  /** Read your own group's config and every project composition held
+  /** Read your personal config and every project composition held
    * again, holding the agent cards' batches from the start until every
    * read succeeds; the newest reading again decides. */
   rereadConfig(): Promise<void>;
@@ -307,10 +289,9 @@ export interface AppState extends AttachmentState {
   dashboardGroupsCollapsed: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
-  /** The home, its groups and their spex repositories as the core last
-   * described them (space-30, DR-103): replaced wholesale by every
-   * `space.state` and `space.get`. */
-  space?: GroupsState;
+  /** The core's latest Space state (space-30), replaced wholesale by
+   * every `space.state` and `space.get`. */
+  space?: SpaceState;
   registryAccounts?: Record<string, import("@sublang/spex-core/protocol").RegistryState>;
   /** The last `space.get` failure, shown on the surface. */
   spaceError?: string;
@@ -350,12 +331,9 @@ export interface AppState extends AttachmentState {
    * every record kept; the reply is the new state. Refused, the core's
    * words name what is still kept under it. */
   spaceForget(instance: string): Promise<void>;
-  /** Give a local-only spex repository a home at an instance (space-58):
-   * a listed spex repository by its host id, or a new one in a group,
-   * the choice naming the instance it is at (space-29). The choice
-   * authorizes syncing there (space-57). Accepted at once, outcome as
-   * state. */
-  spacePick(repository: string, choice: SpaceGroupChoice): Promise<void>;
+  /** Place and sync a local project's records in the account's own
+   * namespace at the chosen Space (space-29, space-97). */
+  spacePick(repository: string, choice: SpaceDestination): Promise<void>;
   /** Clone a spex repository an instance lists and this device lacks
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
@@ -365,26 +343,6 @@ export interface AppState extends AttachmentState {
    * which a stopped phase does not name (space-30); none after a
    * reload. */
   spaceLastAct(repository: string): SpaceLastAct | undefined;
-  /** A group's or a spex repository placement's members as its
-   * instance reports them, read on every call and held nowhere
-   * (space-62). */
-  spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
-  /** Create a group at the instance `instance` at the path `path`, at
-   * its root or inside the group whose host id is `parent` (space-68);
-   * the state listing it arrives before the reply. */
-  spaceGroupCreate(instance: string, name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
-  /** Ask the Space to delete an empty group; the state without the
-   * group arrives before the reply (space-29). */
-  spaceGroupDeletionCheck(instance: string, group: string): Promise<CommandResults["space.group.deletionCheck"]>;
-  spaceGroupDelete(instance: string, group: string, confirmPath: string): Promise<CommandResults["space.group.delete"]>;
-  spaceGroupRestore(instance: string, group: string): Promise<CommandResults["space.group.restore"]>;
-  /** Add the account of `login` to a group or a spex repository's
-   * placement at one of its instance's roles, by its id (space-69); the
-   * reply lists the members after the addition. */
-  spaceShare(target: SpaceMembersTarget, login: string, role: string): Promise<SpaceMembersReply>;
-  /** Remove a member the group or the spex repository's placement holds
-   * of its own (space-72); the reply lists the members afterwards. */
-  spaceUnshare(target: SpaceMembersTarget, login: string): Promise<SpaceMembersReply>;
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
@@ -475,8 +433,7 @@ export interface AppState extends AttachmentState {
    * Playbooks surface (playbook-library-1, playbook-library-122);
    * undefined until read. */
   playbookLists?: PlaybookLists;
-  /** Read what each environment exports, the project's and your own
-   * group's; the newest read wins. */
+  /** Read the project and global playbooks. The newest read wins. */
   loadPlaybookLists(projectId: string | undefined): Promise<void>;
   loadEnvironment(repository: string): Promise<void>;
   /** Write a request into a spex repository's `spex.yaml`; resolving
@@ -503,7 +460,7 @@ export interface AppState extends AttachmentState {
    * (playbook-library-51, playbook-library-103). */
   loadDraftDefaults(projectId: string): Promise<CommandResults["draft.defaults"]>;
   /** Create a draft in the environment `repository` names — a
-   * project's, or the global one by your own group's key — its spec
+   * project's, or the global one by your personal key — its spec
    * package naming the org and license given, and open its workspace;
    * the core refuses an id a playbook of either environment holds
    * (playbook-library-51, core-service-96). */
@@ -611,7 +568,6 @@ export interface AppState extends AttachmentState {
     baseVersion?: string,
   ): Promise<{ version: string }>;
   refreshReadiness(): Promise<void>;
-  registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
   /** Forget the working folder and delete its spex repository's clone
    * (projects-9); a clone holding what has not reached the host is
@@ -696,42 +652,6 @@ export interface AppState extends AttachmentState {
      * current project by default (environments-10). */
     projectId?: string;
   }): Promise<void>;
-}
-
-/** The local core's place key (run-view-168). */
-export const LOCAL_PLACE_KEY = "local";
-
-/** Where a core runs (run-view-168, DR-133): the local core's place,
- * keyed "local", or a seat's, keyed by its `<instance origin>#<server
- * id>` as `server.state` names it and shown by its server's name. Each
- * place keeps its core's state in a store of its own, holding every
- * protocol id as its core sent it. */
-export interface Place {
-  key: string;
-  /** A seat's server name; the local place has none. */
-  name?: string;
-}
-
-export const LOCAL_PLACE: Place = { key: LOCAL_PLACE_KEY };
-
-export function isLocalPlace(place: Place): boolean {
-  return place.key === LOCAL_PLACE_KEY;
-}
-
-/** What a place is shown by (run-view-168): "This computer", or the
- * server's name. */
-export function placeLabel(place: Place): string {
-  return isLocalPlace(place)
-    ? i18n._({ id: "This computer", comment: "the place of the local core, beside each team server's name" })
-    : (place.name ?? place.key);
-}
-
-/** The key a place keeps a preference under in this page's storage
- * (run-view-168): the local place's is today's key, so an existing
- * home's preferences stand; a seat's is that key qualified by its
- * place, so a project held at two places keeps two sets. */
-export function placeKey(place: Place, key: string): string {
-  return isLocalPlace(place) ? key : `${key}@${place.key}`;
 }
 
 /** Where a stored intent's attachments live: the intent's own
@@ -846,8 +766,7 @@ function permissionAsFailure(record: FoldedRecord): FoldedRecord {
  * its own identity beside the other chrome preferences (DR-030). */
 export const frameKey = (frameId: string): string => `spex.frame:${frameId}`;
 
-/** The frame heights kept under `prefix`: the local place's
- * `spex.frame:`, a seat's qualified by its place (run-view-168). */
+/** Read the saved heights of the workspace frames. */
 function readFrameHeights(prefix: string): Record<string, number> {
   const heights: Record<string, number> = {};
   try {
@@ -910,10 +829,7 @@ function readLanguageChoice(): Language | null {
   return isLanguage(stored) ? stored : null;
 }
 
-/** The language this page paints in, settled before the first render
- * (localization-3) — the local store's initializer runs on import. The
- * local store's alone: a seat's choice activates nothing here
- * (localization-11). */
+/** Settle the page language before its first render (localization-3). */
 function pageLanguage(): { choice: Language | null; resolved: Language } {
   const choice = readLanguageChoice();
   const resolved = resolveLanguage(choice, preferredLanguages());
@@ -931,10 +847,10 @@ function readFlags(key: string): Record<string, boolean> {
   }
 }
 
-/** Whether a Groups state pairs other spex repositories with working
+/** Whether a Space state pairs other spex repositories with working
  * folders than the page lists as projects (space-59, space-60,
  * space-63): a move re-keyed one, or a join added one. */
-export function projectsMoved(state: GroupsState, projects: readonly ProjectInfo[]): boolean {
+export function projectsMoved(state: SpaceState, projects: readonly ProjectInfo[]): boolean {
   const paired = new Set(
     allRepositories(state)
       .filter((repository) => repository.folder !== null && repository.state !== "absent")
@@ -956,40 +872,18 @@ type GetState = Parameters<StateCreator<AppState>>[1];
 
 /** What a store offers beside its state: its client, and a message
  * handed to it as its client would. */
-interface PlaceSeams {
+interface StoreClientAccess {
   /** The store's client; throws while none is connected. */
   getClient(): SpexClient;
   /** Put a client in place without dialing — a fake in tests. */
   setClient(client: SpexClient | undefined): void;
   /** Hand the store a server message as its client would. */
   deliver(message: ServerMessage): void;
-  /** End the store's connection for good, dialing no more; a later
-   * `connect()` dials afresh (run-view-50). */
-  close(): void;
 }
 
-/** One core's store (run-view-168): its state, its seams, and the
- * place it keeps. */
-export type AppStore = UseBoundStore<StoreApi<AppState>> & PlaceSeams & { readonly place: Place };
-
-/** One core's state and acts (run-view-168, DR-133). Everything the
- * store keeps of its core — the client, the reads in flight and their
- * counts, the backfills and their buffers — lives in this call, so no
- * two places share any of it, and every id stays as its core sent it. */
-function placeState(
-  place: Place,
-  initialClient: SpexClient | undefined,
-  endpoint: string | undefined,
-  seams: PlaceSeams,
-  set: SetState,
-  get: GetState,
-): AppState {
-  const local = isLocalPlace(place);
-  /** This place's key for a preference this page keeps (run-view-168). */
-  const prefKey = (key: string): string => placeKey(place, key);
-  const framePrefix = `${prefKey("spex.frame")}:`;
-
-  let client = initialClient;
+function createAppState(clientAccess: StoreClientAccess, set: SetState, get: GetState): AppState {
+  const framePrefix = "spex.frame:";
+  let client: SpexClient | undefined;
   const modelReads = new Map<AdapterName, Promise<AgentOptions>>();
 
   function getClient(): SpexClient {
@@ -1055,7 +949,7 @@ function placeState(
   // Readings again after a batch's conflict, the newest deciding.
   let rereads = 0;
 
-  /** The newest re-read of the projects a Groups state set off: an older
+  /** The newest re-read of the projects a Space state set off: an older
    * reply is discarded. */
   let projectReads = 0;
 
@@ -1065,7 +959,7 @@ function placeState(
    * one a Retry joins again (space-13) — the instance an Attach, a Place
    * or a Leave named, a Place's choice and whether a Leave was confirmed —
    * which confirm a stopped Leave asks next, and what its Retry sends
-   * again (space-89). It outlives a row remounting and not a reload. */
+   * again (space-98). It outlives a row remounting and not a reload. */
   const lastActs = new Map<string, SpaceLastAct>();
 
   /** Records describe the conversation; the listing owns activity,
@@ -1126,7 +1020,7 @@ function placeState(
   }
 
   /**
-   * Re-read the projects and the sessions after a Groups state named
+   * Re-read the projects and the sessions after a Space state named
    * other projects than the page holds (space-59, space-60, space-63):
    * a joined project lists, and a moved one is followed to its new key
    * by its working folder — the current project, its open tabs, its
@@ -1163,7 +1057,7 @@ function placeState(
       workspaceTabs: follow(get().workspaceTabs),
       expandedProjects,
     });
-    if (moved.size > 0) safeStorageSet(prefKey(EXPANDED_PROJECTS_KEY), JSON.stringify(expandedProjects));
+    if (moved.size > 0) safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(expandedProjects));
     if (current) get().setCurrentProject(current);
     for (const project of projects) {
       if (!get().projectMeta[project.id]) void get().loadProjectMeta(project.id);
@@ -1183,13 +1077,8 @@ function placeState(
     options: { saved?: boolean; reread?: boolean } = {},
   ): void {
     const stored = isLanguage(choice) ? choice : null;
-    // The page's mirror is the local home's (localization-11): a seat's
-    // choice is that seat's state, kept in its own store and written
-    // nowhere here.
-    if (local) {
-      if (stored) safeStorageSet(LANGUAGE_KEY, stored);
-      else safeStorageRemove(LANGUAGE_KEY);
-    }
+    if (stored) safeStorageSet(LANGUAGE_KEY, stored);
+    else safeStorageRemove(LANGUAGE_KEY);
     const resolved = resolveLanguage(stored, preferredLanguages());
     const current = get().language;
     // The mark of a landed write outlives the re-rendering it causes:
@@ -1203,8 +1092,7 @@ function placeState(
     // off the resolved language, so nothing else need subscribe.
     const changed = current.resolved !== resolved;
     const choiceChanged = current.choice !== stored;
-    // The page's language is the local home's: a seat's activates none.
-    if (changed && local) activateLanguage(resolved);
+    if (changed) activateLanguage(resolved);
     set({ language: { choice: stored, resolved, savedAt } });
     // The core composes prose in the home's language (localization-11),
     // which is the home's choice, not this page's resolution: a choice
@@ -1602,11 +1490,6 @@ function placeState(
       case "browser.progress":
         deliverBrowserProgress(message);
         break;
-      case "server.state":
-        // The open seats, whole (core-service-128), sent on every change
-        // and as the connection opens.
-        set({ seats: message.seats });
-        break;
       case "registry.state":
         set({ registryAccounts: { ...get().registryAccounts, [message.state.origin]: message.state } });
         break;
@@ -1829,24 +1712,15 @@ function placeState(
     }
   }
 
-  seams.getClient = getClient;
-  seams.setClient = (next) => {
+  clientAccess.getClient = getClient;
+  clientAccess.setClient = (next) => {
     client = next;
     modelReads.clear();
     set({ modelCatalogs: {} });
     // What a page asked of the clones goes with its client.
     lastActs.clear();
   };
-  seams.deliver = handleMessage;
-  seams.close = () => {
-    // The client is let go first, so its closing reports nothing here.
-    const closing = client;
-    client = undefined;
-    modelReads.clear();
-    set({ modelCatalogs: {} });
-    closing?.close();
-  };
-
+  clientAccess.deliver = handleMessage;
   return {
     ...createAttachmentState(set, get, getClient),
     connection: "closed",
@@ -1854,7 +1728,6 @@ function placeState(
     showApprovals: (approvalFocusId) => set({approvalInboxOpen: true, approvalFocusId}),
     hideApprovals: () => set({approvalInboxOpen: false, approvalFocusId: undefined}),
     everConnected: false,
-    seats: [],
     readiness: [],
     modelCatalogs: {},
     projects: [],
@@ -1906,18 +1779,16 @@ function placeState(
     runErrors: {},
     workspaceTabs: {},
     openTabs: {},
-    railCollapsed: safeStorageGet(prefKey(RAIL_COLLAPSED_KEY)) === "1",
-    // A seat's choice is unknown until its core answers, and resolving
-    // it here activates nothing (localization-11).
-    language: local ? pageLanguage() : { choice: null, resolved: resolveLanguage(null, preferredLanguages()) },
+    railCollapsed: safeStorageGet(RAIL_COLLAPSED_KEY) === "1",
+    language: pageLanguage(),
     captainSplit: readPercent(
-      prefKey(CAPTAIN_SPLIT_KEY),
+      CAPTAIN_SPLIT_KEY,
       CAPTAIN_SPLIT_MIN,
       CAPTAIN_SPLIT_MAX,
       CAPTAIN_SPLIT_DEFAULT,
     ),
     frameHeights: readFrameHeights(framePrefix),
-    expandedProjects: readFlags(prefKey(EXPANDED_PROJECTS_KEY)),
+    expandedProjects: readFlags(EXPANDED_PROJECTS_KEY),
     specTrees: {},
     specErrors: {},
     homeDraft: "",
@@ -1925,7 +1796,7 @@ function placeState(
     stagedIntents: {},
     collapsedLanes: {},
     foldedSources: {},
-    dashboardGroupsCollapsed: readFlags(prefKey(DASHBOARD_GROUPS_COLLAPSED_KEY)),
+    dashboardGroupsCollapsed: readFlags(DASHBOARD_GROUPS_COLLAPSED_KEY),
     drafts: {},
     draftsLoaded: false,
     draftViews: {},
@@ -1937,13 +1808,13 @@ function placeState(
     draftForms: {},
     draftErrors: {},
     draftSplit: readPercent(
-      prefKey(DRAFT_SPLIT_KEY),
+      DRAFT_SPLIT_KEY,
       DRAFT_SPLIT_MIN,
       DRAFT_SPLIT_MAX,
       DRAFT_SPLIT_DEFAULT,
     ),
     draftStackSplit: readPercent(
-      prefKey(DRAFT_STACK_SPLIT_KEY),
+      DRAFT_STACK_SPLIT_KEY,
       DRAFT_STACK_MIN,
       DRAFT_STACK_MAX,
       DRAFT_STACK_DEFAULT,
@@ -1954,12 +1825,12 @@ function placeState(
     environmentErrors: {},
     spaceChangeSeq: 0,
     spaceSplit: readPercent(
-      prefKey(SPACE_SPLIT_KEY),
+      SPACE_SPLIT_KEY,
       SPACE_SPLIT_MIN,
       SPACE_SPLIT_MAX,
       SPACE_SPLIT_DEFAULT,
     ),
-    spacePrivacyCollapsed: safeStorageGet(prefKey(SPACE_PRIVACY_KEY)) !== "0",
+    spacePrivacyCollapsed: safeStorageGet(SPACE_PRIVACY_KEY) !== "0",
 
     async loadSpace(): Promise<void> {
       // Replies apply in request order (space-106): a read that a newer
@@ -1981,12 +1852,12 @@ function placeState(
         Math.max(SPACE_SPLIT_MIN, Math.round(percent)),
       );
       set({ spaceSplit: clamped });
-      safeStorageSet(prefKey(SPACE_SPLIT_KEY), String(clamped));
+      safeStorageSet(SPACE_SPLIT_KEY, String(clamped));
     },
 
     setSpacePrivacyCollapsed(collapsed: boolean): void {
       set({ spacePrivacyCollapsed: collapsed });
-      safeStorageSet(prefKey(SPACE_PRIVACY_KEY), collapsed ? "1" : "0");
+      safeStorageSet(SPACE_PRIVACY_KEY, collapsed ? "1" : "0");
     },
 
     async spaceRefresh(): Promise<void> {
@@ -2031,18 +1902,6 @@ function placeState(
     },
 
     spaceLastAct: (repository) => lastActs.get(repository),
-
-    spaceMembers: (target) => getClient().command("space.members", { ...target }),
-
-    spaceGroupCreate: (instance, name, path, parent) => getClient().command("space.group.create", { instance, name, path, parent }),
-
-    spaceGroupDeletionCheck: (instance, group) => getClient().command("space.group.deletionCheck", { instance, group }),
-    spaceGroupDelete: (instance, group, confirmPath) => getClient().command("space.group.delete", { instance, group, confirmPath }),
-    spaceGroupRestore: (instance, group) => getClient().command("space.group.restore", { instance, group }),
-
-    spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
-
-    spaceUnshare: (target, login) => getClient().command("space.unshare", { ...target, login }),
 
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
       const read = (spaceReads += 1);
@@ -2118,9 +1977,7 @@ function placeState(
     spaceRead: (repository, path) => getClient().command("space.read", { repository, path }),
 
     connect(url?: string): void {
-      // A seat is dialed at its relay path (core-service-129), never at
-      // the local core's endpoint.
-      const target = url ?? endpoint ?? (local ? defaultCoreUrl() : undefined);
+      const target = url ?? defaultCoreUrl();
       if (target === undefined) throw new Error(i18n._("client not connected"));
       set({ coreUrl: target });
       // Only the client in place speaks for this store: one let go by a
@@ -2231,7 +2088,7 @@ function placeState(
       // asking which one (run-view-57).
       let current = get().currentProjectId;
       if (!current) {
-        const persisted = safeStorageGet(prefKey(CURRENT_PROJECT_KEY));
+        const persisted = safeStorageGet(CURRENT_PROJECT_KEY);
         if (persisted && projects.some((p) => p.id === persisted)) {
           current = persisted;
         } else if (live.length > 0) {
@@ -2257,7 +2114,7 @@ function placeState(
 
     setCurrentProject(projectId: string | undefined): void {
       set({ currentProjectId: projectId });
-      if (projectId) safeStorageSet(prefKey(CURRENT_PROJECT_KEY), projectId);
+      if (projectId) safeStorageSet(CURRENT_PROJECT_KEY, projectId);
     },
 
     setWorkspaceTab(projectId: string, tab: string): void {
@@ -2296,7 +2153,7 @@ function placeState(
 
     setRailCollapsed(collapsed: boolean): void {
       set({ railCollapsed: collapsed });
-      safeStorageSet(prefKey(RAIL_COLLAPSED_KEY), collapsed ? "1" : "0");
+      safeStorageSet(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
     },
 
     async setLanguage(choice: Language | null): Promise<void> {
@@ -2312,7 +2169,7 @@ function placeState(
         Math.max(CAPTAIN_SPLIT_MIN, Math.round(percent)),
       );
       set({ captainSplit: clamped });
-      safeStorageSet(prefKey(CAPTAIN_SPLIT_KEY), String(clamped));
+      safeStorageSet(CAPTAIN_SPLIT_KEY, String(clamped));
     },
 
     setFrameHeight(frameId: string, steps: number): void {
@@ -2325,7 +2182,7 @@ function placeState(
     toggleProjectExpanded(projectId: string, expanded: boolean): void {
       const next = { ...get().expandedProjects, [projectId]: expanded };
       set({ expandedProjects: next });
-      safeStorageSet(prefKey(EXPANDED_PROJECTS_KEY), JSON.stringify(next));
+      safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(next));
     },
 
     setLaneCollapsed(sessionId: string, playerId: string, collapsed: boolean): void {
@@ -2351,26 +2208,7 @@ function placeState(
         [projectId]: collapsed,
       };
       set({ dashboardGroupsCollapsed: next });
-      safeStorageSet(prefKey(DASHBOARD_GROUPS_COLLAPSED_KEY), JSON.stringify(next));
-    },
-
-    async addProjectByPath(path: string): Promise<ProjectInfo> {
-      try {
-        return await get().registerProject(path);
-      } catch (cause) {
-        // Add means an existing repository: a directory that is none
-        // is refused with the way forward, never initialized behind
-        // the user's back (projects-1, projects-22).
-        if (/not the root of a git work tree/.test((cause as Error).message)) {
-          throw new Error(
-            i18n._(
-              "{path} is not the root of a git work tree. To start a new repository there, use Create instead.",
-              { path },
-            ),
-          );
-        }
-        throw cause;
-      }
+      safeStorageSet(DASHBOARD_GROUPS_COLLAPSED_KEY, JSON.stringify(next));
     },
 
     async openAcademyExample(path?: string): Promise<ProjectInfo> {
@@ -2512,7 +2350,7 @@ function placeState(
       set({ readiness: await getClient().command("readiness.get", {}) });
     },
 
-    async registerProject(path: string): Promise<ProjectInfo> {
+    async addProjectByPath(path: string): Promise<ProjectInfo> {
       const project = await getClient().command("project.register", { path });
       set({ projects: await getClient().command("project.list", {}) });
       void get().loadProjectMeta(project.id);
@@ -3233,7 +3071,7 @@ function placeState(
         Math.max(DRAFT_SPLIT_MIN, Math.round(percent)),
       );
       set({ draftSplit: clamped });
-      safeStorageSet(prefKey(DRAFT_SPLIT_KEY), String(clamped));
+      safeStorageSet(DRAFT_SPLIT_KEY, String(clamped));
     },
 
     setDraftStackSplit(percent: number): void {
@@ -3242,7 +3080,7 @@ function placeState(
         Math.max(DRAFT_STACK_MIN, Math.round(percent)),
       );
       set({ draftStackSplit: clamped });
-      safeStorageSet(prefKey(DRAFT_STACK_SPLIT_KEY), String(clamped));
+      safeStorageSet(DRAFT_STACK_SPLIT_KEY, String(clamped));
     },
 
     requestNewPlaybook(): void {
@@ -3383,39 +3221,18 @@ function placeState(
   };
 }
 
-/** Make the store of one core (run-view-168): `client` a client already
- * in place, `endpoint` what `connect()` dials when it names none — a
- * seat's relay path (core-service-129), the local core's by default. */
-export function createAppStore(
-  place: Place,
-  client?: SpexClient,
-  options: { endpoint?: string } = {},
-): AppStore {
-  const seams = {} as PlaceSeams;
-  const store = create<AppState>((set, get) =>
-    placeState(place, client, options.endpoint, seams, set, get),
-  );
-  return Object.assign(store, seams, { place });
-}
-
-/** The local place's store (run-view-168): the one every surface reads,
- * made on import so the page's language is settled before the first
- * render (localization-3). */
-export const useAppStore = createAppStore(LOCAL_PLACE);
-
-/** The local store's client. */
-export function getClient(): SpexClient {
-  return useAppStore.getClient();
-}
+const clientAccess = {} as StoreClientAccess;
+const store = create<AppState>((set, get) => createAppState(clientAccess, set, get));
+export const useAppStore = Object.assign(store, { getClient: clientAccess.getClient });
 
 /** Test seam: store actions resolve the local store's client, which
  * module mocks cannot reach — vitest injects a fake through here. */
 export function setClientForTests(fake: SpexClient | undefined): void {
-  useAppStore.setClient(fake);
+  clientAccess.setClient(fake);
 }
 
 /** Test seam: hand the local store a server message as the client
  * would, without a socket. */
 export function deliverServerMessageForTests(message: ServerMessage): void {
-  useAppStore.deliver(message);
+  clientAccess.deliver(message);
 }

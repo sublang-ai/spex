@@ -14,6 +14,7 @@ Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) and [D
 The instance-only presentation of [DR-120](120-the-instance-is-the-space.md), project placements and execution ownership stand.
 
 Amended by [DR-200](200-publishing-names-need-registry-authority.md) in authoring guidance and fresh publishing-rights checks.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
 
 ## Context
 

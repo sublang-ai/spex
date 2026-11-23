@@ -54,12 +54,10 @@ import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type 
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
 import { probeSignIn, type SignInProbe } from "./local-credentials.js";
-import { codexAuthContent } from "./seat-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import {
   defaultPlayerId,
-  type AdapterCredential,
   type AdapterName,
   type AgentSummary,
   type BaseUrlState,
@@ -100,8 +98,8 @@ export interface PlacedPlaybook extends PlaybookModule {
 }
 
 /** Where composition finds each playbook's module: the environments of
- * the session's spex repositories, the project's before your own
- * group's — the global (environments-9). A shared file names no path. */
+ * the session's spex repositories, the project's before the global
+ * records repository's (environments-9). A shared file names no path. */
 export interface PlaybookModules {
   /** The module of a playbook of this id present on this device, the
    * project's before the global. */
@@ -119,7 +117,7 @@ export interface PlaybookModules {
 export interface ComposeOptions {
   /** The environments' module locations; absent, no playbook has one. */
   modules?: PlaybookModules;
-  /** A project's or another group's own file, added on top of yours. */
+  /** A project's config file, added on top of the global config. */
   project?: { top: unknown; path: string };
   /** The paired project's actual folder; absent for global composition. */
   cwd?: string;
@@ -138,12 +136,12 @@ const MODEL_FIELDS = ["model", "effort", "fastMode", "ultracode", "subagentModel
 const notInProjectFile = (entry: string): Error =>
   new Error(i18n._({
     id: "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses",
-    comment: "Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path",
+    comment: "Config error: a project's settings file holds a field reserved for the global config; {entry} is the field's own path",
     values: { entry },
   }));
 
 /**
- * Check a project's or another group's own file (core-service-2): only
+ * Check a project's config file (core-service-2): only
  * `playbooks.<id>` entries, each naming its roles' players by name, with
  * an option slice — never a captain, players, a model field or a `from`.
  */
@@ -175,7 +173,7 @@ export function validateProjectConfig(top: unknown, _path: string): void {
   }
 }
 
-/** Your own group's file with a project's added on top: the project's
+/** The global config file with a project's added on top: the project's
  * playbooks join yours, its roles and options over your entry's. */
 function layerProjectConfig(own: Record<string, unknown>, project: unknown): Record<string, unknown> {
   if (!isPlainObject(project) || !isPlainObject(project.playbooks)) return own;
@@ -557,7 +555,7 @@ export function resolveConfigPath(
   return ownConfigPath(resolveRoot(env, home), env);
 }
 
-/** Your own group's config inside its spex repository's clone
+/** The global config in the global records repository
  * (storage-1, DR-103): the name `home.yaml` records — before the
  * instances migration rewrites it too (DR-127) — or this device's user
  * name for a home not yet written; a damaged home reads as a new one. */
@@ -812,15 +810,12 @@ export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
  * signed in or not, so the seed is shown none. */
 const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
 
-/** A local user home permits sign-in and settings lookup. A seat grants
- * only its materialized native Codex home, or no filesystem lookup. */
-export type SeedHome = string | { codexHome: string } | null;
+export type SeedHome = string | null;
 
 /** Whether each agent is set up as a seed counts it (core-service-3,
  * DR-205): a credential variable — Claude's user settings included, as
  * a run reads them — or a sign-in its own status command confirms where
- * its folder stands; never the folder alone. With no home, on a seat,
- * the variables of `env` alone. */
+ * its folder stands. Without a home, only credential variables count. */
 export async function seedCredentials(
   env: NodeJS.ProcessEnv,
   home: SeedHome,
@@ -828,7 +823,6 @@ export async function seedCredentials(
 ): Promise<SeedCredentials> {
   const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
     if (variableCredential(adapter, env, home)) return true;
-    if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
     if (typeof home !== "string") return false;
     // The status command runs only where the folder stands, since it
     // would create it.
@@ -843,22 +837,6 @@ export async function seedCredentials(
 function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
   const runEnv = adapter === "claude" && typeof home === "string" ? { ...env, ...claudeSettingsEnv(env, home) } : env;
   return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
-}
-
-/** Whether `env` selects a seat's access-only Codex snapshot that is
- * materialized as its own `auth.json` (core-service-150): a seed-only
- * presence, never written into a run. An invalid or unmaterialized
- * snapshot counts no credential. */
-function materializedCodexSnapshot(env: NodeJS.ProcessEnv): boolean {
-  if (!env.CODEX_AUTH_CONTENT || !env.CODEX_HOME) return false;
-  try {
-    const auth = join(env.CODEX_HOME, "auth.json");
-    const stat = lstatSync(auth);
-    return stat.isFile() && !stat.isSymbolicLink() &&
-      readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT);
-  } catch {
-    return false;
-  }
 }
 
 /** An agent's configuration folder, where its sign-in is kept. */
@@ -2235,7 +2213,7 @@ export async function loadConfig(
 }
 
 /**
- * The players project files name for a role that your own group's
+ * The players project files name for a role that the global
  * roster lacks (core-service-2, settings-46): one entry per player,
  * naming the spex repository whose file names it and every role that
  * does. A file that will not read names none; its own load reports it.
@@ -2379,19 +2357,9 @@ export interface AdapterReadiness {
   requirement?: string;
   /** Each unmet half by its kind (DR-204); `requirement` joins them. */
   faults: ReadinessFault[];
-  /** On a seat, the credential class and its phrase (settings-49). */
-  credential?: AdapterCredential;
   /** With null readiness alone: why the agent's sign-in could not be
    * confirmed just now (settings-14). */
   unconfirmed?: string;
-}
-
-/** The credential half where another rule than the launcher's decides
- * it: a seat's forms (settings-49). */
-export interface CredentialHalf {
-  ready: boolean;
-  requirement?: string;
-  credential: AdapterCredential;
 }
 
 /** The runtime half of readiness: usable, or a requirement naming why not. */
@@ -2642,9 +2610,6 @@ export async function checkAdapterReadiness(
   runtime: (
     adapter: AdapterName,
   ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck> = checkAdapterRuntime,
-  // On a seat the credential half is the seat's forms' (settings-14,
-  // settings-49), in place of the launcher's rules below.
-  credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
   // Injectable so tests spawn no status command.
   signIn: SignInProbe = probeSignIn,
 ): Promise<AdapterReadiness> {
@@ -2658,15 +2623,9 @@ export async function checkAdapterReadiness(
     faults.push({ kind: "runtime", requirement: runtimeCheck.requirement });
   }
   let credentialReady: boolean | null = null;
-  let credential: AdapterCredential | undefined;
   let unconfirmed: string | undefined;
   const forms = LOCAL_CREDENTIAL_FORMS[adapter];
-  if (credentialHalf) {
-    const half = await credentialHalf(adapter);
-    credentialReady = half.ready;
-    credential = half.credential;
-    if (!half.ready) faults.push({ kind: "credential", requirement: half.requirement ?? half.credential.phrase });
-  } else if (forms && (adapter === "claude" || adapter === "codex")) {
+  if (forms && (adapter === "claude" || adapter === "codex")) {
     // A home folder is no sign-in: the runtime creates it on its first
     // start (DR-204). With no variable set the agent's own status
     // command, run as a run would be, answers — only where the folder
@@ -2702,7 +2661,6 @@ export async function checkAdapterReadiness(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ),
       faults,
-      ...(credential ? { credential } : {}),
     };
   }
   // The null class survives only over a usable runtime (settings-14):
@@ -2711,7 +2669,6 @@ export async function checkAdapterReadiness(
     adapter,
     ready: credentialReady === null ? null : true,
     faults,
-    ...(credential ? { credential } : {}),
     ...(unconfirmed !== undefined ? { unconfirmed } : {}),
   };
 }

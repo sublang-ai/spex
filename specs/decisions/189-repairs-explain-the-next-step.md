@@ -10,6 +10,7 @@ Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): optional save
 Accepted (2026-11-02) for the owner's request to make the warnings after signing in understandable to fresh users.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repair wording: an unconnected project folder is not described as missing, and storage failures carry a next step with their technical evidence behind Details.
 Extends [DR-063](063-space-setup-and-repair.md) without changing folder pairing, import, acknowledgement or data preservation.
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: server-specific location wording and recovery navigation. Local Files & history continues.
 
 ## Context
 

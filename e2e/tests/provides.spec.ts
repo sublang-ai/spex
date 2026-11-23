@@ -109,7 +109,7 @@ test("playbook-library-94, spec-view-67: a provided spec is placed in specs/, it
     description: "The services a platform offers",
     artifacts: { "platform-services": { kind: "spec", language: "en" } },
   }, { "specs/en/platform-services.md": SERVICES_SPEC });
-  // Your own group's environment requests the handbook beside the
+  // The global environment requests the handbook beside the
   // built-in spec package (arranged over the protocol).
   await app.core.command("environment.request", { repository: app.ownKey, name: HANDBOOK, request: { kind: "registry", version: "^1.0.0" }, wait: true });
   // The demo project's own spec of the name a package's spec takes.

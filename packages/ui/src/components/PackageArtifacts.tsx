@@ -26,8 +26,7 @@ import type {
   PlaybookAvailability,
 } from "@sublang/spex-core/protocol";
 
-import { isLocalPlace } from "../state/store.js";
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { appletTabId } from "../lib/applets.js";
 import { addLabel, addsTitle, firstRequirement, isProvided, listOf, notListedPhrase } from "../lib/environments.js";
 import { currentLocale, i18n } from "../i18n.js";
@@ -242,7 +241,7 @@ function WaitingLine({
   repository: string;
   onAdded?: (name: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const search = store((current) => current.searchRegistry);
   const request = store((current) => current.requestSpecPackage);
   const [busy, setBusy] = useState(false);
@@ -337,11 +336,11 @@ export function PackageArtifacts({
   /** A package a waiting link's Add requested, for the heading's receipt. */
   onAdded?: (name: string) => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const setWorkspaceTab = store((current) => current.setWorkspaceTab);
   // An applet's page is a tab of this computer's project, standing while
   // its files are here (applets-1).
-  const pageHere = projectId !== undefined && isLocalPlace(store.place) && pkg.installed && pkg.missingPath === null;
+  const pageHere = projectId !== undefined && pkg.installed && pkg.missingPath === null;
 
   const fallbackOf = (artifact: Artifact): ReactNode =>
     artifact.fallback ? <FallbackMark testId={`env-fallback-${name}-${artifact.id}`} shown={artifact.language} wanted={state.language} /> : null;

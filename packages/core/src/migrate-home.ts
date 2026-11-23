@@ -215,7 +215,7 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
     folded.set(match[1], foldFormerIntentActs(parseFormerIntentLog(input(entry.path)!.toString("utf8"), match[1], file), file));
   }
 
-  // 2 — home.yaml: your own group under this device's user name, one
+  // 2 — home.yaml: the personal records folder under this device's username, one
   // working folder per project whose path this device recorded.
   // A home already in the groups layout — a legacy store imported late
   // (core-service-64) — keeps its file: a project whose folder it pairs
@@ -246,7 +246,7 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   const keyOf = (projectId: string): string | undefined => plan![projectId];
 
   // Where every former session goes: the project whose working folder
-  // its directory resolves to, else your own group (storage-9).
+  // its directory resolves to, else the global records repository (storage-9).
   const formerSessions = join(root, "sessions");
   const owner = (sessionId: string): string => {
     let cwd: unknown; let projectId: unknown;
@@ -331,7 +331,7 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
     record({ step: "project", repository: key, project: project.id, intents: written, sessions });
   }
 
-  // 4 — your own group's spex repository: the configuration with every
+  // 4 — the global records repository: the configuration with every
   // `from` dropped, and the sessions that resolve to no project.
   const ownDir = home.clonePath(home.own());
   mkdirSync(ownDir, { recursive: true, mode: 0o700 });
@@ -401,10 +401,9 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   Home.load(root);
   parsePrefs(readJsonFile(join(root, "local", "prefs.json")), join(root, "local", "prefs.json"));
   const keys = [...new Set([...Object.values(plan!), home.own()])];
-  // Your own group's environment — the global — requests the built-in
-  // spec package before its first history is written, as the home it
-  // becomes is made, locked at the public registry independently of its
-  // Space; each project's working folder holding
+  // The global environment requests the built-in spec package before
+  // the first commit. It locks the package at the public registry
+  // independently of Space. Each project's working folder holding
   // neither environment file gets its own at its root, requesting
   // nothing, never in the clone (storage-9, environments-11,
   // environments-26).

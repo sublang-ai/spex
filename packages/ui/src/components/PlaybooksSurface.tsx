@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Playbooks surface (playbook-library-122, DR-176): the global page,
-// the rail's Playbooks entry for the place it shows. Under a header
+// opened from the sidebar's Playbooks entry. Under a header
 // carrying the global environment's registry, the account there and one
 // "Add…", each spec package the global environment requests stands as
 // the Packages tab's row reads it — each it requires beneath the one
@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PlaybookAvailability } from "@sublang/spex-core/protocol";
 
-import { usePlaceStore } from "../state/place-context.js";
+import { useAppStore } from "../state/store.js";
 import { ownRepositoryKey } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { AuthoringWorkspace } from "./AuthoringWorkspace.js";
@@ -33,7 +33,7 @@ export function PlaybooksSurface({
 }: {
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
-  const store = usePlaceStore();
+  const store = useAppStore;
   const configState = store((state) => state.configState);
   const readiness = store((state) => state.readiness);
   const connection = store((state) => state.connection);
@@ -53,7 +53,7 @@ export function PlaybooksSurface({
   // for a project's tab binds as that project would, and is not this
   // page's.
   const lists = readLists?.projectId === null ? readLists : undefined;
-  // The global environment is your own group's spex repository's, as
+  // The global environment is your personal spex repository's, as
   // Space or the list names it.
   const ownKey = ownRepositoryKey(space, readLists?.own);
 

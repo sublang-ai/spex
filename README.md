@@ -12,7 +12,7 @@
 Spex brings specs and AI workflows into one IDE. Reuse specs, skills,
 playbooks or applets as versioned **spec packages**: find and publish
 packages on [Spex Space](https://spex.sublang.ai), and install them from
-the IDE. Space also offers optional project-record sharing and sync.
+the IDE. Space can also sync your project records between your computers.
 
 ## Why Spex
 
@@ -61,9 +61,7 @@ npm install -g @sublang/spex
 The guide's package commands use CLI 5.0 and need no running app.
 Its IDE controls follow current source and are newer than app 0.9.0-beta.24.
 
-To share project records, manage members or work on a team server, read
-[Groups and collaboration](docs/groups.md). Package publishing uses your
-registry account, separately from a Space's groups.
+To sync project records between your computers, see the [getting started guide](docs/getting-started.md#optionally-sync-project-records).
 
 Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
 inside its Electron; the server shell compiles them only when its Node, or a
@@ -214,18 +212,16 @@ as `1.2.3` or `^1.2.3`. Private packages need a sign-in with access. The
 [`spex` command line](packages/cli/README.md) does the same from a
 terminal, with no app running.
 
-**Optional project-record sharing.** Sign in on **Space** when you want
-to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless
-`SPEX_HOST_URL` names another when the home is first created. The desktop
-opens the Space's sign-in page in your browser; the server shell links
-to the browser approval page. Spex then syncs your Personal records to
-the Space, and a project's records once you add it to a group; a
-group's members see its records. Git gets the Space's credential
+**Optional project sync.** Sign in to a Space to sync your personal settings
+and playbooks. Choose a Space on a project's row to sync its records too.
+On another computer, sign in to the same account and open the project
+with its working folder. Package publishing uses your registry sign-in.
+Git gets the Space's credential
 through Spex's own credential helper, run on the app's own runtime,
 never through a remote URL, and this computer's sign-in stays in
 `local/credentials.yaml`, readable by you alone
 ([git-host](specs/packages/git-host.md),
-[DR-103](specs/decisions/103-the-home-and-its-groups.md)).
+[DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) build both native desktop downloads from the tagged source;
@@ -316,7 +312,7 @@ For development: `npm ci`, `npm run build`, then `npm run test:affected` runs
 the suites reached by your changes, including untracked files. Run
 `npm run prepush` before pushing for build, type, catalog and spec checks.
 Pull requests use the same affected-suite selection; full platform checks,
-browser journeys, native browser acceptance and the privileged hub lane gate
+browser journeys and native browser acceptance gate
 app releases or run on explicit request. There are no nightly checks or
 duplicate runs after merging. CLI releases validate the CLI across platforms.
 For a focused browser investigation, `npm run e2e` drives the served UI in
