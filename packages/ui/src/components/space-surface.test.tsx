@@ -126,7 +126,7 @@ describe("SPACE: re-reads on events, never on a timer (space-2)", () => {
       window.dispatchEvent(new Event("focus"));
     });
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
-    // Records in no group read no phrase (space-120).
+    // Local-only records read no standing phrase (space-120).
     expect(screen.queryByTestId(`space-repo-state-${KEY}`)?.textContent ?? "").toBe("");
     // Nothing to send, its last sync is its phrase (space-120).
     deliver(repoState({ local: [] }));
@@ -988,7 +988,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
   });
 
-  test("a Space holding no records and records started separately read as such; records in no group offer no Check", async () => {
+  test("shows when a Space holds no records or histories started separately and disables Check for local-only records", async () => {
     await renderSpace(repoState({ branch: { ...BRANCH, hostEmpty: true, behind: 0 }, incoming: [] }));
     expect(screen.getByText("Spex Example holds no records yet; Sync will send these")).toBeTruthy();
     cleanup();

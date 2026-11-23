@@ -4823,8 +4823,8 @@ export class SpaceManager {
 
   /** The instance governing a clone's spex repository (git-host-5): its
    * own (storage-31) while signed in there, alone deciding its row and
-   * the group it stands under, its read-only state, its unlisting, its
-   * members and what the person may do on it, whatever other instance
+   * its read-only state, its unlisting and what the person may do on it,
+   * whatever other instance
    * lists it; while its own is signed out, or it has none, the earliest
    * signed-in instance in the home's list whose view lists the same host
    * repository by its Git origin and id, which its next sync follows
@@ -4877,7 +4877,7 @@ export class SpaceManager {
     if (governing) return governing;
     if (this.instanceOfClone(machine) !== undefined) return undefined;
     const remote = machine.facts.remote;
-    const serving = (remote === null ? undefined : this.spaceForRecords(remote)) ?? this.defaultInstance();
+    const serving = (remote === null ? undefined : this.recordSpace(remote, underRecordAddress)) ?? this.defaultInstance();
     return this.signedInAt(serving) ? serving : undefined;
   }
 
@@ -4989,7 +4989,7 @@ export class SpaceManager {
    * for a clone not at the host, nor while no signed-in instance serves
    * it, where Git's own or the fallback serves. */
   identityFor(machine: RepositorySync): { name: string; email: string } | null {
-    const at = this.instanceOfClone(machine) !== undefined || this.atHost(machine.facts, this.servingOf(machine));
+    const at = this.instanceOfClone(machine) !== undefined || this.atHost(machine.facts);
     const instance = at ? this.rowInstance(machine) : undefined;
     const account = instance ? this.host.store.home.account(instance.origin) : null;
     if (!instance || !account) return null;
@@ -5229,7 +5229,10 @@ export class SpaceManager {
    * URL's last segment; the path placement's remote as itself with any
    * embedded user removed. */
   private placementPath(placement: Placement): string {
-    if (placement.instance === null) return displayRemote(placement.url);
+    if (placement.instance === null) {
+      const space = this.spaceForRecords(placement.url);
+      return space ? this.nameOf(space) : displayRemote(placement.url);
+    }
     const own = this.instanceAt(placement.instance);
     const facts = { remote: placement.url, id: placement.id, remoteName: placement.name };
     const instance = this.signedInAt(own) ? own : this.listedInstances().find((candidate) => this.signedInAt(candidate) && this.listingOf(candidate, facts) !== undefined);
@@ -5245,7 +5248,7 @@ export class SpaceManager {
     const remote = facts.remote;
     const own = this.servingAt(key, facts);
     const under = (instance: HostInstance): boolean => underOrigin(remote, instance.origin) || underOrigin(remote, instance.knownOrigin());
-    if (!this.atHost(facts, own) && !under(own) && !this.listedInstances().some(under)) return displayRemote(remote);
+    if (facts.id === null && !this.spaceForRecords(remote) && !under(own) && !this.listedInstances().some(under)) return displayRemote(remote);
     return this.urlRules(facts, key)[0].own?.path ?? key;
   }
 
@@ -5297,19 +5300,24 @@ export class SpaceManager {
     catch { console.error("spex: the Space description could not be saved"); }
   }
 
-  private atHost(facts: RemoteFacts, instance: HostInstance): boolean {
-    return facts.remote !== null && (facts.id !== null || this.spaceForRecords(facts.remote, instance) !== undefined);
+  /** A named path can only be adopted through the Space's reported HTTP address. */
+  private atHost(facts: RemoteFacts): boolean {
+    return facts.remote !== null && (facts.id !== null || this.recordSpace(facts.remote, underRecordAddress) !== undefined);
   }
 
   /** Resolve a records URL from the Space addresses already known here.
    * Before a Space reports its Git endpoint, its own service address is
    * still known, but an undisclosed separate endpoint looks external. */
-  spaceForRecords(url: string, preferred?: HostInstance): HostInstance | undefined {
-    const instances = this.preferring(preferred?.origin ?? null);
+  spaceForRecords(url: string): HostInstance | undefined {
+    return this.recordSpace(url, belongsToRecordAddress);
+  }
+
+  private recordSpace(url: string, matches: (url: string, base: string) => boolean): HostInstance | undefined {
+    const instances = this.reportingInstances();
     return instances.find((instance) => {
       const origin = instance.knownOrigin();
-      return origin !== undefined && belongsToRecordAddress(url, origin);
-    }) ?? instances.find((instance) => instance.knownOrigin() === undefined && belongsToRecordAddress(url, instance.origin));
+      return origin !== undefined && matches(url, origin);
+    }) ?? instances.find((instance) => instance.knownOrigin() === undefined && matches(url, instance.origin));
   }
 
   /** The origin a sign-in names (git-host-2, storage-2): the canonical
@@ -5777,9 +5785,9 @@ export class SpaceManager {
   /** Read an instance — the default instance where none is named
    * (git-host-5): one read of it at a time, the answer held as its
    * current view, a failure keeping its previous view and its time, and
-   * every other instance's read and view its own. A read begun before a
-   * clone was attached to a repository there, or a group was created
-   * there, cannot list it: it is made again before it is held. */
+   * every other instance's read and view its own. If a change there
+   * invalidates an in-flight read, the read starts again before its
+   * view is published. */
   readHost(instance: HostInstance = this.defaultInstance()): Promise<HostView> {
     const generation = instance.accountGeneration;
     if (instance.reading && instance.readingGeneration === generation) return instance.reading;
@@ -6303,7 +6311,7 @@ export class SpaceManager {
     return key !== home.own() && splitKey(key).instance === null && key.startsWith(`${home.ownName}/`);
   }
 
-  /** Ask an instance to create `name` in a group there for a clone
+  /** Ask a Space to create `name` in the signed-in account's namespace for a clone
    * (git-host-6): created, the clone takes it as its first placement
    * and syncs (adopt), or, for a Place (`place`), as a placement beside
    * its others (placeAdd), which the Place's operation then syncs; left
@@ -7016,7 +7024,7 @@ export class SpaceManager {
   async admit(machine: RepositorySync, input: { push: boolean }): Promise<void> {
     const facts = machine.facts;
     const first = this.syncsWith(machine, input.push);
-    if (!this.atHost(facts, first ?? this.servingOf(machine)) || first) return;
+    if (!this.atHost(facts) || first) return;
     const later = machine.placements.slice(1).some((placement) => placement.instance === null
       || (input.push ? this.governingOfPlacement(machine, placement) !== undefined : this.signedInAt(this.instanceAt(placement.instance))));
     if (!later) throw new CoreError("invalid_request", signInTo(this.nameOf(this.servingOf(machine))));
@@ -7042,10 +7050,9 @@ export class SpaceManager {
     const syncs = op !== "check";
     if (syncs) await this.moveDeferred(machine);
     const facts = await machine.readFacts();
-    const serving = this.servingOf(machine);
     const instance = this.syncsWith(machine, syncs);
     const configured = keyPlacement(machine.placements);
-    if (!this.atHost(facts, instance ?? serving) && configured === undefined) return undefined;
+    if (!this.atHost(facts) && configured === undefined) return undefined;
     if (!instance) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
     const own = this.instanceOfClone(machine);
     const follows = own !== undefined && instance !== own;
@@ -8119,13 +8126,13 @@ export class SpaceManager {
    * state from the last answer of the instance governing it — its own,
    * or, while that is signed out, the one its next sync follows
    * (git-host-5, space-60) — as the first placement's is: none
-   * governing, unreachable; a group named like a login, unreachable; what its last transport
+   * governing, unreachable; what its last transport
    * learnt of the host, or the instance's failed read, until its next
-   * read; listed, reachable or read-only with the listing's members and
-   * rights; not listed by a read, unreachable — the path placement
+   * read; listed, reachable or read-only according to the account's
+   * access; not listed by a read, unreachable — the path placement
    * reachable. */
   private overlayPlacement(machine: RepositorySync, placement: Placement, line: PlacementState): PlacementState {
-    if (placement.instance === null) return { ...line, path: displayRemote(placement.url), state: "reachable", reason: null };
+    if (placement.instance === null) return { ...line, path: this.placementPath(placement), state: "reachable", reason: null };
     // Read from the instance governing it — its own, or, while that is
     // signed out, the one its next sync follows (git-host-5, space-60).
     const instance = this.governingOfPlacement(machine, placement);
@@ -8168,7 +8175,7 @@ export class SpaceManager {
     }, shown === null ? {} : { path: shown });
     if (facts.remote === null) return { ...row, state: "local-only", reason: null };
     // A remote the reader named, a path this device reaches: no host.
-    if (!this.atHost(facts, this.servingOf(machine))) return row;
+    if (!this.atHost(facts)) return row;
     // An instance signed out leaves its rows unreachable until its next
     // sign-in, where no signed-in instance lists them (space-6, space-61,
     // git-host-4).

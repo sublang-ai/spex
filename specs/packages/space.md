@@ -1005,6 +1005,7 @@ When the Space moves an already synced project repository outside the signed-in 
 When real cores transfer records with independent Space and external Git destinations, the integration suite shall verify their routing:
 
 - after sign-out and restart, a previously learned separate Git address is still classified locally and refused as a path placement in HTTP(S) and both SSH forms, while an unrelated external remote can sync when the Space is unavailable [[space-136](#space-136)];
+- a terminal-configured path placement using SSH at a known Space stops Check and Sync with Git settings guidance and Retry before a Space read or transfer, keeping the local row without exposing the transport address [[space-140](#space-140)] [[space-15](#space-15)];
 - an approved personal repository uses its Space and an external HTTP redirect and SSH-authenticated LFS fetch use ordinary Git transport [[space-140](#space-140)];
 - a conflicting fetch rewrite, separate push URL or configured LFS download or upload endpoint stops the affected transfer before records reach the unapproved repository, identifies the Git settings and offers Retry. The endpoint cases include SSH and hosted uploads for both the default branch and `spex` [[space-140](#space-140)] [[space-15](#space-15)];
 - when Git settings stop the first hosted placement at Push, a later healthy external placement still receives the saved records [[space-15](#space-15)];

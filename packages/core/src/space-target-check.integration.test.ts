@@ -146,6 +146,31 @@ test("git-host-23: a cold sync of a personal Git address checks its Space immedi
   assert.equal(placed.id, repository.id);
 });
 
+test("space-142: an existing SSH origin at a known Space stops as a path placement", async (t) => {
+  const { home, host } = await prepared("record-personal-ssh");
+  t.after(() => home.stop());
+  const repository = host.script.addRepository({ group: "ada", name: "direct-ssh-spex" });
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitRepository(0, hostKey(host, "ada/direct-ssh-spex"), (row) => row.id === repository.id);
+  const { key, clone } = await addFolder(home, gitFolder("direct-ssh"));
+  const address = new URL(`${host.gitOrigin}/ada/direct-ssh-spex.git`);
+  const ssh = `ssh://git@${address.hostname}:1${address.pathname}`;
+  git(clone, "remote", "add", "origin", ssh);
+  const before = host.script.requests.length;
+  for (const command of ["space.fetch", "space.sync"] as const) {
+    const row = await home.client.settle(command, { repository: key });
+    assert.ok(row.sync.phase === "stopped" && row.sync.step === "check" && row.sync.cause === "git" && row.sync.retry, JSON.stringify(row.sync));
+    assert.match(row.sync.message, /^Git settings direct this external records transfer to a Space/);
+    assert.equal(row.state, "reachable");
+    assert.equal(row.governing, null);
+    const placement = placementOf(row, null);
+    assert.equal(placement.state, "reachable");
+    assert.ok(!JSON.stringify(row).includes(ssh), "the local row keeps the transport address private");
+  }
+  assert.deepEqual(host.script.requests.slice(before), [], "neither operation asks the Space about this path placement");
+  assert.equal(git(clone, "remote", "get-url", "origin"), ssh);
+});
+
 test("space-142: an external records placement checks its effective push destination", async (t) => {
   const backend = await startHost();
   const host = await startHost({ gitBackend: backend });

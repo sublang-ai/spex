@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Real Groups integration fixtures; each file owns its scratch and cores.
+// Real core integration fixtures for Space. Each file owns its scratch and cores.
 
 import assert from "node:assert/strict";
 import { orderRemotes, remoteOrderOf } from "../home.js";

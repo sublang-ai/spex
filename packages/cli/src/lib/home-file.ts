@@ -65,14 +65,14 @@ export function kebab(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/** This device's user name as a group folder name (storage-2). */
+/** This device's user name as a personal records folder name (storage-2). */
 export function defaultOwnName(env: NodeJS.ProcessEnv = process.env): string {
   let name = "";
   try { name = userInfo().username; } catch { name = env.USER ?? env.USERNAME ?? ""; }
   return kebab(name) || "me";
 }
 
-/** Whether a name may stand as a group folder under `workspace/`. */
+/** Whether a name may stand as the personal records folder under `workspace/`. */
 export function isGroupName(value: string): boolean {
   return GROUP_NAME.test(value);
 }

@@ -293,9 +293,9 @@ test("projects-28: the Overview's records line reads Records with their standing
   page,
   app,
 }) => {
-  // The Overview's repository header carries the records line, "Records
-  // · <group> · <standing>": records in no group name none, and no line
-  // names the records' `-spex` (projects-4, space-61).
+  // The Overview's records line reads "Records", followed by the Space's
+  // display name and the current standing when available (projects-4,
+  // space-61).
   seedDemoProject(app.projectDir);
   await app.core.command("project.register", { path: app.projectDir });
   await open(page, app);

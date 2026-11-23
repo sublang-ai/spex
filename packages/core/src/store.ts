@@ -835,8 +835,8 @@ export class Store {
   }
 
   /** Every clone under `workspace/` as the folders stand now: a folder
-   * named `<name>-spex` inside plain group folders mirroring the Git host
-   * (storage-1), under an instance's folder or the personal records folder, its key
+   * named `<name>-spex` inside the personal records folder or a login
+   * folder under a Space's folder (storage-1), its key
    * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
    * again keeps its descriptor, and one gone leaves the map. */
   private currentRepositories(): Map<string, SpexRepository> {

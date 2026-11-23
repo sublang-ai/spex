@@ -804,7 +804,7 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
     // session's original bytes beside the store it migrates into: never
     // portable, since a legacy manifest may hold a provider token
     // (storage-9, storage-17, storage-18).
-    // `.spex/` holds a group's own environment's installed files and
+    // `.spex/` holds the environment's installed files and
     // generated skills (environments-26), and the former `packages/` and
     // `skills/` stay ignored until an install removes them (DR-165).
     "/.spex/", "/packages/", "/skills/", "/local/", `/${UPLOAD_STAGING}/`, `/${APPLY_MARKER}`, "/.lock*",

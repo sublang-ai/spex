@@ -566,7 +566,7 @@ export class CoreService {
   private readonly handoffs = new Map<string, string>();
   /** Manual and automatic sends share one admission per conversation. */
   private readonly submitting = new Map<string, Promise<void>>();
-  /** Groups' engine (DR-103): one sync machine per spex repository. */
+  /** Space sync runs one machine per spex repository. */
   private readonly space: SpaceManager;
   private readonly registry: RegistryManager;
   /** Every spex repository's environment (DR-104). */
@@ -2902,9 +2902,9 @@ export class CoreService {
           }));
         }
         const op = command.op as ConfigEditOp;
-        // A project's or another group's file (playbook-library-3): its
-        // playbook entries alone, composed on top of yours with the
-        // modules its environment exports before yours.
+        // A project's file (playbook-library-3): its playbook entries
+        // alone, composed on top of the global entries with the modules
+        // its environment exports before the global modules.
         const target = command.repository !== undefined && command.repository !== this.store.home.own()
           ? this.store.repository(command.repository)
           : undefined;

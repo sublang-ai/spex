@@ -102,7 +102,7 @@ test("projects-46: a removal whose rename is refused changes nothing, the clone 
   t.after(() => home.stop());
   const group = dirname(clone);
   // Refused as another program refuses it: on Windows, a reader holding
-  // a folder of the clone open; on POSIX, a group folder taking no
+  // a folder of the clone open; on POSIX, a parent folder taking no
   // rename.
   let release: () => void;
   if (process.platform === "win32") {
@@ -361,7 +361,7 @@ test("projects-46: a removal whose write of home.yaml fails puts the clone back 
   t.after(() => home.stop());
   const [target, refused, allowed] = process.platform === "win32" ? [join(home.dataDir, "home.yaml"), 0o444, 0o644] : [home.dataDir, 0o555, 0o755];
   // Each try sets the clone aside under a name of its own, which a watch
-  // of its group's folder sees, as it holds nothing open in the clone.
+  // of its parent folder sees, as it holds nothing open in the clone.
   const asides = new Set<string>();
   const group = watch(dirname(clone), (_event, name) => { if (name?.startsWith(".removed-")) asides.add(name); });
   const before = standing(clone);

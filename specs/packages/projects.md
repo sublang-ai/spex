@@ -208,7 +208,7 @@ Where project repository state is collected — current branch or detached HEAD,
 
 #### projects-48
 
-When a client sends `project.status` or `forge.items`, the core shall classify the code's remote from the current or saved reports of Git origins [[git-host-5](git-host.md#git-host-5)] without requesting a Space read.
+When a client sends `project.status` or `forge.items`, the core shall answer without requesting a Space read.
 
 #### projects-12
 

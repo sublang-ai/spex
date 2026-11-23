@@ -32,7 +32,7 @@ export const WORKSPACE = "workspace";
 /** The most segments a key the walks of `workspace/` find may hold: the
  * nine a key held before DR-127, and the instance's folder before them. */
 export const WORKSPACE_DEPTH = 10;
-/** A spex repository's name for a folder or group name: `<name>-spex`. */
+/** A spex repository's name derived from the supplied name: `<name>-spex`. */
 export function repositoryNameFor(name: string): string {
   return `${kebab(name) || "project"}-spex`;
 }
