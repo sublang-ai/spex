@@ -635,9 +635,8 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(git(neverClone, "for-each-ref", "--format=%(refname)", "refs/heads/"), "refs/heads/spex");
   assert.equal(git(neverClone, "status", "--porcelain"), "");
   assert.equal(createdOn(neverClone), null, "the clone records the creation no more");
-  // That push refused, as a protected default branch refuses a member
-  // who may not push there, the sync stops after the re-reads in the
-  // stand-in's words, nothing pushed (git-host-7).
+  // The Space refuses the account's push to the protected branch. The
+  // sync stops after the re-reads and reports the refusal (git-host-7).
   const protectedWords = "You are not allowed to push code to protected branches on this project.";
   host.script.refuseDefaultBranch(protectedWords);
   t.after(() => host.script.refuseDefaultBranch(null));
@@ -1112,8 +1111,8 @@ test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign
   const from = home.client.mark();
   await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
-  // The core's own client and Groups, reached for what no command shows:
-  // its answers held, and the instant its pair is removed.
+  // Hold the core's Space client responses and observe when it removes
+  // the credential pair.
   const core = home.service as unknown as { space: { readHost(): Promise<unknown>; signedInAs(origin: string, account: HostAccount): Promise<void> } };
   const client = clientAt(home, host);
   const holds = holdingFetch(client.fetchImpl);
@@ -1399,7 +1398,7 @@ test("space-97, storage-35: a local clone holding only the path placement origin
   await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, name: "again" } }, "invalid_request", /^path-only already syncs with a Space$/);
 });
 
-test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under the personal records folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
+test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under the personal records folder; a bare repository then named syncs with no catalog read and goes; and a newly created Space placement has no last sync until its first sync completes", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1540,9 +1539,8 @@ test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a 
   const unpathed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: renamedLocal, url: null }), renamedLocal);
   assert.deepEqual([unpathed.state, unpathed.placements], ["local-only", []]);
 
-  // A group then picked to create another repository reads no last sync
-  // until its first sync, read while that sync waits on its host read
-  // (space-22, space-141).
+  // Pick a Space to create another repository. Its last sync is empty
+  // while its first sync waits on the Space read (space-22, space-141).
   host.script.sleepListing(2_000);
   const fromOther = home.client.mark();
   await home.client.expectOk("space.pick", { repository: renamedLocal, choice: { kind: "create", instance: host.url, name: "invites" } });
@@ -1587,9 +1585,9 @@ const foldsCase = ((): boolean => {
   return existsSync(join(dir, "A"));
 })();
 
-/** A project's spex repository created in the stand-in's acme group by a
- * signed-in home and synced there, with one finished session. */
-async function acmeProject(home: Awaited<ReturnType<typeof startHome>>, name: string): Promise<{ key: string; id: string; clone: string; folder: string; sessionId: string }> {
+/** Create and sync a project's spex repository in the signed-in
+ * account's namespace, then finish a session. */
+async function personalProject(home: Awaited<ReturnType<typeof startHome>>, name: string): Promise<{ key: string; id: string; clone: string; folder: string; sessionId: string }> {
   const folder = gitFolder(name);
   await addFolder(home, folder);
   const from = home.client.mark();
@@ -1606,7 +1604,7 @@ test("space-60: a sync moving a renamed repository's clone stops naming a sessio
   const home = await startHome("move-leased", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   await signIn(home, host);
-  const { key, id, clone, folder, sessionId } = await acmeProject(home, "leased");
+  const { key, id, clone, folder, sessionId } = await personalProject(home, "leased");
   host.script.rename(id, { name: "relocated-spex" });
   const renamed = hostKey(host, "ada/relocated-spex");
   const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
@@ -1832,7 +1830,7 @@ test("space-60, space-59: a destination already standing stops the host's move a
   await home.client.waitRepository(fromRefresh, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   assert.equal(Home.load(home.dataDir).keyForFolder(home.projectDir), `${LOGIN}/${basename(home.projectDir)}-spex`, "a Refresh once it is gone moves them all");
   // The host renames a repository onto a folder standing here.
-  const { key, id, clone } = await acmeProject(home, "occupy");
+  const { key, id, clone } = await personalProject(home, "occupy");
   host.script.rename(id, { name: "standing-spex" });
   const standing = clonePath(home.dataDir, hostKey(host, "ada/standing-spex"));
   mkdirSync(standing, { recursive: true });
@@ -1866,7 +1864,7 @@ test("space-59: where the filesystem folds case, a first sign-in that collides w
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
 });
 
-test("space-38: a second home joins a project from the stand-in with its code; a rename moves both clones; an archive turns it read-only; a removed membership unreachable", async (t) => {
+test("space-38: a second home joins a project from the stand-in with its code; a rename moves both clones; an archive turns it read-only; a withdrawn repository becomes unreachable", async (t) => {
   const host = await startHost();
   const code = codeRepository("shared");
   const a = await startHome("host-a", { host, project: false, extra: { signIn: "browser" } });
@@ -1935,7 +1933,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   assert.equal(git(bareOf(host, renamed), "rev-parse", "spex"), bareHead, "nothing was sent");
   assert.ok((await b.client.expectOk("session.list", {})).some((session) => session.id === sessionA2));
   assert.ok(brought.local.some((unit) => unit.sessionId === sessionB), "this home's session stays here, listed to send");
-  // The membership removed: unreachable on the next read, the clone whole.
+  // The next read marks the withdrawn repository unreachable and preserves the clone.
   host.script.withdrawRepository(id);
   const fromGone = b.client.mark();
   await b.client.expectOk("space.refresh", {});
@@ -1963,8 +1961,8 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   assert.ok(reauth.sync.phase === "stopped" && reauth.sync.cause === "reauth" && reauth.sync.message === "Sign in again", JSON.stringify(reauth.sync));
   assert.match(reauth.sync.guidance, /^Sign in again, then Retry\.$/);
   host.script.unauthorizeTransport(false);
-  // A refusal names the Space's own words and Invite members, claims no role and
-  // offers no act the host did not name (space-50).
+  // A refusal quotes the Space's own words and directs the reader to
+  // check access there (space-50).
   const words = "Your account is blocked: contact support.";
   host.script.refuseTransport(words);
   const refused = await home.client.settle("space.sync", { repository: HOST_OWN });
@@ -2362,8 +2360,8 @@ test("space-110: pending sign-in cancels before its start reply and later auth s
   let releaseDevice!: () => void;
   const deviceArrived = new Promise<void>((resolve) => { deviceReached = resolve; });
   const deviceGate = new Promise<void>((resolve) => { releaseDevice = resolve; });
-  // A real forwarding instance refuses only catalog groups, after the
-  // sign-in's person lookup; authentication itself remains successful.
+  // The forwarding Space refuses repository catalog reads after the
+  // sign-in's account lookup. Authentication succeeds.
   const front = createServer(async (request, response) => {
     try {
       if (request.url === "/api/v1/auth/device" && holdDevice) {
@@ -2593,7 +2591,7 @@ test("space-60: a sync of a repository the stand-in renamed, while home.yaml sto
   const home = await startHome("lower-sync-unread", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   await signIn(home, host);
-  const { key, id, clone, sessionId } = await acmeProject(home, "unread");
+  const { key, id, clone, sessionId } = await personalProject(home, "unread");
   host.script.rename(id, { name: "renamed-spex" });
   const target = clonePath(home.dataDir, hostKey(host, "ada/renamed-spex"));
   const homeBytes = readFileSync(Home.file(home.dataDir));
@@ -2662,7 +2660,7 @@ test("space-60: where the filesystem folds case, a sync of a repository renamed 
   const home = await startHome("cased-unwritten", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   await signIn(home, host);
-  const { key, id, folder, sessionId } = await acmeProject(home, "cased");
+  const { key, id, folder, sessionId } = await personalProject(home, "cased");
   host.script.rename(id, { name: "Cased-spex" });
   const homeBytes = readFileSync(Home.file(home.dataDir));
   const { failed } = failHomeWrite(home);

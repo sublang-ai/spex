@@ -30,8 +30,7 @@ export const SPEC_PACKAGE_NAME_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[
 export const PLAYBOOK_ID_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const PLAYBOOK_ID_MAX = 64;
 
-/** Your personal spex repository: as Space reads it under your own
- * group (space-1), else as the playbook list names it. */
+/** The global records repository as Space or the playbook list names it. */
 export function ownRepositoryKey(
   space: SpaceState | undefined,
   own: readonly PlaybookAvailability[] | undefined,

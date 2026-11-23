@@ -33,7 +33,7 @@ async function placed(name: string, match: (first: StandinHost, second: StandinH
   await home.client.waitRepository(mark, "ada/ada-spex", (row) => row.sync.phase === "done", 30_000);
   mark = home.client.mark();
   await signIn(home, second);
-  // Sign-in returns before own-group setup finishes. Drain its second
+  // Sign-in returns before global records setup finishes. Drain its second
   // placement before atlas exists, so a later setup publication cannot
   // consume atlas's branch-count barrier. Its notice may remain owed.
   await home.client.waitSpace(mark, (state) => {

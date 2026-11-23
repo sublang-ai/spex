@@ -1045,6 +1045,11 @@ msgstr "cannot read file: {message}"
 msgid "captain must resolve an adapter"
 msgstr "captain must resolve an adapter"
 
+#. Guidance for a path placement whose configured Git remote named origin belongs to a known Space
+#: src/space.ts
+msgid "Change or remove the records clone's origin in Git, then retry."
+msgstr "Change or remove the records clone's origin in Git, then retry."
+
 #. Guidance after a Space refused a records write
 #: src/space-git.ts
 msgid "Check access in your Space, then retry."
@@ -1646,7 +1651,7 @@ msgstr "Issues and PRs come from GitHub · Code: {host}"
 msgid "Issues and PRs come from GitHub · Code: {space}"
 msgstr "Issues and PRs come from GitHub · Code: {space}"
 
-#. Guidance under a sync stopped because a step at the Space waits for a member with the rights
+#. Guidance for a records step waiting at a Space. The core tries the step again at the next sync.
 #: src/space.ts
 msgid "It is asked again at the next sync."
 msgstr "It is asked again at the next sync."

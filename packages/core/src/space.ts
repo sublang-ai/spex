@@ -568,6 +568,11 @@ const retryGuidance = (): string => i18n._({
   comment: "Guidance under a step that stopped for a reason the app does not classify",
 });
 
+const chooseSpaceDestination = (): string => i18n._({
+  id: "Choose that Space as a sync destination",
+  comment: "Refusal of a remote the reader named for a project's records that lies at a Space, which supplies its own records addresses",
+});
+
 /** Guidance where the host no longer lists a spex repository (space-15). */
 const nothingDeleted = (): string => i18n._({
   id: "Nothing on this computer was deleted.",
@@ -577,7 +582,7 @@ const nothingDeleted = (): string => i18n._({
 /** Guidance under a step the host left waiting (space-64). */
 const syncLater = (): string => i18n._({
   id: "It is asked again at the next sync.",
-  comment: "Guidance under a sync stopped because a step at the Space waits for a member with the rights",
+  comment: "Guidance for a records step waiting at a Space. The core tries the step again at the next sync.",
 });
 
 /** Guidance under a stop the host's rate limit made, or a Stop of its
@@ -2827,10 +2832,7 @@ class RepositorySync {
       // The Git host's own remote URLs are those it hands over, used as
       // given and never named by the reader (space-136).
       if (this.owner.spaceForRecords(url)) {
-        throw new CoreError("invalid_request", i18n._({
-          id: "Choose that Space as a sync destination",
-          comment: "Refusal of a remote the reader named for a project's records that lies at a Space, which supplies its own records addresses",
-        }));
+        throw new CoreError("invalid_request", chooseSpaceDestination());
       }
     }
     const path = repo.placements.find((placement) => placement.instance === null);
@@ -3850,8 +3852,8 @@ class RepositorySync {
    * first by its own instance, the first by the instance the clone syncs
    * with — or the path placement's remote as a report reads it. */
   private turnSpace(held: Placement | undefined, remote: string): string {
-    if (held) return held.instance ? this.owner.instanceName(held.instance) : displayRemote(held.url);
-    return keyPlacement(this.placements) === undefined ? displayRemote(remote) : this.owner.hostNameOf(this);
+    if (held) return held.instance ? this.owner.instanceName(held.instance) : this.owner.pathRemoteAsShown(held.url);
+    return keyPlacement(this.placements) === undefined ? this.owner.pathRemoteAsShown(remote) : this.owner.hostNameOf(this);
   }
 
   /** A failed transport in the plain words of space-15: the Git host's
@@ -4115,9 +4117,10 @@ class RepositorySync {
   /** Check both the declared remote and the URLs Git will actually use,
    * including its URL rewrites and any separately configured push URLs. */
   private requireExternalDestination(name: string, remote: string, step: "check" | "push"): void {
+    this.owner.requireExternalRecordRemote(remote, step, "configured");
     const urls = this.git.runSync(["remote", "get-url", "--all", ...(step === "push" ? ["--push"] : []), name]);
     if (urls.code !== 0) throw this.transportStop(step, urls, remote, false);
-    const destinations = new Set([remote, ...urls.stdout.toString("utf8").trimEnd().split(/\r?\n/)]);
+    const destinations = new Set(urls.stdout.toString("utf8").trimEnd().split(/\r?\n/));
     for (const url of destinations) this.owner.requireExternalRecordRemote(url, step);
   }
 
@@ -4647,10 +4650,9 @@ export class SpaceManager {
   private startRead = true;
   private flow?: { cancel(): void };
   private flowReport?: ReportedSignIn;
-  /** Steps at an instance waiting for a member with the rights
-   * (space-64), by the clone's key, then by the origin of the instance
-   * each waits at — one per placement (DR-128); asked again at that
-   * instance's next read. */
+  /** Steps a Space refused for the account's rights (space-64), keyed
+   * by clone and Space origin. Each placement's step is asked again
+   * at that Space's next read (DR-128). */
   private readonly waiting = new Map<string, Map<string, Waiting>>();
   /** The progress of joins in flight or stopped, by the instance each
    * joins at and the host's id there (space-63, joinKey) — two Git
@@ -5174,12 +5176,14 @@ export class SpaceManager {
    * and any other URL under an instance's Git origin as that instance's
    * name, the clone's own instance's where several report one origin;
    * then each placement `beside` reading as its own path in its instance,
-   * a path placement as itself with any embedded user removed (DR-128). */
+   * with path placements reading as `pathRemoteAsShown`. */
   private urlRules(facts: RemoteFacts, key: string, at?: string, beside: readonly Placement[] = []): Parameters<typeof withoutHostUrls>[1][] {
     const own = at === undefined ? this.servingAt(key, facts) : this.instanceAt(at);
     const listing = facts.remote === null ? undefined : this.listingOf(own, facts);
     const segment = instanceSegmentOf(key);
-    const path = listing ? `${listing.repository.group.fullPath}/${listing.repository.path}`
+    const pathSpace = at === undefined && facts.remote !== null && !this.atHost(facts) ? this.spaceForRecords(facts.remote) : undefined;
+    const path = pathSpace ? this.nameOf(pathSpace)
+      : listing ? `${listing.repository.group.fullPath}/${listing.repository.path}`
       : at !== undefined && facts.remote !== null ? remoteSegment(facts.remote)
       : segment === null ? key : key.slice(segment.length + 1);
     const rules: Parameters<typeof withoutHostUrls>[1][] = [own, ...this.listedInstances().filter((instance) => instance !== own)].map((instance, index) => ({
@@ -5215,24 +5219,27 @@ export class SpaceManager {
    * (space-15): `placement` the one it stopped at, beside the clone's
    * first, or the first where none is named; every placement the clone
    * holds reading as its path in its instance. A path placement beside
-   * the first is read under the first's rules, its own remote as
-   * itself. */
+   * the first is read under the first's rules, its remote as
+   * `pathRemoteAsShown`. */
   placementFailure(machine: RepositorySync, failure: GitFailure, placement?: Placement): GitFailure {
     const beside = machine.placements;
     if (!placement?.instance) return this.withoutHostUrls(failure, machine.facts, machine.key, undefined, beside);
     return this.withoutHostUrls(failure, { remote: placement.url, id: placement.id, remoteName: placement.name }, machine.key, placement.instance, beside);
   }
 
+  /** A path placement names the Space when its address belongs there,
+   * or displays the remote without HTTP(S) user info (space-15). */
+  pathRemoteAsShown(remote: string): string {
+    const space = this.spaceForRecords(remote);
+    return space ? this.nameOf(space) : displayRemote(remote);
+  }
+
   /** A placement's path as its line and a report read it (space-87,
    * space-15): as its instance's listing names it — while that is signed
    * out, a signed-in instance's that lists it (git-host-5) — else its
-   * URL's last segment; the path placement's remote as itself with any
-   * embedded user removed. */
+   * URL's last segment; a path placement reads as `pathRemoteAsShown`. */
   private placementPath(placement: Placement): string {
-    if (placement.instance === null) {
-      const space = this.spaceForRecords(placement.url);
-      return space ? this.nameOf(space) : displayRemote(placement.url);
-    }
+    if (placement.instance === null) return this.pathRemoteAsShown(placement.url);
     const own = this.instanceAt(placement.instance);
     const facts = { remote: placement.url, id: placement.id, remoteName: placement.name };
     const instance = this.signedInAt(own) ? own : this.listedInstances().find((candidate) => this.signedInAt(candidate) && this.listingOf(candidate, facts) !== undefined);
@@ -5929,9 +5936,17 @@ export class SpaceManager {
     throw new SpaceStopped(step, { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
   }
 
-  /** A configured path remote cannot bypass a Space's ownership check. */
-  requireExternalRecordRemote(remote: string, step: "check" | "push"): void {
+  /** Refuse a path placement at a Space, whether configured directly or
+   * resolved through the computer's Git settings. */
+  requireExternalRecordRemote(remote: string, step: "check" | "push", source: "configured" | "settings" = "settings"): void {
     if (!this.spaceForRecords(remote)) return;
+    if (source === "configured") {
+      const guidance = i18n._({
+        id: "Change or remove the records clone's origin in Git, then retry.",
+        comment: "Guidance for a path placement whose configured Git remote named origin belongs to a known Space",
+      });
+      throw new SpaceStopped(step, { cause: "git", message: chooseSpaceDestination(), guidance, retry: true }, false);
+    }
     const message = i18n._({
       id: "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry.",
       comment: "An external records transfer stopped because Git would use a known Space address",
@@ -6393,12 +6408,10 @@ export class SpaceManager {
     if (options.join) machine.oweJoin(name);
   }
 
-  /** Every step left waiting at an instance, asked again at its read
-   * (space-64): a creation a member with the rights did is found and
-   * joined. An entry stands until its step is done or no longer asked
-   * for — never lost to an act that failed meanwhile. Each clone's wait
-   * at that instance is its own, a wait at another instance standing
-   * (DR-128). */
+  /** Retry steps waiting at this Space after a read (space-64).
+   * Join a requested repository already found in the account's own
+   * namespace. Keep each wait until its step completes or is no
+   * longer needed, independently for each Space (DR-128). */
   private async retryWaiting(instance: HostInstance, view: HostView): Promise<void> {
     for (const [key, waits] of [...this.waiting]) {
       const waiting = waits.get(instance.origin);
@@ -8061,13 +8074,10 @@ export class SpaceManager {
     return machine.placements[0]?.instance ?? null;
   }
 
-  /** A clone's placement lines (space-87, space-30): those its clone
-   * holds in the order added, the path placement last — the first read
-   * as its row is, its state, its path and its listing's members and
-   * rights as `overlaid` read them; each other by its own instance's
-   * last answer (overlayPlacement) — each with its branch against that
-   * placement's `spex`, its lists, and this device's last sync as `held` and the row's machine read them; then the one
-   * a creation for it waits at, attached to no remote here. */
+  /** A clone's placement lines (space-87, space-30). The first line
+   * takes the row's state and reason. Later attached lines use their
+   * own placement state. A waiting step goes on its placement's line
+   * or gets a line of its own if no placement shows it. */
   private linesOf(machine: RepositorySync, row: RepositoryState, held: Placement[]): PlacementState[] {
     const lines: PlacementState[] = [];
     // Each step waiting at the host waits on the line of the placement at
@@ -8164,7 +8174,8 @@ export class SpaceManager {
     };
     // What a pick, a join or a pairing changed since the machine's last
     // reading is read afresh: its remote, its id and its working folder.
-    // A remote at the host reads as its path in the instance (space-15).
+    // A Space placement reads as its repository path. A path placement
+    // at a known Space reads as the Space's display name (space-15).
     const shown = this.remoteAsShown(facts, base.key);
     const row: RepositoryState = keyLine({
       ...base,

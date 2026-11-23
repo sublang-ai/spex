@@ -47,7 +47,7 @@ export interface InstancesReceipt {
 
 /** A clone the migration moves under its instance's folder, or whose
  * remote alone it renames: by the key it has and the key it takes —
- * one key for your own group's own repository, which keeps its folder —
+ * one key for the global records repository, which keeps its folder —
  * whether its remote, the host's, takes the instance's folder's name,
  * and the clone it was when planned: the host's id it records, and its
  * remote's URL, each null where it had none. */
@@ -314,12 +314,12 @@ function nameRemoteBy(dir: string, folder: string, env: NodeJS.ProcessEnv): void
   } else if (names.includes(folder) && !moveLegacyIds(run, folder)) report();
 }
 
-/** What the migration does with each clone (DR-127): your own group's
- * own repository, recording the host's id, renames its remote and keeps
+/** What the migration does with each clone (DR-127): the global records
+ * repository, recording the host's id, renames its remote and keeps
  * its folder; any other clone recording it moves under the instance's
  * folder at its key — its path there, which a Spex before DR-127 kept
  * it at — its remote renamed; a clone recording none moves at its key
- * keeping its remote, unless it lies in your own group's folder, which
+ * keeping its remote, unless it lies in the personal records folder, which
  * holds the clones never at an instance; a clone already under an
  * instance's folder is not touched. */
 function planClones(home: Home, folder: string, env: NodeJS.ProcessEnv): CloneMove[] {

@@ -177,7 +177,7 @@ test("space-8, space-31, space-33, space-7, space-15, space-10, space-29: Check 
   assert.equal(git(clone, "config", "--get", `remote.${hostFolder(second)}.spexId`), placed.id);
 });
 
-test("space-61, space-87: with the first instance signed out, the first placement's line reads unreachable, Sign in again, while the second's reads reachable from the second's own read, with its path, unknown members' count and rights there, and the row reads reachable through it", async (t) => {
+test("space-61, space-87: with the first instance signed out, the first placement's line reads unreachable, Sign in again, while the second's reads reachable from the second's own read, with its path and repository id, and the row reads reachable through it", async (t) => {
   const { first, second, home, key, placed } = await placedAtBoth("line-states");
   t.after(() => home.stop());
   const before = repositoryOf(await refreshed(home), key);
@@ -262,9 +262,8 @@ function recordSteps(home: Awaited<ReturnType<typeof startHome>>, key: string, h
   return steps;
 }
 
-/** A peer working copy of the second's bare repository standing on the
- * first's `spex`, as a member holding both carried it there: its next
- * push to the second descends from the first's history. */
+/** Set a working copy of the second repository to the first's
+ * `spex` so its next push descends from the first's history. */
 function peerOnFirst(secondBare: string, firstBare: string): string {
   const dir = peerClone(secondBare);
   git(dir, "fetch", "-q", firstBare, "spex");

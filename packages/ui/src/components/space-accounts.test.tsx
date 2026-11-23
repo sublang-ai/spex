@@ -220,9 +220,9 @@ describe("SPACE: the header (space-1, space-2)", () => {
   });
 
   test("with no git the guidance replaces every other field", async () => {
-    await renderSpace(base({ git: { ok: false, guidance: "Install Git from git-scm.com, then reopen Groups." } }));
+    await renderSpace(base({ git: { ok: false, guidance: "Git is not installed. Install Git, then reopen Space." } }));
     expect(screen.getByTestId("space-no-git").textContent).toContain("Git is not installed");
-    expect(screen.getByTestId("space-no-git").textContent).toContain("git-scm.com");
+    expect(screen.getByTestId("space-no-git").textContent).toContain("Install Git, then reopen Space.");
     expect(screen.queryByTestId("space-signin-card")).toBeNull();
     expect(screen.queryByTestId(`space-instance-${ORIGIN}`)).toBeNull();
     expect(screen.queryByTestId("space-refresh")).toBeNull();

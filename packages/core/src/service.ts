@@ -3457,7 +3457,7 @@ export class CoreService {
       case "space.get":
         return this.requireSpace().get();
       // The Git host (git-host-2..10, space-3..6, space-63, space-64, space-65, space-97): sign-in
-      // and its set-up, the host read, picks, joins and members.
+      // and its setup, the Space read, and personal repository selection and joins.
       case "space.refresh":
         return this.requireSpace().refresh();
       case "space.signin.start":

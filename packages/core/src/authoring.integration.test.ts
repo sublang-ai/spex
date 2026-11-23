@@ -1371,7 +1371,7 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   ];
 
   // LICENSE is read at each reply. A registry refusal leaves Org blank,
-  // with no Space group or local-username fallback.
+  // regardless of the project's repository path or the local username.
   const cases: [string | null, string | null][] = [
     ["﻿\n                                 Apache License\n                           Version 2.0, January 2004\n", "Apache-2.0"],
     ["MIT License\n\nCopyright (c) 2026 Acme\n", "MIT"],
@@ -1393,8 +1393,8 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   // One listed is it, wherever its path.
   first.script.setOrgs("first-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
   assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011", "alpha-two"], "one listed");
-  // Of several, the first listed name wins for every project, even
-  // when another namespace's path matches its Space group.
+  // Use the registry's first authorized namespace even when another
+  // namespace matches the project's repository path prefix.
   first.script.setOrgs("first-token", [
     { name: "workshop", path: "acme/workshop", role: "developer" },
     { name: "alpha", path: "alpha", role: "owner" },

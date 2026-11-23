@@ -165,8 +165,8 @@ function receivedFor(registry: StandinRegistry, from: number, name: string): [st
     .map((request) => [request.path, request.instance, request.account, request.bearer]);
 }
 
-/** Resolve one registry request against a registry outside any core, as
- * another member's home would have locked it: its resolution. */
+/** Resolve a registry request outside the core to supply the
+ * resolution recorded by another home. */
 async function resolvedAt(registry: RegistryClient, name: string, version: string): Promise<Resolution> {
   const text = `format: 1\npackages:\n  ${name}:\n    version: ${version}\n`;
   const result = await resolve({ requests: parseRequests(text), requestsText: text, registry, pathRoot: null, git: gitSource(join(scratch, "resolve-cache")) });

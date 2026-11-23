@@ -910,9 +910,8 @@ test("space-83, space-4, space-59, space-65, storage-34, storage-2, storage-36: 
   const state = await home.client.expectOk("space.get", {});
   assert.equal(state.defaultInstance, first.url);
   assert.deepEqual(state.instances.map((instance) => instance.origin), [first.url, second.url]);
-  // Each with its own account, display name, read state and groups, the
-  // second's set-up having read the second (space-30, space-4,
-  // git-host-5).
+  // Each Space has its own display name and read state. Setup at the
+  // second has read its catalog (space-30, space-4, git-host-5).
   assert.deepEqual(state.instances.map((instance) => [instance.displayName, instance.read, typeof instance.readAt]), [[HOST_NAME, { phase: "idle" }, "number"], ["Second stand-in", { phase: "idle" }, "number"]]);
   assert.equal(Home.load(home.dataDir).instance(second.url)?.displayName, "Second stand-in");
   // The personal records folder bears the first's login, no later sign-in
@@ -1241,9 +1240,9 @@ test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the fir
 test("space-29, git-host-4, git-host-10, space-6, space-64, space-63: space.signout naming an instance the first signed out is refused, nothing asked of it, its sign-out mark and its step waiting there kept; signed in again, a sign-out of the first ends its own waiting step while a join stopped at the second stands", async (t) => {
   const { first, second, beta, home, betaKey } = await twoInstances("signout-scoped");
   t.after(() => home.stop());
-  // A creation at the first left waiting for a member with the rights
-  // (space-64), and a join at the second whose clone the second's
-  // transport refuses, stopped (space-63).
+  // At the first Space, the account lacks permission to create the
+  // repository (space-64). At the second, the transport refuses the
+  // clone during join (space-63).
   const words = "You need the Maintainer role in Acme to create projects.";
   first.script.refuseCreate(words);
   const { key: local } = await addFolder(home, gitFolder("waits"));

@@ -93,9 +93,8 @@ test("storage-36, space-35, space-23: personal global records setup, explicit pr
   const a = await startHome("placed-a", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => a.stop());
 
-  // The sign-in's own-group step (space-4, space-65): the file names the
-  // stand-in and the host's id for the global records repository
-  // there, and its first sync pushes it.
+  // Global records setup writes the placement file with the Space
+  // origin and repository id. Its first sync pushes it (space-4, space-65).
   let from = a.client.mark();
   await signIn(a, host);
   const own = await a.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
@@ -385,8 +384,8 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
     await home.stop();
     // The home as a Spex before DR-127 left it: `home.yaml` in format 1,
     // the clone keyed by its path in the instance with its remote
-    // `origin` and the host's id at the top level, your own group's
-    // likewise.
+    // `origin` and the host's id at the top level. The global
+    // records clone uses that remote and id layout too.
     const clone = clonePath(home.dataDir, legacy);
     mkdirSync(dirname(clone), { recursive: true });
     git(dirname(clone), "clone", "-q", "--branch", "spex", "--single-branch", shared.bare, basename(clone));

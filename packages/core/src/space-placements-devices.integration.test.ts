@@ -112,11 +112,9 @@ test("space-93, space-99, storage-36, space-87, space-29, space-61, space-63, sp
   assert.equal(pushesTo(second, "bob/atlas-spex"), 0);
   assert.equal(configOf(oneClone, `remote.${secondFolder}.url`), null);
 
-  // The third home, signed in to both as a member at each — the same
-  // accounts, a device of theirs — joins at the first: the second's
-  // placement stands from its file as its line "Not on this device"
-  // with no row of its own, and Join of it is refused (space-87,
-  // space-29, storage-36).
+  // The third home uses the same accounts at both Spaces and joins at
+  // the first. The second's placement file gives it a "Not on this
+  // computer" line with no row to join (space-87, space-29, storage-36).
   const three = await startHome("devices-three", { host: first, project: false });
   t.after(() => three.stop());
   mark = three.client.mark();

@@ -834,11 +834,10 @@ export class Store {
     catch (error) { console.error(`spex: ${dir} is not a repository yet: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
-  /** Every clone under `workspace/` as the folders stand now: a folder
-   * named `<name>-spex` inside the personal records folder or a login
-   * folder under a Space's folder (storage-1), its key
-   * up to WORKSPACE_DEPTH segments. The walk only reads: a clone found
-   * again keeps its descriptor, and one gone leaves the map. */
+  /** Walk non-hidden folders under `workspace/` up to WORKSPACE_DEPTH
+   * segments. A folder whose relative path is a valid repository key
+   * ends that branch of the walk. Keep descriptors for clones found
+   * again and drop those whose folders are gone. */
   private currentRepositories(): Map<string, SpexRepository> {
     const found = new Map<string, string>();
     const walk = (dir: string, depth: number): void => {

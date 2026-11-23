@@ -133,10 +133,9 @@ test("space-87: a personal listing named by another clone’s placement file app
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   const state = await home.client.expectOk("space.get", {});
 
-  // The second's listing is now the clone's line, not on this device,
-  // with that listing's path, members, visibility and rights; no row of
-  // its own stands, so no Join is offered (git-host-5, space-87,
-  // space-61, space-30).
+  // The second's listing supplies the clone's unattached line with
+  // that listing's path and id. It has no row to join (git-host-5,
+  // space-87, space-61, space-30).
   const row = repositoryOf(state, key);
   assert.deepEqual(row.placements.map((line) => [line.instance, line.attached, line.state]), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
   const filed = placementOf(row, second.url);
@@ -511,7 +510,7 @@ test("space-82: Forget follows available personal copies and refuses when projec
   // `atlas` keyed under the first, in your namespace there, which the
   // second lists too, and placed in the third account's namespace; `borealis` keyed
   // under the third account's namespace and placed in your namespace at the first
-  // (space-97). A group of `null` is your namespace.
+  // (space-97). A null `group_id` requests the account's own namespace.
   const created = async (name: string, at: StandinHost, namespace: string): Promise<string> => {
     const { key: local } = await addFolder(home, gitFolder(name));
     const from = home.client.mark();

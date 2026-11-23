@@ -61,7 +61,7 @@ export function sameFile(a: string, b: string): boolean {
 /** Whether a move's destination is taken by anything but its source: a
  * case-folding rename re-cases the final component alone, so the clone
  * itself is its destination only under the same parent (space-60); under
- * another spelling of its group it counts as taken (space-59). A folder
+ * another spelling of its parent it counts as taken (space-59). A folder
  * on the destination's path below `workspace` that resolves under
  * another spelling on disk takes it too, its leaf absent or not: the
  * rename would land under the disk's spelling while the home records the

@@ -385,7 +385,7 @@ test("storage-25: divergent partial destination blocks only its environment, pre
 });
 
 
-test("storage-25: an interrupted own-group plan cannot be bootstrapped before recovery, and damaged journals fail closed", { timeout: 90_000 }, async (t) => {
+test("storage-25: an interrupted global environment plan cannot be bootstrapped before recovery, and damaged journals fail closed", { timeout: 90_000 }, async (t) => {
   let home = await startHome("own-pending-bootstrap", { project: false });
   t.after(() => home.stop());
   const clone = ownClone(home.dataDir);

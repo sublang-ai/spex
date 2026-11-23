@@ -155,20 +155,59 @@ test("space-142: an existing SSH origin at a known Space stops as a path placeme
   const { key, clone } = await addFolder(home, gitFolder("direct-ssh"));
   const address = new URL(`${host.gitOrigin}/ada/direct-ssh-spex.git`);
   const ssh = `ssh://git@${address.hostname}:1${address.pathname}`;
+  const refusal = await home.client.expectError("space.remote.set", { repository: key, url: ssh }, "invalid_request", /^Choose that Space as a sync destination$/);
+  const spaceName = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.displayName;
+  assert.ok(spaceName);
   git(clone, "remote", "add", "origin", ssh);
   const before = host.script.requests.length;
   for (const command of ["space.fetch", "space.sync"] as const) {
     const row = await home.client.settle(command, { repository: key });
     assert.ok(row.sync.phase === "stopped" && row.sync.step === "check" && row.sync.cause === "git" && row.sync.retry, JSON.stringify(row.sync));
-    assert.match(row.sync.message, /^Git settings direct this external records transfer to a Space/);
+    assert.equal(row.sync.message, refusal);
     assert.equal(row.state, "reachable");
     assert.equal(row.governing, null);
     const placement = placementOf(row, null);
     assert.equal(placement.state, "reachable");
+    assert.equal(placement.path, spaceName);
     assert.ok(!JSON.stringify(row).includes(ssh), "the local row keeps the transport address private");
   }
   assert.deepEqual(host.script.requests.slice(before), [], "neither operation asks the Space about this path placement");
   assert.equal(git(clone, "remote", "get-url", "origin"), ssh);
+});
+
+test("space-142: a Space path placement beside a hosted placement names only the Space", async (t) => {
+  const { home, host, key } = await preparedProject("record-beside-ssh");
+  t.after(() => home.stop());
+  const clone = clonePath(home.dataDir, key);
+  const path = "ada/record-beside-ssh-spex";
+  const address = new URL(`${host.gitOrigin}/${path}.git`);
+  const ssh = `git@${address.hostname}:${address.pathname.slice(1)}`;
+  const spaceName = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.displayName;
+  assert.ok(spaceName);
+  git(clone, "remote", "add", "origin", ssh);
+  writeFileSync(join(clone, "notes.md"), "Sync these records to the Space.\n");
+
+  const row = await home.client.settle("space.sync", { repository: key });
+  assert.equal(row.sync.phase, "done", JSON.stringify(row.sync));
+  const hosted = placementOf(row, host.url);
+  assert.equal(hosted.path, path);
+  assert.equal(hosted.outcome?.kind, "synced");
+  assert.equal(git(bareOf(host, key), "show", "spex:notes.md"), "Sync these records to the Space.");
+  const pathPlacement = placementOf(row, null);
+  assert.equal(pathPlacement.path, spaceName);
+  assert.equal(pathPlacement.state, "reachable");
+  const { outcome } = pathPlacement;
+  assert.ok(outcome?.kind === "stopped" && outcome.step === "check" && outcome.cause === "git" && outcome.retry, JSON.stringify(outcome));
+  assert.equal(outcome.message, "Choose that Space as a sync destination");
+  assert.equal(outcome.guidance, "Change or remove the records clone's origin in Git, then retry.");
+  assert.ok(!JSON.stringify(row).includes(ssh), "no row field exposes the path placement's transport address");
+  assert.equal(git(clone, "remote", "get-url", "origin"), ssh);
+
+  await home.client.expectOk("space.remote.set", { repository: key, url: null });
+  const retried = await home.client.settle("space.sync", { repository: key });
+  assert.equal(retried.sync.phase, "done", JSON.stringify(retried.sync));
+  assert.deepEqual(retried.placements.map((placement) => placement.instance), [host.url]);
+  assert.equal(placementOf(retried, host.url).outcome?.kind, "synced");
 });
 
 test("space-142: an external records placement checks its effective push destination", async (t) => {
@@ -191,7 +230,7 @@ test("space-142: an external records placement checks its effective push destina
   assert.equal(blocked.sync.phase, "stopped");
   assert.equal(blocked.sync.step, "push");
   assert.equal(blocked.sync.cause, "git");
-  assert.match(blocked.sync.message, /Git settings.*push URL/);
+  assert.match(blocked.sync.message, /^Git settings direct this external records transfer to a Space.*push URL/);
   assert.equal(blocked.sync.retry, true);
   assert.ok(!backend.script.requests.some(request => request.path.includes("/unlisted/example-spex.git")));
   assert.equal(git(bare, "rev-parse", "spex"), saved, "the successful external Check did not publish the saved local work");

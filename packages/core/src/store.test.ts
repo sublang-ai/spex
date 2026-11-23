@@ -1097,20 +1097,19 @@ test("projects-10: removal forgets the pair and deletes the clone; the working f
   reopened.close();
 });
 
-test("storage-1: a clone whose group and name the host spells with capitals, dots and underscores pairs under that key", () => {
+test("storage-1: a clone nested under a key with capitals, dots and underscores pairs under that key", () => {
   const dir = tempRoot();
   const store = new Store({ machineIdentity, dir, own: "tester" });
   const project = store.registerProject(join(tmpdir(), "spex-spelled"), "spelled", 1);
   store.close();
-  // The host's own spelling of the group and the repository, as a sync
-  // that followed a transfer would leave them (space-60).
+  // Move the clone and update the pair to a nested key on disk.
   const key = "Acme.Corp/platform_team/web.app-spex";
   mkdirSync(join(dir, "workspace", "Acme.Corp", "platform_team"), { recursive: true });
   renameSync(join(dir, "workspace", ...project.id.split("/")), join(dir, "workspace", ...key.split("/")));
   const home = parseYaml(readFileSync(join(dir, "home.yaml"), "utf8")) as { folders: { repository: string }[] };
   for (const folder of home.folders) if (folder.repository === project.id) folder.repository = key;
   writeFileSync(join(dir, "home.yaml"), stringifyYaml(home));
-  // A dot folder is never a group or a clone.
+  // The walk skips hidden folders.
   mkdirSync(join(dir, "workspace", ".trash", "old-spex"), { recursive: true });
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   assert.deepEqual(reopened.listProjects().map((entry) => entry.id), [key]);
