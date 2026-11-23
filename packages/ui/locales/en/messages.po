@@ -4958,11 +4958,6 @@ msgstr "Path to an existing Git repository"
 msgid "Permission mode"
 msgstr "Permission mode"
 
-#. heading for your personal projects and records at a Space
-#: src/lib/space.ts
-msgid "Personal"
-msgstr "Personal"
-
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
 msgstr "Pick a project first ({keys})"
@@ -7197,7 +7192,7 @@ msgstr "This changes the model of every Captain and player on {name} at once. To
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 
-#. the heading of the projects and sessions kept on this computer alone, in no group at any Space
+#. the heading of the projects kept on this computer alone
 #: src/lib/space.ts
 msgid "This computer"
 msgstr "This computer"

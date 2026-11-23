@@ -379,7 +379,7 @@ test("git-host-26, git-host-7, space-97, space-12, space-15, space-87: a Place's
   assert.equal(configOf(clone, `remote.${secondFolder}.spexCreated`), null, "the default branch spends the creation");
 });
 
-test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-60, space-5, storage-31, storage-34, storage-36, storage-5, git-host-6, git-host-9: personal settings are placed at every instance the home signs in to — a sign-in at the first creates its own repository there; one at the third, on a Git backend of its own, creates bob-spex in the namespace there as its second placement, its remote named by the third's folder with its id and its file written, its first push proceeding directly with a credential the third issued; one at the second, over the first's Git backend and listing the first's repository, adds no placement; space.place and space.leave naming it are each refused, nothing asked of any instance; the first signed out and forgotten, its placement there follows the second, its remote renamed in its place with its id and last sync kept and its file rewritten to the second's with the first's deleted, and the third receives that change at the next sync; the third then signed out and forgotten, which no signed-in instance but the second lists, its remote there is dropped with its id, what it fetched and its last sync, its file left", async (t) => {
+test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-60, space-141, storage-31, storage-34, storage-36, storage-5, git-host-6, git-host-9: personal settings are placed at every instance the home signs in to — a sign-in at the first creates its own repository there; one at the third, on a Git backend of its own, creates bob-spex in the namespace there as its second placement, its remote named by the third's folder with its id and its file written, its first push proceeding directly with a credential the third issued; one at the second, over the first's Git backend and listing the first's repository, adds no placement; space.place and space.leave naming it are each refused, nothing asked of any instance; the first signed out and forgotten, its placement there follows the second, its remote renamed in its place with its id and last sync kept and its file rewritten to the second's with the first's deleted, and the third receives that change at the next sync; the third then signed out and forgotten, which no signed-in instance but the second lists, its remote there is dropped with its id, what it fetched and its last sync, its file left", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
   const third = await startHost({ displayName: THIRD_NAME, person: { id: "1002", login: "bob", displayName: "Bob" } });
@@ -447,7 +447,7 @@ test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-
   // its place, the host's id in its section and its last sync kept, its
   // file rewritten to the second's and the first's deleted — the
   // third's placement untouched and the row at the second, its folder
-  // kept (space-82, space-60, space-5, storage-34, storage-36, storage-5).
+  // kept (space-82, space-60, space-141, storage-34, storage-36, storage-5).
   const [firstFolder, secondFolder, thirdFolder] = [hostFolder(first), hostFolder(second), hostFolder(third)];
   const lastAtFirst = syncRecordsOf(home.dataDir, HOST_OWN)[`sync:${HOST_OWN}:${firstFolder}:last`];
   assert.ok(lastAtFirst, "a last sync with the first");
@@ -479,7 +479,7 @@ test("space-94, space-4, space-65, space-12, space-29, space-1, space-82, space-
   // instance left, holds the first placement and lists nothing of the
   // third's, so the remote there is dropped — its id, the spex it
   // fetched and its last sync with it — its file left as it stands and
-  // the second's placement standing (space-82, space-5, storage-5).
+  // the second's placement standing (space-82, space-141, storage-5).
   await signOut(home, third);
   const alone = await forget(home, third);
   assert.deepEqual(alone.instances.map((instance) => instance.origin), [second.url]);

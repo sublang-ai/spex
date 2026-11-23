@@ -119,17 +119,17 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const initialStatus = await again.client.expectOk("project.status", { projectId: privateKey });
   const initialForge = await again.client.expectOk("forge.items", { projectId: privateKey });
   assert.equal(initialStatus.originUrl, undefined);
-  assert.deepEqual([initialForge.guidance, initialForge.at], ["Issues and PRs come from GitHub", cachedAt]);
+  assert.deepEqual([initialForge.guidance, initialForge.at], [instanceGuidance, cachedAt]);
   assert.equal(host.script.requests.length, beforeLocal, "local status and cached forge guidance trigger no host read");
   const reread = again.client.mark();
   const initial = again.client.expectOk("space.get", {});
   await description.reached;
   const unread = repositoryOf(await initial, privateKey);
-  assert.deepEqual([unread.code, unread.codeKind], [null, "unknown"], "the initial reply withholds the code before the description arrives");
+  assert.deepEqual([unread.code, unread.codeKind], [`Code: ${HOST_NAME}`, "space"], "the initial reply uses the saved address before the description arrives");
   description.release();
-  await again.client.waitRepository(reread, privateKey, (repository) => repository.code === `Code: ${HOST_NAME}` && repository.codeKind === "space");
+  await again.client.waitSpace(reread, (state) => typeof instanceOf(state, host.url)?.readAt === "number");
   const afterRead = await again.client.expectOk("forge.items", { projectId: privateKey });
-  assert.deepEqual([afterRead.guidance, afterRead.at], [instanceGuidance, cachedAt], "the same cache follows the newly reported origin");
+  assert.deepEqual([afterRead.guidance, afterRead.at], [instanceGuidance, cachedAt], "the same cache follows the freshly reported origin");
 });
 
 test("space-37: joining code at another origin keeps that device's credentials and asks no code credential of the broker", async (t) => {
@@ -396,7 +396,7 @@ test("projects-41, projects-37, space-63, storage-36: signed in to two instances
   assert.ok((await home.client.expectOk("project.list", {})).some((project) => project.id === key && project.path === folder), "the folder is paired");
 });
 
-test("projects-38, projects-7, projects-36: signed in to two instances on Git backends of their own, the first the default, a project at the first reads its forge guidance and project.status by the first's reported Git origin — code at the first's on this instance, at the second's on a remote, at another origin named with its credential-free URL — and a local-only project by the default instance's; after a restart with the second signed out and the first read anew, code at another origin reads on a remote with no URL", async (t) => {
+test("projects-38, projects-7, projects-36: signed in to two instances on Git backends of their own, the first the default, a project at the first reads its forge guidance and project.status by the first's reported Git origin — code at the first's on this instance, at the second's on a remote, at another origin named with its credential-free URL — and a local-only project by the default instance's; after a restart with the second signed out, saved addresses keep the same labels and origin URLs", async (t) => {
   const { first, second, home } = await twoInstances("code-kinds");
   t.after(() => home.stop());
   // Three projects at the first, each a working folder whose `origin`
@@ -436,25 +436,27 @@ test("projects-38, projects-7, projects-36: signed in to two instances on Git ba
   // Both instances reported (projects-7, projects-36).
   const reported = await home.client.expectOk("space.get", {});
   assert.deepEqual(reported.instances.map((instance) => [instance.origin, instance.signedIn, typeof instance.readAt]), [[first.url, true, "number"], [second.url, true, "number"]]);
-  assert.deepEqual(await read(home, true), {
+  const expected = {
     first: [INSTANCE_GUIDANCE, null],
     second: [REMOTE_GUIDANCE, null],
     other: ["Issues and PRs come from GitHub · Code: code.example.test", "https://code.example.test/team/three.git"],
     local: [INSTANCE_GUIDANCE, null],
-  });
+  };
+  assert.deepEqual(await read(home, true), expected);
 
-  // Restarted with the second signed out, the first read anew: the
-  // second has reported no Git origin this run, so only code under the
-  // first's is classified, a cached reply included (projects-7).
+  // The two saved Git origins classify code right away, including
+  // cached replies and the signed-out second Space (projects-7).
   await signOut(home, second);
   await home.stop();
   const again = await startHome("code-kinds-again", { dataDir: home.dataDir, project: false });
   t.after(() => again.stop());
+  const beforeRestartRead = [first.script.requests.length, second.script.requests.length];
+  assert.deepEqual(await read(again, false), expected, "saved addresses classify before the first Space read");
+  assert.deepEqual([first.script.requests.length, second.script.requests.length], beforeRestartRead, "local presentation does not read either Space");
   const from = again.client.mark();
   await again.client.expectOk("space.get", {});
   const anew = await again.client.waitSpace(from, (state) => instanceOf(state, first.url)?.read.phase === "idle" && (instanceOf(state, first.url)?.readAt ?? null) !== null, 30_000);
   assert.deepEqual([instanceOf(anew, second.url)?.signedIn, instanceOf(anew, second.url)?.readAt], [false, null]);
-  const expected = { first: [INSTANCE_GUIDANCE, null], second: [REMOTE_GUIDANCE, null], other: [REMOTE_GUIDANCE, null], local: [INSTANCE_GUIDANCE, null] };
   assert.deepEqual(await read(again, false), expected, "cached replies follow the origins known now");
   assert.deepEqual(await read(again, true), expected);
 });

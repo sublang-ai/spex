@@ -124,7 +124,7 @@ function codeRepository(name: string): string {
   return dir;
 }
 
-test("space-37: the browser sign-in renames your own group after the login, pushes its spex repository, and writes the account", async (t) => {
+test("space-37: the browser sign-in names the personal records folder after the login, pushes its spex repository, and writes the account", async (t) => {
   const host = await startHost();
   const home = await startHome("signin-browser", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -163,7 +163,8 @@ test("space-37: the browser sign-in renames your own group after the login, push
   // its display name as its read named it (DR-127, storage-2).
   const file = Home.load(home.dataDir).file;
   assert.equal(file.origin, host.url);
-  assert.deepEqual(file.instances, [{ origin: host.url, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" }, displayName: HOST_NAME }]);
+  assert.equal(file.format, 3);
+  assert.deepEqual(file.instances, [{ origin: host.url, gitOrigin: host.gitOrigin, clientId: "spex", account: { id: "1001", login: LOGIN, displayName: "Ada Lovelace" }, displayName: HOST_NAME }]);
   assert.equal(file.own, LOGIN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
@@ -259,7 +260,7 @@ test("space-37, storage-5: a fresh core with no sync of a clone's placement reco
   assert.deepEqual(placementOf(ahead, host.url).branch?.agreed, { at, current: false });
 });
 
-test("space-5, space-12, storage-34, space-87: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none, its placement file still naming the placement not on this device; a remote the reader sets is origin beside the placement", async (t) => {
+test("space-141, space-12, storage-34, space-87: your own group's clone syncs through a remote still named origin and through one a terminal adds again under its instance's folder, a remote removed taking its id and one under a folder no instance resolves being none, its placement file still naming the placement not on this device; a remote the reader sets is origin beside the placement", async (t) => {
   const host = await startHost();
   const home = await startHome("remote-names", { host, project: false });
   t.after(() => home.stop());
@@ -329,7 +330,7 @@ test("space-5, space-12, storage-34, space-87: your own group's clone syncs thro
 
   // A remote the reader sets is `origin`, the clone's path placement,
   // beside the one named by its instance's folder, which keeps its id,
-  // what the clone holds of it and the upstream (space-5).
+  // what the clone holds of it and the upstream (storage-34, space-141).
   const other = bareRepo();
   const set = repositoryOf(await home.client.expectOk("space.remote.set", { repository: HOST_OWN, url: other }), HOST_OWN);
   assert.equal(set.id, synced.id);
@@ -516,7 +517,7 @@ test("space-37: Choosing a Space creates personal <name>-spex there and pushes, 
   assert.equal(Home.load(home.dataDir).keyForFolder(alpha), hostKey(host, "ada/alpha-spex"));
   // The account commits, at the host's no-reply address (space-32).
   assert.equal(git(clone, "log", "-1", "--format=%an <%ae>"), "ada <ada@users.noreply.127.0.0.1>");
-  // The host's own URLs are its to hand over (space-5).
+  // The host's own URLs are its to hand over (space-136).
   await home.client.expectError("space.remote.set", { repository: hostKey(host, "ada/alpha-spex"), url: `${host.gitOrigin}/ada/other-spex.git` }, "invalid_request", /^Choose that Space as a sync destination$/);
   // A name the host reports taken is refused in place (space-97).
   host.script.addRepository({ group: "ada", name: "beta-spex" });
@@ -1297,7 +1298,7 @@ test("space-60, space-21: a remote set while a sync's Check step reads a renamed
   // host's read is in flight: its remotes no longer read what the check
   // read (space-21). The host's remote is named by the instance's folder
   // (DR-127); the reader's, set by the command beside it, is `origin`
-  // (space-5).
+  // (storage-34).
   const remote = bareRepo();
   const set = home.client.command("space.remote.set", { repository: key, url: remote });
   const originUrl = (): string | null => {
@@ -1313,7 +1314,7 @@ test("space-60, space-21: a remote set while a sync's Check step reads a renamed
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), remote, "the new remote stands");
 });
 
-test("space-5: a remote set while space.remote.set read the clone is refused, never replaced", async (t) => {
+test("space-21: a remote set while space.remote.set read the clone is refused, never replaced", async (t) => {
   const host = await startHost();
   const dataDir = mkdtempSync(join(scratch, "remote-race-"));
   const key = `${OWN}/remote-race-spex`;
@@ -1407,7 +1408,7 @@ test("space-97, storage-35: a local clone holding only the path placement origin
   await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, name: "again" } }, "invalid_request", /^path-only already syncs with a Space$/);
 });
 
-test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
+test("space-73, storage-5, space-141, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1443,7 +1444,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   // placement's remote, after it in the clone's Git configuration and
   // last among its placements; the placement keeps its id, the `spex`
   // the clone holds of it, the upstream and this device's recorded last
-  // sync (space-5, space-29).
+  // sync (space-141, space-29).
   const path = bareRepo();
   const named = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: path }), key);
   assert.deepEqual(remoteUrls(clone), [[folder, url], ["origin", path]]);
@@ -1475,7 +1476,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
 
   // The next Sync, read while it waits on its host read: the same
   // repository at its new path keeps the sync the clone holds and this
-  // device's record, the upstream standing (space-5, space-61); then it
+  // device's record, the upstream standing (space-141, space-61); then it
   // moves the clone there (space-60).
   host.script.sleepListing(2_000);
   const fromSync = home.client.mark();
@@ -1516,7 +1517,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   // fetched of it, its upstream, this device's last sync record and
   // its placement file; the clone moves under your own group's
   // folder with its pair, reading local only with no last sync and no
-  // agreed commit; nothing at the host changes (space-98, space-5,
+  // agreed commit; nothing at the host changes (space-98, space-141,
   // storage-38).
   const fromLeave = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.leave", { repository: moved, instance: host.url, confirmed: true }), { accepted: true });
@@ -1550,7 +1551,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
 
   // A group then picked to create another repository reads no last sync
   // until its first sync, read while that sync waits on its host read
-  // (space-5).
+  // (space-22, space-141).
   host.script.sleepListing(2_000);
   const fromOther = home.client.mark();
   await home.client.expectOk("space.pick", { repository: renamedLocal, choice: { kind: "create", instance: host.url, name: "invites" } });

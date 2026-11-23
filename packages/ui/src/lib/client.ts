@@ -128,9 +128,7 @@ export class SpexClient {
     });
   }
 
-  /** End the connection for good: a redial still waiting is called
-   * off, so a place dropped mid-backoff never dials again
-   * (app-shell-1). */
+  /** End the connection and cancel any pending redial. */
   close(): void {
     this.closedByUser = true;
     clearTimeout(this.reconnectTimer);

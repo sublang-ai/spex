@@ -54,13 +54,14 @@ The store shall persist core-owned data in Spex home using these locations:
 
 ### storage-2
 
-The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, instances, own, folders}`:
+The home file shall encode `home.yaml` as exactly `{format, device, origin, instances, own, folders}`:
 
 | Field | Content |
 | --- | --- |
+| `format` | 2 at creation, advancing to 3 when the first Git address is saved and staying at 3 thereafter; `gitOrigin` is allowed only in format 3 |
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
 | `origin` | the origin of the instance the home was created with [[git-host-1](git-host.md#git-host-1)], kept as it is thereafter |
-| `instances` | an array of `{origin, clientId, account, displayName?, signedOut?, gitOrigin?}`, one per instance the home has signed in to and not forgotten [[space-82](space.md#space-82)], in the order they were added: its origin, the public client id `spex`, `{id, login, displayName}` of the account as that instance reported them, the instance's display name as its last read named it, and `signedOut` true once its credential was removed while its entry is kept, and `gitOrigin` the last HTTP(S) Git address the Space reported, including its base path and without credentials, query or fragment, kept across sign-out and sign-in for local destination classification [[git-host-5](git-host.md#git-host-5)] [[git-host-4](git-host.md#git-host-4)] [[git-host-10](git-host.md#git-host-10)] |
+| `instances` | an array of `{origin, clientId, account, displayName?, signedOut?, gitOrigin?}`, one per instance the home has signed in to and not forgotten [[space-82](space.md#space-82)], in the order they were added: its origin, the public client id `spex`, `{id, login, displayName}` of the account as that instance reported them, the instance's display name as its last read named it, and `signedOut` true once its credential was removed while its entry is kept, and `gitOrigin` the last HTTP(S) Git address the Space reported, including its base path and without credentials, query or fragment, kept across sign-out and sign-in so the core can recognize the Space without a new read [[git-host-5](git-host.md#git-host-5)] [[git-host-4](git-host.md#git-host-4)] [[git-host-10](git-host.md#git-host-10)] |
 | `own` | the name of the home’s personal records folder under `workspace/`, initialized from the local account and updated at the first Space sign-in [[space-59](space.md#space-59)] |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
@@ -166,7 +167,7 @@ The store shall read a clone's instance from its key where the key begins with t
 
 ### storage-34
 
-When the core writes a placement's remote — its host repository created, joined, cloned or attached at an instance, a placement following that instance, the instances migration renaming a remote [[storage-30](#storage-30)], or the reader naming one [[space-136](space.md#space-136)] — it shall name that remote by the instance's folder [[storage-1](#storage-1)], `@<host>`, recording the host's id for that repository in the remote's own section of the clone's Git configuration as `remote.<folder>.spexId`, or `origin`, with no id, for the one remote the reader names, so that a placement's remote and id are renamed and dropped together ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the core writes a placement's remote — its host repository created, joined, cloned or attached at an instance, a placement following that instance, the instances migration renaming a remote [[storage-30](#storage-30)], or the reader naming one — it shall name that remote by the instance's folder [[storage-1](#storage-1)], `@<host>`, recording the host's id for that repository in the remote's own section of the clone's Git configuration as `remote.<folder>.spexId`, or `origin`, with no id, for the one remote the reader names, so that a placement's remote and id are renamed and dropped together ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - the clone's placements are its remotes in the order its Git configuration holds them, the order they were added, a rename keeping its place and `origin` taken last;
 - at most one remote stands per instance, and a clone holding no placement is local only;
@@ -489,7 +490,7 @@ When an integration suite runs a real core against two stand-in instances on sep
 - the project keyed under the first's folder and read as the first's, and the global records repository keeping its folder and read as the instance it was first placed at [[storage-1](#storage-1)] [[storage-31](#storage-31)];
 - the second's rename moving no clone [[storage-6](#storage-6)];
 - the first placement's leave refused while the writer holds its lease, naming the session, and in the restarted core, naming the second, the clone and its remotes as they were each time, then, the lease released and the second read, the clone moved to the second's path with its pairs, session locations, sync preferences and the skills placed for your agents following, and the last leave moving it under the personal records folder, local only [[storage-38](#storage-38)], a remote then named through `space.remote.set` making it local only no more [[storage-34](#storage-34)];
-- the last sync recorded per placement and removed with its leave, a former `sync:<repository>:last` read as the first placement's, and legacy notice preferences left inert while no new acceptance is recorded [[storage-5](#storage-5)];
+- the last sync recorded per placement and removed with its leave, a former `sync:<repository>:last` read as the first placement's [[storage-5](#storage-5)];
 - a placement file merged as one unit, a `meta.yaml` under `placements/` forming no unit, and a file not of its encoding reported, naming no placement and blocking nothing else [[storage-11](#storage-11)] [[storage-12](#storage-12)] [[storage-41](#storage-41)];
 - the second home's clone, its one placement left with `confirmed`, local only under the personal records folder holding the first's file, moved under the first's folder at the repository's path there by an Attach once that home signs in at the first [[storage-35](#storage-35)].
 
@@ -499,7 +500,7 @@ When an integration suite migrates two signed-in format-1 homes, each holding a 
 
 ### storage-42
 
-When an integration suite runs a real core on a scratch home signed in to two stand-in instances over one Git backend, with a personal project placed and synced at the first, then signs the first out and syncs that project, it shall verify that the sync's follow leaves the clone's `placements/` holding the second's file, naming the same id, in place of the first's [[storage-36](#storage-36)], its remote renamed to the second's folder with the id in its section [[storage-34](#storage-34)], and its last sync and notice entries re-keyed to that remote in the same step [[storage-5](#storage-5)].
+When an integration suite runs a real core on a scratch home signed in to two stand-in instances over one Git backend, with a personal project placed and synced at the first, then signs the first out and syncs that project, it shall verify that the sync's follow leaves the clone's `placements/` holding the second's file, naming the same id, in place of the first's [[storage-36](#storage-36)], its remote renamed to the second's folder with the id in its section [[storage-34](#storage-34)], and its last sync entries re-keyed to that remote in the same step [[storage-5](#storage-5)].
 
 ### storage-16
 
@@ -606,6 +607,13 @@ When the integration suite starts a real core again on a format-1 home whose pro
 | refused by Git, the clone's configuration locked | the clone, its pair and its remote moved back, the clone still deferred and read as its Space's placement [[storage-38](#storage-38)] |
 | refused by Git, and the move back failing, onto a path no move the migration planned left from | the clone and its pair where it moved, its remote standing, deferred at that path and read as its Space's placement; the Leave's Retry, Git able to, dropping it there, local only, the receipt naming it no more [[storage-38](#storage-38)] |
 | made by Git | dropped and moved under the personal records folder, local only, its pair following, the receipt naming it no more [[storage-38](#storage-38)] |
+
+### storage-62
+
+When a real core learns a Space’s Git address, the integration suite shall verify its persistence in the home file:
+
+- a successful Space description advances a format-2 home to format 3 and saves the address even when the account read fails [[storage-2](#storage-2)];
+- after sign-out and restart, the home still supplies the saved address before any Space read [[storage-2](#storage-2)].
 
 ## References
 

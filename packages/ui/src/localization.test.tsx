@@ -23,11 +23,6 @@ afterEach(cleanup);
 
 const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 
-vi.mock("./state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./state/store.js")>();
-  return { ...actual, getClient: () => ({ command: commandMock }) };
-});
-
 import { Root } from "./Root.js";
 import { spaceState } from "./fixtures/space-state.js";
 import {

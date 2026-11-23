@@ -46,11 +46,6 @@ function defaultReply(type: string): object {
               : {};
 }
 
-vi.mock("./state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./state/store.js")>();
-  return { ...actual, getClient: () => ({ command: commandMock }) };
-});
-
 import { App } from "./App.js";
 import type { AttentionEntry, LedgerState } from "@sublang/spex-core/protocol";
 import {
@@ -218,13 +213,42 @@ beforeEach(() => {
   commandMock.mockImplementation(async (type: string) =>
     type === "ledger.get" ? LEDGER : defaultReply(type),
   );
-  // Store actions resolve the module-local client, which the module
-  // mock above cannot reach.
+  // Store actions resolve the client injected through this seam.
   setClientForTests({
     command: commandMock,
     subscribe: vi.fn(async () => {}),
   } as never);
   seed();
+});
+
+test("run-view-96: a Dashboard failure between turns lands on the line at its onset", async () => {
+  const sessionId = "a-failed";
+  const onset = NOW - 10_000;
+  const ledger: LedgerState = {
+    intents: [],
+    attention: [{
+      band: "interrupted", kind: "failure", title: "Release failed",
+      projectId: "p1", sessionId, since: onset,
+    }],
+    badge: 1,
+  };
+  const records = [
+    { seq: 1, record: { type: "runtime_error", turnId: null, timestamp: onset - 1_000, message: "An earlier failure" } },
+    { seq: 2, record: { type: "runtime_error", turnId: null, timestamp: onset, message: "The release failed between turns" } },
+  ];
+  commandMock.mockImplementation(async (type: string) => {
+    if (type === "ledger.get") return ledger;
+    if (type === "history.get") return { records };
+    if (type === "ledger.history") return { intents: [], more: false };
+    return defaultReply(type);
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /^Dashboard/ }));
+  fireEvent.click(await screen.findByTestId(`attention-act-${sessionId}`));
+
+  const error = await screen.findByText("The release failed between turns");
+  await vi.waitFor(() => expect(error.closest("[data-focus-key]")?.getAttribute("data-focused")).toBe("1"));
+  expect(screen.getByText("An earlier failure").closest("[data-focus-key]")?.getAttribute("data-focused")).toBeNull();
 });
 
 describe("run-view-70: the sidebar navigates, the tabs hold what is open", () => {

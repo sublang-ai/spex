@@ -7,12 +7,13 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { join } from "node:path";
 import { applyStorageSelection, planStorageMerge, StorageWriteRefused, validateStorageSnapshot } from "./storage-git.js";
 import { createSpaceHarness, clonePath } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, startHost, startHome, signIn } = fixture;
+const { addFolder, bareRepo, git, gitFolder, startHost, startHome, signIn } = fixture;
 test.after(() => fixture.dispose());
 const base = Buffer.alloc(65_578, 17), incoming = Buffer.alloc(65_578, 29);
 const oid = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -102,14 +103,158 @@ test("git-host-14: an alternate LFS endpoint receives no brokered credential", a
   assert.equal(existsSync(join(clone, "asset.bin")), false);
 });
 
-test("git-host-14, git-host-23: an LFS override cannot send a personal records Check to another Space repository", async (t) => {
+test("git-host-14, space-142: an LFS override cannot send a personal records Check to another Space repository", async (t) => {
   const { host, home, key, clone } = await coldReader(t);
   const endpoint = `${host.gitOrigin}/elsewhere.git/info/lfs`;
   git(clone, "config", "lfs.url", endpoint);
   const result = await home.client.settle("space.sync", { repository: key, placement: host.url }, 30_000);
-  assert.ok(result.sync.phase === "stopped" && result.sync.step === "check" && result.sync.cause === "gone", JSON.stringify(result.sync));
+  assert.ok(result.sync.phase === "stopped" && result.sync.step === "check" && result.sync.cause === "git", JSON.stringify(result.sync));
+  assert.match(result.sync.message, /Git settings.*Git LFS settings/);
+  assert.equal(result.sync.retry, true);
   assert.ok(!host.script.requests.some((request) => request.path.startsWith(new URL(endpoint).pathname)), "the override receives no LFS request");
   assert.equal(existsSync(join(clone, "asset.bin")), false);
+});
+
+async function externalReader(home: Awaited<ReturnType<typeof startHome>>, url?: string) {
+  const { key, clone } = await addFolder(home, gitFolder("external-lfs"));
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const seeded = await home.client.settle("space.sync", { repository: key });
+  assert.equal(seeded.sync.phase, "done", JSON.stringify(seeded.sync));
+  const peer = fixture.peerClone(bare);
+  filters(peer);
+  writeFileSync(join(peer, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n");
+  writeFileSync(join(peer, "asset.bin"), incoming);
+  commit(peer);
+  git(peer, "push", "-q", "origin", "HEAD:spex");
+  if (url) await home.client.expectOk("space.remote.set", { repository: key, url });
+  filters(clone);
+  return { key, clone, bare };
+}
+
+test("space-142: an external records Check refuses a configured Space LFS endpoint", async (t) => {
+  const host = await startHost();
+  const home = await startHome("external-lfs-override", { host });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  await home.client.waitRepository(0, "ada/ada-spex", row => row.sync.phase === "done");
+  const { key, clone } = await externalReader(home);
+  const endpoint = `${host.gitOrigin}/unlisted/override-spex.git/info/lfs`;
+  git(clone, "config", "lfs.url", endpoint);
+  git(clone, "config", "lfs.transfer.maxretries", "0");
+
+  const blocked = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.step, "check");
+  assert.equal(blocked.sync.cause, "git");
+  assert.match(blocked.sync.message, /Git settings.*Git LFS settings/);
+  assert.equal(blocked.sync.retry, true);
+  assert.ok(!host.script.requests.some(request => request.path.startsWith(new URL(endpoint).pathname)));
+  assert.equal(existsSync(object(join(clone, ".git"), incoming)), false);
+});
+
+test("space-142: an external records Push refuses Git LFS upload overrides into a known Space", async (t) => {
+  const host = await startHost();
+  const home = await startHome("external-lfs-push-override", { host });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  await home.client.waitRepository(0, "ada/ada-spex", row => row.sync.phase === "done");
+  const { key, clone } = await addFolder(home, gitFolder("external-lfs-upload"));
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const seeded = await home.client.settle("space.sync", { repository: key });
+  assert.equal(seeded.sync.phase, "done", JSON.stringify(seeded.sync));
+  const head = git(bare, "rev-parse", "spex");
+  git(clone, "lfs", "install", "--local");
+  writeFileSync(join(clone, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n");
+  writeFileSync(join(clone, "asset.bin"), incoming);
+
+  const endpoint = `${host.gitOrigin}/unlisted/upload-spex.git/info/lfs`;
+  git(clone, "config", "remote.origin.lfspushurl", "fixture-upload");
+  git(clone, "config", `url.${endpoint}.pushInsteadOf`, "fixture-upload");
+  const blocked = await home.client.settle("space.sync", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.step, "push");
+  assert.equal(blocked.sync.cause, "git");
+  assert.match(blocked.sync.message, /Git settings.*Git LFS settings/);
+  assert.equal(blocked.sync.retry, true);
+  assert.ok(!host.script.requests.some(request => request.path.startsWith(new URL(endpoint).pathname)));
+  assert.equal(git(bare, "rev-parse", "spex"), head);
+
+  git(clone, "config", "--unset", "remote.origin.lfspushurl");
+  git(clone, "config", "--file", ".lfsconfig", "lfs.pushurl", endpoint);
+  const tracked = await home.client.settle("space.sync", { repository: key });
+  assert.equal(tracked.sync.phase, "stopped");
+  assert.equal(tracked.sync.step, "push");
+  assert.equal(tracked.sync.cause, "git");
+  assert.ok(!host.script.requests.some(request => request.path.startsWith(new URL(endpoint).pathname)));
+  assert.equal(git(bare, "rev-parse", "spex"), head);
+
+  rmSync(join(clone, ".lfsconfig"));
+  const repaired = await home.client.settle("space.sync", { repository: key });
+  assert.equal(repaired.sync.phase, "done", JSON.stringify(repaired.sync));
+  assert.deepEqual(readFileSync(object(bare, incoming)), incoming);
+});
+
+test("space-142: external SSH records Check authenticates and downloads through Git LFS", { skip: process.platform === "win32" }, async (t) => {
+  const authorization = "Bearer external-lfs-fixture";
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(`${request.method} ${request.url}`);
+    request.resume();
+    if (request.headers.authorization !== authorization) {
+      response.writeHead(403).end();
+    } else if (request.method === "POST" && request.url === "/records.git/info/lfs/objects/batch") {
+      response.writeHead(200, { "content-type": "application/vnd.git-lfs+json" }).end(JSON.stringify({
+        transfer: "basic", objects: [{
+          oid: oid(incoming), size: incoming.length, authenticated: true,
+          actions: { download: { href: `${origin}/asset`, header: { Authorization: authorization } } },
+        }],
+      }));
+    } else if (request.method === "GET" && request.url === "/asset") {
+      response.writeHead(200, { "content-type": "application/octet-stream" }).end(incoming);
+    } else {
+      response.writeHead(404).end();
+    }
+  });
+  server.listen(0, "127.0.0.1");
+  t.after(() => { server.close(); });
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const origin = `http://127.0.0.1:${address.port}`;
+  const ssh = join(fixture.scratch, "lfs-ssh.sh");
+  const url = "ssh://git@127.0.0.1:1/records.git";
+  const home = await startHome("external-lfs-ssh", {
+    env: { GIT_SSH_COMMAND: `"${ssh}"`, GIT_SSH_VARIANT: "ssh" },
+  });
+  t.after(() => home.stop());
+  const { key, clone, bare } = await externalReader(home, url);
+  const authenticated = join(fixture.scratch, "lfs-ssh-authenticated");
+  const commandLog = join(fixture.scratch, "lfs-ssh-commands");
+  // Real Git and Git LFS call the SSH transport. The fixture answers the
+  // remote commands locally, without a machine SSH account or keys.
+  const auth = JSON.stringify({ href: `${origin}/records.git/info/lfs`, header: { Authorization: authorization } });
+  writeFileSync(ssh, [
+    "#!/bin/sh",
+    `printf '%s\\n' "$*" >> "${commandLog}"`,
+    'case " $* " in',
+    `  *" git-upload-pack "*) exec git-upload-pack "${bare}" ;;`,
+    `  *" git-lfs-authenticate "*" download"*) touch "${authenticated}"; printf '%s\\n' '${auth}' ;;`,
+    "  *) exit 1 ;;",
+    "esac",
+    "",
+  ].join("\n"), { mode: 0o755 });
+  git(clone, "config", "lfs.transfer.maxretries", "0");
+
+  const fetched = await home.client.settle("space.fetch", { repository: key }, 30_000);
+  assert.equal(fetched.sync.phase, "idle", JSON.stringify({
+    sync: fetched.sync, requests,
+    commands: existsSync(commandLog) ? readFileSync(commandLog, "utf8") : "",
+  }));
+  assert.ok(existsSync(authenticated), "Git LFS requested its download credential over SSH");
+  assert.deepEqual(requests, ["POST /records.git/info/lfs/objects/batch", "GET /asset"]);
+  assert.deepEqual(readFileSync(object(join(clone, ".git"), incoming)), incoming);
 });
 
 function selected() {

@@ -3295,7 +3295,7 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     ).toBeNull();
   });
 
-  test("the repository header over the project's own group, sharing the rows", async () => {
+  test("projects-17: the repository header shows the project and its Git status", async () => {
     seedSources({
       projectMeta: {
         "me/alpha-spex": {

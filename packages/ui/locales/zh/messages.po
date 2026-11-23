@@ -4958,11 +4958,6 @@ msgstr "已有 Git 仓库路径"
 msgid "Permission mode"
 msgstr "权限模式"
 
-#. heading for your personal projects and records at a Space
-#: src/lib/space.ts
-msgid "Personal"
-msgstr "个人"
-
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
 msgstr "请先选择项目（{keys}）"
@@ -7197,7 +7192,7 @@ msgstr "此设置会批量修改所有用到 {name} 的 Captain 和 Player 的�
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "此命令会刷新规约规则并打印迁移提示词，由 AI 智能体执行迁移："
 
-#. the heading of the projects and sessions kept on this computer alone, in no group at any Space
+#. the heading of the projects kept on this computer alone
 #: src/lib/space.ts
 msgid "This computer"
 msgstr "本机"

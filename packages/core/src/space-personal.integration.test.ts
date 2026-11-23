@@ -40,8 +40,8 @@ async function refresh(home: Awaited<ReturnType<typeof startHome>>, host: Awaite
   return home.client.waitSpace(mark, (state) => (instanceOf(state, host.url)?.readAt ?? 0) > last, 30_000);
 }
 
-test("space-97: if the Space cannot verify the account, Pick names the Space and creates nothing until retried", async (t) => {
-  const host = await startHost();
+test("space-138, space-97: if the Space cannot verify the account, Pick names the Space and creates nothing until retried", async (t) => {
+  const host = await startHost({ displayName: "Orchard Space" });
   const home = await signedIn("pick-account-unavailable", host);
   t.after(() => home.stop());
   const { key } = await addFolder(home, gitFolder("orchard"));
@@ -49,7 +49,7 @@ test("space-97: if the Space cannot verify the account, Pick names the Space and
   await refresh(home, host);
   const creations = host.script.creations.length;
   host.script.unavailable(1);
-  await home.client.expectError("space.pick", fields, "invalid_request", /^Could not reach /);
+  await home.client.expectError("space.pick", fields, "invalid_request", /^Could not reach Orchard Space$/);
   assert.equal(host.script.creations.length, creations);
   const mark = home.client.mark();
   await home.client.expectOk("space.pick", fields);

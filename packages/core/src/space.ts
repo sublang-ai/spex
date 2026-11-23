@@ -13,7 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Dirent } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
@@ -270,6 +270,20 @@ function sameRecordAddress(left: string, right: string | null): boolean {
     a.search === b.search && a.hash === b.hash;
 }
 
+function recordLfsAddress(remote: string): string | null {
+  const address = recordAddress(remote);
+  if (!address) return null;
+  const path = address.pathname.replace(/\/+$/, "").replace(/(?:\.git)?$/, ".git/info/lfs");
+  return new URL(path, address.origin).href;
+}
+
+function selectedLfsEndpoint(env: string, name?: string): string | undefined {
+  const lines = env.split(/\r?\n/);
+  const selected = (name && lines.find((line) => line.startsWith(`Endpoint (${name})=`)))
+    || lines.find((line) => line.startsWith("Endpoint="));
+  return selected?.match(/=(.+) \(auth=[^)]*\)$/)?.[1];
+}
+
 /** A verified Records URL must also remain the destination Git uses.
  * Check in the transport's own directory and configuration, before
  * spawning Git with the Space credential. */
@@ -279,23 +293,31 @@ function verifiedRecordDestination(git: SpaceGit, remote: string, step: SyncStep
   return recordDestinationConfig(remote);
 }
 
+function recordPushUrls(git: SpaceGit, config: string[], name: string): string[] {
+  const result = git.runSync([...config, "remote", "-v"]);
+  if (result.code !== 0) return [];
+  const prefix = `${name}\t`;
+  const suffix = " (push)";
+  return result.stdout.toString("utf8").split(/\r?\n/)
+    .filter((line) => line.startsWith(prefix) && line.endsWith(suffix))
+    .map((line) => line.slice(prefix.length, -suffix.length));
+}
+
 /** Probe and use a command-scoped remote with the approved URL, so
  * Git's push-only rewrites are resolved without inheriting a configured
  * placement's push URL. Git lists command-scoped remotes in `remote -v`. */
 function verifiedRecordPush(git: SpaceGit, remote: string, step: SyncStep): { config: string[]; destination: string } {
   const destination = `spex-records-${randomUUID()}`;
   const config = [...recordDestinationConfig(remote), "-c", `remote.${destination}.url=${remote}`];
-  const result = git.runSync([...config, "remote", "-v"]);
-  const pushes = result.stdout.toString("utf8").split(/\r?\n/)
-    .filter((line) => line.startsWith(`${destination}\t`) && line.endsWith(" (push)"));
-  requireApprovedRecordDestination(result.code === 0 && pushes.length === 1 && pushes[0] === `${destination}\t${remote} (push)`, step);
+  const pushes = recordPushUrls(git, config, destination);
+  requireApprovedRecordDestination(pushes.length === 1 && pushes[0] === remote, step);
   return { config, destination };
 }
 
 function requireApprovedRecordDestination(matches: boolean, step: SyncStep): void {
   if (!matches) {
     const message = i18n._({
-      id: "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry.",
+      id: "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry.",
       comment: "A records transfer stopped because Git configuration could change the Space-approved destination",
     });
     throw new SpaceStopped(step, { cause: "git", message, guidance: retryGuidance(), retry: true }, false);
@@ -1251,7 +1273,7 @@ class RepositorySync {
   placements: Placement[] = [];
   /** The remote `spex`'s upstream names, as the last read found it: a
    * remote taken away leaves it, beside the host's `spex` the clone
-   * holds (space-5). */
+   * holds (space-141). */
   private upstreamName: string | null = null;
   /** What this core learnt of each placement — its check, its plan and
    * lists, its host's last refusal — by its remote's name (space-8,
@@ -1424,7 +1446,7 @@ class RepositorySync {
 
   /**
    * A placement added at an instance (storage-34, space-97, space-63):
-   * the host's remote URL, used as given (space-5), and its id, written
+   * the host's remote URL, used as given, and its id, written
    * as a remote named by that instance's folder, `folder`, beside every
    * remote standing and never in place of one — only while the clone
    * holds no other placement with an instance and, given `expected`, its
@@ -1465,7 +1487,7 @@ class RepositorySync {
 
   /**
    * A placement added beside the clone's others at an instance (space-97,
-   * storage-34): the host's remote URL, used as given (space-5), and its
+   * storage-34): the host's remote URL, used as given, and its
    * id, written as a remote named by that instance's folder, `folder` at
    * `origin`, never in place of a remote standing — only while the clone
    * holds no placement at that instance and, given `expected`, its
@@ -1513,7 +1535,7 @@ class RepositorySync {
   }
 
   /**
-   * The clone's path placement, `origin` (space-5, space-29): the URL the
+   * The clone's path placement, `origin` (storage-34, space-29): the URL the
    * reader names written as that remote, recording no id, or, null, that
    * remote's own section removed, its instance placements untouched —
    * only while it still reads `expected`, as publishRemote's. Returns
@@ -1773,7 +1795,7 @@ class RepositorySync {
 
   /** Give the clone the host's own remote and id as a placement
    * (space-97, space-63, storage-34): the URL the host handed over, used
-   * as given (space-5), added beside the remotes standing and never in
+   * as given, added beside the remotes standing and never in
    * place of one, only while the clone holds no other placement with an
    * instance and its remotes still read what the caller read before
    * asking the host — `expected` (space-21) — so a remote set meanwhile
@@ -1799,7 +1821,7 @@ class RepositorySync {
     // The same repository keeps what the clone holds of it and this
     // device's last sync; another, now the clone's first placement,
     // clears what a remote taken away or one formerly of its name left,
-    // a placement standing keeping what the clone holds of it (space-5).
+    // a placement standing keeping what the clone holds of it (space-141).
     if (!added.stood && !same) {
       // In the step that wrote the remote: what a Spex before DR-128
       // recorded for the repository was the first placement's — the path
@@ -1955,10 +1977,10 @@ class RepositorySync {
   }
 
   /**
-   * Drop a placement (space-91, storage-38, space-5): its remote removed
+   * Drop a placement (space-91, storage-38, space-141): its remote removed
    * with its section — its id and creation mark — every ref the clone
    * fetched under its name and the upstream naming it, this device's last
-   * sync and notice of it, and what this core learnt of it, in one
+   * sync, and what this core learnt of it, in one
    * synchronous step; the clone's records are kept, and its placement
    * file is left as it stands. Written only while it still reads as it
    * was read; whether it was dropped.
@@ -2761,7 +2783,7 @@ class RepositorySync {
     return repo as ReadyRepository;
   }
 
-  /** Name the clone's path placement, or take it away (space-5,
+  /** Name the clone's path placement, or take it away (storage-34,
    * space-29): the remote the reader names is `origin`, set or removed
    * alone beside the clone's instance placements, which keep their ids,
    * what the clone holds of them and this device's last sync with them. */
@@ -2773,7 +2795,7 @@ class RepositorySync {
       const checked = validateRemoteUrl(url);
       if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
       // The Git host's own remote URLs are those it hands over, used as
-      // given and never named by the reader (space-5).
+      // given and never named by the reader (space-136).
       if (this.owner.spaceForRecords(url)) {
         throw new CoreError("invalid_request", i18n._({
           id: "Choose that Space as a sync destination",
@@ -2792,11 +2814,11 @@ class RepositorySync {
       // In that step, this device's last sync of a path
       // placement named before leave with it, and, where the path
       // placement is the first, what a Spex before DR-128 recorded for
-      // the repository (storage-5, space-5).
+      // the repository (storage-5, space-141).
       this.host.store.dropPlacementPrefs(this.key, PATH_PLACEMENT, first);
       // Another path placement, or none, clears what the clone held of
       // the former one — its `spex` and the upstream naming it — and,
-      // where it was the first placement, its check (space-5): what the
+      // where it was the first placement, its check (space-141): what the
       // old remote held says nothing of the new one.
       if (path !== undefined) {
         await this.git.run(["update-ref", "-d", `refs/remotes/${PATH_PLACEMENT}/${SPEX_BRANCH}`]);
@@ -2819,7 +2841,7 @@ class RepositorySync {
    * first or a later one, whole, as any drop is (dropPlacement) — its id
    * and creation mark with its remote's section (storage-34), the `spex`
    * the clone fetched of it and the upstream naming it, and this device's
-   * last sync (space-5, storage-5) — its placement file
+   * last sync (space-141, storage-5) — its placement file
    * left as it stands. Written only while that placement still stands as
    * it was read. */
   async dropRemote(placement: Placement): Promise<void> {
@@ -3767,17 +3789,15 @@ class RepositorySync {
           lfsConfig.push(...config());
         }
         const env = await this.git.ok([...lfsConfig, "lfs", "env"]);
-        const endpoints = env.split(/\r?\n/);
-        const selected = endpoints.find((line) => line.startsWith(`Endpoint (${name})=`))
-          ?? endpoints.find((line) => line.startsWith("Endpoint="));
-        const endpoint = selected?.match(/=(\S+) \(auth=[^)]*\)$/)?.[1];
+        const endpoint = selectedLfsEndpoint(env, name);
         if (endpoint) {
-          const address = URL.parse(target);
-          const lfsPath = address?.pathname.replace(/\/+$/, "").replace(/(?:\.git)?$/, ".git/info/lfs");
-          if (!host || !address || !lfsPath || !sameRecordAddress(endpoint, new URL(lfsPath, address.origin).href)) {
+          if (host) {
+            this.requireHostedLfsDestination(target, endpoint, "check");
+            if (recordAddress(endpoint)) lfsConfig.push("-c", `lfs.url=${endpoint}`);
+          } else {
+            // Setting lfs.url bypasses Git LFS's SSH authentication.
             this.owner.requireExternalRecordRemote(endpoint, "check");
           }
-          if (recordAddress(endpoint)) lfsConfig.push("-c", `lfs.url=${endpoint}`);
         } else if (host) {
           requireApprovedRecordDestination(false, "check");
         }
@@ -3844,6 +3864,7 @@ class RepositorySync {
     let run: GitRun;
     try {
       const { config, destination } = verifiedRecordPush(this.git, remote, "check");
+      this.requireLfsPushDestination(config, destination, remote, true, "check");
       run = await this.git.run([...config, "push", "-q", destination, `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
     } finally {
       await credential?.dispose();
@@ -4068,6 +4089,60 @@ class RepositorySync {
     for (const url of destinations) this.owner.requireExternalRecordRemote(url, step);
   }
 
+  private requireHostedLfsDestination(remote: string, endpoint: string, step: "check" | "push"): void {
+    requireApprovedRecordDestination(
+      sameRecordAddress(endpoint, recordLfsAddress(remote)) || !this.owner.spaceForRecords(endpoint),
+      step,
+    );
+  }
+
+  /** Git LFS's env command reports the download endpoint. Resolve its
+   * upload settings in the hook's Git configuration before it can run. */
+  private requireLfsPushDestination(config: string[], name: string, remote: string, hosted: boolean, step: "check" | "push"): void {
+    if (/^(?:true|1|on|yes)$/i.test(this.git.environment().GIT_LFS_SKIP_PUSH ?? "")) return;
+    const hook = this.git.runSync([...config, "rev-parse", "--git-path", "hooks/pre-push"]);
+    if (hook.code !== 0) throw this.transportStop(step, hook, remote, hosted);
+    try { accessSync(resolve(this.dir, hook.stdout.toString("utf8").trimEnd()), constants.X_OK); }
+    catch { return; }
+    const pushKey = `remote.${name}.lfspushurl`;
+    const fetchKey = `remote.${name}.lfsurl`;
+    const keys = `^(lfs\\.(pushurl|url)|remote\\.${name}\\.(lfspushurl|lfsurl|pushurl|url))$`;
+    const read = (args: string[]): Map<string, string> | undefined => {
+      const result = this.git.runSync([...config, "config", "--includes", "--null", ...args, "--get-regexp", keys]);
+      if (result.code === 1 && !result.stderr) return new Map();
+      if (result.code !== 0) {
+        if (args.length === 0) throw this.transportStop(step, result, remote, hosted);
+        return undefined;
+      }
+      const values = new Map<string, string>();
+      for (const item of result.stdout.toString("utf8").split("\0")) {
+        const newline = item.indexOf("\n");
+        if (newline >= 0) values.set(item.slice(0, newline), item.slice(newline + 1));
+      }
+      return values;
+    };
+    const gitConfig = read([]);
+    const lfsConfig = existsSync(join(this.dir, ".lfsconfig"))
+      ? read(["--file", ".lfsconfig"])
+      : read(["--blob", ":.lfsconfig"]) ?? read(["--blob", "HEAD:.lfsconfig"]);
+    const override = gitConfig?.get("lfs.pushurl") ?? lfsConfig?.get("lfs.pushurl")
+      ?? gitConfig?.get("lfs.url") ?? lfsConfig?.get("lfs.url")
+      ?? gitConfig?.get(pushKey)
+      ?? gitConfig?.get(fetchKey) ?? lfsConfig?.get(fetchKey);
+    const address = override ?? gitConfig?.get(`remote.${name}.pushurl`) ?? gitConfig?.get(`remote.${name}.url`) ?? remote;
+
+    const probe = `spex-lfs-${randomUUID()}`;
+    // Use Git's push rewrite rules for the LFS input, independently
+    // of the Git remote's own configured push URL.
+    const urls = recordPushUrls(this.git, [...config, "-c", `remote.${probe}.url=${address}`], probe);
+    requireApprovedRecordDestination(urls.length > 0, step);
+    for (const url of urls) {
+      const endpoint = override === undefined ? recordLfsAddress(url) ?? url : url;
+      if (hosted) this.requireHostedLfsDestination(remote, endpoint, step);
+      else this.owner.requireExternalRecordRemote(endpoint, step);
+    }
+  }
+
   /** Step 6 — Push `spex` to the placement whose remote bears `name`,
    * setting the upstream where `setUpstream` asks — once, at the first
    * placement (space-12) — with the credential its instance brokers —
@@ -4096,6 +4171,7 @@ class RepositorySync {
     try {
       // The upstream names the remote by its name in the clone (DR-127).
       const { config, destination } = at ? verifiedRecordPush(this.git, remote, "push") : { config: [], destination: name };
+      this.requireLfsPushDestination(config, destination, remote, !!at, "push");
       const args = [...config, "push", "-q", ...(!at && setUpstream ? ["-u"] : []), destination, SPEX_BRANCH];
       run = await this.git.run(args, { transport: true, ...(credential ? { credential } : {}) });
     } finally {
@@ -4899,8 +4975,7 @@ export class SpaceManager {
   }
 
   /** Whether the home's default instance and every instance it lists
-   * have reported their Git origin (git-host-5), as a read or a
-   * description named it for the core's run. */
+   * have a current or saved Git address (git-host-5). */
   private originsReported(): boolean {
     return this.reportingInstances().every((instance) => instance.knownOrigin() !== undefined);
   }
@@ -5429,7 +5504,7 @@ export class SpaceManager {
    * first or a later one, has its remote renamed to the folder of the
    * signed-in instance governing it, its file rewritten, else that
    * remote dropped, its id, what it fetched and its upstream with it,
-   * its file left (space-5); last, the instance's entry leaves
+   * its file left (space-141); last, the instance's entry leaves
    * `home.yaml` (storage-2), and with it what this run held of its
    * account. One still signed in is refused, and one the home does not
    * list `not_found` (space-29).
@@ -5813,8 +5888,13 @@ export class SpaceManager {
   }
 
   /** A configured path remote cannot bypass a Space's ownership check. */
-  requireExternalRecordRemote(remote: string, step: SyncStep): void {
-    if (this.spaceForRecords(remote)) throw new SpaceStopped(step, { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
+  requireExternalRecordRemote(remote: string, step: "check" | "push"): void {
+    if (!this.spaceForRecords(remote)) return;
+    const message = i18n._({
+      id: "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry.",
+      comment: "An external records transfer stopped because Git would use a known Space address",
+    });
+    throw new SpaceStopped(step, { cause: "git", message, guidance: retryGuidance(), retry: true }, false);
   }
 
   /** A target answer cannot outlive the account it was requested for. */
@@ -7166,7 +7246,7 @@ export class SpaceManager {
    * clone but not its remote. One rename at one instant, once the clone
    * still reads the remotes the check read before asking the host —
    * `facts` — and records the host's id; its fetched `spex`, its
-   * upstream and this device's last sync stay with it (space-5). */
+   * upstream and this device's last sync stay with it (space-141). */
   private followByRemote(instance: HostInstance, machine: RepositorySync, id: string, facts: CloneFacts, accountGeneration: number): void {
     try { this.assertTargetAccount(instance, accountGeneration); }
     catch (error) { throw hostStop("check", error, this.nameOf(instance)); }

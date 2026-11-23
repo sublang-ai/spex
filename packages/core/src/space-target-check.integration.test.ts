@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// git-host-23: actual core, complete stand-in catalogs and real Git
+// git-host-23, space-142, storage-62: actual core, complete stand-in catalogs and real Git
 // transports. Only individual HTTP answers are held/refused.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -72,7 +72,7 @@ function pathOf(input: Parameters<typeof fetch>[0]): string {
   return new URL(input instanceof Request ? input.url : String(input)).pathname;
 }
 
-test("storage-2, git-host-23: a separate Git address stays classified after sign-out and restart without a Space read", async (t) => {
+test("storage-62, space-142: a separate Git address stays classified after sign-out and restart without a Space read", async (t) => {
   const backend = await startHost();
   const host = await startHost({ gitBackend: backend });
   assert.notEqual(new URL(host.gitOrigin).origin, host.url);
@@ -103,13 +103,14 @@ test("storage-2, git-host-23: a separate Git address stays classified after sign
   assert.deepEqual(reads, [], "routing and refusal use the same persisted address");
 });
 
-test("storage-2, git-host-23: a successful Space description survives a failed account read", async (t) => {
+test("storage-62: a successful Space description survives a failed account read", async (t) => {
   const { home, host } = await prepared("record-first-description");
   t.after(() => home.stop());
   await home.stop();
   const homeFile = join(home.dataDir, "home.yaml");
   const original = readFileSync(homeFile, "utf8");
-  const legacy = original.replace(/^    gitOrigin: .*\r?\n/m, "");
+  assert.match(original, /^format: 3$/m);
+  const legacy = original.replace(/^format: 3$/m, "format: 2").replace(/^    gitOrigin: .*\r?\n/m, "");
   assert.notEqual(legacy, original);
   writeFileSync(homeFile, legacy);
 
@@ -121,6 +122,7 @@ test("storage-2, git-host-23: a successful Space description survives a failed a
   assert.equal(core.store.home.instance(host.url)?.gitOrigin, undefined);
   await assert.rejects(core.space.readHost());
   assert.equal(core.store.home.instance(host.url)?.gitOrigin, host.gitOrigin);
+  assert.match(readFileSync(homeFile, "utf8"), /^format: 3$/m);
 });
 
 test("git-host-23: a cold sync of a personal Git address checks its Space immediately", async (t) => {
@@ -139,7 +141,7 @@ test("git-host-23: a cold sync of a personal Git address checks its Space immedi
   assert.equal(placed.id, repository.id);
 });
 
-test("space-136, git-host-23: an external records placement checks its effective push destination", async (t) => {
+test("space-142: an external records placement checks its effective push destination", async (t) => {
   const backend = await startHost();
   const host = await startHost({ gitBackend: backend });
   const home = await startHome("record-push-destination", { host });
@@ -158,11 +160,39 @@ test("space-136, git-host-23: an external records placement checks its effective
   const blocked = await home.client.settle("space.sync", { repository: key });
   assert.equal(blocked.sync.phase, "stopped");
   assert.equal(blocked.sync.step, "push");
-  assert.equal(blocked.sync.cause, "gone");
+  assert.equal(blocked.sync.cause, "git");
+  assert.match(blocked.sync.message, /Git settings.*push URL/);
+  assert.equal(blocked.sync.retry, true);
+  assert.ok(!backend.script.requests.some(request => request.path.includes("/unlisted/example-spex.git")));
   assert.equal(git(bare, "rev-parse", "spex"), saved, "the successful external Check did not publish the saved local work");
 });
 
-test("git-host-23: external HTTP records Check follows Git redirects while the default Space is unavailable", async (t) => {
+test("space-142: an external records Check refuses a fetch rewrite into a known Space", async (t) => {
+  const { host, home } = await prepared("record-fetch-rewrite");
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, gitFolder("record-fetch-rewrite"));
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const url = `${host.gitOrigin}/unlisted/rewrite-spex.git`;
+  const rewrite = `url.${url}.insteadOf`;
+  git(clone, "config", rewrite, bare);
+
+  const blocked = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(blocked.sync.phase, "stopped");
+  assert.equal(blocked.sync.step, "check");
+  assert.equal(blocked.sync.cause, "git");
+  assert.match(blocked.sync.message, /Git settings.*URL rewrite/);
+  assert.equal(blocked.sync.retry, true);
+  assert.ok(!host.script.requests.some(request => request.path.startsWith(new URL(url).pathname)));
+  assert.equal(git(clone, "config", "remote.origin.url"), bare);
+
+  git(clone, "config", "--unset", rewrite);
+  const checked = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(checked.sync.phase, "idle");
+  assert.ok(placementOf(checked, null).branch?.checkedAt);
+});
+
+test("space-142: external HTTP records Check follows Git redirects while the default Space is unavailable", async (t) => {
   const host = await startHost();
   const requests: string[] = [];
   const server = createServer((request, response) => {
@@ -192,7 +222,7 @@ test("git-host-23: external HTTP records Check follows Git redirects while the d
   assert.deepEqual(reads, [], "the default Space is never consulted for an external records transfer");
 });
 
-test("git-host-23: Git URL rewrites cannot redirect a verified Space records check, push or join", async (t) => {
+test("space-142: Git URL rewrites cannot redirect a verified Space records check, push or join", async (t) => {
   const { home, host, key, id } = await preparedProject("records-rewrite");
   t.after(() => home.stop());
   const clone = clonePath(home.dataDir, key);
@@ -395,7 +425,7 @@ test("git-host-23: a newer completed full read fences an older target before it 
   assert.ok(!existsSync(clonePath(home.dataDir, key)) && existsSync(clonePath(home.dataDir, moved)));
 });
 
-test("git-host-23: a target-only read does not spend the first full Groups read after restart", async (t) => {
+test("git-host-23: a target-only read does not spend the first full Space read after restart", async (t) => {
   const ready = await prepared("target-before-first-get");
   const { host, home: first, unrelated } = ready;
   await first.stop();

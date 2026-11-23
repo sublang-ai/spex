@@ -7,8 +7,7 @@ export interface PublicationOptions {
   publication?: { org: string; license: string };
 }
 
-// App store: wires the protocol client into view state, one store per
-// core, each at its place (app-shell-1). Composer
+// App store: wires the IDE's core into view state (app-shell-1). Composer
 // submissions queue client-side while a turn is active and dispatch
 // when it ends (RUN-8); the core enforces one turn at a time.
 // Reconnects re-subscribe every live session and backfill missed
@@ -290,9 +289,8 @@ export interface AppState extends AttachmentState {
   dashboardGroupsCollapsed: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
-  /** The home, its groups and their spex repositories as the core last
-   * described them (space-30, DR-103): replaced wholesale by every
-   * `space.state` and `space.get`. */
+  /** The core's latest Space state (space-30), replaced wholesale by
+   * every `space.state` and `space.get`. */
   space?: SpaceState;
   registryAccounts?: Record<string, import("@sublang/spex-core/protocol").RegistryState>;
   /** The last `space.get` failure, shown on the surface. */
@@ -435,8 +433,7 @@ export interface AppState extends AttachmentState {
    * Playbooks surface (playbook-library-1, playbook-library-122);
    * undefined until read. */
   playbookLists?: PlaybookLists;
-  /** Read what each environment exports, the project's and your own
-   * group's; the newest read wins. */
+  /** Read the project and global playbooks. The newest read wins. */
   loadPlaybookLists(projectId: string | undefined): Promise<void>;
   loadEnvironment(repository: string): Promise<void>;
   /** Write a request into a spex repository's `spex.yaml`; resolving
@@ -3247,11 +3244,6 @@ function createAppState(clientAccess: StoreClientAccess, set: SetState, get: Get
 const clientAccess = {} as StoreClientAccess;
 const store = create<AppState>((set, get) => createAppState(clientAccess, set, get));
 export const useAppStore = Object.assign(store, { getClient: clientAccess.getClient });
-
-/** The local store's client. */
-export function getClient(): SpexClient {
-  return useAppStore.getClient();
-}
 
 /** Test seam: store actions resolve the local store's client, which
  * module mocks cannot reach — vitest injects a fake through here. */

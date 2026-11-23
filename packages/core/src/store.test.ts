@@ -1057,7 +1057,11 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   assert.equal(refusal(valid), "accepted");
   assert.equal(refusal({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "tester", folders: [] }),
     "format 1: the migration to several Spaces has not run; preserved unchanged");
-  assert.equal(refusal({ ...valid, format: 3 }), "unsupported format 3; preserved unchanged");
+  const instances = [{ ...valid.instances[0], gitOrigin: "https://git.spex.pub/repos" }];
+  assert.equal(refusal({ ...valid, format: 3, instances }), "accepted");
+  assert.equal(ownConfigPath(dir), join(dir, "workspace", "tester", "tester-spex", "config", "playbook.config.yaml"));
+  assert.match(refusal({ ...valid, instances }), /^expected fields /, "format 2 does not allow a Git address");
+  assert.equal(refusal({ ...valid, format: 4 }), "unsupported format 4; preserved unchanged");
   assert.equal(refusal({ ...valid, origin: "https://spex.pub/" }), "https://spex.pub/ is not a Space's address");
   assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex", account }] }), "https://Spex.pub is not a Space's address");
   assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex", account }] }), "https://…@spex.pub is not a Space's address");
@@ -1068,7 +1072,7 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   assert.match(refusal({ ...valid, instances: [{ url: "https://spex.pub", clientId: "spex", account }] }), /^expected fields /, "an entry names its origin as origin");
   assert.match(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex" }] }), /^expected fields /, "an entry carries its account");
   assert.match(refusal({ ...valid, host: valid.instances[0] }), /^expected fields /);
-  // Your own group's config path reads either format's folder name.
+  // The global config also resolves from a home awaiting migration.
   write({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "bob", folders: [] });
   assert.equal(ownConfigPath(dir), join(dir, "workspace", "bob", "bob-spex", "config", "playbook.config.yaml"));
 });

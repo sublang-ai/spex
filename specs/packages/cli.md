@@ -56,11 +56,12 @@ spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex
 
 #### cli-1
 
-When a package command runs, the CLI shall act on the environment whose root is the nearest folder, the current one included, holding `spex.yaml`, else the top level of the Git work tree the current folder lies in, else the current folder, reading and writing its files where they live [[environments-26](environments.md#environments-26)] and starting, finding or needing no core ([DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
+When a package command runs, the CLI shall read and write the selected environment’s files where they live [[environments-26](environments.md#environments-26)] without starting, finding or needing a core ([DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
 
+- search upward from the current folder for the nearest eligible folder containing `spex.yaml`, skipping manifests in ineligible folders. If none qualifies, use the Git work tree’s top level or, outside a work tree, the current folder;
 - the environment's instance is the `space` its `spex.yaml` names, else the home's default instance [[environments-2](environments.md#environments-2)], independently of its selected registry [[environments-38](environments.md#environments-38)];
 - the home is created where it is missing, with nothing in it but what the command writes; no clone, lease or record of the home is read or written;
-- package commands refuse roots inside the Spex home, the user’s home folder and any folder whose `.spex` contains the Spex home.
+- a root is ineligible if it is the user’s home directory itself, equals or lies beneath the Spex home, or contains the Spex home at or below its `.spex` directory. Refuse the command if its fallback root is ineligible.
 
 ### The environment
 
@@ -210,7 +211,7 @@ When the packed CLI, installed into a scratch prefix from `npm pack`, runs with 
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
 - after a hand edit to `demo/spec`'s placed copy, `spex install` prints `spec edited in specs/ — left as yours` beneath `demo/spec` [[cli-4](#cli-4)], and once the registry publishes `demo/spec` 1.1.0, `spex update` prints `demo/spec` with both versions and, beneath it, `spec edited in specs/ — left as yours, 1.1.0 waiting` [[cli-5](#cli-5)];
 - `spex remove demo/other` drops the request, the files and the placement and prints the loss, a name not requested refused, and `spex remove sublang/playbooks`, in the folder whose lock records the built-in package, drops its request and prints the loss as for any other [[cli-3](#cli-3)];
-- the environment root is found from a subfolder and defaults to the Git top level when no manifest exists. A root inside the Spex home, the user's home folder, or a root whose `.spex` contains the Spex home is refused before package files are changed [[cli-1](#cli-1)].
+- root discovery skips an ineligible manifest and accepts an eligible ancestor, including project folders beneath the user's home. Without an eligible manifest it defaults to the Git top level or the current folder and refuses an ineligible fallback before writing package files [[cli-1](#cli-1)].
 
 #### cli-16
 

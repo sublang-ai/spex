@@ -193,7 +193,7 @@ test("space-61, space-87: with the first instance signed out, the first placemen
   // (space-1).
 });
 
-test("storage-34, space-5, space-29: a clone placed at the second holds one remote there — a second remote at the second's Git origin under another name than its folder is no placement, with no line, nothing fetched under it and nothing pushed to its repository, and one named through space.remote.set is refused", async (t) => {
+test("storage-34, space-29: a clone placed at the second holds one remote there — a second remote at the second's Git origin under another name than its folder is no placement, with no line, nothing fetched under it and nothing pushed to its repository, and one named through space.remote.set is refused", async (t) => {
   const { first, second, home, key, clone } = await placedAtBoth("one-per-instance");
   t.after(() => home.stop());
   const spare = second.script.addRepository({ group: "bob", name: "spare-spex" });
@@ -214,7 +214,7 @@ test("storage-34, space-5, space-29: a clone placed at the second holds one remo
   assert.equal(git(clone, "config", "--get", "remote.spare.url"), spareUrl);
 
   // A remote the reader names at that instance's Git origin is refused,
-  // nothing written (space-5, space-29).
+  // nothing written (storage-34, space-29).
   await home.client.expectError("space.remote.set", { repository: key, url: spareUrl }, "invalid_request", /^Choose that Space as a sync destination$/);
   assert.ok(!remoteNamesOf(clone).includes("origin"), "no path placement written");
 });
@@ -420,7 +420,7 @@ test("space-92, space-14, space-9, space-17, space-18, space-29: a conflict at t
   assert.deepEqual(chosen.placements.map((line) => line.outcome?.kind), ["synced", "synced"]);
 });
 
-test("space-92, space-12, space-5: a path placement set by space.remote.set syncs last, with no catalog read, the upstream staying at the first placement, and no merge drops it", async (t) => {
+test("space-92, space-12, space-91: a path placement set by space.remote.set syncs last, with no catalog read, the upstream staying at the first placement, and no merge drops it", async (t) => {
   const { first, second, home, key, clone } = await settledAtBoth("path-last");
   t.after(() => home.stop());
   const bare = bareRepo();
@@ -442,7 +442,7 @@ test("space-92, space-12, space-5: a path placement set by space.remote.set sync
   assert.deepEqual([path.path, path.state, path.outcome?.kind], [bare, "reachable", "synced"]);
   assert.deepEqual(synced.placements.map((line) => line.instance), [canonicalOrigin(first.url), canonicalOrigin(second.url), null]);
   // The upstream stays at the first placement, and the path placement
-  // stands after the merge (space-12, space-5).
+  // stands after the merge (space-12, space-91).
   assert.equal(git(clone, "config", "--get", "branch.spex.remote"), hostFolder(first));
   assert.deepEqual(remoteNamesOf(clone).sort(), [hostFolder(first), hostFolder(second), "origin"].sort());
   assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), git(clone, "rev-parse", "HEAD"));

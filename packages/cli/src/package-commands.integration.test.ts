@@ -484,6 +484,24 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
 
 });
 
+test("cli-15, cli-1: skip an ineligible user-home manifest while resolving a project root", async () => {
+  const ancestor = workingFolder(join(SCRATCH, "ancestor"));
+  const user = join(ancestor, "user");
+  const child = join(user, "project");
+  mkdirSync(child, { recursive: true });
+  const manifest = `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`;
+  writeFileSync(join(ancestor, "spex.yaml"), manifest);
+  writeFileSync(join(user, "spex.yaml"), "not a manifest\n");
+  const list = () => spexWith({ HOME: user, USERPROFILE: user }, HOME, child, "list");
+  const inherited = await list();
+  assert.equal(inherited.code, 0, inherited.stderr);
+  assert.ok(inherited.stdout.startsWith(`Folder    ${ancestor}\n`), inherited.stdout);
+  writeFileSync(join(child, "spex.yaml"), manifest);
+  const local = await list();
+  assert.equal(local.code, 0, local.stderr);
+  assert.ok(local.stdout.startsWith(`Folder    ${child}\n`), local.stdout);
+});
+
 test("cli-15: a Git source is shown with no network remote named, and a source changed at one version is an update", async () => {
   // A network remote is never printed, as a request, a source or Git's
   // failure: it may lie under an instance's Git origin (DR-120).

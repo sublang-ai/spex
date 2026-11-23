@@ -65,7 +65,6 @@ import {
   type FakeScript,
   type FakeRunOptions,
   type StandinHost,
-  type StandinPerson,
   type StandinRegistry,
   type StubSlcStep,
 } from "@sublang/spex-core/testing";
@@ -198,8 +197,8 @@ export interface AppOptions {
     /** Friendly Space name for journeys and visual evidence. */
     displayName?: string;
     registry?: boolean;
-    share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
-    second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; registry?: boolean };
+    share?: { host: StandinHost; registry?: StandinRegistry };
+    second?: { displayName?: string; registry?: boolean };
   };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
@@ -658,10 +657,7 @@ export interface App {
    * codes and holds the fixture (git-host-12). The home's default
    * instance, from `SPEX_HOST_URL`. */
   host?: StandinHost;
-  /** Every stand-in instance of the journey, the first being `host`,
-   * the second `host.second`'s, or another app's `host.share.second`
-   * (DR-127); empty without
-   * `host`. */
+  /** The journey's Space stand-ins in order, empty without `host`. */
   hosts: StandinHost[];
   /** The stand-in registry the host fronts (with `host.registry`):
    * `registries[0]`. */
@@ -826,28 +822,17 @@ async function arrangeApp(
     }
     hosts.push(host);
     registries.push(registry);
-    // Another app's second instance, which this home reaches only by a
-    // sign-in naming it (space-83); its owner closes it.
-    if (spec.share?.second) {
-      if (spec.second) throw new Error("host.share.second and host.second name two second instances");
-      hosts.push(spec.share.second);
-      registries.push(undefined);
-    }
-    // The second instance, after the first and closed before it: over
-    // the first's Git backend or on one of its own (git-host-12),
-    // fronting a registry of its own where asked, started before it and
-    // closed after it (environments-18).
+    // The second Space has its own Git backend and optional registry.
     if (spec.second) {
-      const { backend, displayName, person } = spec.second;
+      const { displayName } = spec.second;
       let fronted: StandinRegistry | undefined;
       if (spec.second.registry) {
         fronted = await startStandinRegistry({ dir: join(scratch, "registry-2") });
         owned.push(fronted);
       }
       const second = await startStandinHost({
-        ...(backend === "shared" ? { gitBackend: host } : { dir: join(scratch, "host-2") }),
+        dir: join(scratch, "host-2"),
         displayName: displayName ?? SECOND_HOST_NAME,
-        ...(person ? { person } : {}),
         ...(fronted ? { registry: fronted.url } : {}),
       });
       owned.push(second);

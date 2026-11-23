@@ -18,7 +18,7 @@ A **capability** is the secret path segment under which the core serves one appl
 
 While a project of this computer is shown, the workspace shall show one tab per applet that its release provides [[environments-1](environments.md#environments-1)] and the project's environment or the global environment’s installs, and whose files are present on this device [[environments-14](environments.md#environments-14)], after the workspace's pinned tabs [[run-view-58](run-view.md#run-view-58)], named by the applet's id, standing while the applet is so installed and leaving with it ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
 
-- two environments each installing an applet of one id give two tabs, each naming its spec package;
+- two environments each installing an applet of one id give two tabs, each naming its spec package.
 
 #### applets-2
 

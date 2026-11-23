@@ -3144,5 +3144,9 @@ msgid "Your saved commits remain on this computer. Address the content limit, th
 msgstr "Your saved commits remain on this computer. Address the content limit, then Retry."
 
 #. A records transfer stopped because Git configuration could change the Space-approved destination
-msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry."
-msgstr "Git settings prevent using the records address from this Space. Check the URL rewrite rules, then retry."
+msgid "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
+msgstr "Git settings prevent using the records address from this Space. Check the URL rewrite rules and Git LFS settings, then retry."
+
+#. An external records transfer stopped because Git would use a known Space address
+msgid "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."
+msgstr "Git settings direct this external records transfer to a Space. Check the URL rewrite rules, push URL, and Git LFS settings, then retry."

@@ -494,9 +494,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - A home can sign in to several instances, with each instance's account,
   personal project listings and repository operations kept separate ([DR-127](specs/decisions/127-a-home-signed-in-to-several-instances.md)).
   Existing homes and clones migrate to the instance-aware layout; a
-  refused credential signs out only its instance. A project's records can
-  be placed at several instances, with **Place at…**, **Attach** for a
-  placement another device named, and **Leave…**, which keeps its server copy.
+  refused credential signs out only its instance.
   Sync runs placement by placement, each with its own incoming changes,
   choices and outcome ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
 - Each environment searches, resolves and publishes at its selected

@@ -7,7 +7,7 @@
 // writing its file as its three lines, the same bytes on every home, a
 // file that does not read naming no placement and blocking nothing, and
 // a migrated clone's first sync writing each placement's file no commit
-// held (storage-37); this device's last sync and notice recorded per
+// held (storage-37); this device's last sync recorded per
 // placement, following its remote (storage-5); and, end to end, a
 // project placed at two instances, joined on a second home, left
 // placement by placement and attached again (storage-39), and two
@@ -125,7 +125,7 @@ test("storage-36, space-35, space-23: personal global records setup, explicit pr
   assert.deepEqual(placed.entries.map((entry) => [entry.path, entry.kind, entry.family, entry.sync]), [[file, "file", "placement", "shared"]]);
 
   // A remote the reader names is the path placement, written to no file
-  // (storage-36, space-5).
+  // (storage-36, storage-34).
   await a.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   assert.deepEqual(remoteNamesOf(clone), [hostFolder(host), "origin"]);
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${hostFolder(host)}.yaml`].sort());
@@ -198,7 +198,7 @@ test("storage-41, storage-12: a placement file that does not read as its encodin
   assert.deepEqual(await lines(), [held]);
 });
 
-test("storage-5, space-22, space-5, space-15: this device's last sync is kept per placement under sync:<repository>:<placement>:, a former sync:<repository>:last reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
+test("storage-5, space-22, space-141, space-15: this device's last sync is kept per placement under sync:<repository>:<placement>:, a former sync:<repository>:last reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const home = await startHome("per-placement", { host, project: false });
@@ -271,7 +271,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync is kept pe
   });
   assert.deepEqual(lines(synced), [[host.url, syncedLast], [null, pathSynced]]);
 
-  // The path placement dropped takes its own record alone (space-5).
+  // The path placement dropped takes its own record alone (space-141).
   const dropped = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: syncedLast });
   assert.deepEqual(lines(dropped), [[host.url, syncedLast]]);
@@ -643,7 +643,7 @@ test("space-91, storage-38: a lone placement's file deleted by hand on this devi
   assert.equal(git(bare, "rev-parse", "spex"), atHost, "the host's repository is left as it stands");
 });
 
-test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, storage-38, storage-5, storage-11, storage-12, storage-41, storage-35, space-97, space-98, space-99, space-63, space-5: a project created in the first account's namespace and placed in the second's on separate Git backends, joined on a second home signed in at the second alone and renamed by the second, is left placement by placement — refused under a live writer's lease naming the session and in a restarted core whose read of the second fails naming the second, then moved to the second's path with its pair, session, records and exports, and local only at the last — while the second home leaves its one placement and attaches the first's from its file", async (t) => {
+test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, storage-38, storage-5, storage-11, storage-12, storage-41, storage-35, space-97, space-98, space-99, space-63, space-141: a project created in the first account's namespace and placed in the second's on separate Git backends, joined on a second home signed in at the second alone and renamed by the second, is left placement by placement — refused under a live writer's lease naming the session and in a restarted core whose read of the second fails naming the second, then moved to the second's path with its pair, session, records and exports, and local only at the last — while the second home leaves its one placement and attaches the first's from its file", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: BOB });
   const firstFolder = hostFolder(first);
@@ -703,7 +703,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   const sessionId = await runTurn(home, key, "Chart the atlas");
 
   // A remote the reader names is `origin`, written to no file (storage-36,
-  // space-5).
+  // storage-34).
   await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   assert.deepEqual(remotesOf(clone), [firstFolder, "origin"]);
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`].sort());
@@ -732,7 +732,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
     records[`sync:${key}:${secondFolder}:last`],
     records[`sync:${key}:origin:last`],
   ]);
-  // `origin` removed again, with its record (space-5, storage-5).
+  // `origin` removed again, with its record (space-141, storage-5).
   const unpathed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.deepEqual(remotesOf(clone), [firstFolder, secondFolder]);
   assert.deepEqual(unpathed.placements.map((line) => line.instance), [first.url, second.url]);

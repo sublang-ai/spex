@@ -39,11 +39,6 @@ afterEach(cleanup);
 
 const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 
-vi.mock("../state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../state/store.js")>();
-  return { ...actual, getClient: () => ({ command: commandMock, subscribe: async () => null, unsubscribe: async () => null }) };
-});
-
 import { PlaybooksTab } from "./PlaybooksTab.js";
 import { PlaybooksSurface } from "./PlaybooksSurface.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";

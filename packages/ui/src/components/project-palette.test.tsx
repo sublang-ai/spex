@@ -18,7 +18,7 @@ afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
 import { SpexCommandError } from "../lib/client.js";
-import { useAppStore } from "../state/store.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
 import {
   applyRecords,
   initialSessionView,
@@ -327,6 +327,31 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
       ),
     ];
     expect(words.filter((word) => /forge/i.test(word))).toEqual([]);
+  });
+});
+
+describe("projects-17: registration refusals in the palette", () => {
+  afterEach(() => setClientForTests(undefined));
+
+  test.each(["/tmp/alpha/src", "/tmp/plain"])("shows the refusal for %s and points to Create", async (path) => {
+    const command = vi.fn().mockRejectedValue(new SpexCommandError(
+      "invalid_request",
+      `${path} is not the root of a git work tree (run git init first, or use project.create)`,
+    ));
+    setClientForTests({ command } as never);
+    const { onPick, onClose } = renderPalette({ onAddPath: useAppStore.getState().addProjectByPath });
+    const field = screen.getByTestId("palette-path");
+    fireEvent.change(field, { target: { value: path } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect((await screen.findByTestId("palette-error")).textContent).toBe(
+      `${path} is not the root of a git work tree. To start a new repository there, use Create instead.`,
+    );
+    expect(command.mock.calls.map(([type, fields]) => [type, fields])).toEqual([
+      ["project.register", { path }],
+    ]);
+    expect(field).toHaveProperty("value", path);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 

@@ -63,11 +63,12 @@ While the home holds an instance's app token, when a call to that instance is ma
 
 When a signed-in Space is first read after startup, refreshed or read at sign-in, the core shall hold a complete current view of the account and its own project repositories, traversing all catalog pages and accepting only repositories the Space identifies as belonging to the signed-in account's own namespace ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
-- the Space description supplies its display name for the home entry [[storage-2](storage.md#storage-2)] and its reported Git origin for transport alone;
+- the Space description supplies its display name for the home entry [[storage-2](storage.md#storage-2)] and its reported Git address, which the core saves with the Space entry [[storage-2](storage.md#storage-2)] and uses for transport and local recognition, including after restart;
 - repository identity uses the Git origin and stable repository id or matching remote URL, with a named instance and id used for a recorded placement not present on this device [[storage-36](storage.md#storage-36)]; names alone do not match;
 - the signed-in Space that owns a placement governs its state; while signed out, the first signed-in Space listing that same repository in its own account's namespace can govern it on the next sync [[space-60](space.md#space-60)];
 - the core treats a repository the Space no longer lists as personal as unavailable, preserving local records;
-- the first read is started once per account generation, and concurrent Refreshes join an ongoing full read for that generation;
+- the first `space.get` after startup replies with the current local state and starts a full read in the background for each signed-in Space where a full read has not begun ([DR-106](../decisions/106-groups-after-a-restart-and-a-host-sign-out.md)); an operation-specific ownership check does not consume this read [[git-host-22](#git-host-22)];
+- concurrent Refreshes join an ongoing full read for the same account generation; the core does not schedule catalog reads on a timer;
 - a failed full read retains the last completed view and reports its sanitized cause without advancing the last-read time; completed pages and details are retained during a rate-limit retry [[git-host-21](#git-host-21)];
 - an answer started before a completed attachment must be read again before replacing that instance's authority; a full read older than a targeted read does not overwrite the target [[git-host-22](#git-host-22)].
 
@@ -75,9 +76,7 @@ When a signed-in Space is first read after startup, refreshed or read at sign-in
 
 When sync checks a Space placement, the core shall re-read that Space’s current account, complete catalog and matched repository details, and refuse the destination unless the fresh result matches the placement’s identity [[git-host-5](#git-host-5)] and identifies the repository in the signed-in account's own namespace ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)):
 
-- the target read governs the repository's path, branch and access without advancing the full-view read time. Before a push, including catch-up, confirm the account and the destination's current details again;
-- Git must use the Space-approved records address for a check, push or clone. A Git setting that would rewrite it stops the transfer with guidance to check the rewrite rules;
-- a user-supplied records remote is eligible for external Git transport only after the core classifies its destination [[space-136](space.md#space-136)];
+- the target read governs the repository's path, branch and access without advancing the full-view read time;
 - a changed account or credential [[git-host-4](#git-host-4)] refuses the step and prevents a stale result from being published;
 - a valid move within the personal namespace follows the clone's unchanged-path guards [[space-60](space.md#space-60)].
 
@@ -152,9 +151,10 @@ The shared sign-in client shall bind each authorization, device, token, refresh 
 
 #### git-host-12
 
-The library shall supply an HTTP stand-in for integration tests that serves Space sign-in, an account description, a paginated repository catalog with namespace identity, project details, private personal placement creation, branch preparation and Git credential brokering:
+The core package shall supply an HTTP stand-in for integration tests that serves Space sign-in, an account description, a paginated repository catalog with namespace identity, project details, private personal placement creation, branch preparation and Git credential brokering over a directory of bare repositories:
 
 - separate stand-in Spaces can share a backing Git origin and record independent accounts and grants;
+- the stand-in serves authorized Git and LFS transport over HTTP and records which Space issued each credential it accepts;
 - fixtures may add repositories in another namespace or move a repository out of the signed-in account’s namespace to exercise filtering and fresh target checks;
 - a fixture can script token refresh and expiry, revoked credentials, account changes, read-only state, transport refusals, and rate-limit responses with `Retry-After`.
 
@@ -183,7 +183,10 @@ When a real core signs in through the stand-in Space and creates a personal reco
 
 - account identity, tokens and personal catalog refresh on sign-in, catalog pagination and exclusion of other namespaces [[git-host-2](#git-host-2)] [[git-host-3](#git-host-3)] [[git-host-4](#git-host-4)] [[git-host-5](#git-host-5)];
 - creation, branch preparation and authenticated Git transport use that account and Space, with an expired token refreshed and a refused refresh signing out that Space only [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)] [[git-host-9](#git-host-9)] [[git-host-4](#git-host-4)];
+- a delayed README is read again before the first push; if it never lands the core pushes its own README on `main` before `spex`, while refusal, read-only access or a restart before completion preserves the creation marker for retry [[git-host-7](#git-host-7)];
+- a cold reader fetches LFS objects with the brokered credential before Apply, Stop ends the held transfer, and an alternate LFS endpoint receives no credential [[git-host-9](#git-host-9)] [[git-host-12](#git-host-12)];
 - classified failure and retry guidance reports the Space name and bounds a rate-limit wait [[git-host-11](#git-host-11)] [[git-host-21](#git-host-21)];
+- a rate-limited read keeps its initial recovery deadline when another request extends the shared hold, and a replay still in flight at that deadline is aborted without masking a separate request timeout, provider refusal or authentication failure [[git-host-21](#git-host-21)];
 - the repository moved outside the personal namespace fails its fresh target check before Git transport [[git-host-22](#git-host-22)];
 - sign-out revokes credentials only for that Space [[git-host-10](#git-host-10)].
 
@@ -193,15 +196,14 @@ When a real core syncs an individual repository against the stand-in Space, the 
 
 - an unrelated repository detail failure leaves the selected sync available and the full read time unchanged;
 - a repository moved outside the personal namespace stops the transfer, retains its local files and receives no new records, including during catch-up;
-- a previously reported separate Git address is recognized after restart and its personal repository routes through an ownership check while signed in, and an unavailable Space does not prevent an independent external records remote from syncing;
-- a configured LFS endpoint for a different Space repository is refused before object fetch;
-- a Git URL rewrite or separate push URL does not divert a managed transfer from its approved destination, and external Git remotes keep their redirect behavior;
 - target, catalog and authentication failures prevent transfer, and a held response across sign-out cannot restore access;
 - a later complete read supersedes an earlier target read, while a target-only check after restart leaves the first full read due.
 
 #### git-host-24
 
-When a real core signs in at two independent stand-in Spaces, the integration suite shall verify that each account, personal catalog, refresh, rate-limit hold and sign-out is scoped to its own Space, and that a failed read there leaves the other Space usable [[git-host-2](#git-host-2)] [[git-host-4](#git-host-4)] [[git-host-5](#git-host-5)] [[git-host-21](#git-host-21)].
+When a real core signs in at two independent stand-in Spaces, the integration suite shall verify that each account, personal catalog, refresh, rate-limit hold and sign-out is scoped to its own Space, and that a failed read there leaves the other Space usable [[git-host-2](#git-host-2)] [[git-host-4](#git-host-4)] [[git-host-5](#git-host-5)] [[git-host-21](#git-host-21)]:
+
+- after restarting signed in to both, concurrent initial `space.get` calls start one full read per Space and the first reply has neither read completed; after those reads settle, further state requests do not start another read [[git-host-5](#git-host-5)].
 
 #### git-host-25
 

@@ -16,7 +16,6 @@
 // would freeze the language this module was imported in.
 
 import type {
-  CodeKind,
   SpaceState,
   InstanceState,
   PlacementBranch,
@@ -485,26 +484,11 @@ export function rowPhrase(
       return { text, title: text, tone: "idle" };
     }
     const text = hostStatePhrase("unreachable", repo.reason ?? lines.find((line) => line.state === "unreachable")?.reason ?? null);
-    return { text, title: text, tone: "attention" };
+    return { text, title: text, tone: "attention", act: { kind: "retry", placement: null } };
   }
   const last = lastSyncOf(repo);
   const text = lastSyncPhrase(last, now);
   return { text, title: last ? absoluteTitle(last.at) : text, tone: "idle" };
-}
-
-/** A project's code status (space-1): the core's phrase, "Code:
- * <where>" or "Code remote not configured", with what it says of the
- * configured remote — at a Space, elsewhere, or none, in the neutral
- * tone; nothing
- * while the core does not know yet, the records hold no `project.json`,
- * or the row stands under "This computer" (`local`), which nobody shares
- * yet. */
-export function codeOf(
-  repo: RepositoryState,
-  local: boolean,
-): { kind: Exclude<CodeKind, "unknown">; phrase: string; tone: "idle" | "attention" } | null {
-  if (local || repo.codeKind === "unknown" || repo.code === null) return null;
-  return { kind: repo.codeKind, phrase: repo.code, tone: "idle" };
 }
 
 /** A project's name from its spex repository's (space-1, space-46):
@@ -544,16 +528,9 @@ export function openingAt(state: SpaceState | undefined, id: string | undefined)
   return openingOf(state.repositories.find((repo) => repo.key === id));
 }
 
-/** "Personal" (space-1, DR-172): your own records and your namespace
- * at a Space, as a heading and a picker's first choice. */
-export const personalLabel = (): string =>
-  i18n._({ id: "Personal", comment: "heading for your personal projects and records at a Space" });
-
-/** "This computer" (space-1, DR-172): the heading of what stands in no
- * group — your sessions before any sign-in, and each project not yet
- * shared. */
+/** The local projects section (space-1). */
 export const thisComputerLabel = (): string =>
-  i18n._({ id: "This computer", comment: "the heading of the projects and sessions kept on this computer alone, in no group at any Space" });
+  i18n._({ id: "This computer", comment: "the heading of the projects kept on this computer alone" });
 
 /** Whether a spex repository a Space lists may hold the records of a
  * project here (space-97): its code read alike — the core names where a

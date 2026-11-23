@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface's header and groups list over a mocked client
-// (DR-103, DR-127): the header with Refresh or the sign-in card, and the
-// instance's heading with its account and last read (space-1, space-2),
-// signing in through the browser flow and the device flow, its failure,
-// Cancel, the instance's sign-out of this device and Sign out on its
-// heading (space-3, space-6), every row state with its control, its
-// overflow and its phrase (space-61, space-64), "Add to a group…"
-// (space-97), "Open here" (space-63, space-111), the
-// vocabulary (space-27) and the label budget and the container steps the
-// fit rests on (space-28). Each act is checked by the command it sends;
-// its outcome arrives as state.
+// Space account controls, personal project rows and sync destinations
+// exercised through the renderer and its protocol client.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { SpaceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -35,6 +26,7 @@ import {
   installClient,
   live,
   noInstance,
+  placement,
   renderSpace,
   repo,
   signedOutAt,
@@ -78,8 +70,7 @@ afterEach(() => {
  * core names the code's host, never its remote. */
 const CODE = "Code: github.com";
 
-/** A home that lists no instance: your own group alone, its
- * repositories local, as a test says otherwise of the project's row. */
+/** A home with only the local projects section. */
 function signedOut(over: HomeOver = {}, row: Partial<RepositoryState> = {}): SpaceState {
   return noInstance(over, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, ...row })]);
 }
@@ -210,7 +201,7 @@ describe("SPACE: the header (space-1, space-2)", () => {
     // "This computer" alone, never named after this computer's user:
     // "Your sessions" reads no phrase and carries no control; the
     // project reads none and carries no code glyph, nobody sharing it
-    // yet, its "Add to a group…" disabled and titled "Sign in to a Space
+    // yet, its "Sync to a Space…" disabled and titled "Sign in to a Space
     // first" (space-1, space-61, space-66).
     const groups = within(screen.getByTestId("space-projects")).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["This computer"]);
@@ -563,7 +554,7 @@ describe("SPACE: the sign-in card's Space address, no directory read (space-66, 
   });
 });
 
-describe("SPACE: the groups list and its rows (space-1, space-61, space-64)", () => {
+describe("SPACE: personal project rows (space-1, space-61, space-64)", () => {
   test.each(["name", "phrase", "explore"] as const)("the records panel closes itself and restores focus to its %s opener", async (source) => {
     await renderSpace(base(), { open: false });
     const opener = screen.getByTestId(source === "name" ? `space-repo-${KEY}`
@@ -611,7 +602,7 @@ describe("SPACE: the groups list and its rows (space-1, space-61, space-64)", ()
 });
 
 describe("Personal Space destinations", () => {
-  test("a project with an explicit records remote can select its first Space", async () => {
+  test("space-139: a project with an explicit records remote can select a new copy at its first Space", async () => {
     const project = repo({ instance: null, remote: "/records/academy.git" });
     await renderSpace(base({}, [project]), { open: false });
     const menu = moreOf(project.key);
@@ -627,7 +618,7 @@ describe("Personal Space destinations", () => {
     expect(calls("space.place")).toEqual([]);
   });
 
-  test("space-137: changing Space resets the matching records choice and only submission joins", async () => {
+  test("space-137, space-139: changing Space resets the matching records choice and only submission joins", async () => {
     const project = repo({ key: "jane/academy-spex", instance: null, state: "local-only", id: null, remote: null, branch: null });
     const firstCopy = repo({
       key: "@spex.example/jane/academy-spex", instance: ORIGIN, id: "101", state: "absent", branch: null, folder: null,
@@ -663,9 +654,111 @@ describe("Personal Space destinations", () => {
     await waitFor(() => expect(screen.queryByTestId(`space-destination-${project.key}`)).toBeNull());
   });
 
+  test("space-139: a pending submission holds the picker and refusal preserves the choice for retry", async () => {
+    const project = repo({ key: "jane/academy-spex", instance: null, state: "local-only", id: null, remote: null, branch: null });
+    const copy = repo({ instance: SECOND, key: "@second.example/jada/academy-spex", id: "202", state: "absent", branch: null, folder: null });
+    await renderSpace(twoInstances({}, [project, copy]), { open: false });
+    let refuse!: (reason: Error) => void;
+    const submission = new Promise<never>((_, reject) => { refuse = reject; });
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.pick" && calls(type).length === 1 ? submission : answer(type, fields));
+    fireEvent.click(within(moreOf(project.key)).getByRole("menuitem", { name: "Sync to a Space…" }));
+    const panel = screen.getByTestId(`space-destination-${project.key}`);
+    const picker = within(panel);
+    const destination = picker.getByRole("combobox", { name: "Space" });
+    fireEvent.change(destination, { target: { value: SECOND } });
+    const records = picker.getByRole("combobox", { name: "Project records" });
+    fireEvent.change(records, { target: { value: copy.id } });
+    const close = picker.getByRole("button", { name: "Close" });
+    fireEvent.click(picker.getByRole("button", { name: "Sync records" }));
+    const busy = picker.getByRole("button", { name: "Syncing…" });
+    for (const control of [destination, records, close, busy]) {
+      expect(control).toHaveProperty("disabled", true);
+    }
+    fireEvent.keyDown(destination, { key: "Escape" });
+    fireEvent.click(close);
+    fireEvent.click(busy);
+    expect(panel.isConnected).toBe(true);
+    expect(calls("space.pick")).toHaveLength(1);
+
+    await act(async () => refuse(new Error("Second Example refused the request")));
+    expect(picker.getByRole("alert").textContent).toBe("Second Example refused the request");
+    expect(destination).toHaveProperty("value", SECOND);
+    expect(records).toHaveProperty("value", copy.id);
+    fireEvent.click(picker.getByRole("button", { name: "Sync records" }));
+    await waitFor(() => expect(panel.isConnected).toBe(false));
+    expect(calls("space.pick")).toEqual(Array.from({ length: 2 }, () => ({
+      repository: project.key,
+      choice: { kind: "join", instance: SECOND, hostId: copy.id },
+    })));
+  });
+
   test("a project synced to one Space keeps its sync action with another Space signed in", async () => {
     const project = repo();
     await renderSpace(twoInstances({}, [project]), { open: false });
     expect(moreEntries(project.key)).toEqual(["Sync records", "Explore records"]);
+  });
+});
+
+
+describe("space-143: personal project row states", () => {
+  test("Open here invokes the native picker and joins the selected row at its own Space", async () => {
+    const first = repo({ state: "absent", branch: null, folder: null });
+    const second = repo({ instance: SECOND, key: "@second.example/jada/academy-spex", id: "202", state: "absent", branch: null, folder: null });
+    const pickDirectory = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce("/tmp/academy");
+    (window as { spexNative?: unknown }).spexNative = { pickDirectory };
+    await renderSpace(twoInstances({}, [first, second]), { open: false });
+    expect(pickDirectory).not.toHaveBeenCalled();
+
+    const row = within(screen.getByTestId(`space-instance-${SECOND}`)).getByTestId(`space-row-${second.key}`);
+    const open = within(row).getByRole("button", { name: "Open here" });
+    await act(async () => { fireEvent.click(open); });
+    expect(pickDirectory).toHaveBeenCalledTimes(1);
+    expect(calls("space.join")).toEqual([]);
+    fireEvent.click(open);
+    expect(pickDirectory).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(calls("space.join")).toEqual([
+      { instance: SECOND, hostId: second.id, folder: "/tmp/academy" },
+    ]));
+  });
+
+  test("Choose folder pairs the selected working folder with the local records", async () => {
+    const project = repo({ folder: null });
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      const bound = { id: project.key, name: "academy", path: "/tmp/academy", registeredAt: 0, repository: { key: project.key, name: project.name } };
+      if (type === "project.rebind") return bound;
+      if (type === "project.list") return [bound];
+      return answer(type, fields);
+    });
+    await renderSpace(base({}, [project]), { open: false });
+    fireEvent.click(screen.getByRole("button", { name: "Choose folder…" }));
+    const editor = within(screen.getByTestId(`space-folder-${project.key}`));
+    const useFolder = editor.getByRole("button", { name: "Use this folder" });
+    fireEvent.change(editor.getByRole("textbox", { name: "Project folder on this computer" }), { target: { value: "/tmp/academy" } });
+    fireEvent.click(useFolder);
+    await screen.findByRole("button", { name: "Open project" });
+    expect(calls("project.rebind")).toEqual([{ projectId: project.key, path: "/tmp/academy" }]);
+    expect(calls("space.join")).toEqual([]);
+  });
+
+  test("an unreachable row shows the cause and Retry requests another Space read", async () => {
+    const project = repo({ state: "unreachable", reason: "The network is offline" });
+    await renderSpace(base({}, [project]), { open: false });
+    const row = within(screen.getByTestId(`space-row-${project.key}`));
+    expect(row.getByTestId(`space-repo-state-${project.key}`).textContent).toBe("Unreachable: The network is offline");
+    fireEvent.click(row.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(calls("space.refresh")).toEqual([{}]));
+  });
+
+  test("a waiting placement shows its step and the Space's refusal", async () => {
+    const project = repo({ placements: [
+      placement(),
+      placement({ instance: SECOND, attached: false, waiting: { step: "branch", message: "Second Example refused branch preparation" } }),
+    ] });
+    await renderSpace(twoInstances({}, [project]));
+    const line = within(screen.getByTestId(`space-line-${SECOND}`));
+    expect(line.getByTestId("space-line-instance").textContent).toBe("Second Example");
+    const phrase = line.getByText("Waiting for the Space to prepare the records branch");
+    expect(phrase.title).toBe("Second Example refused branch preparation");
   });
 });

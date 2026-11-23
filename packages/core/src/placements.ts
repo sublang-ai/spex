@@ -19,7 +19,7 @@ import { orderRemotes, remoteOrderOf } from "./home.js";
 import { instanceFolder, isInstanceFolder, parseOrigin } from "@sublang/spex/instance";
 
 /** The remote the reader names: the clone's one path placement, which
- * records no id (storage-34, space-5). */
+ * records no id (storage-34). */
 export const PATH_PLACEMENT = "origin";
 
 /** Where a Spex before DR-128 kept the host's id, and the core's

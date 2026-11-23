@@ -9,9 +9,7 @@
 // (dashboard-50) — and below both, one ledger group per project, the
 // same component the Overview tab draws (DR-038). Work state here is
 // derived — the surface writes only Boss acts (queue, close) and its
-// reader-owned project disclosure preference. Where the page holds
-// several places, the attention queue joins every core's, each entry
-// answered at its own core (dashboard-9, DR-133).
+// reader-owned project disclosure preference.
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import type {
@@ -484,8 +482,7 @@ export function DashboardSurface({
   onStartIntent,
   onNavigate,
 }: {
-  /** Open at the entry's core and turn, or its failure's onset where
-   * it names no turn. An omitted place means this computer. */
+  /** Open at the entry's turn or the onset of a failure between turns. */
   onOpenSession: (sessionId: string, turnId?: number, focusAt?: number) => void;
   /** Open an intent record in its project's records reader. */
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
@@ -493,14 +490,9 @@ export function DashboardSurface({
    * stageDispatch and switches to the Workspace). */
   onStartIntent: (intent: IntentInfo) => Promise<void> | void;
   /** Optional Projects navigation for empty-state guidance
-   * (dashboard-8), showing the place named; plain copy stands in when
-   * the App leaves it unwired. */
+   * (dashboard-8). */
   onNavigate?: (surface: "Workspace") => void;
 }) {
-  // The place the project groups stand at: this computer's, the
-  // Dashboard joining the places' attention alone (DR-133). A link to a
-  // project, or to Projects from the empty state, opens at this place,
-  // whichever the Projects surface last showed (dashboard-9).
   const home = useAppStore;
   const projects = useAppStore((state) => state.projects);
   const sessions = useAppStore((state) => state.sessions);
@@ -607,8 +599,7 @@ export function DashboardSurface({
   );
 
   // The Sources guidance points at the project's Overview, where the
-  // repository header shows the GitHub binding (dashboard-8, DR-038),
-  // opened at the project's place (dashboard-9).
+  // repository header shows the GitHub binding (dashboard-8, DR-038).
   const openOverview = (projectId: string) => () => {
     const state = home.getState();
     state.setCurrentProject(projectId);
@@ -680,7 +671,6 @@ export function DashboardSurface({
               entry={entry}
               projectName={projectNameOf(entry.projectId)}
               now={now}
-              // Opened and answered at its own core (dashboard-9).
               onOpen={() =>
                 entry.kind === "failure" && entry.turnId === undefined
                   ? onOpenSession(entry.sessionId, undefined, entry.since)

@@ -813,9 +813,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The project's Playbooks tab lands on its id field
-                // (playbook-library-51), at the place shown here
-                // (run-view-200, DR-172).
+                // Open the project's new playbook form (playbook-library-51).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}

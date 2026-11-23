@@ -2890,7 +2890,7 @@ test("playbook-library-110: an authoring session of the global environment keeps
 });
 
 
-test("instance package sources keep transport locators out of state and broadcasts", { timeout: 180_000 }, async (t) => {
+test("environments-29: instance package sources keep transport locators out of state and broadcasts", { timeout: 180_000 }, async (t) => {
   const harness = createSpaceHarness();
   const homes: { stop(): Promise<void> }[] = [];
   t.after(async () => {
@@ -3051,15 +3051,15 @@ test("instance package sources keep transport locators out of state and broadcas
   assert.match(state!.error!, /418/, "the real external Git refusal reached the unclassified stderr path");
   writeFileSync(join(clone, "spex.yaml"), requests);
   writeFileSync(join(clone, "spex.lock"), locked);
-  // A restart has no reported origin yet; local reads do not discover it.
+  // The saved address gives local reads the Space label before the first read.
   await home.stop();
   const restarted = await harness.startHome("source-restart", { dataDir: home.dataDir, project: false, host });
   homes.push(restarted);
   const seen = host.script.requests.length;
   state = await restarted.client.expectOk("environment.get", { repository: own });
   safe(state);
-  assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, "the remote");
-  assert.equal(state.packages.find((pkg) => pkg.name === "acme/toolbox")?.source.detail, `the remote ${commitPrefix} pkg`);
+  assert.equal((state.requests["acme/toolbox"] as unknown as { repository: string }).repository, instance);
+  assert.equal(state.packages.find((pkg) => pkg.name === "acme/toolbox")?.source.detail, `${instance} ${commitPrefix} pkg`);
   assert.equal(host.script.requests.length, seen, "environment.get does not read the host");
   const reading = restarted.client.mark();
   await restarted.client.expectOk("space.get", {});

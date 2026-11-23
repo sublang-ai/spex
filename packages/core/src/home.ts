@@ -385,13 +385,12 @@ export class Home {
   }
 }
 
-/** Your own group's folder name as `home.yaml` records it, in this
- * format or the one before the instances migration; undefined where
- * none stands or it does not read. */
+/** The personal records folder name in any supported home layout,
+ * including the one before the instances migration. */
 export function recordedOwnName(root: string): string | undefined {
   let value: unknown;
   try { value = parseYaml(readFileSync(Home.file(root), "utf8")); } catch { return undefined; }
-  if (!isObject(value) || (value.format !== 1 && value.format !== 2)) return undefined;
+  if (!isObject(value) || (value.format !== 1 && value.format !== 2 && value.format !== 3)) return undefined;
   return typeof value.own === "string" && isGroupName(value.own) ? value.own : undefined;
 }
 

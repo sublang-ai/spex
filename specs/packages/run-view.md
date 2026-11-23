@@ -800,7 +800,7 @@ Wherever the run view says where a run, a step, a lane or a call stands — a ma
 
 While the app is connected, the sidebar shall present navigation as surface entries around a Projects section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
-- Dashboard stands first, then the Projects section then Playbooks, Space and Settings ([DR-150](../decisions/150-spex-space-product-and-destination.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-175](../decisions/175-projects-shown-where-they-are-open.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md));
+- Dashboard stands first, then the Projects section, then Playbooks, Space and Settings ([DR-150](../decisions/150-spex-space-product-and-destination.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-175](../decisions/175-projects-shown-where-they-are-open.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md));
 - saved-record folder tasks add no entry in expanded or collapsed navigation, keeping the project tree to projects and their sessions [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md);
 - each project node discloses its sessions on a control of its own, an axis independent of which project is current ([DR-027](../decisions/027-linked-views-contract.md)) — the current project starts disclosed, and thereafter the reader's arrangement stands;
 - activating a project row makes it the current project and changes no disclosure;
@@ -1451,7 +1451,7 @@ Where fixture projects hold queues whose next intents span the published schedul
 
 #### run-view-96
 
-Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure — recorded naming its turn, and recorded naming none while that turn was open, as earlier cores recorded their own — one finished awaiting its verdict, and an unowned session's failure recorded between turns, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively, with the between-turn failure focusing its onset's line from either this computer's or another core's Dashboard entry [[run-view-91](#run-view-91)].
+Where fixture streams hold one intent standing on a pending question, one holding an unacknowledged failure — recorded naming its turn, and recorded naming none while that turn was open, as earlier cores recorded their own — one finished awaiting its verdict, and an unowned session's failure recorded between turns, when each session is opened from its attention entry, the test suite shall assert the run view focuses the question's bubble, the failure's line, and the delivery card respectively, with the between-turn failure focusing its onset's line from its Dashboard entry [[run-view-91](#run-view-91)].
 
 #### run-view-137
 

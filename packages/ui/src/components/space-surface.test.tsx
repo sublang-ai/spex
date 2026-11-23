@@ -1761,10 +1761,8 @@ describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
       repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "git", message: "x", guidance: "y", retry: true } }),
     ];
-    // The acts a decision fixes as whole phrases stand past the budget:
-    // "Add to a group…" and the fill naming the Space the choices are
-    // for, "All <display name>'s" (space-17, space-28).
-    const named = new Set(["Add to a group…", "All Spex Example's"]);
+    // The fill names the Space the choices are for (space-17, space-28).
+    const named = new Set(["All Spex Example's"]);
     for (const state of states) {
       await renderSpace(state);
       for (const button of screen.getAllByRole("button")) {

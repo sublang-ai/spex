@@ -12,11 +12,6 @@ afterEach(cleanup);
 
 const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 
-vi.mock("../state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../state/store.js")>();
-  return { ...actual, getClient: () => ({ command: commandMock }) };
-});
-
 import { SettingsSurface } from "./SettingsSurface.js";
 import {
   setClientForTests,
@@ -110,9 +105,6 @@ function renderSettings(readiness = READINESS) {
 beforeEach(() => {
   commandMock.mockReset();
   commandMock.mockResolvedValue(CONFIG);
-  // The surface acts through the client of the place it shows
-  // (app-shell-1), this computer's here: the store's own client, which
-  // the module mock cannot reach.
   setClientForTests({ command: commandMock } as never);
 });
 
@@ -547,8 +539,6 @@ describe("settings-6: every edit acknowledges in place", () => {
     commandMock.mockImplementation(
       () => new Promise((resolve) => (land = resolve)),
     );
-    // The language write goes through a store action, which resolves
-    // the module-local client the module mock cannot reach.
     setClientForTests({ command: commandMock } as never);
     useAppStore.setState({ language: { choice: "en", resolved: "en" } });
     renderSettings();

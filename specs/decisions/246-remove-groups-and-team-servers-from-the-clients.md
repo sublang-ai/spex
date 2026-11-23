@@ -29,7 +29,7 @@ This decision amends the following decisions within the listed scope.
 | Group and seat examples in user guidance, and the hub lane in app validation and download caching | [DR-202](202-registry-guidance-keeps-account-scope.md), [DR-199](199-release-gated-full-validation.md), [DR-228](228-ci-keeps-its-downloads.md) |
 | Local config, storage and environments | [DR-004](004-config-and-persistence.md), [DR-036](036-file-state-store.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) |
 | Project picker, welcome and recovery navigation | [DR-011](011-project-workspace.md), [DR-065](065-repairs-the-reader-answers.md), [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) |
-| Personal project listing, wording, attached records and failure guidance | [DR-057](057-space-surface.md), [DR-064](064-honest-remote-failure.md), [DR-069](069-key-phrases-not-sentences.md), [DR-225](225-bounded-surfaces-and-attached-records.md), [DR-227](227-remove-the-storage-footer-from-space.md) |
+| Personal project listing, wording, attached records and failure guidance | [DR-057](057-space-surface.md), [DR-064](064-honest-remote-failure.md), [DR-069](069-key-phrases-not-sentences.md), [DR-173](173-the-registry-is-no-face-of-a-space.md), [DR-225](225-bounded-surfaces-and-attached-records.md), [DR-227](227-remove-the-storage-footer-from-space.md) |
 | Retirement of hub validation from the test tiers and merge workflow | [DR-086](086-tests-in-tiers.md), [DR-145](145-merge-on-green.md) |
 
 ## Context
@@ -57,7 +57,8 @@ Wherever Spex identifies the service, it names only the Space, including in repl
 
 Discover, open and sync a Space repository only when that Space identifies it as belonging to the signed-in account's own namespace.
 This rule applies to each sync destination, even if its repository has moved since the last sync.
-The home recognizes a Space’s reported Git address across restarts and uses its service address until it learns that Git address. An explicitly configured external records remote uses ordinary Git credentials and redirect behavior, independently of Space availability [[space-136](../packages/space.md#space-136)].
+The home recognizes a Space’s reported Git address across restarts and uses its service address until it learns that Git address [[space-136](../packages/space.md#space-136)].
+An explicitly configured external records remote uses ordinary Git credentials and redirect behavior, independently of Space availability [[space-140](../packages/space.md#space-140)].
 Project removal and placement detachment keep their existing loss confirmations [[projects-9](../packages/projects.md#projects-9)] [[space-98](../packages/space.md#space-98)].
 
 ### One core per IDE

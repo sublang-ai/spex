@@ -1,23 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface over a home signed in to two Spaces, each holding a
-// group `acme` under the same id (DR-127, DR-172): each Space under its
-// own heading in the home's order, "<Space> · @<login>" with New group —
-// disabled and titled where the Space says the person may not create one
-// — its overflow's "Remove from this list" and Sign out, no read time,
-// its read's failure on its heading alone (space-1, git-host-5);
-// "Sign in again" whose flow reads on its heading (space-3); the rows of a signed-out Space
-// (space-61, space-11, space-120); the heading's fit (space-28); the
-// card "Sign in to a Space" with its chooser of Spaces (space-3,
-// space-115); "Add to a group…" offering each signed-in Space's Personal
-// and groups under its display name, a choice naming its Space
-// (space-97, space-29); "Open here" naming the Space its row stands
-// under (space-63, space-111, space-29); "Add a Space…" at the list's
-// foot opening the card in its place (space-1, space-3, space-28); and
-// "Remove from this list" on a signed-out heading removing the Space
-// from this list, a refusal standing beneath it (space-82, space-29,
-// space-1). Each act is checked by the command it sends.
+// Space headings, account controls, sign-in, and the Space directory
+// rendered over two accounts (space-1, space-3, space-82, space-115).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -55,7 +40,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A Space's section of the groups list, by its origin. */
+/** A Space's section of the personal projects list, by its origin. */
 const sectionOf = (origin: string): HTMLElement => screen.getByTestId(`space-instance-${origin}`);
 
 /** A Space heading's overflow, "More", opened where it is not open

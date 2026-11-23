@@ -36,7 +36,7 @@ export interface HomeAccount { id: string; login: string; displayName: string | 
 export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string; gitOrigin?: string }
 export interface HomeFolder { path: string; repository: string; aliases?: string[] }
 export interface HomeFile {
-  format: 2;
+  format: 2 | 3;
   device: string;
   /** The origin the home was created with: the default instance while
    * no instance is listed. */
@@ -103,11 +103,11 @@ export function isSpaceGitOrigin(value: unknown): value is string {
   return url !== null && !url.username && !url.password;
 }
 
-/** `home.yaml`'s format, refused unless it is this Spex's: format 1 says
- * the instances migration has not run (storage-1). */
+/** Format 3 adds the saved Git address. Format 1 still requires the
+ * instances migration (storage-30). */
 function homeFormat(value: Record<string, unknown>, file: string): void {
   need(value.format !== 1, file, words().homeBeforeInstances());
-  knownFormat(value, file, 2);
+  knownFormat(value, file, [2, 3]);
 }
 
 function parseAccount(value: unknown, file: string): void {
@@ -134,7 +134,8 @@ export function parseHomeFile(value: unknown, file: string, checkFolders?: Folde
   need(isOrigin(value.origin), file, notAnOrigin(value.origin));
   const folders = new Map<string, string>();
   for (const instance of value.instances) {
-    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName", "gitOrigin"], file);
+    closed(instance, ["origin", "clientId", "account"],
+      value.format === 3 ? ["signedOut", "displayName", "gitOrigin"] : ["signedOut", "displayName"], file);
     need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
       (instance.gitOrigin === undefined || isSpaceGitOrigin(instance.gitOrigin)) &&
       (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
@@ -280,7 +281,8 @@ export function withDisplayName(home: HomeFile, origin: string, displayName: str
   if (index < 0) return null;
   const { displayName: _, ...rest } = home.instances[index];
   const entry: HomeInstance = { ...rest, ...(displayName === null ? {} : { displayName }), ...(gitOrigin === undefined ? {} : { gitOrigin }) };
-  return { ...home, instances: home.instances.map((item, at) => at === index ? entry : item) };
+  return { ...home, format: gitOrigin === undefined ? home.format : 3,
+    instances: home.instances.map((item, at) => at === index ? entry : item) };
 }
 
 // -- one step ----------------------------------------------------------------

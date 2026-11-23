@@ -8,9 +8,8 @@
 // Two widgets, not one — a navigation list for the surfaces and one
 // ARIA tree for the projects — because "current surface" and
 // "selected session" are different words (run-view-67).
-// is open, the tree lists each place's projects under a heading naming
-// the place, this computer's first, the heading a row of its own that
-// opens the project on the Projects surface (run-view-200).
+// Personal Space projects opening here appear as selectable rows
+// while the core registers them (run-view-200).
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";

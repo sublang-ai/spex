@@ -77,7 +77,7 @@ async function projectAt(name: string, hosts: Awaited<ReturnType<typeof startHos
   return { home, key, code, id: created.id as string, clone: clonePath(home.dataDir, key) };
 }
 
-test("space-94, space-91, space-60, space-5: for a project placed at the first of two instances over one Git backend, a peer's commit adding a file for the second naming the same host repository leaves only the first's file after the next Sync's merge, the Sync after pushing that deletion; a peer's commit then replacing the first's file by the second's renames the clone's remote to the second's folder at that merge, the clone following it to its path there, dropping nothing and keeping its last sync", async (t) => {
+test("space-94, space-91, space-60, space-141: for a project placed at the first of two instances over one Git backend, a peer's commit adding a file for the second naming the same host repository leaves only the first's file after the next Sync's merge, the Sync after pushing that deletion; a peer's commit then replacing the first's file by the second's renames the clone's remote to the second's folder at that merge, the clone following it to its path there, dropping nothing and keeping its last sync", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: SECOND_NAME });
   const firstFolder = hostFolder(first);
@@ -134,7 +134,7 @@ test("space-94, space-91, space-60, space-5: for a project placed at the first o
   // clone's remote is renamed to the second's folder with its id in its
   // section, the clone moved to its path at the second with its pair,
   // dropping nothing, and its last sync re-keyed in the same step, as a
-  // follow makes them (space-91, space-60, space-5).
+  // follow makes them (space-91, space-60, space-141).
   await peerPush(peer, (dir) => {
     rmSync(join(dir, firstFile));
     writeFileSync(join(dir, secondFile), placementBytes(second.url, id));
@@ -253,7 +253,7 @@ test("space-101, space-91, storage-38, storage-37: for a project placed at the f
   } finally { if (!released) await live.release(); }
 });
 
-test("space-60, space-61, space-5: a placement beside the first follows a signed-in instance over its Git backend that lists its host repository while its own is signed out, its remote renamed and its file rewritten, moving no clone and taking that instance's credential, but never onto an instance at which the clone holds another placement, where it reads unreachable and is not followed", async (t) => {
+test("space-60, space-61, storage-34: a placement beside the first follows a signed-in instance over its Git backend that lists its host repository while its own is signed out, its remote renamed and its file rewritten, moving no clone and taking that instance's credential, but never onto an instance at which the clone holds another placement, where it reads unreachable and is not followed", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME });
   const third = await startHost({ gitBackend: second, displayName: THIRD_NAME });
@@ -292,7 +292,7 @@ test("space-60, space-61, space-5: a placement beside the first follows a signed
   // follows the third at its Check — its remote renamed to the third's
   // folder with its id, its file rewritten to the third's in place of the
   // second's, its records re-keyed — the clone moved nowhere, and its
-  // transport taking the third's credential (space-60, space-5).
+  // transport taking the third's credential (space-60, storage-34).
   git(clone, "remote", "remove", thirdFolder);
   rmSync(join(clone, "placements", `${thirdFolder}.yaml`));
   const transports = second.script.transportCredentials.length;

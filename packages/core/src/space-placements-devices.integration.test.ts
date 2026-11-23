@@ -63,7 +63,7 @@ function holds(bare: string, path: string): boolean {
   try { return git(bare, "cat-file", "-t", `spex:${path}`) === "blob"; } catch { return false; }
 }
 
-test("space-93, space-99, storage-36, space-87, space-29, space-61, space-63, space-12, space-98, space-91, space-21, space-97, space-14, space-60, space-5, space-4, storage-34, storage-38, storage-5: a project placed at two instances syncs through a device holding both, and a second device attaches from the placement's file — a file pushed by plain Git standing unattached on every home, nothing carried there, until its reader attaches; the second home's Join at the second writing nothing to the placement files and naming the first it does not list; a session crossing from the second home and an intent from the first; Attach refused signed out, with no file, at a placement held — the personal settings placement at the second, placed there by the sign-in, among them — and for a repository another clone holds, and selecting Attach immediately syncing; a Leave asked while a sync runs following it and every other home dropping that remote at its next sync; two homes placing at once meeting as one choice, the side not chosen dropped and offered Attach", async (t) => {
+test("space-93, space-99, storage-36, space-87, space-29, space-61, space-63, space-12, space-98, space-91, space-21, space-97, space-14, space-60, space-141, space-4, storage-34, storage-38, storage-5: a project placed at two instances syncs through a device holding both, and a second device attaches from the placement's file — a file pushed by plain Git standing unattached on every home, nothing carried there, until its reader attaches; the second home's Join at the second writing nothing to the placement files and naming the first it does not list; a session crossing from the second home and an intent from the first; Attach refused signed out, with no file, at a placement held — the personal settings placement at the second, placed there by the sign-in, among them — and for a repository another clone holds, and selecting Attach immediately syncing; a Leave asked while a sync runs following it and every other home dropping that remote at its next sync; two homes placing at once meeting as one choice, the side not chosen dropped and offered Attach", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: BOB });
   const firstOrigin = canonicalOrigin(first.url);
@@ -279,7 +279,7 @@ test("space-93, space-99, storage-36, space-87, space-29, space-61, space-63, sp
 
   // The third home's next Sync drops its remote there, with this
   // device's records of it, the clone's records kept (space-91,
-  // storage-38, space-5).
+  // storage-38, space-141).
   const dropped = await three.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(dropped.sync.phase, "done", JSON.stringify(dropped.sync));
   assert.deepEqual(lines(dropped), [[firstOrigin, true, "reachable"]]);
