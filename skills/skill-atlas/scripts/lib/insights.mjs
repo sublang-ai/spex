@@ -6,11 +6,12 @@
 // the values its English message is built from, for the page to phrase.
 
 import path from 'node:path';
+import { AGENT_LABELS } from './roots.mjs';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
 const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'stale-annotation', 'translation-steps'];
 
-export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }) {
+export function findInsights({ skills, edges, unresolved, roots, conflicts = new Map(), scanArgs = '' }) {
   const out = [];
   const rootLabel = new Map(roots.map((r) => [r.id, r.label]));
 
@@ -20,28 +21,30 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
     if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: { named }, message: `${s.id}: ${s._fmError}; ${named ? 'the fields that read are used' : 'the folder name is used as its name'}` });
   }
 
-  const byName = new Map();
-  for (const s of skills) {
-    if (!byName.has(s.name)) byName.set(s.name, []);
-    byName.get(s.name).push(s);
-  }
-  for (const [name, copies] of byName) {
-    if (copies.length < 2) continue;
-    const where = copies.map((c) => `${rootLabel.get(c.root) ?? c.root} (${c.dir})`).join('; ');
+  // Only differing skills of one name that an agent may load either of are a
+  // problem [same-name.mjs]; an override and another agent's copy are not.
+  for (const [name, c] of conflicts) {
+    const agents = [...c.agents].sort();
+    const copies = [...c.copies.values()].map((p) => ({ ...p, rootLabel: rootLabel.get(p.root) ?? p.root }));
+    const who = agents.map((a) => AGENT_LABELS[a] ?? a);
     out.push({
       kind: 'duplicate-name',
-      skills: copies.map((c) => c.id),
-      params: { name },
-      message: `"${name}" is defined differently in ${copies.length} folders: ${where}. An agent loading several of these folders sees only one of them.`,
+      skills: [...new Set(copies.map((p) => p.id))],
+      params: { name, agents, copies },
+      message: `"${name}" differs between ${copies.map((p) => p.path).join(' and ')}, and ${who.join(' and ')} may load either. Keep one: delete or rename the other ${copies.length > 2 ? 'folders' : 'folder'}, then scan again.`,
     });
   }
 
-  const seenUnresolved = new Set();
+  // One per skill and name; a call where any of its links calls.
+  const unresolvedOf = new Map();
   for (const u of unresolved) {
     const key = `${u.from}\0${u.name}`;
-    if (seenUnresolved.has(key)) continue;
-    seenUnresolved.add(key);
-    out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from }, message: `${u.from} links to "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
+    const seen = unresolvedOf.get(key);
+    if (!seen) unresolvedOf.set(key, { ...u });
+    else if (u.kind === 'calls') seen.kind = 'calls';
+  }
+  for (const u of unresolvedOf.values()) {
+    out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from, kind: u.kind }, message: `${u.from} ${u.kind} "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
   }
 
   for (const { members, path: cycle } of callCycles(skills, edges)) {

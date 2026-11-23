@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=f741a3d19f6249245224ec8e31129280f620f6379bf7bee1bd6a518e23b8e521 own=602a4c4fbbb69988bc25afbdbb08b1617dc61e660bde08d116e93670c4ba0443 -->
+<!-- skill-atlas:source sha256=ff113c46269008302e36715ea33120186eb51c169b9fba7d0bcb1abe04a889ec own=c373299773d5489d8e1bd1adb20b6d52194209042e89e22fce805eb20acc2486 -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
@@ -39,16 +39,16 @@ node <skill-dir>/scripts/atlas.mjs serve
 node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
-阅读摘要：每个位置有多少技能、被链接最多的技能、指向未安装技能的链接、重复的名称，以及未能识别出步骤的技能。
+阅读摘要：每个位置有多少技能、被链接最多的技能、指向未安装技能的链接、某个代理可能加载两个不同技能的名称，以及未能识别出步骤的技能。
 如果它报告没有任何技能，告诉用户搜索了哪些文件夹，并询问他们的技能放在哪里；用 `--root <dir>` 传入该文件夹。
 
 ### 步骤 2：打开视图
 
 在后台启动 `node <skill-dir>/scripts/atlas.mjs serve`，把它打印的 URL 交给用户。
-用一两句话告诉用户可以在页面上做什么：点击一个技能查看其步骤和它调用的技能，在“工作流”“链接”和“来源”之间切换分组，以及把技能拖入各个阶段。
+用一两句话告诉用户可以在页面上做什么：点击一个技能查看其步骤和它调用的技能，在“工作流”“依赖”和“来源”之间切换分组，以及把技能拖入各个阶段。
 页面跟随读者的语言（英语或简体中文），页头有语言切换器；用户用中文交流时，加上 `--lang zh-CN`。
 
-如果没有本地浏览器（远程或沙箱会话），改为写出一个独立页面，并告诉用户它在哪里：
+如果没有本地浏览器（远程或沙箱会话），改为写出一个独立的只读页面，并告诉用户它在哪里：
 
 ```bash
 node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html

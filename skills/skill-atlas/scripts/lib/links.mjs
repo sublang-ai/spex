@@ -117,14 +117,17 @@ function resolve(matcher, name, fromRoot) {
   return (list.find((t) => t.root === fromRoot) ?? list[0]).id;
 }
 
-// Strong forms that name a skill even when it is not installed.
+// Strong forms that name a skill even when it is not installed, each of the
+// kind its resolved form has: "`x` skill" calls only after a verb of use, as
+// "Invoke the `x` skill" does, and mentions otherwise.
 function strongForms() {
   return [
-    new RegExp(String.raw`\x60/(${NAME_CHARS})(?:\s[^\x60]*)?\x60`, 'g'),
-    new RegExp(String.raw`\x60(${NAME_CHARS})\x60\s+skill\b`, 'gi'), // "the `x` skill", "our `x` skill", "Invoke `x` skill"
-    new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${NAME_CHARS})["'\x60]?\s*[,)]`, 'g'),
+    { re: new RegExp(String.raw`\x60/(${NAME_CHARS})(?:\s[^\x60]*)?\x60`, 'g'), slash: true },
+    { re: new RegExp(String.raw`\x60(${NAME_CHARS})\x60\s+skill\b`, 'gi'), needsVerb: true }, // "the `x` skill", "our `x` skill", "Invoke `x` skill"
+    { re: new RegExp(String.raw`\bSkill\(\s*["'\x60]?(${NAME_CHARS})["'\x60]?\s*[,)]`, 'g') },
   ];
 }
+const VERB_BEFORE = new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}$`, 'i');
 
 const LIST_ITEM = /^\s*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
 // The start of an HTML block that can end a paragraph, as CommonMark has it
@@ -247,20 +250,24 @@ export function findLinks(matcher, from, units) {
         }
       }
     }
-    for (const re of matcher.strong) {
-      re.lastIndex = 0;
-      for (const m of text.matchAll(re)) {
+    for (const form of matcher.strong) {
+      form.re.lastIndex = 0;
+      for (const m of text.matchAll(form.re)) {
         const name = m[1];
         if (matcher.targets.has(name)) continue;
         const at = m.index + m[0].indexOf(name);
-        if (m[0].startsWith('`/')) {
+        const sentence = sentences.at(at);
+        if (form.slash) {
           // A backticked `/x` is a command only in a sentence saying skill,
           // command, slash or type, and no skill where the agent itself has
           // that command; `Skill(x)` and "`x` skill" name a skill whatever x is.
-          if (BUILTIN_COMMANDS.has(name) || PATH_LIKE.has(name.toLowerCase()) || !sentences.at(at).says(CONTEXT_FOR_UNRESOLVED)) continue;
+          if (BUILTIN_COMMANDS.has(name) || PATH_LIKE.has(name.toLowerCase()) || !sentence.says(CONTEXT_FOR_UNRESOLVED)) continue;
         }
+        // Steered as a link to an installed skill is, one per step and name, calls before mentions.
+        let kind = form.needsVerb && !VERB_BEFORE.test(text.slice(Math.max(sentence.start, m.index - 80), m.index)) ? 'mentions' : 'calls';
+        if (steeredAway(text.slice(Math.max(sentence.start, at - STEER_REACH), at)) || sentence.says(STEER_AWAY_SENTENCE)) kind = 'mentions';
         const key = `${step}\0${name}`;
-        if (!unresolved.has(key)) unresolved.set(key, { from: fromId, fromStep: step, name, evidence: where(at) });
+        if (!unresolved.has(key) || (kind === 'calls' && unresolved.get(key).kind === 'mentions')) unresolved.set(key, { from: fromId, fromStep: step, name, kind, evidence: where(at) });
       }
     }
   }

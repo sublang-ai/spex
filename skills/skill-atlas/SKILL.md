@@ -36,16 +36,16 @@ Its first line of output is JSON with the `url` to give the user.
 node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
-Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, duplicate names, and skills whose steps could not be detected.
+Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, names an agent may load two differing skills under, and skills whose steps could not be detected.
 If it reports no skills, tell the user which folders were searched and ask where their skills live; pass that folder with `--root <dir>`.
 
 ### Step 2: Open the view
 
 Start `node <skill-dir>/scripts/atlas.mjs serve` in the background and give the user the URL it prints.
-Tell them in one or two sentences what they can do there: click a skill to see its steps and what it calls, switch grouping between Workflow, Links and Source, and drag skills into phases.
+Tell them in one or two sentences what they can do there: click a skill to see its steps and what it calls, switch grouping between Workflow, Dependencies and Source, and drag skills into phases.
 The page follows the reader's language, English or Simplified Chinese, with a switcher in its header; add `--lang zh-CN` when the user writes in Chinese.
 
-With no local browser (a remote or sandboxed session), write a standalone page instead and tell the user where it is:
+With no local browser (a remote or sandboxed session), write a standalone, read-only page instead and tell the user where it is:
 
 ```bash
 node <skill-dir>/scripts/atlas.mjs export --out skill-atlas.html

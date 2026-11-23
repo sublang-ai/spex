@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The scan: roots -> skills -> steps, links, tags -> translations -> annotations -> insights.
+// The scan: roots -> skills -> skills of one name -> steps, links, tags -> translations -> annotations -> insights.
 // A skill that cannot be read or parsed is recorded with an issue; it never
 // aborts the scan.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { listRoots, skillDirs, isDir, realOr, placeId, idWord } from './roots.mjs';
+import { listRoots, skillDirs, isDir, realOr, placeId, idWord, AGENT_LABELS } from './roots.mjs';
 import { splitFrontmatter } from './frontmatter.mjs';
 import { fenceMask, clipText } from './markdown.mjs';
 import { detectSteps } from './steps.mjs';
@@ -18,6 +18,7 @@ import { stateTranslations, readTextBounded, chooseTranslation, listFilesBounded
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { fileLanguage } from './language.mjs';
 import { findInsights } from './insights.mjs';
+import { relateSameNames } from './same-name.mjs';
 import { warn } from './log.mjs';
 
 export const ATLAS_VERSION = 1;
@@ -94,6 +95,7 @@ export function scan(opts) {
   skills = mergeIdenticalCopies(skills);
 
   assignIds(skills, idOrder, new Map(listed.map((r) => [r.id, r.path])));
+  const conflicts = relateSameNames(skills, new Map(listed.map((r) => [r.id, r])));
   const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
   let edges = [];
   let unresolved = [];
@@ -119,7 +121,7 @@ export function scan(opts) {
     for (const st of s.steps) st.calls = [...new Set(edges.filter((e) => e.from === s.id && e.fromStep === st.id).map((e) => e.to))];
     s.tags = mergeHits(s._baseTags, ...s.steps.map((st) => st.tags));
   }
-  const insights = findInsights({ skills, edges, unresolved, roots, scanArgs: scanArgs(opts) });
+  const insights = findInsights({ skills, edges, unresolved, roots, conflicts, scanArgs: scanArgs(opts) });
   for (const s of skills) {
     s.issues = [...new Set(insights.filter((i) => i.skills.includes(s.id)).map((i) => i.kind))];
   }
@@ -137,6 +139,7 @@ export function scan(opts) {
     generatedAt: new Date().toISOString(),
     cwd: opts.cwd,
     roots,
+    agentNames: AGENT_LABELS,
     tagCatalog: tagCatalog.map(({ id, category, label }) => ({ id, category, label })),
     skills: skills.map(publicSkill),
     edges,
@@ -149,7 +152,7 @@ function readSkill(dir, root) {
   const file = path.join(dir, 'SKILL.md');
   const s = {
     id: null, name: path.basename(dir), description: '', root: root.id, plugin: root.plugin ?? null,
-    dir, file, digest: null, language: 'und', copies: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
+    dir, file, digest: null, language: 'und', copies: [], sameName: [], frontmatter: {}, lines: 0, summary: null, files: [], translations: {}, stepKind: 'none', steps: [], tags: [], issues: [],
     _text: '', _raw: '', _readOk: false, _lines: [], _mask: [], _bodyStart: 0, _keyLines: {}, _fmError: null, _baseTags: [],
     _localTranslations: [], _staleByLang: new Map(), _editedByLang: new Map(), _translationSteps: new Map(), _listing: null,
   };

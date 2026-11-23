@@ -202,9 +202,10 @@ Invoke the \`ping\` skill.
   writeSkill(path.join(CLAUDE, 'broken'), `---\nname: broken-name\ndescription: 'unclosed\n  still going\n---\nBody text.\n`);
   writeSkill(path.join(CLAUDE, 'unclosed'), `---\nname: unclosed\ndescription: never closed\nBody without a closing delimiter.\n`);
 
-  // Duplicate name in two real folders, and one folder linked into two roots.
+  // Duplicate name in three real folders, two of them in one root Codex loads, and one folder linked into two roots.
   writeSkill(path.join(CLAUDE, 'dup'), `${fm('dup', 'First copy.')}\nOne.\n`);
   writeSkill(path.join(P, '.codex', 'skills', 'dup'), `${fm('dup', 'Second copy.')}\nTwo.\n`);
+  writeSkill(path.join(P, '.codex', 'skills', 'team', 'dup'), `${fm('dup', 'Third copy.')}\nThree.\n`);
   writeSkill(path.join(P, '.agents', 'skills', 'shared'), `${fm('shared', 'Shared via a link.')}\nShared.\n`);
   try {
     fs.symlinkSync(path.join(P, '.agents', 'skills', 'shared'), path.join(CLAUDE, 'shared'), 'junction');
@@ -487,8 +488,13 @@ describe('scan (skill-atlas-24)', () => {
 
   test('keeps one record for a linked folder and an identical copy, and reports differing ones', (t) => {
     const dup = atlas.insights.filter((i) => i.kind === 'duplicate-name');
-    assert.deepEqual(dup.map((i) => i.skills), [['dup', 'dup@project-codex']], 'only differing skills of one name');
+    assert.deepEqual(dup.map((i) => i.skills), [['dup@project-codex', 'dup@project-codex@team.dup']], 'only differing skills of one name an agent may load either of');
     assert.deepEqual(skillOf(atlas, 'dup').copies, []);
+    assert.deepEqual(skillOf(atlas, 'dup').sameName, [
+      { id: 'dup@project-codex', relation: 'other-agent', agents: [], wins: null },
+      { id: 'dup@project-codex@team.dup', relation: 'other-agent', agents: [], wins: null },
+    ], "Claude Code's copy beside Codex's, no agent loading both");
+    assert.deepEqual(skillOf(atlas, 'alpha').sameName, [], 'none where no other skill has the name');
     const same = atlas.skills.filter((s) => s.name === 'same');
     assert.equal(same.length, 1);
     assert.deepEqual(same[0].copies, [{ root: 'project-gemini', dir: path.join(P, '.gemini', 'skills', 'same') }]);
@@ -515,8 +521,13 @@ describe('scan (skill-atlas-24)', () => {
     // Every insight carries the values its message is built from.
     for (const i of atlas.insights) assert.ok(i.params && typeof i.params === 'object', `${i.kind} has params`);
     const one = (kind, id) => atlas.insights.find((i) => i.kind === kind && i.skills.includes(id));
-    assert.deepEqual(one('duplicate-name', 'dup').params, { name: 'dup' });
-    assert.deepEqual(one('unresolved-link', 'orchestrator').params, { name: 'missing-thing', from: 'orchestrator' });
+    const codexDir = path.join(P, '.codex', 'skills');
+    assert.deepEqual(one('duplicate-name', 'dup@project-codex').params, { name: 'dup', agents: ['codex'], copies: [
+      { id: 'dup@project-codex', path: path.join(codexDir, 'dup'), root: 'project-codex', rootLabel: 'Project · Codex' },
+      { id: 'dup@project-codex@team.dup', path: path.join(codexDir, 'team', 'dup'), root: 'project-codex', rootLabel: 'Project · Codex' },
+    ] });
+    assert.match(one('duplicate-name', 'dup@project-codex').message, /Codex may load either\. Keep one: delete or rename the other folder, then scan again\.$/);
+    assert.deepEqual(one('unresolved-link', 'orchestrator').params, { name: 'missing-thing', from: 'orchestrator', kind: 'calls' });
     assert.deepEqual([...one('cycle', 'ping').params.path].sort(), ['ping', 'pong']);
     assert.match(one('cycle', 'ping').message, /for example ping \u2192 pong \u2192 ping$/);
     assert.equal(one('oversized', 'big').params.lines, skillOf(atlas, 'big').lines);
@@ -700,7 +711,7 @@ test('scan --summary prints the digest (skill-atlas-24, skill-atlas-7)', () => {
   assert.match(r.stdout, /\nFolders \(skills present, copies included\):\n {2}project-claude +\d+ /);
   assert.match(r.stdout, /\nMost linked:\n {2}\S+: /);
   assert.match(r.stdout, /\nUnresolved links \(3\):\n {2}orchestrator step 3 -> missing-thing/);
-  assert.match(r.stdout, /\nDuplicate names, differing folders \(1\):\n {2}dup \[project-claude\], dup@project-codex \[project-codex\]/);
+  assert.match(r.stdout, /\nName conflicts \(1\):\n {2}dup: Codex may load either of dup@project-codex \[project-codex\] \S+, dup@project-codex@team\.dup \[project-codex\] \S+\n\n/);
   assert.match(r.stdout, /\nCycles \(2\):\n( {2}.*\n)* {2}ping -> pong -> ping\n/);
   assert.match(r.stdout, /\nCycles \(2\):\n( {2}.*\n)* {2}tri-a, tri-b, tri-c: for example (tri-\w) -> tri-\w -> \2\n/);
   assert.match(r.stdout, /\n {2}no steps \(\d+\): .*plain/);
@@ -889,11 +900,83 @@ test('copies: one skill only where every file is the same, and a call from a cop
   assert.equal(named('dotsame').length, 1, 'alike dot-files included: one skill');
   for (const n of ['near', 'worded', 'extra', 'dotty', 'nm']) {
     assert.deepEqual(named(n).map((s) => s.id), [n, `${n}@project-gemini`], `${n}: a differing file keeps the folders apart`);
-    assert.ok(atlas.insights.some((i) => i.kind === 'duplicate-name' && i.params.name === n));
+    assert.deepEqual(named(n)[0].sameName, [{ id: `${n}@project-gemini`, relation: 'other-agent', agents: [], wins: null }], `${n}: each agent loads one`);
+    assert.ok(!atlas.insights.some((i) => i.kind === 'duplicate-name' && i.params.name === n), `${n}: another agent's copy is no conflict`);
   }
   assert.deepEqual(named('helper').map((s) => [s.id, s.copies.map((c) => c.root)]), [['helper', []], ['helper@project-agents', ['project-gemini']]]);
   assert.deepEqual(edge(atlas, 'caller', 'helper@project-agents').map((e) => e.kind), ['calls'], 'the call resolves to the copy in its own folder');
   assert.equal(edge(atlas, 'caller', 'helper').length, 0);
+});
+
+test('differing skills of one name: a conflict, an override or another agent\'s copy, and only a conflict an insight (skill-atlas-33, skill-atlas-24, skill-atlas-5, skill-atlas-7)', () => {
+  const home = path.join(tmp, 'same-name-home');
+  const config = path.join(home, '.claude');
+  const repo = path.join(tmp, 'same-name-repo');
+  const sub = path.join(repo, 'sub');
+  const extra = path.join(tmp, 'same-name-extra');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  const put = (dir, name, text) => writeSkill(path.join(dir, name), `${fm(name, text)}\n${text}\n`);
+  // Claude Code: the home folder's over a project's, the repository root's over a nearer folder's.
+  put(path.join(sub, '.claude', 'skills'), 'ov', 'Project.');
+  put(path.join(config, 'skills'), 'ov', 'Home.');
+  put(path.join(sub, '.claude', 'skills'), 'deep', 'Nearer.');
+  put(path.join(repo, '.claude', 'skills'), 'deep', 'Root.');
+  // Gemini CLI: a project's over the home folder's, and in one place the shared folder over its own.
+  put(path.join(sub, '.agents', 'skills'), 'gem', 'Project.');
+  put(path.join(home, '.gemini', 'skills'), 'gem', 'Home.');
+  put(path.join(sub, '.agents', 'skills'), 'beta', 'Shared.');
+  put(path.join(sub, '.gemini', 'skills'), 'beta', 'Own.');
+  // Claude Code and Cursor both load both, and each loads another: one entry per skill loaded.
+  for (const dir of ['.claude', '.cursor']) {
+    put(path.join(sub, dir, 'skills'), 'rho', 'Project.');
+    put(path.join(home, dir, 'skills'), 'rho', 'Home.');
+  }
+  // Codex offers both: a conflict even between a project's folder and the home folder's.
+  put(path.join(sub, '.codex', 'skills'), 'cx', 'Project.');
+  put(path.join(home, '.codex', 'skills'), 'cx', 'Home.');
+  // Another agent's copy, a --root's, and a plugin's, named by its plugin.
+  put(path.join(sub, '.cursor', 'skills'), 'cur', 'Cursor.');
+  put(path.join(sub, '.claude', 'skills'), 'cur', 'Claude.');
+  put(extra, 'ex', 'Extra.');
+  put(path.join(sub, '.claude', 'skills'), 'ex', 'Claude.');
+  // The project's own source folder, loaded by no agent.
+  put(path.join(sub, 'skills'), 'xi', 'Source.');
+  put(path.join(sub, '.claude', 'skills'), 'xi', 'Installed.');
+  const plugin = path.join(config, 'plugins', 'cache', 'kit');
+  put(path.join(plugin, 'skills'), 'ov', 'Plugin.');
+  fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'kit@m': [{ scope: 'user', installPath: plugin }] } }));
+  // An unresolved name in a sentence steering away from it, and one called.
+  writeSkill(path.join(sub, '.claude', 'skills', 'asker'), `${fm('asker', 'Asks.')}\nDo not run the \`/gone\` command.\n\nInvoke the \`away\` skill.\n`);
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+  const args = ['--cwd', sub, '--root', extra, '--state', path.join(tmp, 'same-name-state')];
+  const r = run(['scan', ...args], { env });
+  assert.equal(r.status, 0, r.stderr);
+  const atlas = JSON.parse(r.stdout);
+  const rel = (name) => atlas.skills.filter((s) => s.name === name).map((s) => [s.id, s.sameName.map((e) => [e.id, e.relation, e.agents.join(' '), e.wins])]);
+  assert.deepEqual(rel('ov').find(([id]) => id === 'ov')[1], [['ov@project-claude.sub', 'override', 'claude-code', 'ov']], "Claude Code loads the home folder's; the plugin's is another name");
+  assert.deepEqual(rel('ov').find(([id]) => id.startsWith('ov@plugin'))[1], [], "a plugin's skill shares no name outside its plugin");
+  assert.deepEqual(rel('deep').map(([, e]) => e[0].slice(1)), [['override', 'claude-code', 'deep'], ['override', 'claude-code', 'deep']], "the repository root's over a nearer folder's");
+  assert.deepEqual(rel('gem').map(([, e]) => e[0].slice(1)), [['override', 'gemini-cli', 'gem@project-agents.sub'], ['override', 'gemini-cli', 'gem@project-agents.sub']], "a project's over the home folder's");
+  assert.deepEqual(rel('cx').map(([, e]) => e[0].slice(1)), [['conflict', 'codex', null], ['conflict', 'codex', null]], 'Codex has no precedence');
+  const shared = atlas.skills.find((s) => s.name === 'beta' && s.root === 'project-agents.sub').id;
+  assert.deepEqual(rel('beta').map(([, e]) => e[0].slice(1)), [['override', 'gemini-cli', shared], ['override', 'gemini-cli', shared]], "Gemini CLI's shared folder over its own");
+  const rhoIn = (root) => atlas.skills.find((s) => s.name === 'rho' && s.root === root).id;
+  const rhoEach = [['override', 'claude-code', rhoIn('user-claude')], ['override', 'cursor', rhoIn('project-claude.sub')]];
+  assert.deepEqual(rel('rho').map(([, e]) => e.map((x) => x.slice(1))), [rhoEach, rhoEach], 'both sides name the skill each agent loads');
+  assert.deepEqual(rel('cur').map(([, e]) => e[0].slice(1)), [['other-agent', '', null], ['other-agent', '', null]], 'no agent loads both');
+  assert.deepEqual(rel('ex').map(([, e]) => e[0].slice(1)), [['other-agent', '', null], ['other-agent', '', null]], 'a --root is loaded by no agent');
+  assert.deepEqual(rel('xi').map(([, e]) => e[0].slice(1)), [['other-agent', '', null], ['other-agent', '', null]], 'the source folder is loaded by no agent');
+  assert.deepEqual(atlas.roots.find((r) => r.id === 'project-source.sub').agents, [], 'a folder names the agents loading it');
+  assert.equal(atlas.agentNames['gemini-cli'], 'Gemini CLI', "agents' names");
+  const conflicts = atlas.insights.filter((i) => i.kind === 'duplicate-name');
+  assert.deepEqual(conflicts.map((i) => [i.params.name, i.params.agents, i.params.copies.map((c) => c.path)]), [['cx', ['codex'], [path.join(sub, '.codex', 'skills', 'cx'), path.join(home, '.codex', 'skills', 'cx')]]], 'only a conflict is an insight');
+  assert.ok(!skillOf(atlas, 'gem').issues.includes('duplicate-name'), 'an override is no issue');
+  assert.deepEqual(atlas.unresolved.map((u) => [u.name, u.kind]).sort(), [['away', 'calls'], ['gone', 'mentions']]);
+  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'unresolved-link').map((i) => [i.params.name, i.params.kind, i.message.split('"')[0]]).sort(), [['away', 'calls', 'asker calls '], ['gone', 'mentions', 'asker mentions ']]);
+  const summary = run(['scan', '--summary', ...args], { env });
+  assert.equal(summary.status, 0, summary.stderr);
+  assert.match(summary.stdout, /\nName conflicts \(1\):\n {2}cx: Codex may load either of /);
+  assert.doesNotMatch(summary.stdout, /\n {2}(ov|deep|gem|beta|rho|cur|ex|xi): /, 'an override and another agent\'s copy are no problem');
 });
 
 test('steps: the list opening the body after quoted notes, comments and a full-width colon (skill-atlas-2)', () => {

@@ -3,6 +3,8 @@
 
 // A short plain-text digest of an atlas, for an agent to read.
 
+import { AGENT_LABELS } from './roots.mjs';
+
 const TOP_LINKED = 10; // the digest names the ten most-linked skills
 
 export function summarize(atlas) {
@@ -56,10 +58,13 @@ export function summarize(atlas) {
   }
 
   const kinds = (k) => atlas.insights.filter((i) => i.kind === k);
-  const dups = kinds('duplicate-name');
-  out.push('', `Duplicate names, differing folders (${dups.length}):`);
-  if (!dups.length) out.push('  (none)');
-  for (const i of dups) out.push(`  ${i.skills.map((id) => `${id} [${byId.get(id)?.root}]`).join(', ')}`);
+  // Only a conflict is a problem; an override or another agent's copy is as intended.
+  const conflicts = kinds('duplicate-name');
+  out.push('', `Name conflicts (${conflicts.length}):`);
+  if (!conflicts.length) out.push('  (none)');
+  for (const i of conflicts) {
+    out.push(`  ${i.params.name}: ${i.params.agents.map((a) => AGENT_LABELS[a] ?? a).join(', ')} may load either of ${i.params.copies.map((c) => `${c.id} [${c.root}] ${c.path}`).join(', ')}`);
+  }
 
   const cycles = kinds('cycle');
   out.push('', `Cycles (${cycles.length}):`);

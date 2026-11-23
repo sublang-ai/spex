@@ -240,7 +240,7 @@ button.col-name:hover { background: var(--surface-3); }
 .card-copies { flex: none; font-size: 10.5px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .issue-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
 .card-desc { color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-foot { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-height: 18px; margin-top: 2px; }
+.card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; justify-content: space-between; min-height: 18px; margin-top: 2px; }
 .card-foot .pills { flex-wrap: nowrap; }
 .card-meta { color: var(--text-3); font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; display: inline-flex; gap: 6px; flex: none; }
 .card-tools { position: absolute; top: 4px; right: 4px; display: flex; gap: 0; }
@@ -268,7 +268,6 @@ button.col-name:hover { background: var(--surface-3); }
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); color: color-mix(in srgb, var(--accent) 85%, var(--text)); cursor: pointer; white-space: nowrap;
 }
 .call-chip:hover { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-.call-chip.mention { border-style: dashed; background: transparent; }
 .call-chip.unresolved { border-style: dashed; border-color: var(--border-2); color: var(--text-3); background: transparent; cursor: help; }
 .step-body { margin: 2px 8px 6px 28px; padding: 6px 8px; background: var(--surface-2); border-radius: 5px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .step-body .lines { color: var(--text-3); font-size: 11px; }
@@ -280,16 +279,12 @@ button.col-name:hover { background: var(--surface-3); }
 .ev .tx { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- links ---------- */
-.lk path.ln { fill: none; stroke: var(--link); stroke-width: 1.3; }
-.lk.calls path.ln { marker-end: url(#ar); }
-.lk.mentions path.ln { stroke-dasharray: 4 3; marker-end: url(#ar-m); }
+.lk path.ln { fill: none; stroke: var(--link); stroke-width: 1.3; marker-end: url(#ar); }
 #links .ah { fill: var(--link); }
 #links .ah-hot { fill: var(--accent); }
 #links.emph .lk { opacity: .13; }
 #links.emph .lk.hot { opacity: 1; }
-.lk.hot path.ln { stroke: var(--accent); stroke-width: 2; }
-.lk.hot.calls path.ln { marker-end: url(#ar-hot); }
-.lk.hot.mentions path.ln { marker-end: url(#ar-hot-m); }
+.lk.hot path.ln { stroke: var(--accent); stroke-width: 2; marker-end: url(#ar-hot); }
 .lk .cnt rect { fill: var(--surface); stroke: var(--border-2); }
 .lk .cnt text { font: 600 10px var(--font); fill: var(--text-2); }
 .lk.hot .cnt rect { stroke: var(--accent); }
@@ -354,6 +349,8 @@ button.col-name:hover { background: var(--surface-3); }
 .src-badge { font-size: 10.5px; color: var(--text-3); }
 .tr-note { margin: 0; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-2); overflow-wrap: anywhere; }
 .tr-note.stale { background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.same-note { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--text-2); display: flex; flex-direction: column; gap: 2px; }
+.same-note .linkish { margin-left: 6px; font-size: 12px; }
 
 /* ---------- popovers, dialogs, toasts ---------- */
 .popover { position: fixed; z-index: 50; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-pop); max-height: min(70vh, 560px); overflow: auto; overscroll-behavior: contain; }
@@ -381,6 +378,19 @@ button.col-name:hover { background: var(--surface-3); }
 .inspop .ins-repair ul { margin: 0; padding-left: 16px; }
 .inspop .ins-repair p { margin: 4px 0 0; }
 .inspop .ins-repair code { font-family: var(--mono); overflow-wrap: anywhere; user-select: all; }
+.inspop .ins-repair li { margin: 2px 0; }
+.inspop .ins-repair .icon-btn, .inspop .ins-repair .linkish { display: inline-flex; width: auto; padding: 0 2px; vertical-align: middle; color: var(--accent); }
+.inspop .ins-repair .icon-btn { width: 22px; height: 22px; padding: 0; color: var(--text-3); }
+.cmp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); font: 12px/1.5 var(--mono); border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: calc(100vh - 220px); }
+.cmp-head { position: sticky; top: 0; z-index: 1; background: var(--surface-2); padding: 6px 8px; font: 600 12px var(--font); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.cmp-head .sub { display: block; font: 11px var(--mono); color: var(--text-3); font-weight: 400; }
+.cmp-cell { display: flex; gap: 8px; padding: 0 8px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmp-cell:nth-child(odd) { border-right: 1px solid var(--border); }
+.cmp-cell .n { flex: none; min-width: 28px; text-align: right; color: var(--text-3); user-select: none; }
+.cmp-cell.changed { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.cmp-cell.empty { background: var(--surface-2); }
+.cmp-cell .ws { color: var(--warn); }
+.cmp-sum { margin: 0; color: var(--text-2); font-size: 12px; }
 dialog.dlg { border: 0; padding: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
 dialog.dlg.wide { width: min(860px, calc(100vw - 32px)); }
 dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
@@ -446,7 +456,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
     <button id="btn-insights" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="insights">Insights</span> <span class="badge" id="insights-n">0</span></button>
     <button id="btn-rescan" class="btn" type="button" hidden>Rescan</button>
-    <button id="btn-download" class="btn" type="button" hidden>Download workflows.json</button>
     <button id="btn-details" class="btn" type="button" aria-controls="details" aria-expanded="true">Details</button>
     <span class="lang">
       <label class="sr-only" for="lang-select" id="lang-label">Language</label>
@@ -457,7 +466,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     <span class="seg-label" id="seg-label">Group by</span>
     <div class="seg" id="grouping" role="radiogroup" aria-labelledby="seg-label">
       <button type="button" role="radio" data-g="workflow" aria-checked="false">Workflow</button>
-      <button type="button" role="radio" data-g="links" aria-checked="false">Links</button>
+      <button type="button" role="radio" data-g="dependencies" aria-checked="false">Dependencies</button>
       <button type="button" role="radio" data-g="source" aria-checked="false">Source</button>
     </div>
     <div class="wf-tools" id="wf-tools">
@@ -470,7 +479,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <kbd aria-hidden="true">/</kbd>
     </div>
     <button id="btn-tags" class="btn" type="button" aria-haspopup="true" aria-expanded="false"><span data-i18n="tags">Tags</span> <span class="badge" id="tags-n" hidden></span></button>
-    <label class="check"><input type="checkbox" id="chk-mentions"> <span data-i18n="mentions">Mentions</span></label>
     <span id="focus-chip"></span>
     <div class="spacer"></div>
     <button id="btn-expand" class="btn ghost" type="button">Expand all</button>
@@ -485,9 +493,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       <svg id="links" aria-hidden="true" width="0" height="0">
         <defs>
           <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="ah" d="M0 1 L10 5 L0 9 z"/></marker>
-          <marker id="ar-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto"><path class="ah" d="M0 1 L10 5 L0 9 z"/></marker>
           <marker id="ar-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="ah-hot" d="M0 1 L10 5 L0 9 z"/></marker>
-          <marker id="ar-hot-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="ah-hot" d="M0 1 L10 5 L0 9 z"/></marker>
         </defs>
         <g id="link-layer"></g>
       </svg>
@@ -503,9 +509,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Constants
   // ===================================================================
   const CATS = ['input', 'output', 'tool', 'human'];
+  // How a skill stands to another differing skill of its name (references/data-model.md).
+  const SAME_NAME = ['conflict', 'override', 'other-agent'];
+  const GROUPINGS = ['workflow', 'dependencies', 'source'];
   // Labels here are the page's own fallbacks, looked up in the reader's language when shown.
   const DEFAULT_VIEW = {
-    title: '', defaultGrouping: 'workflow', showMentions: true, maxTagsPerCard: 6,
+    title: '', defaultGrouping: 'workflow', maxTagsPerCard: 6,
     categories: {
       input: { label: '', color: '#2f7d6d' },
       output: { label: '', color: '#b4621b' },
@@ -526,19 +535,27 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const code = (v) => h('code', { text: str(v) });
   const runLine = (text, p) => h('p', null, withNodes(t(text), { command: code(p.command) }));
   const INSIGHTS = {
+    // Reported for a conflict alone: differing copies of one name an agent may load either of.
     'duplicate-name': {
-      title: () => t('Installed more than once'),
+      title: () => t('Conflicting copies of one name'),
       issue: () => t('Another skill with the same name is installed, so an agent may load either copy.'),
-      message: (p, ins) => (p.name == null ? null : t('“{name}” is defined differently in {n} folders; an agent loading several of them sees only one.', { name: p.name, n: arr(ins.skills).length })),
+      message: (p) => (p.name == null || !Array.isArray(p.copies) ? null : t('{agents} may load either copy of “{name}”:', { agents: list(arr(p.agents).map(agentName)), name: p.name })),
+      // Each copy's folder with a control copying its path, one comparing it with the first, and what to do.
+      repair: (p) => [
+        h('ul', null, p.copies.map((c, i) => h('li', null,
+          copyRootTitle(c), ' ', code(c && c.path), copyPathButton(c && c.path),
+          i && c ? compareButton(p.copies[0] && p.copies[0].id, c.id) : null))),
+        h('p', { text: state.mode === 'live' ? t('Keep one: delete or rename the other folder, then Rescan.') : t('Keep one: delete or rename the other folder.') }),
+      ],
     },
     'unresolved-link': {
-      title: () => t('Links to skills that are not installed'),
-      issue: () => t('Links to a skill that is not installed.'),
-      message: (p) => (p.name == null ? null : t('{from} links to “{name}”, which is not installed', { from: str(p.from), name: p.name })),
+      title: () => t('Calls skills that are not installed'),
+      issue: () => t('Calls a skill that is not installed.'),
+      message: (p) => (p.name == null ? null : t('{from} calls “{name}”, which is not installed', { from: str(p.from), name: p.name })),
     },
     'cycle': {
-      title: () => t('Skills that link to each other in a loop'),
-      issue: () => t('Is part of a loop of skills that link back to each other.'),
+      title: () => t('Skills that call each other in a loop'),
+      issue: () => t('Is part of a loop of skills that call each other.'),
       // The insight lists every skill of the group; `path` is one loop through them, as an example.
       message: (p, ins) => (!Array.isArray(p.path) ? null : t('{n} skills call each other in a loop, for example {path}', { n: Math.max(arr(ins.skills).length, p.path.length), path: [...p.path, p.path[0]].map(str).join(' → ') })),
     },
@@ -678,7 +695,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   let uid = 0;
   function lsGet(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; } }
   function lsSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; } }
-  function hashStr(s) { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return (x >>> 0).toString(36); }
   function slugify(s) { return str(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'x'; }
   function uniqueId(base, taken) { let id = base, n = 2; while (taken.has(id)) id = `${base}-${n++}`; return id; }
   const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -829,7 +845,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     focus: null,                // skill id the canvas is focused on
     search: '',
     tagFilter: new Set(),
-    showMentions: true,
     detailsOpen: true,
     renaming: null,             // phase id being renamed inline
     wfBlocked: null,            // null | {kind:'invalid', path, message} | {kind:'unavailable', message} | {kind:'conflict'}
@@ -839,9 +854,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   };
   const els = {
     title: $('#title'), summary: $('#summary'), saveStatus: $('#save-status'),
-    insights: $('#btn-insights'), insightsN: $('#insights-n'), rescan: $('#btn-rescan'), download: $('#btn-download'),
+    insights: $('#btn-insights'), insightsN: $('#insights-n'), rescan: $('#btn-rescan'),
     detailsBtn: $('#btn-details'), seg: $('#grouping'), wfTools: $('#wf-tools'), wfSelect: $('#wf-select'), wfMenu: $('#wf-menu'),
-    search: $('#search'), tagsBtn: $('#btn-tags'), tagsN: $('#tags-n'), mentions: $('#chk-mentions'), focusChip: $('#focus-chip'),
+    search: $('#search'), tagsBtn: $('#btn-tags'), tagsN: $('#tags-n'), focusChip: $('#focus-chip'),
     expandAll: $('#btn-expand'), collapseAll: $('#btn-collapse'), main: $('#main'), canvas: $('#canvas'), board: $('#board'),
     svg: $('#links'), layer: $('#link-layer'), details: $('#details'), toasts: $('#toasts'), banner: $('#banner'),
     lang: $('#lang-select'), langWrap: $('.lang'),
@@ -852,16 +867,22 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   // Normalization and indexing (pure)
   // ===================================================================
+  // The page shows dependencies alone, a skill's calls: a mention (a skill named without being
+  // run) is dropped here, once, so nothing past this point knows mentions exist [skill-atlas-13].
+  const isCall = (x) => x.kind !== 'mentions';
   function normalizeAtlas(a) {
     a = a && typeof a === 'object' ? a : {};
+    // An unresolved link read from a mention alone is no insight of the page's.
+    const mentionOnly = (i) => i.kind === 'unresolved-link' && !!i.params && i.params.kind === 'mentions';
     return {
       version: a.version || 1, generatedAt: a.generatedAt || null, cwd: str(a.cwd),
-      roots: arr(a.roots).filter((r) => r && r.id != null),
+      roots: arr(a.roots).filter((r) => r && r.id != null).map((r) => ({ ...r, agents: arr(r.agents).map(String) })),
+      agentNames: a.agentNames && typeof a.agentNames === 'object' ? a.agentNames : {},
       tagCatalog: arr(a.tagCatalog).filter((x) => x && x.id),
       skills: arr(a.skills).filter((s) => s && typeof s.id === 'string'),
-      edges: arr(a.edges).filter((e) => e && e.from && e.to),
-      unresolved: arr(a.unresolved).filter((u) => u && u.from && u.name),
-      insights: arr(a.insights).filter((i) => i && i.kind),
+      edges: arr(a.edges).filter((e) => e && e.from && e.to && isCall(e)),
+      unresolved: arr(a.unresolved).filter((u) => u && u.from && u.name && isCall(u)),
+      insights: arr(a.insights).filter((i) => i && i.kind && !mentionOnly(i)),
     };
   }
   const catOf = (id) => { const c = str(id).split('.')[0]; return CATS.includes(c) ? c : 'tool'; };
@@ -891,8 +912,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
       const s = {
         ...raw, name: str(raw.name) || raw.id, description: str(raw.description), summary: raw.summary ? str(raw.summary) : '',
-        steps, tags: normTags(raw.tags), files: arr(raw.files).filter((f) => f && f.path), issues: arr(raw.issues).map(String),
+        // A skill's issues are the kinds of the insights the page shows that name it.
+        steps, tags: normTags(raw.tags), files: arr(raw.files).filter((f) => f && f.path),
+        issues: [...new Set(atlas.insights.filter((i) => arr(i.skills).includes(raw.id)).map((i) => String(i.kind)))],
         copies: arr(raw.copies).filter((c) => c && c.root != null).map((c) => ({ root: String(c.root), dir: str(c.dir) })),
+        // The other differing skills of its name, each with how the two stand [skill-atlas-14].
+        sameName: arr(raw.sameName).filter((x) => x && typeof x.id === 'string' && SAME_NAME.includes(x.relation))
+          .map((x) => ({ id: x.id, relation: x.relation, agents: arr(x.agents).map(String), wins: typeof x.wins === 'string' ? x.wins : null })),
         frontmatter: raw.frontmatter && typeof raw.frontmatter === 'object' ? raw.frontmatter : {},
         stepKind: ['step', 'section', 'none'].includes(raw.stepKind) ? raw.stepKind : (steps.length ? 'step' : 'none'),
         translations,
@@ -920,21 +946,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     skills.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     const edges = atlas.edges.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({
-      from: e.from, to: e.to, fromStep: e.fromStep ? String(e.fromStep) : null, kind: e.kind === 'mentions' ? 'mentions' : 'calls',
+      from: e.from, to: e.to, fromStep: e.fromStep ? String(e.fromStep) : null,
       source: e.source || 'scan', evidence: e.evidence && typeof e.evidence === 'object' ? e.evidence : null,
     }));
-    const stepEdgeKind = new Map();
-    for (const e of edges) {
-      if (!e.fromStep) continue;
-      const k = e.fromStep + '\u0000' + e.to;
-      if (stepEdgeKind.get(k) !== 'calls') stepEdgeKind.set(k, e.kind);
-    }
+    // A step's chips: the installed skills it calls and the names it calls that no skill has.
+    const stepCalls = new Set(edges.filter((e) => e.fromStep).map((e) => e.fromStep + '\u0000' + e.to));
+    for (const st of stepById.values()) st.step.calls = st.step.calls.filter((to) => !byId.has(to) || stepCalls.has(st.step.id + '\u0000' + to));
     const unresolvedBy = new Map();
     for (const u of atlas.unresolved) {
       if (!unresolvedBy.has(u.from)) unresolvedBy.set(u.from, []);
       unresolvedBy.get(u.from).push(u);
     }
-    return { skills, byId, byName, rootById, stepById, tagById, edges, stepEdgeKind, unresolvedBy, roots: atlas.roots, insights: atlas.insights };
+    return { skills, byId, byName, rootById, stepById, tagById, edges, unresolvedBy, roots: atlas.roots, insights: atlas.insights };
   }
 
   function rollupIds(tagIds, tagById) {
@@ -943,26 +966,24 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return out;
   }
 
-  // Edges currently shown plus adjacency over them, and each step's shown links by kind: the one
-  // set every drawing, count, list, chip, focus and grouping reads [skill-atlas-13].
-  function derive(idx, showMentions) {
-    const shown = idx.edges.filter((e) => showMentions || e.kind === 'calls');
-    const out = new Map(), inc = new Map(), stepKind = new Map();
+  // The dependencies and adjacency over them: what every drawing, count, list, focus and
+  // grouping reads [skill-atlas-13].
+  function derive(idx) {
+    const out = new Map(), inc = new Map();
     for (const s of idx.skills) { out.set(s.id, new Set()); inc.set(s.id, new Set()); }
-    for (const e of shown) {
-      if (e.fromStep) { const k = e.fromStep + '\u0000' + e.to; if (stepKind.get(k) !== 'calls') stepKind.set(k, e.kind); }
+    for (const e of idx.edges) {
       if (e.from === e.to) continue;
       out.get(e.from).add(e.to); inc.get(e.to).add(e.from);
     }
-    return { shown, out, inc, stepKind, layers: computeLayers(idx.skills, out, inc) };
+    return { shown: idx.edges, out, inc, layers: computeLayers(idx.skills, out, inc) };
   }
 
-  // Link-depth layers over the condensation of the shown links (each cycle collapsed to one node):
-  // - entry points: linked out, linked from none;
-  // - in a loop: members of a cycle that no skill outside the cycle links to;
-  // - every other linked skill: the longest chain of links from an entry point or such a loop,
+  // Dependency-depth layers over the condensation of the calls (each cycle collapsed to one node):
+  // - entry points: call others, called by none;
+  // - in a loop: members of a cycle that no skill outside the cycle calls;
+  // - every other called skill: the longest chain of calls from an entry point or such a loop,
   //   so the members of one cycle share a level and skills below a cycle get their real depth;
-  // - standalone: no links. Self links are ignored throughout.
+  // - standalone: no dependency either way. Self calls are ignored throughout.
   function computeLayers(skills, out, inc) {
     const ids = skills.map((s) => s.id);
     const linked = ids.filter((id) => out.get(id).size || inc.get(id).size);
@@ -1129,7 +1150,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       groups.push({ id: '__unassigned', kind: 'unassigned', title: t('Unassigned'), ids: un, missing: [], wide: un.length > 12 });
       return groups;
     }
-    if (state.grouping === 'links') {
+    if (state.grouping === 'dependencies') {
       const L = state.derived.layers;
       const byDepth = new Map();
       for (const s of idx.skills) {
@@ -1139,11 +1160,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         byDepth.get(d).push(s.id);
       }
       const groups = [];
-      if (byDepth.has(0)) groups.push({ id: 'entry', kind: 'level', title: t('Entry points'), hint: t('Link out, nothing links to them'), ids: byDepth.get(0) });
-      for (let d = 1; d <= L.maxDepth; d++) if (byDepth.has(d)) groups.push({ id: 'level-' + d, kind: 'level', title: d === 1 ? t('Linked') : t('Linked · level {n}', { n: d }), hint: t('{n} link from an entry point or a loop|{n} links from an entry point or a loop', { n: d }), ids: byDepth.get(d) });
-      if (L.loops.length) groups.push({ id: 'loops', kind: 'level', title: t('In a loop'), hint: t('Linked only within a cycle that nothing else links to'), ids: idx.skills.filter((s) => L.loops.includes(s.id)).map((s) => s.id) });
+      if (byDepth.has(0)) groups.push({ id: 'entry', kind: 'level', title: t('Entry points'), hint: t('Call other skills; no skill calls them'), ids: byDepth.get(0) });
+      for (let d = 1; d <= L.maxDepth; d++) if (byDepth.has(d)) groups.push({ id: 'level-' + d, kind: 'level', title: d === 1 ? t('Called') : t('Called · level {n}', { n: d }), hint: t('{n} call away from an entry point or a loop|{n} calls away from an entry point or a loop', { n: d }), ids: byDepth.get(d) });
+      if (L.loops.length) groups.push({ id: 'loops', kind: 'level', title: t('In a loop'), hint: t('Called only within a loop that no other skill calls'), ids: idx.skills.filter((s) => L.loops.includes(s.id)).map((s) => s.id) });
       const sa = idx.skills.filter((s) => L.standalone.includes(s.id)).map((s) => s.id);
-      if (sa.length) groups.push({ id: 'standalone', kind: 'standalone', title: t('Standalone'), hint: t('No links'), ids: sa, wide: sa.length > 6 });
+      if (sa.length) groups.push({ id: 'standalone', kind: 'standalone', title: t('Standalone'), hint: t('No dependencies'), ids: sa, wide: sa.length > 6 });
       return groups;
     }
     // A skill installed in several roots (see `copies`) is listed under each of them.
@@ -1189,8 +1210,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!res.ok) throw new Error(`${url} answered ${res.status}`);
     return res.json();
   }
-  function staticKey() { return 'skill-atlas:static-workflows:' + hashStr(str(state.atlas && state.atlas.cwd)); }
-
   async function load() {
     const embedded = document.getElementById('atlas-embedded');
     const raw = embedded ? embedded.textContent.trim() : '';
@@ -1219,15 +1238,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     setupLanguages(config);
     applyConfig(config);
     setAtlas(atlas);
-    if (state.mode === 'static') {
-      const base = normalizeWorkflows(workflows);
-      const basedOn = hashStr(JSON.stringify(base));
-      const stored = lsGet(staticKey());
-      state.workflows = stored && stored.basedOn === basedOn && stored.doc ? normalizeWorkflows(stored.doc) : base;
-      state.staticBase = basedOn;
-    } else {
-      state.workflows = normalizeWorkflows(workflows);
-    }
+    state.workflows = normalizeWorkflows(workflows);
     restorePrefs();
     recompute();
     renderStaticText();
@@ -1289,14 +1300,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     state.view = {
       title: str(v.title),
-      defaultGrouping: ['workflow', 'links', 'source'].includes(v.defaultGrouping) ? v.defaultGrouping : 'workflow',
-      showMentions: v.showMentions !== false,
+      defaultGrouping: GROUPINGS.includes(v.defaultGrouping) ? v.defaultGrouping : 'workflow',
       maxTagsPerCard: Number.isFinite(v.maxTagsPerCard) ? Math.max(0, v.maxTagsPerCard) : 6,
       categories: cats,
     };
     state.config = { presets: arr(config.presets).filter((p) => p && arr(p.phases).length >= 0 && p.name), static: !!config.static, stateDir: config.stateDir || null };
     state.grouping = state.view.defaultGrouping;
-    state.showMentions = state.view.showMentions;
   }
 
   // ---------- labels in the shown language ----------
@@ -1349,18 +1358,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.title.textContent = pageTitle();
     $('[data-i18n="insights"]').textContent = t('Insights');
     els.rescan.textContent = state.rescanning ? t('Rescanning…') : t('Rescan');
-    els.download.textContent = t('Download workflows.json');
     els.detailsBtn.textContent = t('Details');
     $('#lang-label').textContent = t('Language');
     $('#seg-label').textContent = t('Group by');
-    const groupingNames = { workflow: t('Workflow'), links: t('Links'), source: t('Source') };
+    const groupingNames = { workflow: t('Workflow'), dependencies: t('Dependencies'), source: t('Source') };
     for (const b of els.seg.querySelectorAll('button[data-g]')) b.textContent = groupingNames[b.dataset.g];
     $('#wf-label').textContent = t('Active workflow');
     els.wfMenu.setAttribute('aria-label', t('Workflow actions'));
     els.search.placeholder = t('Search skills');
     els.search.setAttribute('aria-label', t('Search skills by name, description or step'));
     $('[data-i18n="tags"]').textContent = t('Tags');
-    $('[data-i18n="mentions"]').textContent = t('Mentions');
     els.expandAll.textContent = t('Expand all');
     els.collapseAll.textContent = t('Collapse all');
     els.toasts.setAttribute('aria-label', t('Notifications'));
@@ -1397,7 +1404,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function recompute() {
-    state.derived = derive(state.idx, state.showMentions);
+    state.derived = derive(state.idx);
     state.visible = computeVisible();
   }
 
@@ -1412,27 +1419,25 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function restorePrefs() {
     const p = lsGet(PREFS_KEY);
     if (!p) return;
-    if (['workflow', 'links', 'source'].includes(p.grouping)) state.grouping = p.grouping;
-    if (typeof p.showMentions === 'boolean') state.showMentions = p.showMentions;
+    if (GROUPINGS.includes(p.grouping)) state.grouping = p.grouping;
     if (typeof p.detailsOpen === 'boolean') state.detailsOpen = p.detailsOpen;
     if (Array.isArray(p.collapsed)) state.collapsed = new Set(p.collapsed.map(String));
   }
   function savePrefs() {
-    lsSet(PREFS_KEY, { grouping: state.grouping, showMentions: state.showMentions, detailsOpen: state.detailsOpen, collapsed: [...state.collapsed].slice(0, 500) });
+    lsSet(PREFS_KEY, { grouping: state.grouping, detailsOpen: state.detailsOpen, collapsed: [...state.collapsed].slice(0, 500) });
   }
 
   // ===================================================================
   // Saving workflows
   // ===================================================================
   const save = { version: 0, saved: 0, inFlight: false, keepalive: false, timer: 0, status: 'idle', etag: null };
-  // Editing is off while the stored file is unreadable or was changed elsewhere.
-  const canEdit = () => !state.wfBlocked;
+  // The exported page is read-only [skill-atlas-22]; the served page's editing is off while the
+  // stored file is unreadable or was changed elsewhere.
+  const canEdit = () => state.mode === 'live' && !state.wfBlocked;
   function markDirty() {
     save.version++;
     dismissUndos();
     clearTimeout(save.timer);
-    // The exported page saves to localStorage synchronously, so closing it right after an edit loses nothing.
-    if (state.mode === 'static') { flushSave(); return; }
     save.timer = setTimeout(() => flushSave(), 400);
     if (save.status !== 'saving') setSaveStatus('pending');
   }
@@ -1451,13 +1456,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   async function flushSave(opts) {
     clearTimeout(save.timer);
     const keepalive = !!(opts && opts.keepalive);
-    if (state.mode === 'static') {
-      const ok = lsSet(staticKey(), { basedOn: state.staticBase, doc: state.workflows });
-      save.saved = save.version;
-      setSaveStatus(ok ? 'saved' : 'error');
-      return;
-    }
-    if (state.wfBlocked) return;
+    if (state.mode !== 'live' || state.wfBlocked) return;
     // A second request would carry the ETag the first is replacing: the follow-up waits for its answer.
     if (save.inFlight) { if (keepalive) save.keepalive = true; return; }
     if (save.saved === save.version && save.status !== 'error') return;
@@ -1551,12 +1550,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const el = els.saveStatus;
     el.classList.toggle('error', st === 'error');
     el.replaceChildren();
-    const local = state.mode === 'static';
-    if (st === 'pending' || st === 'saving') el.append(t('Saving…'));
-    else if (st === 'saved') el.append(local ? t('Saved in this browser') : t('Saved'));
+    // The exported copy saves nothing and says so, quietly.
+    if (state.mode !== 'live') el.append(t('Exported copy, read-only'));
+    else if (st === 'pending' || st === 'saving') el.append(t('Saving…'));
+    else if (st === 'saved') el.append(t('Saved'));
     else if (st === 'error') {
-      el.append(local ? t('Couldn’t save in this browser — ') : t('Couldn’t save — '));
-      el.append(h('button', { type: 'button', class: 'linkish', onclick: () => { save.version++; flushSave(); } }, local ? t('Try again') : t('Retry')));
+      el.append(t('Couldn’t save — '));
+      el.append(h('button', { type: 'button', class: 'linkish', onclick: () => { save.version++; flushSave(); } }, t('Retry')));
     }
   }
   window.addEventListener('beforeunload', (e) => {
@@ -1583,7 +1583,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
     if (!canEdit()) {
-      toast(state.wfBlocked.kind === 'conflict' ? t('Reload the workflows before editing them again') : t('Workflows can’t be edited until the stored file can be read'));
+      if (state.wfBlocked) toast(state.wfBlocked.kind === 'conflict' ? t('Reload the workflows before editing them again') : t('Workflows can’t be edited until the stored file can be read'));
       return null;
     }
     const before = clone(state.workflows);
@@ -1741,8 +1741,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function renderChrome() {
     const idx = state.idx;
     const staticMode = state.mode === 'static';
-    const nLinks = state.derived.shown.length;
-    els.summary.textContent = [t('{n} skill|{n} skills', { n: idx.skills.length }), t('{n} source|{n} sources', { n: idx.roots.length }), t('{n} link|{n} links', { n: nLinks })].join(' · ');
+    const nCalls = state.derived.shown.length;
+    els.summary.textContent = [t('{n} skill|{n} skills', { n: idx.skills.length }), t('{n} source|{n} sources', { n: idx.roots.length }), t('{n} dependency|{n} dependencies', { n: nCalls })].join(' · ');
     const scanned = state.atlas.generatedAt ? fmtDate(state.atlas.generatedAt) : '';
     if (scanned) els.summary.title = t('Scanned {time}', { time: scanned }); else els.summary.removeAttribute('title');
     for (const b of els.seg.querySelectorAll('button')) {
@@ -1757,10 +1757,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, t('No workflows yet')));
     const shownId = shownWorkflowId();
     for (const w of wfs) sel.append(h('option', { value: w.id, selected: w.id === shownId ? true : null }, wfName(w)));
-    sel.append(h('option', { value: '__new' }, t('New workflow…')));
+    if (!staticMode) sel.append(h('option', { value: '__new' }, t('New workflow…')));
     sel.value = shownId || '';
     const blocked = state.wfBlocked;
     sel.disabled = !!blocked;
+    if (staticMode) els.wfMenu.remove();
     els.wfMenu.disabled = !wfs.length || !!blocked;
     const conflict = !!blocked && blocked.kind === 'conflict';
     if (conflict !== !els.banner.hidden || els.banner.dataset.lang !== i18n.lang) {
@@ -1777,7 +1778,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.tagsN.textContent = fmtNum(nTags);
     els.tagsBtn.classList.toggle('active', nTags > 0);
     els.tagsBtn.setAttribute('aria-label', nTags ? t('Tags, {n} selected', { n: nTags }) : t('Filter by tags'));
-    els.mentions.checked = state.showMentions;
     els.focusChip.replaceChildren();
     if (state.focus && idx.byId.has(state.focus)) {
       const s = idx.byId.get(state.focus);
@@ -1788,7 +1788,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.insightsN.textContent = fmtNum(nIns);
     els.insights.disabled = !nIns;
     els.rescan.hidden = staticMode;
-    els.download.hidden = !staticMode;
     els.detailsBtn.setAttribute('aria-expanded', String(state.detailsOpen));
     els.main.classList.toggle('no-details', !state.detailsOpen);
   }
@@ -1868,6 +1867,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function renderWorkflowEmpty() {
+    if (state.mode === 'static') {
+      return h('div', { class: 'empty' }, h('h2', { text: t('No workflows') }),
+        h('p', { text: t('This exported copy holds no workflow; group by Dependencies or Source to explore the skills.') }));
+    }
     const presets = state.config.presets.filter((p) => p.id !== 'blank');
     const blank = state.config.presets.find((p) => p.id === 'blank');
     return h('div', { class: 'empty', style: 'max-width:760px' },
@@ -2081,7 +2084,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         pillsFor(s._cats),
         h('span', { class: 'card-meta' },
           h('span', { text: s.stepKind === 'none' ? t('no steps') : stepNoun(s, s.steps.length) }),
-          outN || inN ? h('span', { 'aria-label': t('links to {out}, linked from {in}', { out: outN, in: inN }), title: t('Links to {out} · linked from {in}', { out: outN, in: inN }) }, [outN ? '→' + fmtNum(outN) : '', inN ? '←' + fmtNum(inN) : ''].filter(Boolean).join(' ')) : null)));
+          outN || inN ? h('span', { class: 'card-deps', text: t('Depends on {out} · used by {in}', { out: outN, in: inN }) }) : null)));
     card.append(main);
     const tools = h('div', { class: 'card-tools' },
       h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-menu', 'data-skill': s.id, 'data-phase': inPhase ? g.id : null, 'data-fk': `cm|${key}|${s.id}`, 'aria-label': t('Actions for {skill}', { skill: '/' + s.name }), 'aria-haspopup': 'true', 'aria-expanded': 'false' }, icon('dots')),
@@ -2125,16 +2128,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         h('span', { class: 'step-idx', text: fmtNum(st.index) }),
         h('span', { class: 'step-title', title: words.title, text: words.title }),
         h('span', { class: 'step-tags' }, pillsFor(stepCats, { bare: true }))));
-      // A link the reader hides (a mention, with Mentions off) shows no chip.
-      const shownCalls = st.calls.filter((to) => { const k = st.id + '\u0000' + to; return state.derived.stepKind.has(k) || !state.idx.stepEdgeKind.has(k); });
-      if (shownCalls.length) {
+      if (st.calls.length) {
         const calls = h('span', { class: 'step-calls' });
-        for (const to of shownCalls) {
+        for (const to of st.calls) {
           const target = state.idx.byId.get(to);
           if (target) {
-            const kind = state.derived.stepKind.get(st.id + '\u0000' + to) || 'calls';
-            const tip = kind === 'mentions' ? t('Mentions {skill} — go there', { skill: '/' + target.name }) : t('Calls {skill} — go there', { skill: '/' + target.name });
-            calls.append(h('button', { type: 'button', class: 'call-chip' + (kind === 'mentions' ? ' mention' : ''), 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: tip }, `→ ${target.name}`));
+            calls.append(h('button', { type: 'button', class: 'call-chip', 'data-act': 'follow', 'data-to': to, 'data-fk': `cc|${key}|${st.id}|${to}`, title: t('Calls {skill} — go there', { skill: '/' + target.name }) }, `→ ${target.name}`));
           } else {
             calls.append(h('span', { class: 'call-chip unresolved', title: t('{skill} is not installed', { skill: to }) }, `→ ${to}`));
           }
@@ -2213,16 +2212,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         }
       }
       if (!best || best.sEl === best.tEl) continue;
-      const k = elId(best.sEl) + '>' + elId(best.tEl) + ':' + e.kind;
+      const k = elId(best.sEl) + '>' + elId(best.tEl);
       let L = agg.get(k);
-      if (!L) { L = { sEl: best.sEl, tEl: best.tEl, kind: e.kind, n: 0, skills: new Set() }; agg.set(k, L); }
+      if (!L) { L = { sEl: best.sEl, tEl: best.tEl, n: 0, skills: new Set() }; agg.set(k, L); }
       L.n++;
       L.skills.add(e.from); L.skills.add(e.to);
     }
     const NS = 'http://www.w3.org/2000/svg';
     const frag = document.createDocumentFragment();
-    // Mentions first so calls paint on top.
-    const list = [...agg.values()].sort((x, y) => (x.kind === y.kind ? 0 : x.kind === 'mentions' ? -1 : 1));
+    const list = [...agg.values()];
     // Pick the side each end attaches to, then spread the ends sharing one side of one element
     // ("ports") down that side in the order of their other ends, so parallel links stay apart.
     const ports = new Map();
@@ -2275,7 +2273,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         mx = x2 + 14;
       }
       const g = document.createElementNS(NS, 'g');
-      g.setAttribute('class', 'lk ' + L.kind);
+      g.setAttribute('class', 'lk');
       const p = document.createElementNS(NS, 'path');
       p.setAttribute('class', 'ln');
       p.setAttribute('d', d);
@@ -2354,7 +2352,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       setSearch(''); state.tagFilter.clear(); state.focus = null; recompute();
       toast(t('Cleared filters to show {skill}', { skill: skillLabel(id) }));
     }
-    if (state.grouping === 'workflow' && !activeWorkflow()) state.grouping = 'links';
+    if (state.grouping === 'workflow' && !activeWorkflow()) state.grouping = 'dependencies';
     const groups = computeGroups() || [];
     const containing = groups.filter((g) => g.ids.includes(id));
     if (containing.length && containing.every((g) => state.collapsed.has(groupKey(g)))) state.collapsed.delete(groupKey(containing[0]));
@@ -2407,29 +2405,26 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return [
       detailsHead(t('Details'), t('Nothing selected')),
       h('div', { class: 'd-body' },
-        h('p', { class: 'd-desc', style: 'color:var(--text-2)', text: t('Select a skill to see its steps, tags and links. Select a phase name to see what flows through it.') }),
+        h('p', { class: 'd-desc', style: 'color:var(--text-2)', text: t('Select a skill to see its steps, tags and dependencies. Select a phase name to see what flows through it.') }),
         sec(t('Legend'), h('div', { class: 'legend' },
           CATS.map((c) => h('div', { class: 'row' }, h('span', { class: `pill cat-${c}` }, icon(c), fmtNum(2)), h('span', { text: catLabel(c) }))),
-          h('div', { class: 'row' }, legendLine(false), h('span', { text: t('Calls — one skill runs another') })),
-          h('div', { class: 'row' }, legendLine(true), h('span', { text: t('Mentions — named without running it') })),
+          h('div', { class: 'row' }, legendLine(), h('span', { text: t('Dependency — one skill calls another') })),
           h('div', { class: 'row' }, h('span', { class: 'issue-dot' }), h('span', { text: t('Has an issue worth a look') })))),
         sec(t('Keys'), h('ul', { class: 'd-list', style: 'font-size:12px;color:var(--text-2)' },
           key('/', t('Search')),
           key('Esc', t('Close a menu or clear the selection')),
           key('F6', t('Move between the canvas and these details')),
-          key('Ctrl/⌘ Z', t('Undo the latest edit')),
-          h('li', { text: t('Click a card to open it; click a call chip to follow the link.') }),
-          state.grouping === 'workflow' ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null))),
+          canEdit() ? key('Ctrl/⌘ Z', t('Undo the latest edit')) : null,
+          h('li', { text: t('Click a card to open it; click a call chip to go to the skill it calls.') }),
+          state.grouping === 'workflow' && canEdit() ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null))),
     ];
   }
-  function legendLine(dashed) {
+  function legendLine() {
     const tpl = document.createElement('template');
-    tpl.innerHTML = `<svg class="line" viewBox="0 0 40 10" aria-hidden="true"><path d="M2 5 H32" fill="none" stroke="var(--link)" stroke-width="1.5" ${dashed ? 'stroke-dasharray="4 3"' : ''}/><path d="M31 1.5 L38 5 L31 8.5 z" fill="var(--link)"/></svg>`;
+    tpl.innerHTML = '<svg class="line" viewBox="0 0 40 10" aria-hidden="true"><path d="M2 5 H32" fill="none" stroke="var(--link)" stroke-width="1.5"/><path d="M31 1.5 L38 5 L31 8.5 z" fill="var(--link)"/></svg>';
     return tpl.content.firstChild;
   }
-  const EDGE_KINDS = { calls: () => t('calls'), mentions: () => t('mentions') };
   const FILE_KINDS = { reference: () => t('reference'), script: () => t('script'), asset: () => t('asset'), other: () => t('other') };
-  const edgeKind = (k) => (own(EDGE_KINDS, k) ? EDGE_KINDS[k]() : str(k));
   const fileKind = (k) => (own(FILE_KINDS, k) ? FILE_KINDS[k]() : str(k) || t('file'));
 
   function renderSkillDetails(s) {
@@ -2441,14 +2436,20 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     body.append(h('p', { class: 'd-desc', text: desc || t('No description.') }));
     if (summary) body.append(h('p', { class: 'd-summary', text: summary }));
     if (s.issues.length) body.append(h('ul', { class: 'issues', 'aria-label': t('Issues') }, s.issues.map((k) => h('li', { text: insightIssue(k) }))));
+    const same = sameNameNote(s);
+    if (same) body.append(same);
     const actions = h('div', { class: 'd-actions' },
-      h('button', { type: 'button', class: 'btn small', 'data-act': 'focus', 'data-skill': s.id, disabled: !(state.derived.out.get(s.id).size || state.derived.inc.get(s.id).size) ? true : null }, t('Focus on linked')),
+      h('button', { type: 'button', class: 'btn small', 'data-act': 'focus', 'data-skill': s.id, disabled: !(state.derived.out.get(s.id).size || state.derived.inc.get(s.id).size) ? true : null }, t('Focus on dependencies')),
       h('button', { type: 'button', class: 'btn small', 'data-act': 'toggle-expand', 'data-skill': s.id }, state.expanded.has(s.id) ? t('Hide steps on canvas') : t('Show steps on canvas')),
       state.mode === 'live' ? h('button', { type: 'button', class: 'btn small', 'data-act': 'view-file', 'data-skill': s.id, 'data-path': 'SKILL.md' }, t('View SKILL.md')) : null);
     body.append(actions);
 
     const wf = state.wfBlocked && state.wfBlocked.kind !== 'conflict' ? null : activeWorkflow();
-    if (wf) {
+    if (wf && state.mode !== 'live') {
+      // The exported copy lists the phases holding the skill, with nothing to change them.
+      const names = phasesOf(s.id).map(phaseName);
+      body.append(sec(t('Phases in {workflow}', { workflow: wfName(wf) }), h('span', { class: names.length ? null : 'muted', text: names.length ? list(names) : t('In no phase.') })));
+    } else if (wf) {
       const checks = h('div', { class: 'phase-checks' });
       if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: t('This workflow has no phases yet.') }));
       for (const p of wf.phases) {
@@ -2504,16 +2505,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
 
     const outE = state.derived.shown.filter((e) => e.from === s.id && e.to !== s.id);
     const inE = state.derived.shown.filter((e) => e.to === s.id && e.from !== s.id);
-    body.append(sec(t('Links out · {n}', { n: new Set(outE.map((e) => e.to)).size }), linkList(outE, 'to', s)));
-    body.append(sec(t('Links in · {n}', { n: new Set(inE.map((e) => e.from)).size }), linkList(inE, 'from', s)));
+    body.append(sec(t('Depends on · {n}', { n: new Set(outE.map((e) => e.to)).size }), depList(outE, 'to')));
+    body.append(sec(t('Used by · {n}', { n: new Set(inE.map((e) => e.from)).size }), depList(inE, 'from')));
 
     const unres = idx.unresolvedBy.get(s.id) || [];
     if (unres.length) {
-      body.append(sec(t('Unresolved links'), h('ul', { class: 'd-list' }, unres.map((u) => {
+      body.append(sec(t('Calls to skills not installed'), h('ul', { class: 'd-list' }, unres.map((u) => {
         const at = u.fromStep && idx.stepById.get(u.fromStep) ? idx.stepById.get(u.fromStep).step.index : null;
         const name = h('code', { class: 'mono', text: str(u.name) });
         return h('li', { class: 'link-item' },
-          h('span', null, withNodes(at != null ? t('Links to {name}, which is not installed (step {n})', { n: at }) : t('Links to {name}, which is not installed'), { name })),
+          h('span', null, withNodes(at != null ? t('Calls {name}, which is not installed (step {n})', { n: at }) : t('Calls {name}, which is not installed'), { name })),
           u.evidence ? h('span', { class: 'sub', text: t('line {n}: {text}', { n: u.evidence.line, text: str(u.evidence.text) }) }) : null);
       }))));
     }
@@ -2529,21 +2530,62 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return [detailsHead(isShared(s) ? t('Skill · {source}', { source: rootLabel(s) }) : t('Skill'), '/' + s.name, true), body];
   }
 
-  function linkList(edges, side, s) {
-    if (!edges.length) return h('span', { class: 'muted', text: side === 'to' ? t('Links to no other skill.') : t('No other skill links here.') });
+  function depList(edges, side) {
+    if (!edges.length) return h('span', { class: 'muted', text: side === 'to' ? t('Depends on no other skill.') : t('No other skill uses it.') });
     const byOther = new Map();
     for (const e of edges) { const o = e[side]; if (!byOther.has(o)) byOther.set(o, []); byOther.get(o).push(e); }
-    return h('ul', { class: 'd-list' }, [...byOther].map(([o, links]) => {
-      const kinds = [...new Set(links.map((e) => e.kind))];
-      const ev = links.find((e) => e.evidence) || null;
+    return h('ul', { class: 'd-list' }, [...byOther].map(([o, calls]) => {
+      const ev = calls.find((e) => e.evidence) || null;
       const stepOf = (e) => e.fromStep && state.idx.stepById.get(e.fromStep) ? state.idx.stepById.get(e.fromStep).step : null;
-      const st = stepOf(links[0]);
+      const st = stepOf(calls[0]);
       return h('li', { class: 'link-item' },
         h('span', { class: 'top' }, h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': o, text: skillLabel(o) }),
-          kinds.map((k) => h('span', { class: 'kind', text: edgeKind(k) })),
           st ? h('span', { class: 'muted', style: 'font-size:11.5px', text: side === 'to' ? t('from step {n}', { n: st.index }) : t('in its step {n}', { n: st.index }) }) : null),
         ev && ev.evidence ? h('span', { class: 'sub', text: t('line {n}: {text}', { n: ev.evidence.line, text: str(ev.evidence.text) }) }) : null);
     }));
+  }
+
+  // ---------- differing skills of one name ----------
+  // An agent's name as the scan gives it, else its key.
+  const agentName = (key) => str(own(state.atlas.agentNames, key) ? state.atlas.agentNames[key] : key);
+  const placeOf = (id) => { const o = state.idx.byId.get(id); return o ? rootLabel(o) : str(id); };
+  // A conflict insight's copy: its folder's title in the shown language, else the scan's label.
+  function copyRootTitle(c) {
+    const r = c && state.idx.rootById.get(c.root);
+    return h('b', { text: r ? rootTitle(r) : str(c && (c.rootLabel || c.root)) });
+  }
+  const copyPathButton = (p) => (p ? h('button', { type: 'button', class: 'icon-btn', 'data-act': 'copy', 'data-text': str(p), 'aria-label': t('Copy folder path'), title: t('Copy path') }, icon('copy')) : null);
+  // Compare reads each SKILL.md from the server, so the exported copy offers none.
+  function compareButton(a, b) {
+    const idx = state.idx;
+    if (state.mode !== 'live' || !idx.byId.has(a) || !idx.byId.has(b)) return null;
+    // Two copies in one folder's subfolders read alike by label: their folders tell them apart.
+    const same = skillLabel(a) === skillLabel(b);
+    const name = (id) => (same ? str(idx.byId.get(id).dir) : skillLabel(id));
+    return h('button', { type: 'button', class: 'linkish', 'data-act': 'compare', 'data-a': a, 'data-b': b, 'aria-label': t('Compare {a} with {b}', { a: name(a), b: name(b) }) }, t('Compare'));
+  }
+  // One quiet note on how a skill stands to the differing skills of its name that no agent loads
+  // in its stead by chance: one it overrides, one overriding it, one another agent loads. A
+  // conflict is an issue of its own, told by its insight.
+  // Where the agents loading both differ in the one they load, each line names its agents.
+  function sameNameNote(s) {
+    const idx = state.idx;
+    const others = s.sameName.filter((x) => x.relation !== 'conflict' && idx.byId.has(x.id));
+    // The agents loading a skill: those of its folder and of each copy's.
+    const loaders = (o) => [...new Set([o.root, ...o.copies.map((c) => c.root)].flatMap((r) => (idx.rootById.get(r) || { agents: [] }).agents))].sort();
+    const lines = others.map((x) => {
+      const place = placeOf(x.id);
+      const split = others.filter((y) => y.id === x.id).length > 1;
+      const agents = list(x.agents.map(agentName));
+      const theirs = list(loaders(idx.byId.get(x.id)).map(agentName));
+      const text = x.relation === 'override'
+        ? (x.wins === s.id
+          ? (split ? t('Overrides the copy in {place} for {agents}', { place, agents }) : t('Overrides the copy in {place}', { place }))
+          : (split ? t('Overridden by the copy in {place} for {agents}', { place, agents }) : t('Overridden by the copy in {place}', { place })))
+        : theirs ? t('Also installed for {agents} with different content', { agents: theirs }) : t('Also in {place}, which no agent loads, with different content', { place });
+      return h('li', null, text, compareButton(s.id, x.id));
+    });
+    return lines.length ? h('ul', { class: 'same-note', 'aria-label': t('Same name') }, lines) : null;
   }
 
   function renderPhaseDetails(p) {
@@ -2558,13 +2600,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       h('button', { type: 'button', class: 'btn small', 'data-act': 'phase-right', 'data-phase': p.id, disabled: i === wf.phases.length - 1 ? true : null, 'aria-label': t('Move phase right') }, t('Move right ▶')),
       h('button', { type: 'button', class: 'btn small danger', 'data-act': 'phase-delete', 'data-phase': p.id }, t('Delete'))));
     const noteId = 'note-' + p.id;
-    body.append(h('section', { class: 'd-sec' }, h('h3', null, h('label', { for: noteId, text: t('Note') })),
-      h('textarea', { id: noteId, 'data-act': 'phase-note', 'data-phase': p.id, readonly: ro, placeholder: t('What happens in this phase, who owns it, when it is done…'), rows: '3' }, p.note)));
+    // Where no edit is possible the note is text, not a field.
+    if (ro) { if (p.note) body.append(sec(t('Note'), h('p', { class: 'd-desc', text: p.note }))); }
+    else body.append(h('section', { class: 'd-sec' }, h('h3', null, h('label', { for: noteId, text: t('Note') })),
+      h('textarea', { id: noteId, 'data-act': 'phase-note', 'data-phase': p.id, placeholder: t('What happens in this phase, who owns it, when it is done…'), rows: '3' }, p.note)));
     const ids = p.skills.filter((id) => idx.byId.has(id));
     const missing = p.skills.filter((id) => !idx.byId.has(id));
     body.append(sec(t('Skills · {n}', { n: p.skills.length }), p.skills.length ? h('ul', { class: 'd-list' },
       ids.map((id) => h('li', null, h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': id, text: skillLabel(id) }), h('div', { class: 'sub', text: shownDesc(idx.byId.get(id)) }))),
-      missing.map((n) => h('li', null, h('span', { class: 'mono muted', text: '/' + n }), h('span', { class: 'sub', text: ' — ' + t('not installed') })))) : h('span', { class: 'muted', text: t('No skills yet. Drag cards here or tick this phase in a skill’s details.') })));
+      missing.map((n) => h('li', null, h('span', { class: 'mono muted', text: '/' + n }), h('span', { class: 'sub', text: ' — ' + t('not installed') })))) : h('span', { class: 'muted', text: ro ? t('No skills') : t('No skills yet. Drag cards here or tick this phase in a skill’s details.') })));
 
     // Tags with the skills contributing each one.
     const contrib = new Map();
@@ -2583,7 +2627,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       body.append(tagSec);
     }
 
-    // Links crossing into or out of this phase.
+    // Calls crossing into or out of this phase.
     const phaseOf = new Map();
     for (const q of wf.phases) for (const id of q.skills) { if (!phaseOf.has(id)) phaseOf.set(id, []); phaseOf.get(id).push(q); }
     const crossings = new Map();
@@ -2597,15 +2641,15 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         if (!crossings.has(label)) crossings.set(label, { out: fromIn, pairs: [] });
         const pair = `${skillLabel(e.from).slice(1)} → ${skillLabel(e.to).slice(1)}`;
         const entry = crossings.get(label);
-        if (!entry.pairs.some((x) => x.from === e.from && x.to === e.to)) entry.pairs.push({ text: pair, from: e.from, to: e.to, kind: e.kind });
+        if (!entry.pairs.some((x) => x.from === e.from && x.to === e.to)) entry.pairs.push({ text: pair, from: e.from, to: e.to });
       }
     }
     const crossList = [...crossings].sort((a, b) => (a[1].out === b[1].out ? a[0].localeCompare(b[0], i18n.lang) : a[1].out ? 1 : -1));
-    body.append(sec(t('Links to other phases'), crossList.length ? h('ul', { class: 'd-list' }, crossList.map(([label, v]) => h('li', { class: 'link-item' },
+    body.append(sec(t('Calls across phases'), crossList.length ? h('ul', { class: 'd-list' }, crossList.map(([label, v]) => h('li', { class: 'link-item' },
       h('b', { text: label }),
       h('span', { class: 'top' }, v.pairs.map((pp, j) => [j ? h('span', { class: 'muted', text: '·' }) : null,
-        h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, title: edgeKind(pp.kind), text: pp.text })]))))) :
-      h('span', { class: 'muted', text: t('No links cross into other phases.') })));
+        h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, text: pp.text })]))))) :
+      h('span', { class: 'muted', text: t('No calls cross into other phases.') })));
     return [detailsHead(t('Phase {i} of {n} · {workflow}', { i: i + 1, n: wf.phases.length, workflow: wfName(wf) }), phaseName(p)), body];
   }
 
@@ -2794,6 +2838,81 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return p;
   }
 
+  // Two texts' lines paired into rows of `a` and `b` (a line's index on each side, or null) and
+  // whether the row's lines are the same: a longest common subsequence of lines between the
+  // shared head and tail, past a bound on its table every middle line counted as changed.
+  const DIFF_MAX_CELLS = 4e6;
+  function lineDiff(a, b) {
+    let head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head++;
+    let tail = 0;
+    while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+    const n = a.length - head - tail, m = b.length - head - tail;
+    const ops = []; // [ai, bi]: both alike; [ai, null] only in a; [null, bi] only in b
+    if (n * m <= DIFF_MAX_CELLS) {
+      const w = m + 1, L = new Uint16Array((n + 1) * w);
+      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+        L[i * w + j] = a[head + i] === b[head + j] ? L[(i + 1) * w + j + 1] + 1 : Math.max(L[(i + 1) * w + j], L[i * w + j + 1]);
+      }
+      for (let i = 0, j = 0; i < n || j < m;) {
+        if (i < n && j < m && a[head + i] === b[head + j]) ops.push([head + i++, head + j++]);
+        else if (j < m && (i >= n || L[i * w + j + 1] >= L[(i + 1) * w + j])) ops.push([null, head + j++]);
+        else ops.push([head + i++, null]);
+      }
+    } else {
+      for (let i = 0; i < n; i++) ops.push([head + i, null]);
+      for (let j = 0; j < m; j++) ops.push([null, head + j]);
+    }
+    const rows = [];
+    for (let i = 0; i < head; i++) rows.push({ a: i, b: i, same: true });
+    // A run of changed lines pairs its two sides' lines row by row.
+    let gone = [], come = [];
+    const pair = () => {
+      for (let k = 0; k < Math.max(gone.length, come.length); k++) rows.push({ a: k < gone.length ? gone[k] : null, b: k < come.length ? come[k] : null, same: false });
+      gone = []; come = [];
+    };
+    for (const [ai, bi] of ops) {
+      if (ai != null && bi != null) { pair(); rows.push({ a: ai, b: bi, same: true }); } else if (ai != null) gone.push(ai); else come.push(bi);
+    }
+    pair();
+    for (let k = tail; k > 0; k--) rows.push({ a: a.length - k, b: b.length - k, same: true });
+    return rows;
+  }
+  // A differing line with what would not show marked: a trailing space or tab, a carriage return.
+  const WS_MARKS = { ' ': '\u00B7', '\t': '\u2192', '\r': '\u240D' };
+  function shownLine(line) {
+    const m = /[ \t\r]+$/.exec(line);
+    if (!m) return h('span', { text: line });
+    return h('span', null, line.slice(0, m.index), h('span', { class: 'ws', title: t('Spaces, tabs or a carriage return at the end of the line'), text: [...m[0]].map((c) => WS_MARKS[c]).join('') }));
+  }
+  // Two skills' SKILL.md side by side, the lines that differ marked; read from the server.
+  async function compareDialog(aId, bId, back) {
+    const idx = state.idx;
+    const sa = idx.byId.get(aId), sb = idx.byId.get(bId);
+    if (!sa || !sb) return;
+    const sum = h('p', { class: 'cmp-sum', role: 'status', text: t('Loading…') });
+    const grid = h('div', { class: 'cmp', tabindex: '0', 'aria-label': t('SKILL.md of each copy, side by side') });
+    const p = modal(t('Compare {skill}', { skill: '/' + sa.name }), [sum, grid], [], { wide: true, initialFocus: () => grid, returnFocus: () => (back && back.isConnected ? back : els.insights) });
+    const read = async (id) => {
+      const res = await fetch(`/api/file?skill=${encodeURIComponent(id)}&path=SKILL.md`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      return (await res.text()).split('\n');
+    };
+    try {
+      const [la, lb] = await Promise.all([read(aId), read(bId)]);
+      const rows = lineDiff(la, lb);
+      const head = (s) => h('div', { class: 'cmp-head' }, rootLabel(s), h('span', { class: 'sub', text: str(s.dir) }));
+      const cell = (lines, i, changed) => (i == null ? h('div', { class: 'cmp-cell empty' })
+        : h('div', { class: 'cmp-cell' + (changed ? ' changed' : '') }, h('span', { class: 'n', text: fmtNum(i + 1) }), changed ? h('span', { class: 'sr-only', text: t('Differs:') + ' ' }) : null, changed ? shownLine(lines[i]) : h('span', { text: lines[i] })));
+      grid.append(head(sa), head(sb), ...rows.flatMap((r) => [cell(la, r.a, !r.same), cell(lb, r.b, !r.same)]));
+      const changed = rows.filter((r) => !r.same).length;
+      sum.textContent = changed ? t('{n} line differs|{n} lines differ', { n: changed }) : t('SKILL.md is the same in both; the copies differ in their other files.');
+    } catch {
+      sum.textContent = t('Couldn’t read {path}.', { path: 'SKILL.md' });
+    }
+    return p;
+  }
+
   // A notice's Undo stands only while its edit is the latest: any later edit, an undo, or editing
   // stopping dismisses every Undo notice (the snapshot itself is `latestEdit`, kept apart from them).
   let undoToasts = [];
@@ -2884,7 +3003,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const items = [
       { label: t('Open details'), run: () => select({ type: 'skill', id: sid }) },
       { label: state.expanded.has(sid) ? t('Hide steps') : t('Show steps'), run: () => toggleExpand(sid) },
-      { label: t('Focus on linked'), disabled: !(state.derived.out.get(sid).size || state.derived.inc.get(sid).size), run: () => setFocus(sid) },
+      { label: t('Focus on dependencies'), disabled: !(state.derived.out.get(sid).size || state.derived.inc.get(sid).size), run: () => setFocus(sid) },
     ];
     if (wf) {
       const member = new Set(phasesOf(sid).map((p) => p.id));
@@ -2969,7 +3088,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   function setFocus(id) {
     state.focus = id;
     refilter();
-    toast(t('Showing {skill} and every skill linked to or from it', { skill: skillLabel(id) }));
+    toast(t('Showing {skill} and every skill it depends on or that depends on it', { skill: skillLabel(id) }));
   }
   let renameReturn = null;
   function startRename(pid, returnFk) {
@@ -3033,15 +3152,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       els.rescan.textContent = t('Rescan');
     }
   }
-  function downloadWorkflows() {
-    const blob = new Blob([JSON.stringify(state.workflows, null, 2) + '\n'], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: 'workflows.json' });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
   async function copyText(text, btn) {
     let ok = false;
     try { await navigator.clipboard.writeText(text); ok = true; } catch {
@@ -3062,9 +3172,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-g]'); if (b) setGrouping(b.dataset.g); });
     els.seg.addEventListener('keydown', (e) => {
       if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
-      const order = ['workflow', 'links', 'source'];
-      const i = order.indexOf(state.grouping);
-      const next = order[(i + (e.key === 'ArrowRight' ? 1 : 2)) % 3];
+      const i = GROUPINGS.indexOf(state.grouping);
+      const next = GROUPINGS[(i + (e.key === 'ArrowRight' ? 1 : 2)) % 3];
       e.preventDefault();
       setGrouping(next);
       flush();
@@ -3073,11 +3182,12 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.wfSelect.addEventListener('change', () => {
       const v = els.wfSelect.value;
       if (v === '__new') { els.wfSelect.value = shownWorkflowId() || ''; newWorkflowDialog(); return; }
-      if (v && v !== shownWorkflowId() && canEdit()) {
+      // Showing another workflow is no edit: the exported copy shows it and saves nothing.
+      if (v && v !== shownWorkflowId() && !state.wfBlocked) {
         state.workflows.active = v;
         endEditRun();
         if (state.selection && state.selection.type === 'phase') state.selection = null;
-        markDirty();
+        if (canEdit()) markDirty();
         invalidate('chrome', 'canvas', 'details');
       }
     });
@@ -3097,11 +3207,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     });
     els.tagsBtn.addEventListener('click', () => { if (popoverOpenFor(els.tagsBtn)) closePopover(); else tagPopover(els.tagsBtn); });
     els.insights.addEventListener('click', () => { if (popoverOpenFor(els.insights)) closePopover(); else insightsPopover(els.insights); });
-    els.mentions.addEventListener('change', () => { state.showMentions = els.mentions.checked; savePrefs(); recompute(); invalidate('chrome', 'canvas', 'details'); });
     els.expandAll.addEventListener('click', expandAll);
     els.collapseAll.addEventListener('click', collapseAll);
     els.rescan.addEventListener('click', rescan);
-    els.download.addEventListener('click', downloadWorkflows);
     els.detailsBtn.addEventListener('click', () => { state.detailsOpen = !state.detailsOpen; savePrefs(); invalidate('chrome', 'links'); });
     els.focusChip.addEventListener('click', (e) => { if (e.target.closest('[data-act="clear-focus"]')) { state.focus = null; refilter(); els.search.focus(); } });
 
@@ -3207,6 +3315,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       case 'goto-step': follow(sid, { expand: true, openStep: tgt.dataset.step }); break;
       case 'view-file': fileDialog(sid, tgt.dataset.path); break;
       case 'copy': copyText(tgt.dataset.text, tgt); break;
+      case 'compare': closePopover(false); compareDialog(tgt.dataset.a, tgt.dataset.b, els.details.contains(tgt) ? tgt : null); break;
       default: break;
     }
   }

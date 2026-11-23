@@ -30,7 +30,7 @@ function skill(project: string, folder: string, name: string, description: strin
 }
 
 // Ten skills: `ship` calls `code`, which calls `review`; `decide` calls
-// `review`; `guide`'s one step only mentions `review`; tags of all four categories, a
+// `review`; `guide`'s one step only mentions `review`, which is no dependency; tags of all four categories, a
 // human one among them; `notes` has only sections; `lone` links nowhere;
 // the skill in `markup` has markup in its name, description and a step.
 function buildFixture(project: string) {
@@ -177,7 +177,7 @@ function linkEndsOn(page: Page, selector: string) {
   }, selector);
 }
 
-test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a link re-anchored to a closed group, mentions hidden", async ({ page }) => {
+test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn nor counted", async ({ page }) => {
   writeWorkflows(FLOW);
   await page.goto(url);
   // Workflow: the active workflow's phases in order, then the skills in no phase.
@@ -185,75 +185,61 @@ test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a lin
   // A phase entry no reported skill has is shown as missing (skill-atlas-19).
   await expect(page.getByRole("region", { name: /^Make,/ })).toContainText("Not installed — kept in this workflow");
 
-  // Links: entry points, each further link depth, then skills with no link;
-  // `guide`'s mention of `review` counts as a link while mentions are shown.
-  await groupBy(page, "Links");
-  await expect.poll(() => groupLabels(page)).toEqual(["Entry points, 3 skills", "Linked, 1 skill", "Linked · level 2, 1 skill", "Standalone, 5 skills"]);
+  // Dependencies: entry points, each further call depth, then skills with none;
+  // `guide`, which only mentions `review`, depends on nothing.
+  await groupBy(page, "Dependencies");
+  await expect.poll(() => groupLabels(page)).toEqual(["Entry points, 2 skills", "Called, 1 skill", "Called · level 2, 1 skill", "Standalone, 6 skills"]);
   const entry = page.getByRole("region", { name: /^Entry points,/ });
   await expect(entry.getByRole("button", { name: /^\/ship\b/ })).toBeVisible();
   await expect(entry.getByRole("button", { name: /^\/decide\b/ })).toBeVisible();
-  await expect(entry.getByRole("button", { name: /^\/guide\b/ })).toBeVisible();
-  await expect(page.locator("#link-layer .lk.mentions")).toHaveCount(1);
-
-  // Mentions hidden on the reader's choice: none drawn, and `guide` no longer linked.
-  const mentions = page.getByRole("checkbox", { name: "Mentions" });
-  await mentions.uncheck();
-  await expect(page.locator("#link-layer .lk.mentions")).toHaveCount(0);
-  await expect(page.locator("#link-layer .lk.calls")).not.toHaveCount(0);
-  await expect.poll(() => groupLabels(page)).toEqual(["Entry points, 2 skills", "Linked, 1 skill", "Linked · level 2, 1 skill", "Standalone, 6 skills"]);
   await expect(page.getByRole("region", { name: /^Standalone,/ }).getByRole("button", { name: /^\/guide\b/ })).toBeVisible();
-  await mentions.check();
-  await expect(page.locator("#link-layer .lk.mentions")).toHaveCount(1);
+  await expect(page.getByRole("checkbox", { name: "Mentions" })).toHaveCount(0);
+  await expect(page.locator("#summary")).toContainText("3 dependencies");
 
   // Source: the scanned folders.
   await groupBy(page, "Source");
   await expect.poll(() => groupLabels(page)).toEqual(["Project · Claude Code, 7 skills", "Project · Universal, 3 skills"]);
 
   // A skill opened to its steps.
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   await cardButton(page, "code").click();
   await expect(card(page, "code").locator(".steps-head")).toHaveText("Steps · 3");
   await expect(card(page, "code").locator(".step-title")).toHaveText(["Plan", "Write", "Review"]);
 
-  // The link code → review ends on review's card, then on its closed group's card.
+  // The call code → review ends on review's card, then on its closed group's card.
   await expect.poll(() => linkEndsOn(page, '.card[data-skill="review"]')).toBe(true);
-  await page.getByRole("button", { name: "Collapse Linked · level 2" }).click();
-  const closed = page.locator(".group-card", { hasText: "Linked · level 2" });
+  await page.getByRole("button", { name: "Collapse Called · level 2" }).click();
+  const closed = page.locator(".group-card", { hasText: "Called · level 2" });
   await expect(closed).toHaveAttribute("aria-expanded", "false");
   await expect(card(page, "review")).toHaveCount(0);
-  await expect.poll(() => linkEndsOn(page, '.group-card[data-key="links:level-2"]')).toBe(true);
+  await expect.poll(() => linkEndsOn(page, '.group-card[data-key="dependencies:level-2"]')).toBe(true);
 });
 
-test("skill-atlas-13: with mentions hidden, a step that only mentions a skill shows no chip, no count and no link in the details", async ({ page }) => {
+test("skill-atlas-13: a card reads what it depends on and what uses it, and a step that only mentions a skill shows no chip and no dependency", async ({ page }) => {
   await page.goto(url);
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
+  await expect(card(page, "code").locator(".card-deps")).toHaveText("Depends on 1 · used by 1");
+  await expect(card(page, "review").locator(".card-deps")).toHaveText("Depends on 0 · used by 2");
   await cardButton(page, "guide").click();
-  const chips = card(page, "guide").locator(".step[data-step='guide#1'] .call-chip");
   const panel = details(page);
-  const linksOut = (n: number) => panel.locator("section.d-sec", { has: page.getByRole("heading", { name: `Links out · ${n}` }) });
-  // Shown: the mention is a chip on its step, a count on the card and a link in the details.
-  await expect(chips).toHaveText(["→ review"]);
-  await expect(card(page, "guide").getByLabel("links to 1, linked from 0")).toHaveCount(1);
-  await expect(linksOut(1).getByRole("button", { name: "/review" })).toBeVisible();
-
-  // Hidden: nothing of it shows, on the step, the card, the details or the linked skill's details.
-  await page.getByRole("checkbox", { name: "Mentions" }).uncheck();
-  await expect(chips).toHaveCount(0);
-  await expect(card(page, "guide").locator(".card-meta [aria-label^='links to']")).toHaveCount(0);
-  await expect(linksOut(0)).toContainText("Links to no other skill.");
-  await expect(panel.getByRole("button", { name: "Focus on linked" })).toBeDisabled();
+  const section = (heading: string) => panel.locator("section.d-sec", { has: page.getByRole("heading", { name: heading }) });
+  // The mention is nothing on the step, the card or the details.
+  await expect(card(page, "guide").locator(".step[data-step='guide#1'] .call-chip")).toHaveCount(0);
+  await expect(card(page, "guide").locator(".card-deps")).toHaveCount(0);
+  await expect(section("Depends on · 0")).toContainText("Depends on no other skill.");
+  await expect(panel.getByRole("button", { name: "Focus on dependencies" })).toBeDisabled();
   await cardButton(page, "review").click();
-  const linksIn = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Links in · 2" }) });
-  await expect(linksIn.getByRole("button")).toHaveCount(2);
-  await expect(linksIn.getByRole("button", { name: "/guide" })).toHaveCount(0);
+  const usedBy = section("Used by · 2");
+  await expect(usedBy.getByRole("button")).toHaveCount(2);
+  await expect(usedBy.getByRole("button", { name: "/guide" })).toHaveCount(0);
 });
 
 test("skill-atlas-14: a skill's, a step's and a phase's details with tags and evidence", async ({ page }) => {
   writeWorkflows(FLOW);
   await page.goto(url);
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
 
-  // A skill: what it holds, its tags by category with evidence, its links out.
+  // A skill: what it holds, its tags by category with evidence, what it depends on.
   await cardButton(page, "decide").click();
   const panel = details(page);
   await expect(panel.getByRole("heading", { name: "/decide" })).toBeVisible();
@@ -265,11 +251,10 @@ test("skill-atlas-14: a skill's, a step's and a phase's details with tags and ev
   await expect(tags.locator(".ev-tag", { hasText: "Reads files" }).locator(".ev li")).toContainText("Read the spec files of the area.");
   const steps = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Steps · 3" }) });
   await expect(steps.getByRole("button")).toHaveCount(3);
-  const calls = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Links out · 1" }) });
+  const calls = panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Depends on · 1" }) });
   await expect(calls.getByRole("button", { name: "/review" })).toBeVisible();
   await expect(calls).toContainText("Invoke the `review` skill on the decision.");
-  await expect(calls.locator(".kind")).toHaveText("calls");
-  await expect(panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Links in · 0" }) })).toBeVisible();
+  await expect(panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Used by · 0" }) })).toBeVisible();
 
   // A step: its lines, its text and its tags with evidence.
   await card(page, "decide").getByRole("button", { name: /Record/ }).click();
@@ -292,10 +277,10 @@ test("skill-atlas-14: a skill's, a step's and a phase's details with tags and ev
   await expect(phaseTags.locator(".tag-row", { hasText: "Writes files" }).getByRole("button", { name: "/code" })).toBeVisible();
 });
 
-test("skill-atlas-15: a followed link selects its target", async ({ page }) => {
+test("skill-atlas-15: a followed dependency selects its target", async ({ page }) => {
   await page.goto(url);
-  await groupBy(page, "Links");
-  await page.getByRole("button", { name: "Collapse Linked · level 2" }).click();
+  await groupBy(page, "Dependencies");
+  await page.getByRole("button", { name: "Collapse Called · level 2" }).click();
   await expect(card(page, "review")).toHaveCount(0);
 
   // From a step's call chip: the closed group opens and the target is selected.
@@ -314,7 +299,7 @@ test("skill-atlas-15: a followed link selects its target", async ({ page }) => {
 
 test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown", async ({ page }) => {
   await page.goto(url);
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   const all = [MARKUP, "code", "decide", "guide", "lint-docs", "lone", "notes", "research", "review", "ship"];
   await expect.poll(() => shownSkills(page)).toEqual(all);
 
@@ -322,10 +307,10 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
   const search = page.getByRole("searchbox", { name: /Search skills/ });
   await search.fill("which");
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
-  // `decide` by its step's text "Invoke the `review` skill on the decision.", `guide` by its step's mention.
+  // `decide` by its step's text "Invoke the `review` skill on the decision.", `guide` by its step's words.
   await search.fill("review");
   await expect.poll(() => shownSkills(page)).toEqual(["code", "decide", "guide", "review"]);
-  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 2 of 3 skills shown");
+  await expect(page.getByRole("region", { name: /^Entry points,/ })).toHaveAttribute("aria-label", "Entry points, 1 of 2 skills shown");
 
   // A tag filter, together with the search, then alone.
   await page.getByRole("button", { name: "Filter by tags" }).click();
@@ -343,9 +328,9 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
   await page.keyboard.press("Escape");
   await expect.poll(() => shownSkills(page)).toEqual(all);
 
-  // A focus: the skill and every skill linked to or from it, through any number of links.
+  // A focus: the skill and every skill it depends on or that depends on it, through any number of calls.
   await cardButton(page, "ship").click();
-  await details(page).getByRole("button", { name: "Focus on linked" }).click();
+  await details(page).getByRole("button", { name: "Focus on dependencies" }).click();
   await expect.poll(() => shownSkills(page)).toEqual(["code", "review", "ship"]);
   await expect(page.getByRole("button", { name: "Clear focus on /ship" })).toBeVisible();
   await page.getByRole("button", { name: "Clear focus on /ship" }).click();
@@ -354,7 +339,7 @@ test("skill-atlas-16: search, a tag filter and a focus narrow the skills shown",
 
 test("skill-atlas-17: an insight's choice selects its skills", async ({ page }) => {
   await page.goto(url);
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   await page.getByRole("button", { name: /^Insights/ }).click();
   const insights = page.getByRole("group", { name: "Insights" });
   await expect(insights.getByRole("heading", { name: /^Name differs from its folder/ })).toBeVisible();
@@ -374,7 +359,7 @@ test("skill-atlas-17: frontmatter in error is said to keep the fields that read,
   try {
     await rescan();
     await page.goto(url);
-    await groupBy(page, "Links");
+    await groupBy(page, "Dependencies");
     await page.getByRole("button", { name: /^Insights/ }).click();
     const insights = page.getByRole("group", { name: "Insights" });
     await expect(insights.getByRole("button", { name: /^\/kept\b/ }).filter({ hasText: "Part of its frontmatter could not be read; the fields that read are used" })).toHaveCount(1);
@@ -386,9 +371,179 @@ test("skill-atlas-17: frontmatter in error is said to keep the fields that read,
   }
 });
 
+// Two differing skills of one name in one agent folder: Claude Code may load either.
+const TWIN = {
+  one: "# Twin\n\n## Step 1: First\n\nDo the first thing.\n\n## Step 2: Second\n\nDo the second thing.\n",
+  two: "# Twin\n\n## Step 1: First\n\nDo another thing.\n\n## Step 2: Second\n\nDo the second thing.\n",
+};
+
+test("skill-atlas-17, skill-atlas-34: a conflict between differing copies of one name names each folder, the agent that may load either and what to do, and compares them", async ({ page }) => {
+  const one = join(project, ".claude", "skills", "twin");
+  const two = join(project, ".claude", "skills", "more", "twin");
+  skill(project, ".claude/skills", "twin", "Twin.", TWIN.one);
+  skill(project, ".claude/skills/more", "twin", "Twin.", TWIN.two);
+  try {
+    await rescan();
+    await page.goto(url);
+    await groupBy(page, "Dependencies");
+    const opener = page.getByRole("button", { name: /^Insights/ });
+    await opener.click();
+    const insights = page.getByRole("group", { name: "Insights" });
+    await expect(insights.getByRole("heading", { name: /^Conflicting copies of one name/ })).toBeVisible();
+    await expect(insights.getByRole("button", { name: /^\/twin\b/ })).toContainText("Claude Code may load either copy of “twin”:");
+    const repair = insights.locator(".ins-repair", { has: page.locator("code", { hasText: two }) });
+    expect((await repair.locator("li code").allTextContents()).sort()).toEqual([one, two].sort());
+    await expect(repair.getByRole("button", { name: "Copy folder path" })).toHaveCount(2);
+    await expect(repair.locator("p")).toHaveText("Keep one: delete or rename the other folder, then Rescan.");
+
+    // Compare: the two SKILL.md side by side, the differing line marked, closed by Escape.
+    await repair.getByRole("button", { name: /^Compare / }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".cmp-cell.changed", { hasText: "Do another thing." })).toHaveCount(1);
+    await expect(dialog.locator(".cmp-cell.changed", { hasText: "Do the second thing." })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+
+    // The exported copy says what to do without Rescan, and offers no Compare.
+    const out = join(tmp, "twin.html");
+    execFileSync(process.execPath, [CLI, "export", "--out", out, "--cwd", project, "--no-user", "--no-plugins", "--state", state]);
+    await page.goto(pathToFileURL(out).href);
+    await page.getByRole("button", { name: /^Insights/ }).click();
+    const exported = page.getByRole("group", { name: "Insights" }).locator(".ins-repair", { has: page.locator("code", { hasText: two }) });
+    await expect(exported.locator("p")).toHaveText("Keep one: delete or rename the other folder.");
+    await expect(exported.getByRole("button", { name: /^Compare / })).toHaveCount(0);
+  } finally {
+    rmSync(one, { recursive: true, force: true });
+    rmSync(join(project, ".claude", "skills", "more"), { recursive: true, force: true });
+    await rescan();
+  }
+});
+
+test("skill-atlas-14, skill-atlas-34: a skill overriding another of its name, the one it overrides and another agent's copy each carry a quiet note and add no insight", async ({ page }) => {
+  const repo = join(tmp, "override");
+  const sub = join(repo, "sub");
+  mkdirSync(sub, { recursive: true });
+  execFileSync("git", ["init", "-q", repo]);
+  const body = (what: string) => `# Solo\n\n## Step 1: Read\n\nRead the ${what}.\n\n## Step 2: Report\n\nReport what was read.\n`;
+  skill(repo, ".claude/skills", "solo", "Reads the notes.", body("root's notes"));
+  skill(sub, ".claude/skills", "solo", "Reads the notes.", body("working folder's notes"));
+  // Cursor's copy beside Claude Code's, and the project's source beside its installed copy.
+  skill(sub, ".claude/skills", "pal", "Pairs.", body("Claude Code's notes"));
+  skill(sub, ".cursor/skills", "pal", "Pairs.", body("Cursor's notes"));
+  skill(sub, ".claude/skills", "src", "Ships.", body("installed notes"));
+  skill(sub, "skills", "src", "Ships.", body("source notes"));
+  const started = await serve(sub, join(tmp, "override-state"));
+  try {
+    await page.goto(started.url);
+    await groupBy(page, "Dependencies");
+    await expect(page.locator("#insights-n")).toHaveText("0");
+    await expect(page.locator("#board .issue-dot")).toHaveCount(0);
+    const cards = page.locator('#board .card[data-skill^="solo"]');
+    await expect(cards).toHaveCount(2);
+    const panel = details(page);
+    const notes: string[] = [];
+    for (const id of await cards.evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!))) {
+      await card(page, id).locator(".card-main").click();
+      await expect(panel).toHaveAttribute("data-sel", `skill:${id}`);
+      await expect(panel.getByRole("list", { name: "Issues" })).toHaveCount(0);
+      notes.push((await panel.locator(".same-note li").innerText()).replace(/\s*Compare$/, ""));
+    }
+    expect(notes.sort()).toEqual(["Overridden by the copy in Project · Claude Code", "Overrides the copy in Project (sub) · Claude Code"]);
+    const noteOf = async (prefix: string) => {
+      const out: string[] = [];
+      for (const id of await page.locator(`#board .card[data-skill^="${prefix}"]`).evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!))) {
+        await card(page, id).locator(".card-main").click();
+        await expect(panel).toHaveAttribute("data-sel", `skill:${id}`);
+        await expect(panel.getByRole("list", { name: "Issues" })).toHaveCount(0);
+        out.push((await panel.locator(".same-note li").innerText()).replace(/\s*Compare$/, ""));
+      }
+      return out.sort();
+    };
+    expect(await noteOf("pal")).toEqual(["Also installed for Claude Code with different content", "Also installed for Cursor with different content"]);
+    expect(await noteOf("src")).toEqual(["Also in Project (sub) · source, which no agent loads, with different content", "Also installed for Claude Code with different content"]);
+    await card(page, (await cards.first().getAttribute("data-skill"))!).locator(".card-main").click();
+
+    // Compare from the note: the line that differs marked, Escape closing it and returning focus to the note.
+    const compare = panel.locator(".same-note").getByRole("button", { name: /^Compare / });
+    await compare.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".cmp-head")).toHaveCount(2);
+    await expect(dialog.locator(".cmp-cell.changed", { hasText: "Read the working folder's notes." })).toHaveCount(1);
+    await expect(dialog.locator(".cmp-cell.changed", { hasText: "Report what was read." })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(compare).toBeFocused();
+  } finally {
+    await stop(started.child);
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("skill-atlas-34: a comparison shows what differs at a line's end, and says where SKILL.md is the same", async ({ page }) => {
+  const repo = join(tmp, "compare");
+  const sub = join(repo, "sub");
+  mkdirSync(sub, { recursive: true });
+  execFileSync("git", ["init", "-q", repo]);
+  const text = "# Ends\n\n## Step 1: Read\n\nRead the notes.\n";
+  skill(repo, ".claude/skills", "ends", "Ends lines.", text);
+  skill(sub, ".claude/skills", "ends", "Ends lines.", text);
+  const crlf = join(sub, ".claude", "skills", "ends", "SKILL.md");
+  writeFileSync(crlf, readFileSync(crlf, "utf8").replace(/\n/g, "\r\n"));
+  skill(repo, ".claude/skills", "kit", "Bundles.", text);
+  skill(sub, ".claude/skills", "kit", "Bundles.", text);
+  for (const [dir, what] of [[repo, "one"], [sub, "two"]]) {
+    mkdirSync(join(dir, ".claude", "skills", "kit", "references"), { recursive: true });
+    writeFileSync(join(dir, ".claude", "skills", "kit", "references", "x.md"), `${what}\n`);
+  }
+  const started = await serve(sub, join(tmp, "compare-state"));
+  try {
+    await page.goto(started.url);
+    await groupBy(page, "Dependencies");
+    const panel = details(page);
+    const dialog = page.getByRole("dialog");
+    const compare = async (name: string) => {
+      await card(page, name).locator(".card-main").click();
+      await expect(panel).toHaveAttribute("data-sel", `skill:${name}`);
+      await panel.locator(".same-note").getByRole("button", { name: /^Compare / }).click();
+      await expect(dialog.locator(".cmp-sum")).not.toHaveText("Loading…");
+    };
+    // Lines differing in a carriage return alone are marked, the return shown.
+    await compare("ends");
+    await expect(dialog.locator(".cmp-sum")).toHaveText(/lines differ$/);
+    await expect(dialog.locator(".cmp-cell.changed .ws", { hasText: "\u240D" }).first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    // Copies differing in another file alone say so.
+    await compare("kit");
+    await expect(dialog.locator(".cmp-sum")).toHaveText("SKILL.md is the same in both; the copies differ in their other files.");
+    await expect(dialog.locator(".cmp-cell.changed")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  } finally {
+    await stop(started.child);
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("skill-atlas-17: an unresolved call is an insight, and an unresolved name the skill steers away from is not", async ({ page }) => {
+  const dir = join(project, ".claude", "skills", "asker");
+  skill(project, ".claude/skills", "asker", "Asks.", "# Asker\n\n## Step 1: Ask\n\nDo not run the `/vanished` command.\n\nInvoke the `away` skill.\n");
+  try {
+    await rescan();
+    await page.goto(url);
+    await page.getByRole("button", { name: /^Insights/ }).click();
+    const insights = page.getByRole("group", { name: "Insights" });
+    await expect(insights).toContainText("asker calls “away”, which is not installed");
+    await expect(insights).not.toContainText("vanished");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    await rescan();
+  }
+});
+
 test("skill-atlas-18: a skill whose name and step hold markup is shown as text", async ({ page }) => {
   await page.goto(url);
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   const markup = card(page, MARKUP);
   await expect(markup.locator(".card-name")).toHaveText("/" + MARKUP);
   await expect(markup.locator(".card-desc")).toContainText("<script>window.__atlasXss = 2</script>");
@@ -573,6 +728,19 @@ test("skill-atlas-20: a file changed behind the page refuses the next edit and s
   expect(readFileSync(join(state, WORKFLOWS), "utf8")).toBe(stored);
 });
 
+test("skill-atlas-13: with no workflow left by a deletion refused as the file changed, the served page offers its presets, never the exported copy's words", async ({ page }) => {
+  writeWorkflows(FLOW);
+  await page.goto(url);
+  await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
+  writeWorkflows({ ...FLOW, workflows: [{ ...FLOW.workflows[0], name: "Flow, changed elsewhere" }] });
+  await page.getByRole("button", { name: "Workflow actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete workflow…" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete workflow" }).click();
+  await expect(page.getByRole("alert")).toHaveText(/Workflows were changed elsewhere/);
+  await expect(page.getByRole("heading", { name: "Organize your skills into a workflow" })).toBeVisible();
+  await expect(page.locator("#board")).not.toContainText("exported copy");
+});
+
 test("skill-atlas-21: an unreadable workflows file is named, and started fresh with the file kept", async ({ page }) => {
   const broken = '{ "version": 1, "workflows": [ }';
   mkdirSync(state, { recursive: true });
@@ -582,9 +750,9 @@ test("skill-atlas-21: an unreadable workflows file is named, and started fresh w
   await expect(notice).toContainText(join(state, WORKFLOWS));
   // No workflow edit is offered, here or from a card in another grouping.
   await expect(page.getByRole("combobox", { name: "Active workflow" })).toBeDisabled();
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   await page.getByRole("button", { name: "Actions for /lone" }).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Open details", "Show steps", "Focus on linked"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Open details", "Show steps", "Focus on dependencies"]);
   await page.keyboard.press("Escape");
   await groupBy(page, "Workflow");
 
@@ -594,23 +762,38 @@ test("skill-atlas-21: an unreadable workflows file is named, and started fresh w
   expect(JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows).toEqual([]);
 });
 
-test("skill-atlas-22: an exported file opened from disk keeps a workflow edit after a reload", async ({ page }) => {
+test("skill-atlas-22: an exported file opened from disk is read-only: its workflows shown with no control editing them, and saying so", async ({ page }) => {
   writeWorkflows(FLOW);
   const out = join(tmp, "atlas.html");
   execFileSync(process.execPath, [CLI, "export", "--out", out, "--cwd", project, "--no-user", "--no-plugins", "--state", state]);
   await page.goto(pathToFileURL(out).href);
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
+  await expect(page.locator("#save-status")).toHaveText("Exported copy, read-only");
   await expect(page.getByRole("button", { name: "Rescan" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Download workflows.json" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Download/ })).toHaveCount(0);
 
+  // No control creating, renaming, reordering, duplicating or deleting a workflow or a phase, or moving a skill.
+  await expect(page.getByRole("button", { name: "Workflow actions" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Active workflow" }).locator("option")).toHaveText(["Flow"]);
+  await expect(page.getByRole("button", { name: "Add phase" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Rename phase|^Actions for phase|^Remove / })).toHaveCount(0);
+  await expect(page.locator("#board [draggable]")).toHaveCount(0);
   await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
-  await page.getByRole("menuitem", { name: "Make", exact: true }).first().click();
-  await expect(page.getByRole("region", { name: /^Make,/ }).getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
-  await expect(page.locator("#save-status")).toHaveText("Saved in this browser");
+  await expect(page.getByRole("menuitem")).toHaveText(["Open details", "Show steps", "Focus on dependencies"]);
+  await page.keyboard.press("Escape");
+  await cardButton(page, "decide").click();
+  const panel = details(page);
+  await expect(panel.locator("section.d-sec", { has: page.getByRole("heading", { name: "Phases in Flow" }) })).toHaveText(/Plan$/);
+  await expect(panel.getByRole("checkbox")).toHaveCount(0);
+  await page.getByRole("region", { name: /^Plan,/ }).getByRole("button", { name: "Plan", exact: true }).click();
+  await expect(panel.getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: /Rename|Move|Delete/ })).toHaveCount(0);
+  await expect(panel.getByRole("textbox")).toHaveCount(0);
 
-  await page.reload();
-  await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 2 skills", "Unassigned, 6 skills"]);
-  await expect(page.getByRole("region", { name: /^Make,/ }).getByRole("button", { name: /^\/lone\b/ })).toBeVisible();
+  // Viewing still works: grouping, search and details.
+  await groupBy(page, "Dependencies");
+  await page.getByRole("searchbox", { name: /Search skills/ }).fill("which");
+  await expect.poll(() => shownSkills(page)).toEqual(["code"]);
 });
 
 // A skill written in Cyrillic, with a reference written in English.
@@ -625,7 +808,7 @@ test("skill-atlas-29: a skill in another script than Latin or CJK is marked as i
   try {
     await rescan();
     await page.goto(url);
-    await groupBy(page, "Links");
+    await groupBy(page, "Dependencies");
     await card(page, RU.name).locator(".card-main").click();
     const panel = details(page);
     await expect(panel.locator(".d-desc")).toHaveText(RU.description);
@@ -672,7 +855,7 @@ test("skill-atlas-29: a skill described in English and written in Arabic with no
     expect(reported.steps).toHaveLength(0);
     expect(typeof reported.language).toBe("string");
     await page.goto(url);
-    await groupBy(page, "Links");
+    await groupBy(page, "Dependencies");
     await card(page, AR.name).locator(".card-main").click();
     await expect(card(page, AR.name).locator(".card-desc")).toHaveText(AR.description);
     const panel = details(page);
@@ -773,7 +956,7 @@ test.describe("in a browser of Chinese", () => {
     // The page's own text and the presets, in Chinese.
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
     await expect(page.getByRole("button", { name: zh("Rescan"), exact: true })).toBeVisible();
-    await expect(page.getByRole("radio", { name: zh("Links") })).toBeVisible();
+    await expect(page.getByRole("radio", { name: zh("Dependencies") })).toBeVisible();
     await expect(page.getByRole("combobox", { name: zh("Language") })).toHaveValue("zh-CN");
     await expect(page.getByRole("heading", { name: zh("Organize your skills into a workflow") })).toBeVisible();
     const sdlc = zhLabels("workflow-presets.zh-CN.json").presets.find((p: { id: string }) => p.id === "sdlc");
@@ -791,7 +974,7 @@ test.describe("in a browser of Chinese", () => {
     // Tags and their categories labelled in Chinese; the evidence quotes SKILL.md's own line.
     const tagZh = (id: string) => zhLabels("tag-rules.zh-CN.json").tags.find((tg: { id: string }) => tg.id === id).label as string;
     const humanZh = zhLabels("view-settings.zh-CN.json").categories.human.label as string;
-    await groupBy(page, zh("Links"));
+    await groupBy(page, zh("Dependencies"));
     await page.getByRole("button", { name: zh("Filter by tags") }).click();
     await page.getByRole("checkbox", { name: startsWith(tagZh("human.approval")) }).check();
     await expect.poll(() => shownSkills(page)).toEqual(["decide"]);
@@ -899,7 +1082,7 @@ test.describe("in a browser of Chinese", () => {
     try {
       await rescan();
       await page.goto(url);
-      await groupBy(page, zh("Links"));
+      await groupBy(page, zh("Dependencies"));
       await expect(card(page, "lone").locator(".card-desc")).toHaveText("Stands alone.");
       await page.getByRole("button", { name: startsWith(zh("Insights")) }).click();
       const insights = page.getByRole("group", { name: zh("Insights") });
@@ -931,7 +1114,7 @@ test.describe("in a browser of Chinese", () => {
       await route.fulfill({ response: res, json: body });
     });
     await page.goto(url);
-    await groupBy(page, zh("Links"));
+    await groupBy(page, zh("Dependencies"));
     await cardMain(page, "decide").click();
     const panel = page.getByRole("complementary", { name: zh("Details") });
     await expect(panel.locator(".d-desc")).toHaveText("Decides on a design.");
@@ -948,7 +1131,7 @@ test.describe("in a browser of Chinese", () => {
     writeFileSync(join(dir, "SKILL.zh.md"), `---\nname: ${ZH_ONLY.name}\ndescription: ${ZH_ONLY.zh}\n---\n<!-- skill-atlas:source sha256=${sha256(join(dir, "SKILL.md"))} -->\n# 调查\n\n## 步骤 1：${ZH_ONLY.step}\n\n${ZH_ONLY.zh}\n`);
     await rescan();
     await page.goto(url);
-    await groupBy(page, zh("Links"));
+    await groupBy(page, zh("Dependencies"));
     await cardMain(page, ZH_ONLY.name).click();
     await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
     await expect(card(page, ZH_ONLY.name).locator(".step-title")).toHaveText([new RegExp(esc(ZH_ONLY.step))]);
@@ -968,7 +1151,7 @@ test.describe("in a browser of Chinese", () => {
   async function expectSurveyShows(page: Page, words: string, file: string, notes: string[], fileNotes: string[]) {
     await rescan();
     await page.goto(url);
-    await groupBy(page, zh("Links"));
+    await groupBy(page, zh("Dependencies"));
     await cardMain(page, ZH_ONLY.name).click();
     await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(words);
     const panel = page.getByRole("complementary", { name: zh("Details") });
@@ -1025,7 +1208,7 @@ test.describe("in a browser of Chinese", () => {
     try {
       await rescan();
       await page.goto(url);
-      await groupBy(page, zh("Links"));
+      await groupBy(page, zh("Dependencies"));
       await cardMain(page, ZH_ONLY.name).click();
       // The description from the zh file, the step's title from the annotation.
       await expect(card(page, ZH_ONLY.name).locator(".card-desc")).toHaveText(ZH_ONLY.zh);
@@ -1042,7 +1225,7 @@ test.describe("in a browser of Chinese", () => {
 test("skill-atlas-30: a language chosen on the page applies at once, keeping the open skill, the selection and the filter, and stands after a reload", async ({ page }) => {
   await page.goto(url);
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
-  await groupBy(page, "Links");
+  await groupBy(page, "Dependencies");
   await cardButton(page, "code").click();
   await expect(card(page, "code").locator(".step-title")).toHaveText(["Plan", "Write", "Review"]);
   const search = page.getByRole("searchbox", { name: /Search skills/ });
@@ -1060,7 +1243,7 @@ test("skill-atlas-30: a language chosen on the page applies at once, keeping the
   await expect(panel.locator(".d-desc")).toHaveText(CODE_ZH.description);
   await expect(page.getByRole("searchbox", { name: zh("Search skills by name, description or step") })).toHaveValue("Implements");
   await expect.poll(() => shownSkills(page)).toEqual(["code"]);
-  await expect(page.getByRole("radio", { name: zh("Links") })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: zh("Dependencies") })).toHaveAttribute("aria-checked", "true");
 
   // The choice is kept in the browser.
   await page.reload();

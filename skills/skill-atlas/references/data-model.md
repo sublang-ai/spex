@@ -40,9 +40,11 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
       "scope": "project",              // project | user | plugin | extra
       "agent": "claude-code",          // agent that loads this folder, or "universal"
       "label": "Project · Claude Code",
+      "agents": ["claude-code"],       // the agents that load this folder; none for a --root's or a project's skills/
       "skillCount": 3
     }
   ],
+  "agentNames": { "claude-code": "Claude Code", "gemini-cli": "Gemini CLI" },   // each agent's name by its key
   "tagCatalog": [                      // every tag id used below, static or dynamic
     { "id": "tool.shell", "category": "tool", "label": "Shell" }
   ],
@@ -59,6 +61,9 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
       "language": "en",                // the language SKILL.md is written in (see Languages); "und" when unknown
       "copies": [                      // other folders holding this same skill, byte for byte
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
+      ],
+      "sameName": [                    // the other differing skills of this name (see below)
+        { "id": "code@user-claude", "relation": "override", "agents": ["claude-code"], "wins": "code@user-claude" }
       ],
       "frontmatter": { "name": "code", "description": "…", "allowed-tools": "Bash Read" },
       "lines": 84,                     // SKILL.md line count
@@ -92,10 +97,10 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
     }
   ],
   "unresolved": [                      // a link to a skill that is not installed
-    { "from": "dev", "fromStep": "dev#2", "name": "branch", "evidence": { "line": 12, "text": "…" } }
+    { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["code", "code@user-claude"], "message": "…" }
+    { "kind": "duplicate-name", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -112,11 +117,22 @@ A `TagHit`:
 }
 ```
 
-Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
+Insight kinds: `duplicate-name` (differing skills of one name an agent may load either of), `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
 
 One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
 A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
-Only skills of one name whose folders differ are a `duplicate-name`.
+Skills of one name whose folders differ each list the others under `sameName`, `{ "id", "relation", "agents", "wins" }`, the relation told from the folders each agent loads them from, copies included, by the first row that applies:
+
+| `relation` | When | `agents` | `wins` |
+| --- | --- | --- | --- |
+| `conflict` | an agent loads both, from folders it ranks alike | those agents | null |
+| `override` | each agent loading both prefers one folder | the agents loading `wins` | the id those agents load; where the agents differ in it, one entry per id they load |
+| `other-agent` | no agent loads both, so each sees one, the two perhaps drifted apart | none, as no agent loads both | null |
+
+- An agent ranks a project's folder over the home folder's, and a nearer project folder over a farther one; Claude Code ranks the home folder's over a project's and a farther project folder's over a nearer one, Codex offers both under the name, ranking none, and Gemini CLI also ranks the shared `.agents` folders over its own in one place (`AGENT_PRECEDENCE` in `scripts/lib/roots.mjs`).
+- A plugin's skill is named `<plugin>:<name>`, so it shares a name only with the skills of the same plugin; a `--root`'s and a project's own `skills/` are loaded by no agent.
+- The agents loading another agent's copy are those of its folders' `agents`.
+- Only a name holding a `conflict` is a `duplicate-name` insight, covering the conflicting copies; an override and another agent's copy are no problem.
 
 ## annotations.json — corrections layered on the scan
 
@@ -247,8 +263,8 @@ Every insight carries `params`, the values its message is built from, so the pag
 
 | Kind | `params` |
 | --- | --- |
-| `duplicate-name` | `name` |
-| `unresolved-link` | `name`, `from` |
+| `duplicate-name` | `name`, `agents` (that may load either copy), `copies` (`{ "id", "path", "root", "rootLabel" }` per conflicting copy, `path` its folder) |
+| `unresolved-link` | `name`, `from`, `kind` (`calls` where any of its links calls, else `mentions`) |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
 | `missing-description`, `no-steps`, `stale-annotation` | — (`{}`) |
@@ -346,6 +362,7 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 - A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
 - One link is kept per (skill, step, target), `calls` before `mentions`; a skill's link to itself is dropped.
 - A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); `` `x` skill `` after any word (``the `x` skill``, ``our `x` skill``); and `Skill(x)`, whatever `x` is.
+  Each has the kind its form would have to an installed skill: `` `x` skill `` calls only within a few words after a verb of use, and any form steered away from mentions; one is kept per (skill, step, name), `calls` before `mentions`.
 
 Tags come from `tag-rules.json`: each rule's patterns are tried against every line of the frontmatter description (and the `context` and `agent` keys), the preamble (every body line outside every step) and each step, fenced code included.
 A match negated earlier in its own clause is not evidence: a never, not, no, nor, without, avoid, don't, doesn't, won't, cannot or can't within the 60 characters before it in the same sentence drops it, unless the rule sets `"negatable": false`.

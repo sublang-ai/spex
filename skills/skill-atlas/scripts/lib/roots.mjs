@@ -51,6 +51,26 @@ export const AGENT_ROOTS = [
 const SCOPE_LABEL = { project: 'Project', user: 'User', plugin: 'Plugin', extra: 'Extra' };
 const SKIP_DIRS = new Set(['node_modules']);
 
+/**
+ * Which of two folders an agent loads a skill name from where both hold it,
+ * by the agent's documentation; an agent not listed prefers a project's folder
+ * to the home folder's and a nearer project folder to a farther one.
+ * - home-first: the home folder's over a project's, a farther project
+ *   folder's over a nearer one (Claude Code keeps the nearer one under
+ *   another name);
+ * - none: both are offered under the name (Codex);
+ * - shared-first: the common rule, and in one place the shared `.agents`
+ *   folders over the agent's own (Gemini CLI).
+ */
+export const AGENT_PRECEDENCE = Object.freeze({ 'claude-code': 'home-first', codex: 'none', 'gemini-cli': 'shared-first' });
+
+/** Each agent's name by its key: the label of the agent's first row. */
+export const AGENT_LABELS = Object.freeze(Object.fromEntries(AGENT_ROOTS.filter((r) => r.agent !== 'universal').reverse().map((r) => [r.agent, r.label])));
+
+// The agents loading a row's folder, by key: its agent, unless that is
+// `universal`, and its loadedBy; none for a row no agent loads.
+const loaders = (row) => (row.noAgent ? [] : [...new Set([...(row.agent === 'universal' ? [] : [row.agent]), ...(row.loadedBy ?? [])])].sort());
+
 /** The Claude Code config folder: CLAUDE_CONFIG_DIR, else ~/.claude. */
 export function claudeConfigDir(home = os.homedir()) {
   return process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : path.join(home, '.claude');
@@ -132,6 +152,7 @@ export function listRoots(opts) {
         requireSkills: !!row.requireSkills,
         plugin: null,
         depth,
+        agents: loaders(row),
         linked: linkedBelow(from, segs),
       });
     }
@@ -143,7 +164,7 @@ export function listRoots(opts) {
     const id = extraId(path.resolve(dir));
     if (extras.has(id)) return;
     extras.add(id);
-    roots.push({ id, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, linked: false });
+    roots.push({ id, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, agents: [], linked: false });
   });
   return roots;
 }
@@ -236,7 +257,7 @@ function pluginRoots(cwd) {
         const rel = path.relative(project, realCwd);
         if (rel.startsWith('..') || path.isAbsolute(rel)) continue; // installed for another project
       }
-      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name, linked: linkedBelow(inst.installPath, ['skills']) });
+      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name, agents: ['claude-code'], linked: linkedBelow(inst.installPath, ['skills']) });
     }
   }
   return roots;

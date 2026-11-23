@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e76cb06deed8182511f2f2f6f921460a038e547b26022508534e018668713979 own=e887051ca31936b64525021ebaa5e16a708270a809ad2a767b4c58a6a715551c -->
+<!-- skill-atlas:source sha256=e43d6412bd3a4a40bce90a0e039045df2e83595099ccd7bd5d452026bd0f932c own=3eec62218556450af9517dff08fd5b066d9791c26bcee494517560263a7371e1 -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -43,9 +43,11 @@
       "scope": "project",              // project | user | plugin | extra
       "agent": "claude-code",          // 加载此文件夹的代理，或 "universal"
       "label": "Project · Claude Code",
+      "agents": ["claude-code"],       // 加载此文件夹的代理；--root 的和项目的 skills/ 则没有
       "skillCount": 3
     }
   ],
+  "agentNames": { "claude-code": "Claude Code", "gemini-cli": "Gemini CLI" },   // 各代理的名称，以其键为键
   "tagCatalog": [                      // 下文用到的每个标签 id，无论静态还是动态
     { "id": "tool.shell", "category": "tool", "label": "Shell" }
   ],
@@ -62,6 +64,9 @@
       "language": "en",                // SKILL.md 所用的语言（见“语言”）；无法判断时为 "und"
       "copies": [                      // 存放同一技能（逐字节相同）的其他文件夹
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
+      ],
+      "sameName": [                    // 此名称下其他内容不同的技能（见下文）
+        { "id": "code@user-claude", "relation": "override", "agents": ["claude-code"], "wins": "code@user-claude" }
       ],
       "frontmatter": { "name": "code", "description": "…", "allowed-tools": "Bash Read" },
       "lines": 84,                     // SKILL.md 的行数
@@ -95,10 +100,10 @@
     }
   ],
   "unresolved": [                      // 指向未安装技能的链接
-    { "from": "dev", "fromStep": "dev#2", "name": "branch", "evidence": { "line": 12, "text": "…" } }
+    { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["code", "code@user-claude"], "message": "…" }
+    { "kind": "duplicate-name", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -115,11 +120,22 @@
 }
 ```
 
-洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
+洞察类型：`duplicate-name`（同名而内容不同、某个代理可能加载其中任一个的技能）、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
 为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
 大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
-只有同名而文件夹不同的技能才是 `duplicate-name`。
+同名而文件夹不同的技能各自在 `sameName` 下列出其余几个，`{ "id", "relation", "agents", "wins" }`，关系由各代理加载它们（副本也算在内）所用的文件夹判定，取第一个适用的行：
+
+| `relation` | 何时 | `agents` | `wins` |
+| --- | --- | --- | --- |
+| `conflict` | 某个代理两者都加载，且它对两者所在的文件夹不分先后 | 这些代理 | null |
+| `override` | 两者都加载的每个代理都偏向其中一个文件夹 | 加载 `wins` 的代理 | 这些代理加载的那个 id；各代理加载的不一致时，每个被加载的 id 一个条目 |
+| `other-agent` | 没有代理两者都加载，因此各自只看到一个，两者可能已各自改动 | 没有，因为没有代理两者都加载 | null |
+
+- 代理把项目的文件夹排在主目录的之前，把较近的项目文件夹排在较远的之前；Claude Code 则把主目录的排在项目的之前，把较远的项目文件夹排在较近的之前；Codex 在这个名称下两者都提供，不分先后；Gemini CLI 还在同一处把共享的 `.agents` 文件夹排在它自己的之前（见 `scripts/lib/roots.mjs` 中的 `AGENT_PRECEDENCE`）。
+- 插件的技能名为 `<plugin>:<name>`，因此只与同一插件的技能同名；`--root` 的技能和项目自己的 `skills/` 都不被任何代理加载。
+- 加载其他代理的副本的代理，是其各文件夹 `agents` 中的代理。
+- 只有含 `conflict` 的名称才是 `duplicate-name` 洞察，涵盖相互冲突的各个副本；覆盖和其他代理的副本都不算问题。
 
 ## annotations.json — 叠加在扫描之上的修正
 
@@ -250,8 +266,8 @@
 
 | 类型 | `params` |
 | --- | --- |
-| `duplicate-name` | `name` |
-| `unresolved-link` | `name`、`from` |
+| `duplicate-name` | `name`、`agents`（可能加载其中任一副本的代理）、`copies`（每个冲突副本一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为其文件夹） |
+| `unresolved-link` | `name`、`from`、`kind`（其中任一链接为调用时为 `calls`，否则为 `mentions`） |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
 | `missing-description`、`no-steps`、`stale-annotation` | —（`{}`） |
@@ -349,6 +365,7 @@
 - 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。
 - 每个（技能、步骤、目标）只保留一条链接，`calls` 优先于 `mentions`；技能指向自身的链接被丢弃。
 - 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；任意词之后的 `` `x` skill ``（``the `x` skill``、``our `x` skill``）；以及 `Skill(x)`，无论 `x` 是什么。
+  每个的类型与该形式指向已安装技能时相同：`` `x` skill `` 只有在某个表示使用的动词之后几个词以内才是调用，任何被引开的形式都是提及；每个（技能、步骤、名称）只保留一个，`calls` 优先于 `mentions`。
 
 标签来自 `tag-rules.json`：每条规则的模式会与 frontmatter 描述（以及 `context` 和 `agent` 键）、前言（所有步骤之外的每一行正文）和每个步骤的每一行逐一匹配，围栏代码也包括在内。
 在其所在子句中先前被否定的匹配不算证据：同一句中它之前 60 个字符以内出现 never、not、no、nor、without、avoid、don't、doesn't、won't、cannot 或 can't 时，该匹配被丢弃，除非规则设置了 `"negatable": false`。
