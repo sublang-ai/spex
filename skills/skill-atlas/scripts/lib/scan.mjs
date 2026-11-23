@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The scan: roots -> skills -> skills of one name -> steps, links, tags -> translations -> annotations -> insights.
+// The scan: roots -> skills -> steps, links, tags -> translations -> annotations -> insights.
 // A skill that cannot be read or parsed is recorded with an issue; it never
 // aborts the scan.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { listRoots, skillDirs, isDir, realOr, placeId, idWord, AGENT_LABELS } from './roots.mjs';
+import { listRoots, skillDirs, isDir, realOr, placeId, idWord } from './roots.mjs';
 import { splitFrontmatter } from './frontmatter.mjs';
 import { fenceMask, clipText } from './markdown.mjs';
 import { detectSteps } from './steps.mjs';
-import { buildLinkMatcher, findLinks, proseUnits } from './links.mjs';
+import { buildLinkMatcher, findLinks, proseUnits, fullName, resolve } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
 import { stateTranslations, readTextBounded, chooseTranslation, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
 import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { fileLanguage } from './language.mjs';
 import { findInsights } from './insights.mjs';
-import { relateSameNames } from './same-name.mjs';
-import { loadingModel } from './loading.mjs';
 import { warn } from './log.mjs';
 
 export const ATLAS_VERSION = 1;
@@ -72,7 +70,6 @@ export function scan(opts) {
     if (!cur || before(root, cur)) scannedAs.set(real, root);
   }
 
-  const counts = new Map(); // root id -> the skills present in its folder
   for (const root of listed) {
     if (!isDir(root.path)) {
       if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
@@ -90,31 +87,15 @@ export function scan(opts) {
       byReal.set(real, rec);
       skills.push(rec);
     }
-    counts.set(root.id, present);
+    if (root.requireSkills && !present) continue;
+    const { requireSkills, explicit, depth, linked, ...rec } = root;
+    roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
   }
   skills = mergeIdenticalCopies(skills);
 
   assignIds(skills, idOrder, new Map(listed.map((r) => [r.id, r.path])));
-  // Each other row reaching a scanned folder loads its skills there too: each
-  // is listed at that row's folder as a copy, after the ids, which it changes not.
-  for (const root of listed) {
-    const as = isDir(root.path) ? scannedAs.get(realOr(root.path)) : null;
-    if (!as || as === root) continue;
-    counts.set(root.id, counts.get(as.id));
-    for (const s of skills) {
-      for (const p of [{ root: s.root, dir: s.dir }, ...s.copies]) {
-        if (p.root === as.id) s.copies.push({ root: root.id, dir: path.join(root.path, path.relative(as.path, p.dir)) });
-      }
-    }
-  }
-  for (const root of listed) {
-    if (!counts.has(root.id) || root.requireSkills && !counts.get(root.id)) continue;
-    const { requireSkills, explicit, depth, dist, row, linked, ...rec } = root;
-    roots.push({ ...rec, skillCount: counts.get(root.id) }); // copies included: the skills present in this folder
-  }
-  const model = loadingModel(skills, new Map(listed.map((r) => [r.id, r])));
-  const conflicts = relateSameNames(model);
-  const matcher = buildLinkMatcher(model);
+  markSameNames(skills);
+  const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
   let edges = [];
   let unresolved = [];
   for (const s of skills) {
@@ -125,7 +106,7 @@ export function scan(opts) {
     readTranslations(s, opts.stateDir);
   }
 
-  const state = { skills, edges, unresolved, catalog };
+  const state = { skills, edges, unresolved, catalog, resolve: (name, fromRoot) => resolve(matcher, name, fromRoot) };
   const annotations = loadAnnotations(opts.stateDir);
   if (annotations) applyAnnotations(annotations, state);
   edges = state.edges;
@@ -139,7 +120,7 @@ export function scan(opts) {
     for (const st of s.steps) st.calls = [...new Set(edges.filter((e) => e.from === s.id && e.fromStep === st.id).map((e) => e.to))];
     s.tags = mergeHits(s._baseTags, ...s.steps.map((st) => st.tags));
   }
-  const insights = findInsights({ skills, edges, unresolved, roots, conflicts, scanArgs: scanArgs(opts) });
+  const insights = findInsights({ skills, edges, unresolved, roots, scanArgs: scanArgs(opts) });
   for (const s of skills) {
     s.issues = [...new Set(insights.filter((i) => i.skills.includes(s.id)).map((i) => i.kind))];
   }
@@ -157,7 +138,6 @@ export function scan(opts) {
     generatedAt: new Date().toISOString(),
     cwd: opts.cwd,
     roots,
-    agentNames: AGENT_LABELS,
     tagCatalog: tagCatalog.map(({ id, category, label }) => ({ id, category, label })),
     skills: skills.map(publicSkill),
     edges,
@@ -217,20 +197,21 @@ function readSkill(dir, root) {
   return s;
 }
 
-// A skill copied into several roots under one name, every file of its folder
-// byte for byte the same, is one record; the later folders join the first
-// one's `copies`. The rest of a folder is compared only once SKILL.md matches.
+// A skill copied into several roots under one name [fullName], every file of
+// its folder byte for byte the same, is one record; the later folders join
+// the first one's `copies`. The rest of a folder is compared only once SKILL.md matches.
 function mergeIdenticalCopies(skills) {
   const kept = [];
   const byName = new Map();
   for (const s of skills) {
-    const same = s._readOk ? (byName.get(s.name) ?? []).find((k) => k._readOk && k._raw === s._raw && sameFolder(k, s)) : null;
+    const name = fullName(s);
+    const same = s._readOk ? (byName.get(name) ?? []).find((k) => k._readOk && k._raw === s._raw && sameFolder(k, s)) : null;
     if (same) {
       same.copies.push({ root: s.root, dir: s.dir }, ...s.copies);
       continue;
     }
-    if (!byName.has(s.name)) byName.set(s.name, []);
-    byName.get(s.name).push(s);
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(s);
     kept.push(s);
   }
   return kept;
@@ -435,6 +416,18 @@ function scanArgs(opts) {
 // A path as one word of a POSIX shell command: quoted where it holds anything but safe characters.
 function shellWord(p) {
   return /^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
+// Each skill's `sameName`: the other skills of its name [fullName], which
+// differ from it, since identical copies are one record [mergeIdenticalCopies].
+function markSameNames(skills) {
+  const byName = new Map();
+  for (const s of skills) {
+    const name = fullName(s);
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(s);
+  }
+  for (const group of byName.values()) for (const s of group) s.sameName = group.filter((o) => o !== s).map((o) => o.id);
 }
 
 function publicSkill(s) {

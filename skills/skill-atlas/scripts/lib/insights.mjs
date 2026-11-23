@@ -6,17 +6,16 @@
 // and `params`, the values its English message is built from, for the page to phrase.
 
 import path from 'node:path';
-import { AGENT_LABELS } from './roots.mjs';
-import { keepLink } from './links.mjs';
+import { keepLink, fullName } from './links.mjs';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
 const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'stale-annotation', 'translation-steps'];
 // Each kind's level (data-model.md): a problem where the reader must act on it,
 // else a note. An unresolved name the skill only mentions runs nothing, so it is a note.
-const NOTE_KINDS = new Set(['oversized', 'missing-description', 'name-mismatch', 'no-steps']);
+const NOTE_KINDS = new Set(['duplicate-name', 'oversized', 'missing-description', 'name-mismatch', 'no-steps']);
 export const levelOf = (i) => (NOTE_KINDS.has(i.kind) || (i.kind === 'unresolved-link' && i.params?.kind === 'mentions') ? 'note' : 'problem');
 
-export function findInsights({ skills, edges, unresolved, roots, conflicts = [], scanArgs = '' }) {
+export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }) {
   const out = [];
   const rootLabel = new Map(roots.map((r) => [r.id, r.label]));
 
@@ -26,18 +25,19 @@ export function findInsights({ skills, edges, unresolved, roots, conflicts = [],
     if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: { named }, message: `${s.id}: ${s._fmError}; ${named ? 'the fields that read are used' : 'the folder name is used as its name'}` });
   }
 
-  // Only skills of one name an agent may run either of are a problem, one
-  // insight per name and set of them [same-name.mjs]; an override and another
-  // agent's copy are not. Renaming one's folder and its declared name alike
-  // parts them for every agent, whichever it invokes a skill by.
-  for (const c of conflicts) {
-    const copies = c.copies.map((p) => ({ ...p, rootLabel: rootLabel.get(p.root) ?? p.root }));
-    const who = c.agents.map((a) => AGENT_LABELS[a] ?? a);
+  // One note per name that differing skills declare [scan.mjs markSameNames]:
+  // a fact, since which an agent picks is its own rule.
+  const byId = new Map(skills.map((s) => [s.id, s]));
+  for (const s of skills) {
+    const group = [s, ...s.sameName.map((id) => byId.get(id))];
+    if (!s.sameName.length || group.some((o) => skills.indexOf(o) < skills.indexOf(s))) continue;
+    const name = fullName(s);
+    const copies = group.flatMap((o) => [{ root: o.root, dir: o.dir }, ...o.copies].map((p) => ({ id: o.id, path: p.dir, root: p.root, rootLabel: rootLabel.get(p.root) ?? p.root })));
     out.push({
       kind: 'duplicate-name',
-      skills: [...new Set(copies.map((p) => p.id))],
-      params: { name: c.name, agents: c.agents, copies },
-      message: `"${c.name}" differs between ${copies.map((p) => p.path).join(' and ')}, and ${who.join(' and ')} may load either. Delete one, rename one's folder and the name in its SKILL.md alike, or move it out of the folders ${who.length > 1 ? 'these agents load' : 'this agent loads'}, then scan again.`,
+      skills: group.map((o) => o.id),
+      params: { name, copies },
+      message: `"${name}" has ${group.length} different versions in ${copies.length} folders: ${copies.map((p) => p.path).join(', ')}. An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.`,
     });
   }
 

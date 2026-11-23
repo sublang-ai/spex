@@ -65,20 +65,34 @@ const NAME_CHARS = String.raw`[a-z0-9][a-z0-9_-]*(?::[a-z0-9][a-z0-9_-]*)?`;
 // only when no word character follows it (sentence punctuation, not `.md`).
 const NAME_END = String.raw`(?![\w/-]|[.:]\w)`;
 
+// A skill's name as it is called: a plugin's skill is `<plugin>:<name>`, so
+// skills of different plugins, or a plugin's and another's, never share one.
+export const fullName = (s) => (s.plugin ? `${s.plugin}:${s.name}` : s.name);
+
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Build matchers from every discovered skill: a link names a skill by any
- * name an agent loads it under, `<plugin>:<name>` included, or by its own
- * name where no agent loads it, and reaches the skill the loading model
- * resolves it to [loading.mjs resolve].
- * @param {ReturnType<import('./loading.mjs').loadingModel>} model
+ * Build matchers from every discovered skill. Each skill is registered under
+ * its own root and under every copy's, so a skill in a copy's folder resolves
+ * to it as a sibling, and as `<plugin>:<name>` where a copy sits in a plugin.
+ * @param {{ id:string, name:string, plugin:string|null, root:string, copies?:{ root:string }[] }[]} skills in preference order
+ * @param {Map<string, string|null>} [pluginOfRoot] root id -> its plugin's name
  */
-export function buildLinkMatcher(model) {
-  const targets = model.linkNames();
-  const keys = [...targets].sort((a, b) => b.length - a.length);
-  const resolve = (name, from) => (targets.has(name) ? model.resolve(name, from)?.id ?? null : null);
-  if (!keys.length) return { targets, resolve, forms: [], strong: strongForms() };
+export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
+  const targets = new Map(); // text form -> [{ id, root }], in preference order
+  const add = (key, id, root) => {
+    if (!targets.has(key)) targets.set(key, []);
+    targets.get(key).push({ id, root });
+  };
+  for (const s of skills) {
+    const places = [{ root: s.root, plugin: s.plugin }, ...(s.copies ?? []).map((c) => ({ root: c.root, plugin: pluginOfRoot.get(c.root) ?? null }))];
+    for (const { root, plugin } of places) {
+      add(s.name, s.id, root);
+      if (plugin) add(`${plugin}:${s.name}`, s.id, root);
+    }
+  }
+  const keys = [...targets.keys()].sort((a, b) => b.length - a.length);
+  if (!keys.length) return { targets, forms: [], strong: strongForms() };
   const ALT = keys.map(escape).join('|');
   const before = String.raw`(?<![\w/.~:@-])(?<!\]\()`;
   const forms = [
@@ -96,7 +110,19 @@ export function buildLinkMatcher(model) {
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?\bcommands?\s+(?:\x60/?|/)(${ALT})${NAME_END}`, 'gi') },
     { kind: 'mentions', re: new RegExp(String.raw`\x60/?(${ALT})\x60`, 'g'), needsSkillWord: true },
   ];
-  return { targets, resolve, forms, strong: strongForms() };
+  return { targets, forms, strong: strongForms() };
+}
+
+/**
+ * The id of the skill a name reaches from a skill in `fromRoot`: of several
+ * skills of the name the one in the caller's own root (a sibling), else the
+ * preferred one; null where none goes by it. Scanned links and annotated
+ * ones both resolve by it.
+ */
+export function resolve(matcher, name, fromRoot) {
+  const list = matcher.targets.get(name);
+  if (!list) return null;
+  return (list.find((t) => t.root === fromRoot) ?? list[0]).id;
 }
 
 // Strong forms that name a skill even when it is not installed, each of the
@@ -194,7 +220,7 @@ function locate(unit, at) {
 /**
  * Find links in a skill's prose.
  * @param {object} matcher from buildLinkMatcher
- * @param {object} from the skill scanned, as the loading model holds it
+ * @param {{ id:string, root:string }} from the skill scanned
  * @param {ReturnType<typeof proseUnits>} units prose (fenced code removed) as proseUnits reads it
  * @returns {{ edges: object[], unresolved: object[] }}
  */
@@ -209,7 +235,7 @@ export function findLinks(matcher, from, units) {
     const sentences = sentencesOf(text);
     // The name found at `at` by `form`, kept as a link unless its sentence rules it out.
     const consider = (form, name, at) => {
-      const to = matcher.resolve(name, from);
+      const to = resolve(matcher, name, from.root);
       if (!to || to === fromId) return; // no skill's (or case differs, in a case-insensitive form), or a self-link
       const sentence = sentences.at(at);
       let kind = form.kind;
@@ -236,9 +262,7 @@ export function findLinks(matcher, from, units) {
       form.re.lastIndex = 0;
       for (const m of text.matchAll(form.re)) {
         const name = m[1];
-        // A name reaching a skill for this caller is a link [consider]; one
-        // reaching none, installed or not, is unresolved.
-        if (matcher.resolve(name, from) !== null) continue;
+        if (matcher.targets.has(name)) continue;
         const at = m.index + m[0].indexOf(name);
         const sentence = sentences.at(at);
         if (form.slash) {

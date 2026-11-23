@@ -666,13 +666,14 @@ test("skill-atlas-17: frontmatter in error is said to keep the fields that read,
   }
 });
 
-// Two differing skills of one name in one agent folder: each agent loading it may load either.
+// Two differing skills of one name: one note naming both folders, each version comparable with the other.
+const WHAT_TO_DO = "An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.";
 const TWIN = {
   one: "# Twin\n\n## Step 1: First\n\nDo the first thing.\n\n## Step 2: Second\n\nDo the second thing.\n",
   two: "# Twin\n\n## Step 1: First\n\nDo another thing.\n\n## Step 2: Second\n\nDo the second thing.\n",
 };
 
-test("skill-atlas-17, skill-atlas-34: a conflict between differing copies of one name names each folder, the agent that may load either and what to do, and compares them", async ({ page }) => {
+test("skill-atlas-17, skill-atlas-34: a name with different versions is a note naming each folder and what to do, and compares them", async ({ page }) => {
   const one = join(project, ".claude", "skills", "twin");
   const two = join(project, ".claude", "skills", "more", "twin");
   skill(project, ".claude/skills", "twin", "Twin.", TWIN.one);
@@ -684,14 +685,15 @@ test("skill-atlas-17, skill-atlas-34: a conflict between differing copies of one
     const opener = page.getByRole("button", { name: /^Insights/ });
     await opener.click();
     const insights = page.getByRole("group", { name: "Insights" });
-    await expect(insights.getByRole("heading", { name: /^Conflicting copies of one name/ })).toBeVisible();
-    // Every agent loading the folder, named alike by its folder and its declared name, in one insight.
+    // A fact listed among the notes, naming no agent: one insight for the name.
+    const headings = await insights.getByRole("heading").allTextContents();
+    expect(headings.findIndex((h) => h.startsWith("Names with different versions"))).toBeGreaterThan(headings.indexOf("Notes"));
     await expect(insights.getByRole("button", { name: /^\/twin\b/ })).toHaveCount(1);
-    await expect(insights.getByRole("button", { name: /^\/twin\b/ })).toContainText("Claude Code, GitHub Copilot, Cursor, Kimi Code, OpenCode may load either copy of “twin”:");
+    await expect(insights.getByRole("button", { name: /^\/twin\b/ })).toContainText("“twin” has 2 different versions:");
     const repair = insights.locator(".ins-repair", { has: page.locator("code", { hasText: two }) });
     expect((await repair.locator("li code").allTextContents()).sort()).toEqual([one, two].sort());
     await expect(repair.getByRole("button", { name: "Copy folder path" })).toHaveCount(2);
-    await expect(repair.locator("p")).toHaveText("Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load, then Rescan.");
+    await expect(repair.locator("p")).toHaveText(WHAT_TO_DO);
 
     // Compare: the two SKILL.md side by side, the differing line marked, closed by Escape.
     await repair.getByRole("button", { name: /^Compare / }).click();
@@ -702,13 +704,13 @@ test("skill-atlas-17, skill-atlas-34: a conflict between differing copies of one
     await expect(dialog).toHaveCount(0);
     await expect(opener).toBeFocused();
 
-    // The exported copy says what to do without Rescan, and offers no Compare.
+    // The exported copy says what to do alike, and offers no Compare.
     const out = join(tmp, "twin.html");
     execFileSync(process.execPath, [CLI, "export", "--out", out, "--cwd", project, "--no-user", "--no-plugins", "--state", state]);
     await page.goto(pathToFileURL(out).href);
     await page.getByRole("button", { name: /^Insights/ }).click();
     const exported = page.getByRole("group", { name: "Insights" }).locator(".ins-repair", { has: page.locator("code", { hasText: two }) });
-    await expect(exported.locator("p")).toHaveText("Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load.");
+    await expect(exported.locator("p")).toHaveText(WHAT_TO_DO);
     await expect(exported.getByRole("button", { name: /^Compare / })).toHaveCount(0);
   } finally {
     rmSync(one, { recursive: true, force: true });
@@ -717,7 +719,7 @@ test("skill-atlas-17, skill-atlas-34: a conflict between differing copies of one
   }
 });
 
-test("skill-atlas-14, skill-atlas-34: any two of three conflicting copies compare, each copy noting the other two and each side choosing among them all", async ({ page }) => {
+test("skill-atlas-14, skill-atlas-34: any two of three versions of a name compare, each noting the other two by folder and each side choosing among them all", async ({ page }) => {
   const claude = join(project, ".claude", "skills");
   const text = (what: string) => `# Tri\n\n## Step 1: Do\n\nDo ${what}.\n\n## Step 2: End\n\nStop.\n`;
   skill(project, ".claude/skills", "tri", "Tri.", text("one thing"));
@@ -730,30 +732,31 @@ test("skill-atlas-14, skill-atlas-34: any two of three conflicting copies compar
     const ids = await page.locator('#board .card[data-skill^="tri"]').evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!));
     expect(ids).toHaveLength(3);
     const panel = details(page);
-    // Each copy's note names the other two, each with its own Compare; its file tells what it does.
+    // Each version's note names the other two by folder, each with its own Compare; its file tells what it does.
     const does = new Map<string, string>();
     for (const id of ids) {
       await card(page, id).locator(".card-main").click();
       await expect(panel).toHaveAttribute("data-sel", `skill:${id}`);
       const file = await panel.locator(".d-path code").first().innerText();
       does.set(id, file.includes(join("x", "tri")) ? "Do two things." : file.includes(join("y", "tri")) ? "Do three things." : "Do one thing.");
+      await expect(panel.locator(".same-note p")).toHaveText("2 other versions of this name");
       await expect(panel.locator(".same-note li")).toHaveCount(2);
-      for (const line of await panel.locator(".same-note li").allInnerTexts()) expect(line).toMatch(/^Conflicts with the copy in Project · Claude Code\s*Compare$/);
+      for (const line of await panel.locator(".same-note li").allInnerTexts()) expect(line).toMatch(/^Project · Claude Code \/\S*\/tri\s*Compare$/);
       await expect(panel.locator(".same-note").getByRole("button", { name: /^Compare / })).toHaveCount(2);
     }
-    // A copy's second Compare, then the third copy chosen on the right: every pair is reached.
+    // A version's second Compare, then the third chosen on the right: every pair is reached.
     const compare = panel.locator(".same-note").getByRole("button", { name: /^Compare / }).nth(1);
     const [a, b] = [(await compare.getAttribute("data-a"))!, (await compare.getAttribute("data-b"))!];
     const c = ids.find((id) => id !== a && id !== b)!;
     await compare.click();
     const dialog = page.getByRole("dialog");
-    const left = dialog.getByRole("combobox", { name: "Copy on the left" });
-    const right = dialog.getByRole("combobox", { name: "Copy on the right" });
+    const left = dialog.getByRole("combobox", { name: "Version on the left" });
+    const right = dialog.getByRole("combobox", { name: "Version on the right" });
     await expect(left).toHaveValue(a);
     await expect(right).toHaveValue(b);
     await expect(dialog.locator(".cmp-cell.changed")).toContainText([`${does.get(a)}`, `${does.get(b)}`]);
     await expect(dialog.locator(".cmp-cell.changed")).toHaveCount(2);
-    // Each side chooses among all three copies, never the one the other side shows.
+    // Each side chooses among all three versions, never the one the other side shows.
     await expect(left.locator("option")).toHaveCount(3);
     await expect(left.locator(`option[value="${b}"]`)).toBeDisabled();
     await right.selectOption(c);
@@ -765,12 +768,12 @@ test("skill-atlas-14, skill-atlas-34: any two of three conflicting copies compar
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(compare).toBeFocused();
-    // The insight compares each later copy with the first, its dialog choosing among all three too.
+    // The insight compares each later version with the first, its dialog choosing among all three too.
     await page.getByRole("button", { name: /^Insights/ }).click();
     const repair = page.getByRole("group", { name: "Insights" }).locator(".ins-repair", { has: page.locator("code", { hasText: join(claude, "y", "tri") }) });
     await expect(repair.getByRole("button", { name: /^Compare / })).toHaveCount(2);
     await repair.getByRole("button", { name: /^Compare / }).first().click();
-    await expect(dialog.getByRole("combobox", { name: "Copy on the right" }).locator("option")).toHaveCount(3);
+    await expect(dialog.getByRole("combobox", { name: "Version on the right" }).locator("option")).toHaveCount(3);
     await page.keyboard.press("Escape");
   } finally {
     rmSync(join(claude, "tri"), { recursive: true, force: true });
@@ -780,50 +783,42 @@ test("skill-atlas-14, skill-atlas-34: any two of three conflicting copies compar
   }
 });
 
-test("skill-atlas-14, skill-atlas-34: a skill overriding another of its name, the one it overrides and another agent's copy each carry a quiet note and add no insight", async ({ page }) => {
-  const repo = join(tmp, "override");
+test("skill-atlas-14, skill-atlas-34: versions of a name in any folders carry one note alike, naming no agent and marking no problem", async ({ page }) => {
+  const repo = join(tmp, "versions");
   const sub = join(repo, "sub");
   mkdirSync(sub, { recursive: true });
   execFileSync("git", ["init", "-q", repo]);
   const body = (what: string) => `# Solo\n\n## Step 1: Read\n\nRead the ${what}.\n\n## Step 2: Report\n\nReport what was read.\n`;
-  // GitHub Copilot alone loads `.github/skills`, the working folder's first.
+  // One agent's folder at two depths, two agents' folders, and the project's source beside an installed version.
   skill(repo, ".github/skills", "solo", "Reads the notes.", body("root's notes"));
   skill(sub, ".github/skills", "solo", "Reads the notes.", body("working folder's notes"));
-  // Gemini CLI's copy beside Windsurf's, neither loading the other's folder, and the project's source beside its installed copy.
   skill(sub, ".windsurf/skills", "pal", "Pairs.", body("Windsurf's notes"));
   skill(sub, ".gemini/skills", "pal", "Pairs.", body("Gemini CLI's notes"));
   skill(sub, ".gemini/skills", "src", "Ships.", body("installed notes"));
   skill(sub, "skills", "src", "Ships.", body("source notes"));
-  const started = await serve(sub, join(tmp, "override-state"));
+  const started = await serve(sub, join(tmp, "versions-state"));
   try {
     await page.goto(started.url);
     await groupBy(page, "Dependencies");
     await expect(page.locator("#insights-n")).toBeHidden();
     await expect(page.locator("#board .issue-dot")).toHaveCount(0);
-    const cards = page.locator('#board .card[data-skill^="solo"]');
-    await expect(cards).toHaveCount(2);
     const panel = details(page);
-    const notes: string[] = [];
-    for (const id of await cards.evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!))) {
-      await card(page, id).locator(".card-main").click();
-      await expect(panel).toHaveAttribute("data-sel", `skill:${id}`);
-      await expect(panel.getByRole("list", { name: "Issues" })).toHaveCount(0);
-      notes.push((await panel.locator(".same-note li").innerText()).replace(/\s*Compare$/, ""));
-    }
-    expect(notes.sort()).toEqual(["Overridden by the copy in Project (sub) · GitHub Copilot", "Overrides the copy in Project · GitHub Copilot"]);
-    const noteOf = async (prefix: string) => {
-      const out: string[] = [];
-      for (const id of await page.locator(`#board .card[data-skill^="${prefix}"]`).evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!))) {
+    for (const prefix of ["solo", "pal", "src"]) {
+      const ids = await page.locator(`#board .card[data-skill^="${prefix}"]`).evaluateAll((cs) => cs.map((c) => c.getAttribute("data-skill")!));
+      expect(ids).toHaveLength(2);
+      for (const id of ids) {
         await card(page, id).locator(".card-main").click();
         await expect(panel).toHaveAttribute("data-sel", `skill:${id}`);
         await expect(panel.getByRole("list", { name: "Issues" })).toHaveCount(0);
-        out.push((await panel.locator(".same-note li").innerText()).replace(/\s*Compare$/, ""));
+        await expect(panel.locator(".same-note p")).toHaveText("1 other version of this name");
+        await expect(panel.locator(".same-note li")).toHaveCount(1);
+        await expect(panel.locator(".same-note")).not.toContainText(/overrid|conflict|wins|loads|may load/i);
       }
-      return out.sort();
-    };
-    expect(await noteOf("pal")).toEqual(["Also installed for Gemini CLI with different content", "Also installed for Windsurf with different content"]);
-    expect(await noteOf("src")).toEqual(["Also in Project (sub) · source, which no agent loads, with different content", "Also installed for Gemini CLI with different content"]);
-    await card(page, (await cards.first().getAttribute("data-skill"))!).locator(".card-main").click();
+    }
+    await page.getByRole("button", { name: /^Insights/ }).click();
+    await expect(page.getByRole("group", { name: "Insights" }).getByRole("button", { name: /different versions:/ })).toHaveCount(3);
+    await page.keyboard.press("Escape");
+    await card(page, (await page.locator('#board .card[data-skill^="solo"]').first().getAttribute("data-skill"))!).locator(".card-main").click();
 
     // Compare from the note: the line that differs marked, Escape closing it and returning focus to the note.
     const compare = panel.locator(".same-note").getByRole("button", { name: /^Compare / });
@@ -846,7 +841,7 @@ test("skill-atlas-34: a comparison shows what differs at a line's end, and says 
   const sub = join(repo, "sub");
   mkdirSync(sub, { recursive: true });
   execFileSync("git", ["init", "-q", repo]);
-  // GitHub Copilot alone loads `.github/skills`: one override, one comparison.
+  // Two versions of each name, one in each project folder's `.github/skills`.
   const text = "# Ends\n\n## Step 1: Read\n\nRead the notes.\n";
   skill(repo, ".github/skills", "ends", "Ends lines.", text);
   skill(sub, ".github/skills", "ends", "Ends lines.", text);
@@ -868,11 +863,6 @@ test("skill-atlas-34: a comparison shows what differs at a line's end, and says 
       writeFileSync(join(dir, ".github", "skills", name!, "SKILL.md"), text!);
     }
   }
-  // OpenCode names a skill by its folder: one folder under two declared names is one name to it.
-  for (const [dir, name] of [[repo, "twin-far"], [sub, "twin-near"]]) {
-    mkdirSync(join(dir, ".opencode", "skills", "twin"), { recursive: true });
-    writeFileSync(join(dir, ".opencode", "skills", "twin", "SKILL.md"), `---\nname: ${name}\ndescription: Twins.\n---\n${text}${name}\n`);
-  }
   const started = await serve(sub, join(tmp, "compare-state"));
   try {
     await page.goto(started.url);
@@ -891,9 +881,9 @@ test("skill-atlas-34: a comparison shows what differs at a line's end, and says 
     await expect(dialog.locator(".cmp-cell.changed .ws", { hasText: "\u240D" }).first()).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
-    // Copies differing in another file alone say so.
+    // Versions differing in another file alone say so.
     await compare("kit");
-    await expect(dialog.locator(".cmp-sum")).toHaveText("SKILL.md is the same in both; the copies differ in their other files.");
+    await expect(dialog.locator(".cmp-sum")).toHaveText("SKILL.md is the same in both; the versions differ in their other files.");
     await expect(dialog.locator(".cmp-cell.changed")).toHaveCount(0);
     await page.keyboard.press("Escape");
     // Of 2,002 lines, the first and the last differ and no other is marked.
@@ -907,11 +897,6 @@ test("skill-atlas-34: a comparison shows what differs at a line's end, and says 
     await expect(dialog.locator(".cmp-sum")).toHaveText(/^Too many lines differ to compare them line by line/);
     await expect(dialog.locator(".cmp-cell.changed")).toHaveCount(0);
     await expect(dialog.locator(".cmp-cell:not(.empty)")).toHaveCount(5000);
-    await page.keyboard.press("Escape");
-    // Copies of two names: the title names both, and each side its copy's skill.
-    await compare("twin-near");
-    await expect(page.getByRole("dialog", { name: "Compare /twin-near, /twin-far" })).toHaveCount(1);
-    await expect(dialog.locator(".cmp-head")).toHaveText([/^\/twin-near · /, /^\/twin-far · /]);
     await page.keyboard.press("Escape");
   } finally {
     await stop(started.child);

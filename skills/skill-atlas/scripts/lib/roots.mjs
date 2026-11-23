@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Where agents load skills from, and which of them each agent loads a name
-// from. Adding a folder is one line in AGENT_ROOTS; adding an agent one entry
-// in AGENTS.
+// Where agents load skills from. Adding an agent is one line in AGENT_ROOTS.
 
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -11,21 +9,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { warn } from './log.mjs';
 
+// Every agent but Claude Code loads the shared folders.
+const UNIVERSAL_LOADERS = ['codex', 'gemini-cli', 'kimi-code', 'opencode', 'cursor', 'windsurf', 'roo', 'goose', 'copilot'];
+
 /**
  * One row per skill folder an agent loads.
  * - key: slug used in root ids (`<scope>-<key>`)
  * - dir: path relative to a project folder or the home folder, `/`-separated
- * - agent: the agent the folder is named for, `universal` for a shared one
  * - scopes: where the folder is looked for
  * - env: an environment variable that replaces the home-relative config folder
  *   (its value stands for the first segment of `dir`, such as `.codex`); a
  *   home folder's `.config` is XDG_CONFIG_HOME where that is set
- * Which agents load a row's folder is AGENTS' to say.
+ * - loadedBy: the other agents that load this folder too, kept by `--agent`
+ *   for any of them
+ * - noAgent: no `--agent` keeps this folder
  */
 export const AGENT_ROOTS = [
   { key: 'claude', dir: '.claude/skills', agent: 'claude-code', label: 'Claude Code', scopes: ['project', 'user'], env: 'CLAUDE_CONFIG_DIR' },
-  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'] },
-  { key: 'agents-config', dir: '.config/agents/skills', agent: 'universal', label: 'Universal', scopes: ['user'] },
+  { key: 'agents', dir: '.agents/skills', agent: 'universal', label: 'Universal', scopes: ['project', 'user'], loadedBy: UNIVERSAL_LOADERS },
+  { key: 'agents-config', dir: '.config/agents/skills', agent: 'universal', label: 'Universal', scopes: ['user'], loadedBy: UNIVERSAL_LOADERS },
   { key: 'codex', dir: '.codex/skills', agent: 'codex', label: 'Codex', scopes: ['project', 'user'], env: 'CODEX_HOME' },
   // The skills Codex ships with itself.
   { key: 'codex-system', dir: '.codex/skills/.system', agent: 'codex', label: 'Codex (bundled)', scopes: ['user'], env: 'CODEX_HOME' },
@@ -43,90 +45,11 @@ export const AGENT_ROOTS = [
   { key: 'goose-config', dir: '.config/goose/skills', agent: 'goose', label: 'Goose', scopes: ['user'] },
   // The project's own skill sources, in each project folder; listed only where
   // it holds skills, and loaded by no agent, so left out under any --agent.
-  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true },
+  { key: 'source', dir: 'skills', agent: 'universal', label: 'source', scopes: ['project'], requireSkills: true, noAgent: true },
 ];
-
-/**
- * Each agent's loading, by its documentation (data-model.md "sameName"):
- * - name: what it invokes a skill by, its frontmatter `name` (`declared`,
- *   which defaults to the folder's) or its folder's name (`folder`); a
- *   plugin's skill is `<plugin>:<name>` [placeName];
- * - order: the places it loads, highest first, as tiers of patterns; places
- *   of one tier rank alike, except that a `near` tier ranks the nearer
- *   project folder first;
- * - also: places it loads in no documented order, so ranking alike with
- *   every other.
- * A pattern is `<scope>-<row key>`, or `plugin`, with an optional `@root`
- * (the repository's root, or --cwd's folder where there is none), `@nested`
- * (below the root), `@cwd` or `@above` (above --cwd) for a project's.
- * An agent whose documentation lists its folders loads those alone; one whose
- * documentation was not found loads its own folders and the shared ones, in no order.
- */
-export const AGENTS = Object.freeze({
-  // code.claude.com/docs/en/skills: personal over project, the repository
-  // root's over a nested folder's; a plugin's skill is namespaced.
-  'claude-code': { name: 'declared', order: [['user-claude'], ['project-claude@root'], ['project-claude@nested']], also: ['plugin'] },
-  // learn.chatgpt.com/docs/build-skills: skills of one name both appear.
-  codex: { name: 'declared', order: [], also: ['project-agents', 'user-agents', 'project-codex', 'user-codex', 'user-codex-system'] },
-  // docs.github.com Copilot CLI reference, "Skill locations": first found wins.
-  copilot: { name: 'declared', order: [['project-copilot@cwd'], ['project-agents@cwd'], ['project-claude@cwd'], ['project-copilot@above'], ['user-copilot-home'], ['user-agents']], also: [] },
-  // cursor.com/help/customization/skills: named by its folder, no order.
-  cursor: { name: 'folder', order: [], also: ['project-cursor@cwd', 'user-cursor', 'project-agents@cwd', 'user-agents', 'project-claude@cwd', 'user-claude', 'project-codex@cwd', 'user-codex'] },
-  // geminicli.com/docs/cli/skills: workspace over user, `.agents` over `.gemini` in each.
-  'gemini-cli': { name: 'declared', order: [['project-agents'], ['project-gemini'], ['user-agents'], ['user-gemini']], also: [] },
-  // moonshotai.github.io/kimi-cli: project over user, kimi > claude > codex > the shared folders, at the project's root.
-  'kimi-code': { name: 'declared', order: [['project-kimi@root'], ['project-claude@root'], ['project-codex@root'], ['project-agents@root'], ['user-kimi'], ['user-claude'], ['user-codex'], ['user-agents-config', 'user-agents']], also: [] },
-  // opencode.ai/docs/skills: named by its folder, the later registered over the earlier,
-  // registered `.claude`, then `.agents`, each the home folder's and then a project's
-  // farthest first, then `~/.config/opencode`, then a project's `.opencode` nearest last.
-  opencode: { name: 'folder', order: [{ near: ['project-opencode'] }, ['user-opencode-config'], { near: ['project-agents'] }, ['user-agents'], { near: ['project-claude'] }, ['user-claude']], also: ['user-opencode'] },
-  // roocodeinc.github.io/Roo-Code/features/skills: named by its folder, project over global, `.roo` over `.agents` in each.
-  roo: { name: 'folder', order: [['project-roo@root'], ['project-agents@root'], ['user-roo'], ['user-agents']], also: [] },
-  windsurf: { name: 'declared', order: [], also: ['project-windsurf', 'user-windsurf', 'user-windsurf-codeium', 'project-agents', 'user-agents', 'user-agents-config'] },
-  goose: { name: 'declared', order: [], also: ['project-goose', 'user-goose', 'user-goose-config', 'project-agents', 'user-agents', 'user-agents-config'] },
-});
-
-// Whether a pattern names a place: its scope, row and, for a project's, where it lies.
-function matches(pattern, place) {
-  const [what, where] = pattern.split('@');
-  if (what === 'plugin') return place.scope === 'plugin';
-  if (what !== `${place.scope}-${place.row}`) return false;
-  if (!where) return true;
-  return where === 'root' ? place.depth === 0 : where === 'nested' ? place.depth > 0 : where === 'cwd' ? place.dist === 0 : place.dist > 0;
-}
-
-/**
- * Where an agent ranks a place: `{ tier, dist }`, the lower first, `null` for
- * a place it loads in no order, `undefined` for one it does not load.
- * @param {string} agent
- * @param {{ scope:string, row?:string, depth?:number, dist?:number }} place a root
- */
-export function rankIn(agent, place) {
-  const spec = AGENTS[agent];
-  if (!spec) return undefined;
-  for (const [tier, t] of spec.order.entries()) {
-    const near = !Array.isArray(t);
-    if ((near ? t.near : t).some((p) => matches(p, place))) return { tier, dist: near ? place.dist ?? 0 : 0 };
-  }
-  return spec.also.some((p) => matches(p, place)) ? null : undefined;
-}
-
-/** How two ranks compare: below zero where the first outranks the second, zero where neither does. */
-export function compareRanks(a, b) {
-  if (!a || !b) return 0;
-  return a.tier - b.tier || a.dist - b.dist;
-}
-
-/** The agents loading a place, by key. */
-export function loadersOf(place) {
-  return Object.keys(AGENTS).filter((agent) => rankIn(agent, place) !== undefined).sort();
-}
 
 const SCOPE_LABEL = { project: 'Project', user: 'User', plugin: 'Plugin', extra: 'Extra' };
 const SKIP_DIRS = new Set(['node_modules']);
-
-/** Each agent's name by its key: the label of the agent's first row. */
-export const AGENT_LABELS = Object.freeze(Object.fromEntries(AGENT_ROOTS.filter((r) => r.agent !== 'universal').reverse().map((r) => [r.agent, r.label])));
 
 /** The Claude Code config folder: CLAUDE_CONFIG_DIR, else ~/.claude. */
 export function claudeConfigDir(home = os.homedir()) {
@@ -176,9 +99,8 @@ function projectPlaces(cwd) {
  */
 export function listRoots(opts) {
   const roots = [];
-  // --agent keeps a folder that agent loads [AGENTS], and a shared folder under `universal`.
-  const wanted = (row, agents) => !opts.agents.length
-    || agents.length > 0 && [row.agent, ...agents].some((agent) => opts.agents.includes(agent));
+  const wanted = (row) => !opts.agents.length
+    || !row.noAgent && [row.agent, ...(row.loadedBy ?? [])].some((agent) => opts.agents.includes(agent));
   const xdg = process.env.XDG_CONFIG_HOME ? path.resolve(process.env.XDG_CONFIG_HOME) : null;
   const { dirs, repo } = projectPlaces(opts.cwd);
   const places = dirs.map((base) => {
@@ -186,17 +108,13 @@ export function listRoots(opts) {
     return { scope: 'project', base, rel };
   });
   if (opts.user) places.push({ scope: 'user', base: opts.home, rel: '' });
-  for (const [n, { scope, base, rel }] of places.entries()) {
+  for (const { scope, base, rel } of places) {
     // How far below the repository's root the folder lies; plain skill ids
     // are given in this order [scan.mjs assignIds], so a folder only some
     // scans cover never takes a name from one every scan covers.
     const depth = rel ? rel.split('/').length : 0;
-    // How far above --cwd's folder it lies, the nearer first.
-    const dist = scope === 'project' ? n : 0;
     for (const row of AGENT_ROOTS) {
-      if (!row.scopes.includes(scope)) continue;
-      const agents = loadersOf({ scope, row: row.key, depth, dist });
-      if (!wanted(row, agents)) continue;
+      if (!row.scopes.includes(scope) || !wanted(row)) continue;
       const [configDir, ...rest] = row.dir.split('/');
       let from;
       let segs = rest;
@@ -214,21 +132,18 @@ export function listRoots(opts) {
         requireSkills: !!row.requireSkills,
         plugin: null,
         depth,
-        dist,
-        row: row.key,
-        agents,
         linked: linkedBelow(from, segs),
       });
     }
   }
-  if (opts.plugins && wanted({ agent: 'claude-code' }, loadersOf({ scope: 'plugin' }))) roots.push(...pluginRoots(opts.cwd));
+  if (opts.plugins && wanted({ agent: 'claude-code' })) roots.push(...pluginRoots(opts.cwd));
   // One folder named twice, however spelled, is one root under one id [extraId].
   const extras = new Set();
   opts.extra.forEach((dir) => {
     const id = extraId(path.resolve(dir));
     if (extras.has(id)) return;
     extras.add(id);
-    roots.push({ id, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, agents: [], linked: false });
+    roots.push({ id, path: path.resolve(dir), scope: 'extra', agent: 'universal', label: `${SCOPE_LABEL.extra} \u00B7 ${dir}`, requireSkills: false, plugin: null, explicit: true, linked: false });
   });
   return roots;
 }
@@ -321,7 +236,7 @@ function pluginRoots(cwd) {
         const rel = path.relative(project, realCwd);
         if (rel.startsWith('..') || path.isAbsolute(rel)) continue; // installed for another project
       }
-      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name, agents: loadersOf({ scope: 'plugin' }), linked: linkedBelow(inst.installPath, ['skills']) });
+      roots.push({ id, path: path.join(inst.installPath, 'skills'), scope: 'plugin', agent: 'claude-code', label: `${SCOPE_LABEL.plugin} \u00B7 ${name}`, requireSkills: false, plugin: name, linked: linkedBelow(inst.installPath, ['skills']) });
     }
   }
   return roots;

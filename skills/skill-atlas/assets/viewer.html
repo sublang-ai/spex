@@ -354,7 +354,10 @@ button.col-name:hover { background: var(--surface-3); }
 .src-badge { font-size: 10.5px; color: var(--text-3); }
 .tr-note { margin: 0; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-2); overflow-wrap: anywhere; }
 .tr-note.stale { background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
-.same-note { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--text-2); display: flex; flex-direction: column; gap: 2px; }
+.same-note { font-size: 12px; color: var(--text-2); }
+.same-note p { margin: 0 0 2px; }
+.same-note ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.same-note .sub { color: var(--text-3); overflow-wrap: anywhere; }
 .same-note .linkish { margin-left: 6px; font-size: 12px; }
 
 /* ---------- popovers, dialogs, toasts ---------- */
@@ -520,8 +523,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Constants
   // ===================================================================
   const CATS = ['input', 'output', 'tool', 'human'];
-  // How a skill stands to another differing skill of its name (references/data-model.md).
-  const SAME_NAME = ['conflict', 'override', 'other-agent'];
   const GROUPINGS = ['workflow', 'dependencies', 'source'];
   // Labels here are the page's own fallbacks, looked up in the reader's language when shown.
   const DEFAULT_VIEW = {
@@ -546,19 +547,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const code = (v) => h('code', { text: str(v) });
   const runLine = (text, p) => h('p', null, withNodes(text, { command: code(p.command) }));
   const INSIGHTS = {
-    // Reported for a conflict alone: differing copies of one name an agent may load either of.
+    // A fact, not a verdict: which version an agent reads is its own rule.
     'duplicate-name': {
-      title: () => t('Conflicting copies of one name'),
-      issue: () => t('Another skill with the same name is installed, so an agent may load either copy.'),
-      message: (p) => (p.name == null || !Array.isArray(p.copies) ? null : t('{agents} may load either copy of “{name}”:', { agents: list(arr(p.agents).map(agentName)), name: p.name })),
-      // Each copy's folder with a control copying its path, one comparing it with the first, and what to do.
-      repair: (p) => [
-        h('ul', null, p.copies.map((c, i) => h('li', null,
-          copyRootTitle(c), ' ', code(c && c.path), copyPathButton(c && c.path),
-          i && c ? compareButton(p.copies[0] && p.copies[0].id, c.id) : null))),
-        // Renaming the folder and the declared name alike parts the copies for every agent, whichever it names a skill by.
-        h('p', { text: state.mode === 'live' ? t('Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load, then Rescan.') : t('Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load.') }),
-      ],
+      title: () => t('Names with different versions'),
+      issue: () => t('Another skill of the same name has different content.'),
+      message: (p, ins) => (p.name == null || !Array.isArray(p.copies) ? null : t('“{name}” has {n} different versions:', { name: p.name, n: arr(ins.skills).length })),
+      // Each version's folder with a control copying its path, and one comparing it with the first.
+      repair: (p) => {
+        const first = p.copies[0] && p.copies[0].id;
+        return [
+          h('ul', null, p.copies.map((c, i) => h('li', null,
+            copyRootTitle(c), ' ', code(c && c.path), copyPathButton(c && c.path),
+            c && c.id !== first && p.copies.findIndex((o) => o && o.id === c.id) === i ? compareButton(first, c.id) : null))),
+          h('p', { text: t('An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.') }),
+        ];
+      },
     },
     'unresolved-link': {
       title: () => t('Calls skills that are not installed'),
@@ -895,8 +898,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const mentionOnly = (i) => i.kind === 'unresolved-link' && !!i.params && i.params.kind === 'mentions';
     return {
       version: a.version || 1, generatedAt: a.generatedAt || null, cwd: str(a.cwd),
-      roots: arr(a.roots).filter((r) => r && r.id != null).map((r) => ({ ...r, agents: arr(r.agents).map(String) })),
-      agentNames: a.agentNames && typeof a.agentNames === 'object' ? a.agentNames : {},
+      roots: arr(a.roots).filter((r) => r && r.id != null),
       tagCatalog: arr(a.tagCatalog).filter((x) => x && x.id),
       skills: arr(a.skills).filter((s) => s && typeof s.id === 'string'),
       edges: arr(a.edges).filter((e) => e && e.from && e.to && isCall(e)),
@@ -937,9 +939,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         steps, tags: normTags(raw.tags), files: arr(raw.files).filter((f) => f && f.path),
         problems: kindsNaming(atlas, raw.id, 'problem'), notes: kindsNaming(atlas, raw.id, 'note'),
         copies: arr(raw.copies).filter((c) => c && c.root != null).map((c) => ({ root: String(c.root), dir: str(c.dir) })),
-        // The other differing skills of its name, each with how the two stand [skill-atlas-14].
-        sameName: arr(raw.sameName).filter((x) => x && typeof x.id === 'string' && SAME_NAME.includes(x.relation))
-          .map((x) => ({ id: x.id, relation: x.relation, agents: arr(x.agents).map(String), wins: typeof x.wins === 'string' ? x.wins : null })),
+        // The other differing skills of its name [skill-atlas-14].
+        sameName: arr(raw.sameName).filter((id) => typeof id === 'string'),
         frontmatter: raw.frontmatter && typeof raw.frontmatter === 'object' ? raw.frontmatter : {},
         stepKind: ['step', 'section', 'none'].includes(raw.stepKind) ? raw.stepKind : (steps.length ? 'step' : 'none'),
         translations,
@@ -966,17 +967,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       byName.get(s.name).push(s);
     }
     skills.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-    // The differing skills of one name any two of which can be compared: each skill's relations
-    // [skill-atlas-14] followed through any number of them, in the page's order.
-    const near = new Map(skills.map((s) => [s.id, new Set()]));
-    for (const s of skills) for (const x of s.sameName) if (near.has(x.id)) { near.get(s.id).add(x.id); near.get(x.id).add(s.id); }
+    // The differing skills of one name, any two of which can be compared, in the page's order.
     const sameGroup = new Map();
     for (const s of skills) {
-      if (sameGroup.has(s.id) || !near.get(s.id).size) continue;
-      const reached = new Set([s.id]);
-      for (const id of reached) for (const o of near.get(id)) reached.add(o);
-      const ids = skills.filter((x) => reached.has(x.id)).map((x) => x.id);
-      for (const id of ids) sameGroup.set(id, ids);
+      const ids = skills.filter((x) => x === s || s.sameName.includes(x.id)).map((x) => x.id);
+      if (ids.length > 1) sameGroup.set(s.id, ids);
     }
     const edges =atlas.edges.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({
       from: e.from, to: e.to, fromStep: e.fromStep ? String(e.fromStep) : null,
@@ -2617,10 +2612,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   // ---------- differing skills of one name ----------
-  // An agent's name as the scan gives it, else its key.
-  const agentName = (key) => str(own(state.atlas.agentNames, key) ? state.atlas.agentNames[key] : key);
   const placeOf = (id) => { const o = state.idx.byId.get(id); return o ? rootLabel(o) : str(id); };
-  // A conflict insight's copy: its folder's title in the shown language, else the scan's label.
+  // A duplicate-name insight's version: its folder's title in the shown language, else the scan's label.
   function copyRootTitle(c) {
     const r = c && state.idx.rootById.get(c.root);
     return h('b', { text: r ? rootTitle(r) : str(c && (c.rootLabel || c.root)) });
@@ -2635,30 +2628,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const name = (id) => (same ? str(idx.byId.get(id).dir) : skillLabel(id));
     return h('button', { type: 'button', class: 'linkish', 'data-act': 'compare', 'data-a': a, 'data-b': b, 'aria-label': t('Compare {a} with {b}', { a: name(a), b: name(b) }) }, t('Compare'));
   }
-  // One quiet note on how a skill stands to each differing skill of its name, each comparable:
-  // one it conflicts with, one it overrides, one overriding it, one another agent loads. A
-  // conflict is also an issue of its own, told by its insight.
-  // Where the agents loading both differ in the one they load, each line names its agents.
+  // A short note listing the other versions of a skill's name, each by its folder and comparable.
   function sameNameNote(s) {
-    const idx = state.idx;
-    const others = s.sameName.filter((x) => idx.byId.has(x.id));
-    // The agents loading a skill: those of its folder and of each copy's.
-    const loaders = (o) => [...new Set([o.root, ...o.copies.map((c) => c.root)].flatMap((r) => (idx.rootById.get(r) || { agents: [] }).agents))].sort();
-    const lines = others.map((x) => {
-      const place = placeOf(x.id);
-      const split = others.filter((y) => y.id === x.id).length > 1;
-      const agents = list(x.agents.map(agentName));
-      const theirs = list(loaders(idx.byId.get(x.id)).map(agentName));
-      const text = x.relation === 'conflict'
-        ? (split ? t('Conflicts with the copy in {place} for {agents}', { place, agents }) : t('Conflicts with the copy in {place}', { place }))
-        : x.relation === 'override'
-          ? (x.wins === s.id
-            ? (split ? t('Overrides the copy in {place} for {agents}', { place, agents }) : t('Overrides the copy in {place}', { place }))
-            : (split ? t('Overridden by the copy in {place} for {agents}', { place, agents }) : t('Overridden by the copy in {place}', { place })))
-          : theirs ? t('Also installed for {agents} with different content', { agents: theirs }) : t('Also in {place}, which no agent loads, with different content', { place });
-      return h('li', null, text, compareButton(s.id, x.id));
-    });
-    return lines.length ? h('ul', { class: 'same-note', 'aria-label': t('Same name') }, lines) : null;
+    const others = state.idx.sameGroup.get(s.id);
+    if (!others) return null;
+    const ids = others.filter((id) => id !== s.id);
+    return h('div', { class: 'same-note' }, h('p', { text: t('{n} other version of this name|{n} other versions of this name', { n: ids.length }) }),
+      h('ul', { 'aria-label': t('Other versions') }, ids.map((id) => h('li', null, placeOf(id), h('span', { class: 'sub', text: ' ' + str(state.idx.byId.get(id).dir) }), compareButton(s.id, id)))));
   }
 
   function renderPhaseDetails(p) {
@@ -2984,30 +2960,28 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return h('span', null, line.slice(0, m.index), h('span', { class: 'ws', title: t('Spaces, tabs or a carriage return at the end of the line'), text: [...m[0]].map((c) => WS_MARKS[c]).join('') }));
   }
   // Two skills' SKILL.md side by side, the lines that differ marked; read from the server.
-  // Where the name has more than two differing copies, each side chooses its copy among them all.
+  // Where the name has more than two versions, each side chooses its version among them all.
   async function compareDialog(aId, bId, back) {
     const idx = state.idx;
     const sa = idx.byId.get(aId);
     if (!sa || !idx.byId.has(bId)) return;
     const copies = idx.sameGroup.get(aId) || [aId, bId];
-    // A group holding several names (an agent naming skills by folder) names each copy's skill.
-    const names = [...new Set([sa.name, ...copies.map((id) => idx.byId.get(id).name)])];
-    const named = (o) => (names.length > 1 ? '/' + o.name + ' · ' : '') + rootLabel(o);
+    const named = (o) => rootLabel(o);
     const pick = { a: aId, b: bId };
     const sum = h('p', { class: 'cmp-sum', role: 'status' });
-    const grid = h('div', { class: 'cmp', tabindex: '0', 'aria-label': t('SKILL.md of each copy, side by side') });
+    const grid = h('div', { class: 'cmp', tabindex: '0', 'aria-label': t('SKILL.md of each version, side by side') });
     const choosers = {};
     const head = (side) => {
       const s = idx.byId.get(pick[side]);
       if (copies.length < 3) return h('div', { class: 'cmp-head' }, named(s), h('span', { class: 'sub', text: str(s.dir) }));
       const name = (id) => { const o = idx.byId.get(id); return named(o) + ' · ' + str(o.dir); };
-      choosers[side] = h('select', { 'aria-label': side === 'a' ? t('Copy on the left') : t('Copy on the right'), onchange: () => { pick[side] = choosers[side].value; show(); } },
+      choosers[side] = h('select', { 'aria-label': side === 'a' ? t('Version on the left') : t('Version on the right'), onchange: () => { pick[side] = choosers[side].value; show(); } },
         copies.map((id) => h('option', { value: id, text: name(id) })));
       choosers[side].value = pick[side];
       return h('div', { class: 'cmp-head' }, choosers[side]);
     };
     grid.append(head('a'), head('b'));
-    const p = modal(t('Compare {skill}', { skill: list(names.map((n) => '/' + n)) }), [sum, grid], [], { wide: true, initialFocus: () => grid, returnFocus: () => (back && back.isConnected ? back : els.insights) });
+    const p = modal(t('Compare {skill}', { skill: '/' + (sa.plugin ? sa.plugin + ':' : '') + sa.name }), [sum, grid], [], { wide: true, initialFocus: () => grid, returnFocus: () => (back && back.isConnected ? back : els.insights) });
     const read = async (id) => {
       const res = await fetch(`/api/file?skill=${encodeURIComponent(id)}&path=SKILL.md`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
@@ -3030,7 +3004,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         const changed = rows.filter((r) => r.same === false).length;
         sum.textContent = rows.some((r) => r.same === null)
           ? t('Too many lines differ to compare them line by line; only the lines alike at the start and the end are known to be the same, and none is marked.')
-          : changed ? t('{n} line differs|{n} lines differ', { n: changed }) : t('SKILL.md is the same in both; the copies differ in their other files.');
+          : changed ? t('{n} line differs|{n} lines differ', { n: changed }) : t('SKILL.md is the same in both; the versions differ in their other files.');
       } catch {
         if (mine === shown) sum.textContent = t('Couldn’t read {path}.', { path: 'SKILL.md' });
       }
@@ -3108,7 +3082,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       wrap.append(h('h3', null, insightTitle(k), h('span', { class: 'muted', text: fmtNum(ofKind.length) })));
       for (const ins of ofKind) {
         const ids = arr(ins.skills).map(String);
-        const names = ids.map((id) => (idx.byId.has(id) ? '/' + idx.byId.get(id).name : id));
+        const names = [...new Set(ids.map((id) => (idx.byId.has(id) ? '/' + idx.byId.get(id).name : id)))]; // versions of one name read once
         const message = insightMessage(ins);
         wrap.append(h('button', { type: 'button', onclick: () => { closePopover(false); showInsight(ids); } },
           h('b', { text: names.length ? list(names) : '—' }), message ? h('div', { text: message }) : null));

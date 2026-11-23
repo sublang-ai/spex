@@ -59,7 +59,11 @@ export function applyAnnotations(doc, atlas) {
   // else of the first of the name; an id is its own skill's key.
   for (const [name, list] of byName) byKey.set(name, list.find((s) => !s.id.includes('@')) ?? list[0]);
   for (const s of atlas.skills) byKey.set(s.id, s);
-  const resolveSkill = (ref) => (typeof ref === 'string' ? byKey.get(ref) ?? null : null);
+  // A link's target: a name reaches the skill a scanned link from the same
+  // skill reaches [links.mjs resolve]; an id that is no name, its own skill.
+  const byId = new Map(atlas.skills.map((s) => [s.id, s]));
+  const targetFrom = (from) => (ref) => (typeof ref !== 'string' ? null
+    : byId.get(atlas.resolve?.(ref, from.root)) ?? byKey.get(ref) ?? null);
 
   for (const [key, value] of Object.entries(doc.skills)) {
     const skill = byKey.get(key);
@@ -68,7 +72,7 @@ export function applyAnnotations(doc, atlas) {
     // its digest; a differing skill's own `<name>@<rootId>` key comes first.
     const sameName = key === skill.name ? byName.get(key) : [skill];
     const others = sameName.filter((s) => s !== skill && !Object.hasOwn(doc.skills, s.id));
-    for (const [s, chosen] of entriesFor(skill, others, sameName, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, resolveSkill);
+    for (const [s, chosen] of entriesFor(skill, others, sameName, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, targetFrom(s));
   }
 }
 

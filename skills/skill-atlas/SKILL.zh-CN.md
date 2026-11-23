@@ -10,7 +10,7 @@ metadata:
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=ff113c46269008302e36715ea33120186eb51c169b9fba7d0bcb1abe04a889ec own=c373299773d5489d8e1bd1adb20b6d52194209042e89e22fce805eb20acc2486 -->
+<!-- skill-atlas:source sha256=2f82e0de27f7a780ba2724b000b529c7e386e077876b18be5c7dd71e02551210 own=7769b8b985a878a6bb2648adbc93311d3cd463cc47f23815357c5859bbef4a0c -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
@@ -39,7 +39,7 @@ node <skill-dir>/scripts/atlas.mjs serve
 node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
-阅读摘要：每个位置有多少技能、被链接最多的技能、指向未安装技能的链接、某个代理可能加载两个不同技能的名称，以及未能识别出步骤的技能。
+阅读摘要：每个位置有多少技能、被链接最多的技能、指向未安装技能的链接、在多个文件夹中有不同版本的名称，以及未能识别出步骤的技能。
 如果它报告没有任何技能，告诉用户搜索了哪些文件夹，并询问他们的技能放在哪里；用 `--root <dir>` 传入该文件夹。
 
 ### 步骤 2：打开视图

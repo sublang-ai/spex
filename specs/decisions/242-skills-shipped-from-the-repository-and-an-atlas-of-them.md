@@ -7,7 +7,7 @@
 
 Accepted (2026-11-21).
 Extended in the atlas's scan, page and state folder and in the form of a shipped skill by [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), which adds translations and the page's language.
-Amended in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls by [DR-248](248-the-atlas-shows-dependencies-and-real-conflicts.md).
+Amended in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls by [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md).
 
 ## Context
 

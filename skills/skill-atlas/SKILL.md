@@ -36,7 +36,7 @@ Its first line of output is JSON with the `url` to give the user.
 node <skill-dir>/scripts/atlas.mjs scan --summary
 ```
 
-Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, names an agent may load two differing skills under, and skills whose steps could not be detected.
+Read the digest: how many skills each location holds, the most-linked skills, links to skills that are not installed, names with different versions in several folders, and skills whose steps could not be detected.
 If it reports no skills, tell the user which folders were searched and ask where their skills live; pass that folder with `--root <dir>`.
 
 ### Step 2: Open the view

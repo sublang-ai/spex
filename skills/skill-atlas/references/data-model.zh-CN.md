@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=60a8d8d7b61adda95077807c8951da0a196e523894a7f62732298c3904bec0ea own=c38fa29b0c4339110ec52192bc805c3c57f1f2e728add09443314719ed9f5514 -->
+<!-- skill-atlas:source sha256=bac844549035ebc026b9421aa3753bbd9aca44bd207d70765093b5cd31a44e9e own=e6fe4c3765b308465ac57ddde1e26fe69720d98d81576fa44ba765ba909c5a5c -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -43,11 +43,9 @@
       "scope": "project",              // project | user | plugin | extra
       "agent": "claude-code",          // 加载此文件夹的代理，或 "universal"
       "label": "Project · Claude Code",
-      "agents": ["claude-code"],       // 加载此文件夹的代理；--root 的和项目的 skills/ 则没有
       "skillCount": 3
     }
   ],
-  "agentNames": { "claude-code": "Claude Code", "gemini-cli": "Gemini CLI" },   // 各代理的名称，以其键为键
   "tagCatalog": [                      // 下文用到的每个标签 id，无论静态还是动态
     { "id": "tool.shell", "category": "tool", "label": "Shell" }
   ],
@@ -65,9 +63,7 @@
       "copies": [                      // 存放同一技能（逐字节相同）的其他文件夹
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
       ],
-      "sameName": [                    // 此名称下其他内容不同的技能（见下文）
-        { "id": "code@user-claude", "relation": "override", "agents": ["claude-code"], "wins": "code@user-claude" }
-      ],
+      "sameName": ["code@user-claude"], // 此名称下的其他技能，各自与本技能内容不同（见下文）
       "frontmatter": { "name": "code", "description": "…", "allowed-tools": "Bash Read" },
       "lines": 84,                     // SKILL.md 的行数
       "summary": null,                 // 一句话，只由标注设置
@@ -99,11 +95,11 @@
       "evidence": { "line": 44, "text": "…invoke the `review` skill once…" }
     }
   ],
-  "unresolved": [                      // 到达不了任何已安装技能的链接
+  "unresolved": [                      // 指向未安装技能的链接
     { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "level": "problem", "skills": ["lint", "lint@project-codex"], "params": { "name": "lint", "agents": ["codex"], "copies": [ /* … */ ] }, "message": "…" }
+    { "kind": "duplicate-name", "level": "note", "skills": ["code", "code@user-claude"], "params": { "name": "code", "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -120,37 +116,12 @@
 }
 ```
 
-洞察类型：`duplicate-name`（同名而内容不同、某个代理可能加载其中任一个的技能）、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
+洞察类型：`duplicate-name`（同名而内容不同的技能）、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
-为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
+为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或以同一名称（见下文）被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
 大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
-同名而文件夹不同的技能各自在 `sameName` 下列出其余几个，`{ "id", "relation", "agents", "wins" }`，由同一个加载模型判定：每个代理按其文档所列加载各处（副本也算在内），以它调用技能所用的名称为名，并按下表排定先后。
-对每个代理和名称，它可能运行的技能是它在该名称下加载的、没有其他技能排在其前的那些；两个技能的关系取每一个适用的行，加载两者的每个代理各给出自己的关系，因此一个代理的冲突不会掩盖另一个代理的覆盖：
-
-| `relation` | 何时 | `agents` | `wins` |
-| --- | --- | --- | --- |
-| `conflict` | 某个代理可能运行其中任一个 | 这些代理 | null |
-| `override` | 某个代理运行其中一个，且把它排在另一个之前 | 运行 `wins` 的代理 | 这些代理运行的那个 id；各代理运行的不一致时，每个被运行的 id 一个条目 |
-| `other-agent` | 两者同名，但没有代理在该名称下两者都加载，因此各自只看到一个，两者可能已各自改动 | 没有，因为没有代理两者都加载 | null |
-
-| 代理 | 调用技能所用的名称 | 加载的位置，先者优先（`=` 表示不分先后） |
-| --- | --- | --- |
-| Claude Code | 其 `name` | `~/.claude/skills`；仓库根目录的 `.claude/skills`；各嵌套文件夹的 `.claude/skills` =；插件的技能名为 `<plugin>:<name>`，仅在没有其他技能用该名称时才可用不带前缀的名称 |
-| Codex | 其 `name` | `.agents/skills`（项目和主目录）、`~/.codex/skills/.system`，以及它自己的 `.codex/skills`（项目和主目录）= |
-| GitHub Copilot | 其 `name` | `--cwd` 的 `.github/skills`；其 `.agents/skills`；其 `.claude/skills`；其上各文件夹的 `.github/skills` =；`~/.copilot/skills`；`~/.agents/skills` |
-| Cursor | 其文件夹名 | `--cwd` 和主目录的 `.cursor/skills`、`.agents/skills`、`.claude/skills`、`.codex/skills` = |
-| Gemini CLI | 其 `name` | 项目的 `.agents/skills` =；其 `.gemini/skills` =；`~/.agents/skills`；`~/.gemini/skills` |
-| Kimi Code | 其 `name` | 在仓库根目录 `.kimi/skills`；`.claude/skills`；`.codex/skills`；`.agents/skills`；然后主目录中的同样几处，`~/.config/agents/skills` = `~/.agents/skills` |
-| OpenCode | 其文件夹名 | `.opencode/skills`，较近的在先；`~/.config/opencode/skills`；`.agents/skills`，较近的在先；`~/.agents/skills`；`.claude/skills`，较近的在先；`~/.claude/skills`；`~/.opencode/skills` 不分先后 |
-| Roo Code | 其文件夹名 | 在项目根目录 `.roo/skills`；`.agents/skills`；`~/.roo/skills`；`~/.agents/skills` |
-| Windsurf、Goose | 其 `name` | 它们自己的文件夹和共享文件夹 =，因为未找到其文档 |
-
-- 代理加载但文档未说明先后的位置，与其他每一处都不分先后，因此它在那里可能运行的两个技能相互冲突，而它在那里可能运行的一个技能不覆盖任何技能（见 `scripts/lib/roots.mjs` 中的 `AGENTS`，每一项都注明其文档）。
-- 插件的技能以其插件命名，因此只与同一插件的技能同名；`--root` 的技能和项目自己的 `skills/` 都不被任何代理加载，其中的技能以其 `name` 为名。
-- 某一行经链接到达另一行的文件夹时，该文件夹只扫描一次，其技能作为副本列在该行的文件夹下，从而保留加载它的代理。
-- 加载其他代理的副本的代理，是其各文件夹 `agents` 中的代理。
-- 每个名称及某个代理在该名称下可能运行的一组技能，报告一个 `duplicate-name` 洞察，列出这些代理以及它们加载这些技能所在的文件夹；覆盖和其他代理的副本都不算问题。
-  把其中一个的文件夹和它的 `name` 一并改名，或把它移出这些代理加载的文件夹，即可让每个代理都把两者分开；否则删除其中一个。
+同名而文件夹不同的技能各自在 `sameName` 下列出其余几个的 id，该名称是一条 `duplicate-name` 提示，列出存有其中任一技能的每个文件夹：读取其中多个文件夹的代理会按自己的规则选用其中一个，图谱不对此建模，既不指名任何代理，也不把任何技能排在其他技能之前。
+`name` 相同的技能即为同名，插件的技能名为 `<plugin>:<name>`，因此两个插件的技能、或插件的技能与非插件的技能，永不同名。
 
 ## annotations.json — 叠加在扫描之上的修正
 
@@ -180,6 +151,7 @@
 ```
 
 - `step` 是从 1 开始的步骤序号；省略它表示针对整个技能。
+- `to` 是技能的名称，指向同一技能中检测到的链接所指向的那个技能；也可以是某一个技能的 id。
 - `steps` 中的一项包含 `title` 和 `summary`；新步骤的标签和链接通过带 `step` 和 `note` 的 `addTags` 和 `addCalls` 给出，它们在替换之后应用。
   （为了容错，`steps` 项中的 `tags` 和 `calls` 列表仍会被读取。）
 - 被替换的步骤，其 `line` 和 `endLine` 为 null，其 `summary` 作为 `excerpt`；扫描在原步骤中找到的标签和链接保留在整个技能上（`fromStep` 为 null），每个目标一条链接，`calls` 优先于 `mentions`。
@@ -281,7 +253,7 @@
 
 | 类型 | `params` |
 | --- | --- |
-| `duplicate-name` | `name`（这些代理调用各副本所用的名称，插件的为 `<plugin>:<name>`）、`agents`（可能加载其中任一副本的代理）、`copies`（每个冲突副本一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为其文件夹） |
+| `duplicate-name` | `name`（插件的为 `<plugin>:<name>`）、`copies`（存有其中任一技能的每个文件夹一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为该文件夹） |
 | `unresolved-link` | `name`、`from`、`kind`（其中任一链接为调用时为 `calls`，否则为 `mentions`） |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
@@ -296,8 +268,8 @@
 
 | `level` | 类型 |
 | --- | --- |
-| `problem` | `duplicate-name`、`calls` 类的 `unresolved-link`、`cycle`、`invalid-frontmatter`、`stale-translation`、`edited-translation`、`stale-annotation`、`translation-steps` |
-| `note` | `mentions` 类的 `unresolved-link`、`oversized`、`missing-description`、`name-mismatch`、`no-steps` |
+| `problem` | `calls` 类的 `unresolved-link`、`cycle`、`invalid-frontmatter`、`stale-translation`、`edited-translation`、`stale-annotation`、`translation-steps` |
+| `note` | `duplicate-name`、`mentions` 类的 `unresolved-link`、`oversized`、`missing-description`、`name-mismatch`、`no-steps` |
 
 页面只为问题在卡片上作标记、在“洞察”按钮上计数，并把提示列在问题之后。
 
@@ -361,10 +333,10 @@
   同名（不计大小写）而内容不同的技能中，按其第一个文件夹排在最前的那个——先按在仓库根目录以下的深度（根目录自己的文件夹和项目之外的文件夹深度为零，较浅的在先），再是项目的行先于主文件夹的、插件的和 `--root` 的行，项目和主文件夹的各行按扫描器固定的代理顺序（`scripts/lib/roots.mjs` 中的 `AGENT_ROOTS`），插件和 `--root` 按其 id，然后按其在根中的文件夹路径逐字符比较——以名称本身为 id，因此不带限定的 id 取决于安装了哪些同名技能，排在最前的那个被移除时由下一个取得；其余每个的 id 只取决于它自己的名称、根和文件夹：`<name>@<rootId>`，其在根中的文件夹路径不是其名称时再加上 `@` 和按上述规则处理的该路径（`a/foo` 对应 `foo@project-agents@a.foo`）。
   含有 `@`、`#`、`/`、`\` 或控制字符的名称，以及 `.` 或 `..`，在 id 中写作其短名加 `_` 和其 SHA-256 的八位十六进制数字。
   任何两个 id 都不会只在大小写上不同，因此在任何文件系统上，每个 id 都指明状态目录 `translations/` 下它自己的文件夹：两个只在大小写上不同的名称，第二个按上述规则加以限定。
-  被多行到达的同一文件夹（`--cwd` 即主文件夹，`--root` 或 `CLAUDE_CONFIG_DIR` 指向项目的某个文件夹，或一个文件夹的技能链接到另一个的）只扫描一次，项目的行先于主文件夹的、插件的和 `--root` 的行，同一类中取不经自身链接到达它的那一行，各自再取 id 顺序中的第一行，因此另一行不会改变任何 id；另一行也会列出，其技能作为副本列在那里。
+  被多行到达的同一文件夹（`--cwd` 即主文件夹，`--root` 或 `CLAUDE_CONFIG_DIR` 指向项目的某个文件夹，或一个文件夹的技能链接到另一个的）只扫描一次，项目的行先于主文件夹的、插件的和 `--root` 的行，同一类中取不经自身链接到达它的那一行，各自再取 id 顺序中的第一行，因此另一行不会改变任何 id。
   其显示名称带有该路径：`Project (packages/ui) · Universal`。
-- 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及每个项目文件夹中含有技能的 `skills`。
-- `--agent <id>` 保留该代理加载的文件夹（见上文 `sameName`）、`universal` 下的 `.agents/skills` 和 `.config/agents/skills`，以及 `--root` 指定的文件夹；项目的 `skills` 不保留。
+- 每个项目文件夹和主目录中每个代理的技能文件夹（`.claude/skills`、`.agents/skills`、`.codex/skills`、`.cursor/skills`……；`CLAUDE_CONFIG_DIR` 和 `CODEX_HOME` 代替主目录的 `.claude` 和 `.codex`），主目录 Codex 技能下 `.system` 中 Codex 自带的技能，主目录的 `.config/opencode/skills`、`.config/agents/skills`（与 `.agents/skills` 一样被加载）、`.config/goose/skills`、`.copilot/skills` 和 `.codeium/windsurf/skills`（设置了 `XDG_CONFIG_HOME` 时，由它代替主目录的 `.config`），每个项目文件夹的 `.github/skills`，以及每个项目文件夹中含有技能的 `skills`。
+- `--agent <id>` 保留该代理的文件夹、该代理加载的 `.agents/skills` 和 `.config/agents/skills`（除 Claude Code 外的代理都加载它们），以及 `--root` 指定的文件夹；项目的 `skills` 不保留。
 - Claude Code 插件的 `skills`：`plugins/installed_plugins.json` 记录该插件为用户或本项目安装，且 `enabledPlugins` 没有把它设为 `false`；依次读取用户的 `settings.json`、项目的 `.claude/settings.json` 和项目的 `.claude/settings.local.json`，项目的每个文件夹都读取，较远的先读，对同一插件，后读的文件的值优先于先读的。
 - 在每个文件夹中，含有 `SKILL.md` 的子文件夹或其下一级文件夹是一个技能；名称以点开头的文件夹和 `node_modules` 会被跳过。
 
@@ -387,9 +359,9 @@
 | 单独的 `` `N` ``，当句子提到 skill 或名称中带连字符时 | `mentions` |
 
 - 否定一直作用到其句子结束，除非其后跟着以使用类动词开头的分句，因此 ``do not run `$lint` and then run `$review` `` 对两者都是提及，而 ``do not run `$lint`, but run `$review` `` 调用 `review`。
-- 名称按上述加载模型解析为加载发出链接的技能的某个代理在该名称下运行的技能，因此链接与 `sameName` 的 `wins` 一致：由发出链接的技能的第一个文件夹所属的代理决定，否则由按键排在最前、运行某个技能的代理决定，它可能运行多个时取图谱顺序中的第一个；没有代理运行任何技能时，取发出链接的技能自己的文件夹（副本所在的文件夹也算）中以该名称为名的技能，否则为最先找到的那个。
+- 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。
 - 每个（技能、步骤、目标）只保留一条链接，`calls` 优先于 `mentions`；技能指向自身的链接被丢弃。
-- 到达不了任何技能的链接——没有以该名称安装的技能，或者加载链接所在技能的代理在该名称下不运行任何技能，例如两个插件共有的裸名称——只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；任意词之后的 `` `x` skill ``（``the `x` skill``、``our `x` skill``）；以及 `Skill(x)`，无论 `x` 是什么。
+- 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；任意词之后的 `` `x` skill ``（``the `x` skill``、``our `x` skill``）；以及 `Skill(x)`，无论 `x` 是什么。
   每个的类型与该形式指向已安装技能时相同：`` `x` skill `` 只有在某个表示使用的动词之后几个词以内才是调用，任何被引开的形式都是提及；每个（技能、步骤、名称）只保留一个，`calls` 优先于 `mentions`。
 
 标签来自 `tag-rules.json`：每条规则的模式会与 frontmatter 描述（以及 `context` 和 `agent` 键）、前言（所有步骤之外的每一行正文）和每个步骤的每一行逐一匹配，围栏代码也包括在内。
