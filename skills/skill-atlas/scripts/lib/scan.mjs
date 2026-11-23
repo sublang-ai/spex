@@ -11,7 +11,7 @@ import { listRoots, skillDirs, isDir, realOr, placeId, idWord } from './roots.mj
 import { splitFrontmatter } from './frontmatter.mjs';
 import { fenceMask, clipText } from './markdown.mjs';
 import { detectSteps } from './steps.mjs';
-import { buildLinkMatcher, findLinks, proseUnits, fullName, resolve } from './links.mjs';
+import { buildLinkMatcher, findLinks, proseUnits, resolve } from './links.mjs';
 import { loadRules, matchLines, allowedToolTags, addEvidence, mergeHits, CATEGORIES, EVIDENCE_TEXT_MAX } from './tags.mjs';
 import { bundledFiles } from './files.mjs';
 import { stateTranslations, readTextBounded, chooseTranslation, listFilesBounded, sha256Hex, TRANSLATIONS_DIR } from './translations.mjs';
@@ -70,6 +70,7 @@ export function scan(opts) {
     if (!cur || before(root, cur)) scannedAs.set(real, root);
   }
 
+  const counts = new Map(); // root id -> the skills present in its folder
   for (const root of listed) {
     if (!isDir(root.path)) {
       if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
@@ -87,15 +88,34 @@ export function scan(opts) {
       byReal.set(real, rec);
       skills.push(rec);
     }
-    if (root.requireSkills && !present) continue;
-    const { requireSkills, explicit, depth, linked, ...rec } = root;
-    roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
+    counts.set(root.id, present);
   }
   skills = mergeIdenticalCopies(skills);
 
   assignIds(skills, idOrder, new Map(listed.map((r) => [r.id, r.path])));
-  markSameNames(skills);
-  const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
+  // Each other root reaching a scanned folder by another path holds its skills
+  // there too: each is listed at that root's folder as a copy, after the ids,
+  // which it changes not. A root naming a path already listed adds nothing.
+  const placed = new Set([...scannedAs.values()].map((r) => r.path));
+  for (const root of byIdOrder) {
+    const as = isDir(root.path) ? scannedAs.get(realOr(root.path)) : null;
+    if (!as || placed.has(root.path)) continue;
+    placed.add(root.path);
+    counts.set(root.id, counts.get(as.id));
+    for (const s of skills) {
+      for (const p of [{ root: s.root, dir: s.dir }, ...s.copies]) {
+        if (p.root === as.id) s.copies.push({ root: root.id, dir: path.join(root.path, path.relative(as.path, p.dir)) });
+      }
+    }
+  }
+  for (const root of listed) {
+    if (!counts.has(root.id) || root.requireSkills && !counts.get(root.id)) continue;
+    const { requireSkills, explicit, depth, linked, ...rec } = root;
+    roots.push({ ...rec, skillCount: counts.get(root.id) }); // copies included: the skills present in this folder
+  }
+  const pluginOf = new Map(roots.map((r) => [r.id, r.plugin]));
+  markSameNames(skills, pluginOf);
+  const matcher = buildLinkMatcher(skills, pluginOf);
   let edges = [];
   let unresolved = [];
   for (const s of skills) {
@@ -197,21 +217,21 @@ function readSkill(dir, root) {
   return s;
 }
 
-// A skill copied into several roots under one name [fullName], every file of
-// its folder byte for byte the same, is one record; the later folders join
-// the first one's `copies`. The rest of a folder is compared only once SKILL.md matches.
+// A skill copied into several roots under one declared name, a plugin's
+// included, every file of its folder byte for byte the same, is one record;
+// the later folders join the first one's `copies`. The rest of a folder is
+// compared only once SKILL.md matches.
 function mergeIdenticalCopies(skills) {
   const kept = [];
   const byName = new Map();
   for (const s of skills) {
-    const name = fullName(s);
-    const same = s._readOk ? (byName.get(name) ?? []).find((k) => k._readOk && k._raw === s._raw && sameFolder(k, s)) : null;
+    const same = s._readOk ? (byName.get(s.name) ?? []).find((k) => k._readOk && k._raw === s._raw && sameFolder(k, s)) : null;
     if (same) {
       same.copies.push({ root: s.root, dir: s.dir }, ...s.copies);
       continue;
     }
-    if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push(s);
+    if (!byName.has(s.name)) byName.set(s.name, []);
+    byName.get(s.name).push(s);
     kept.push(s);
   }
   return kept;
@@ -418,16 +438,29 @@ function shellWord(p) {
   return /^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
 }
 
-// Each skill's `sameName`: the other skills of its name [fullName], which
+// Each skill's `sameName`: the other skills going by a name it goes by, which
 // differ from it, since identical copies are one record [mergeIdenticalCopies].
-function markSameNames(skills) {
+// A skill goes by one name at each of its folders: its declared name, and
+// `<plugin>:<name>` in a plugin's (`_names`: name -> those folders).
+function markSameNames(skills, pluginOf) {
   const byName = new Map();
   for (const s of skills) {
-    const name = fullName(s);
-    if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push(s);
+    s._names = new Map();
+    for (const p of [{ root: s.root, dir: s.dir }, ...s.copies]) {
+      const plugin = pluginOf.get(p.root);
+      const name = plugin ? `${plugin}:${s.name}` : s.name;
+      if (!s._names.has(name)) s._names.set(name, []);
+      s._names.get(name).push(p);
+    }
+    for (const name of s._names.keys()) {
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name).push(s);
+    }
   }
-  for (const group of byName.values()) for (const s of group) s.sameName = group.filter((o) => o !== s).map((o) => o.id);
+  for (const s of skills) {
+    const shared = new Set([...s._names.keys()].flatMap((name) => byName.get(name)));
+    s.sameName = shared.size > 1 ? skills.filter((o) => o !== s && shared.has(o)).map((o) => o.id) : [];
+  }
 }
 
 function publicSkill(s) {

@@ -115,10 +115,10 @@ A `TagHit`:
 
 Insight kinds: `duplicate-name` (differing skills of one name), `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
 
-One skill installed for several agents — a folder linked into several roots, or copied under one name (below) with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
+One skill installed for several agents — a folder linked into several roots, a root's folder linked to another's included, or copied under one `name`, a plugin's copy included, with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
 A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
-Skills of one name whose folders differ each list the others' ids under `sameName`, and their name is one `duplicate-name` note listing every folder holding one of them: an agent reading more than one of those folders picks one by its own rules, which the atlas does not model, naming no agent and ranking no skill over another.
-Skills are of one name where their `name`s are equal, a plugin's skill named `<plugin>:<name>`, so the skills of two plugins, or of a plugin and of none, are never of one name.
+A skill goes by its `name` in each of its folders, and by `<plugin>:<name>` in a plugin's.
+Differing skills going by one name each list the others' ids under `sameName`, and that name is one `duplicate-name` note listing, for each of them, the folders where it goes by that name: an agent reading more than one of those folders picks one by its own rules, which the atlas does not model, naming no agent and ranking no skill over another.
 
 ## annotations.json — corrections layered on the scan
 
@@ -250,7 +250,7 @@ Every insight carries `params`, the values its message is built from, so the pag
 
 | Kind | `params` |
 | --- | --- |
-| `duplicate-name` | `name` (`<plugin>:<name>` for a plugin's), `copies` (`{ "id", "path", "root", "rootLabel" }` per folder holding one of the skills, `path` that folder) |
+| `duplicate-name` | `name` (`<plugin>:<name>` in a plugin's folder), `copies` (`{ "id", "path", "root", "rootLabel" }` per folder where one of the skills goes by it, `path` that folder) |
 | `unresolved-link` | `name`, `from`, `kind` (`calls` where any of its links calls, else `mentions`) |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |

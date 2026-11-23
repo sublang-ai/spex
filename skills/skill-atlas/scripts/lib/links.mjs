@@ -65,10 +65,6 @@ const NAME_CHARS = String.raw`[a-z0-9][a-z0-9_-]*(?::[a-z0-9][a-z0-9_-]*)?`;
 // only when no word character follows it (sentence punctuation, not `.md`).
 const NAME_END = String.raw`(?![\w/-]|[.:]\w)`;
 
-// A skill's name as it is called: a plugin's skill is `<plugin>:<name>`, so
-// skills of different plugins, or a plugin's and another's, never share one.
-export const fullName = (s) => (s.plugin ? `${s.plugin}:${s.name}` : s.name);
-
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**

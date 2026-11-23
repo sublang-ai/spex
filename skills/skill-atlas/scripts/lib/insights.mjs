@@ -6,7 +6,7 @@
 // and `params`, the values its English message is built from, for the page to phrase.
 
 import path from 'node:path';
-import { keepLink, fullName } from './links.mjs';
+import { keepLink } from './links.mjs';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
 const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'stale-annotation', 'translation-steps'];
@@ -25,19 +25,24 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
     if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: { named }, message: `${s.id}: ${s._fmError}; ${named ? 'the fields that read are used' : 'the folder name is used as its name'}` });
   }
 
-  // One note per name that differing skills declare [scan.mjs markSameNames]:
-  // a fact, since which an agent picks is its own rule.
-  const byId = new Map(skills.map((s) => [s.id, s]));
+  // One note per name differing skills go by [scan.mjs markSameNames], each
+  // listing the folders where it goes by that name: a fact, since which an
+  // agent picks is its own rule.
+  const byName = new Map();
   for (const s of skills) {
-    const group = [s, ...s.sameName.map((id) => byId.get(id))];
-    if (!s.sameName.length || group.some((o) => skills.indexOf(o) < skills.indexOf(s))) continue;
-    const name = fullName(s);
-    const copies = group.flatMap((o) => [{ root: o.root, dir: o.dir }, ...o.copies].map((p) => ({ id: o.id, path: p.dir, root: p.root, rootLabel: rootLabel.get(p.root) ?? p.root })));
+    for (const name of s._names?.keys() ?? []) {
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name).push(s);
+    }
+  }
+  for (const [name, group] of byName) {
+    if (group.length < 2) continue;
+    const copies = group.flatMap((o) => o._names.get(name).map((p) => ({ id: o.id, path: p.dir, root: p.root, rootLabel: rootLabel.get(p.root) ?? p.root })));
     out.push({
       kind: 'duplicate-name',
       skills: group.map((o) => o.id),
       params: { name, copies },
-      message: `"${name}" has ${group.length} different versions in ${copies.length} folders: ${copies.map((p) => p.path).join(', ')}. An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.`,
+      message: `"${name}" has ${group.length} different versions in ${copies.length} folders: ${copies.map((p) => p.path).join(', ')}. An agent that reads more than one of these folders picks one by its own rules.`,
     });
   }
 

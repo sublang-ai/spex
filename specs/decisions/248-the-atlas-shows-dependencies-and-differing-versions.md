@@ -45,9 +45,10 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page
 - The page shows dependencies only, the calls between skills, and names the relation a dependency.
   - The scan still classifies every link as a call or a mention, an unresolved one included, and reports both.
 - Skills of one name with different content are one fact, stated without a verdict.
-  - Skills are of one name where their declared names are equal, a plugin's skill named `<plugin>:<name>`, so the skills of two plugins, or of a plugin and of none, are never of one name.
-  - Identical copies are one skill already; each skill lists the other skills of its name, which differ from it.
-  - Each such name is one note listing every folder holding a version: an agent reading more than one of those folders picks one by its own rules, and a reader unsure keeps one, deleting or renaming each other one's folder and declared name alike.
+  - A skill goes by its declared name in each of its folders and by `<plugin>:<name>` in a plugin's, so the differing skills of two plugins, or of a plugin and of none, never share a name.
+  - Folders reached through links to one folder, and byte-for-byte copies of one declared name, a plugin's included, are one skill already; each skill lists the other skills going by a name it goes by, which differ from it.
+  - Each such name is one note listing, for each version, the folders where it goes by that name: an agent reading more than one of those folders picks one by its own rules.
+  - The atlas gives no cleanup advice: deleting a folder another links to would remove each version reached through it.
   - The atlas names no agent for it and ranks no version over another; the reader judges.
   - The page notes on each skill its other versions by folder, and shows any two of them side by side, never marking a line alike in both as differing.
 - A link to a name several skills hold reaches the one in the caller's own folder, else the first in the scanner's order, and `<plugin>:<name>` reaches that plugin's skill.

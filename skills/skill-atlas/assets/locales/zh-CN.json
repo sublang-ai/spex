@@ -11,7 +11,7 @@
     "Names with different versions": "有多个不同版本的名称",
     "Another skill of the same name has different content.": "另一个同名技能的内容不同。",
     "“{name}” has {n} different versions:": "“{name}”有 {n} 个不同版本：",
-    "An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.": "读取其中多个文件夹的代理会按自己的规则选用其中一个；如不确定，只保留一个：删除其余各个，或把其文件夹和其 SKILL.md 中的名称一并改名。",
+    "An agent that reads more than one of these folders picks one by its own rules.": "读取其中多个文件夹的代理会按自己的规则选用其中一个。",
     "Calls skills that are not installed": "调用未安装的技能",
     "Calls a skill that is not installed.": "调用了一个未安装的技能。",
     "{from} calls “{name}”, which is not installed": "{from} 调用了未安装的“{name}”",

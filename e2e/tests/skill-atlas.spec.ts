@@ -667,7 +667,7 @@ test("skill-atlas-17: frontmatter in error is said to keep the fields that read,
 });
 
 // Two differing skills of one name: one note naming both folders, each version comparable with the other.
-const WHAT_TO_DO = "An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.";
+const WHAT_TO_DO = "An agent that reads more than one of these folders picks one by its own rules.";
 const TWIN = {
   one: "# Twin\n\n## Step 1: First\n\nDo the first thing.\n\n## Step 2: Second\n\nDo the second thing.\n",
   two: "# Twin\n\n## Step 1: First\n\nDo another thing.\n\n## Step 2: Second\n\nDo the second thing.\n",

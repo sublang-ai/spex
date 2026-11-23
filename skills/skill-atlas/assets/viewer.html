@@ -559,7 +559,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
           h('ul', null, p.copies.map((c, i) => h('li', null,
             copyRootTitle(c), ' ', code(c && c.path), copyPathButton(c && c.path),
             c && c.id !== first && p.copies.findIndex((o) => o && o.id === c.id) === i ? compareButton(first, c.id) : null))),
-          h('p', { text: t('An agent that reads more than one of these folders picks one by its own rules; if unsure, keep one, deleting each other one or renaming its folder and the name in its SKILL.md alike.') }),
+          h('p', { text: t('An agent that reads more than one of these folders picks one by its own rules.') }),
         ];
       },
     },

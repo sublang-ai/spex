@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=bac844549035ebc026b9421aa3753bbd9aca44bd207d70765093b5cd31a44e9e own=e6fe4c3765b308465ac57ddde1e26fe69720d98d81576fa44ba765ba909c5a5c -->
+<!-- skill-atlas:source sha256=7e9f706aad348732df54a1107521f36a5d8b9c226d5651085e3f8234065e45ba own=a9f8dd7e4a0771446f626fdb6a8b4d2718911c7c39b6660b78ef074e639fbb2b -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -118,10 +118,10 @@
 
 洞察类型：`duplicate-name`（同名而内容不同的技能）、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
-为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或以同一名称（见下文）被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
+为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，包括某个根目录的文件夹链接到另一个根目录的文件夹，或以同一 `name` 被复制（插件中的副本也算）且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
 大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
-同名而文件夹不同的技能各自在 `sameName` 下列出其余几个的 id，该名称是一条 `duplicate-name` 提示，列出存有其中任一技能的每个文件夹：读取其中多个文件夹的代理会按自己的规则选用其中一个，图谱不对此建模，既不指名任何代理，也不把任何技能排在其他技能之前。
-`name` 相同的技能即为同名，插件的技能名为 `<plugin>:<name>`，因此两个插件的技能、或插件的技能与非插件的技能，永不同名。
+技能在其每个文件夹中以其 `name` 为名，在插件的文件夹中则以 `<plugin>:<name>` 为名。
+以同一名称为名而内容不同的技能各自在 `sameName` 下列出其余几个的 id，该名称是一条 `duplicate-name` 提示，为其中每个技能列出它以该名称为名的文件夹：读取其中多个文件夹的代理会按自己的规则选用其中一个，图谱不对此建模，既不指名任何代理，也不把任何技能排在其他技能之前。
 
 ## annotations.json — 叠加在扫描之上的修正
 
@@ -253,7 +253,7 @@
 
 | 类型 | `params` |
 | --- | --- |
-| `duplicate-name` | `name`（插件的为 `<plugin>:<name>`）、`copies`（存有其中任一技能的每个文件夹一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为该文件夹） |
+| `duplicate-name` | `name`（在插件的文件夹中为 `<plugin>:<name>`）、`copies`（其中任一技能以该名称为名的每个文件夹一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为该文件夹） |
 | `unresolved-link` | `name`、`from`、`kind`（其中任一链接为调用时为 `calls`，否则为 `mentions`） |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |

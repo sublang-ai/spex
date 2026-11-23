@@ -150,10 +150,12 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
   for (const rm of list(ann.removeCalls, 'removeCalls', where)) {
     const step = stepAt(rm?.step);
     if (step === null || typeof rm?.to !== 'string') continue;
+    // A name or id reaching a skill removes the links to that skill alone; one
+    // reaching none, the unresolved links by that name.
     const target = resolveSkill(rm.to);
     const hits = (e) => e.from === skill.id && (!step || e.fromStep === step.id);
-    atlas.edges = atlas.edges.filter((e) => !(hits(e) && (e.to === target?.id || e.to === rm.to)));
-    atlas.unresolved = atlas.unresolved.filter((u) => !(hits(u) && u.name === rm.to));
+    if (target) atlas.edges = atlas.edges.filter((e) => !(hits(e) && e.to === target.id));
+    else atlas.unresolved = atlas.unresolved.filter((u) => !(hits(u) && u.name === rm.to));
   }
 }
 
