@@ -18,8 +18,13 @@ export function summarize(atlas) {
   const calls = atlas.edges.filter((e) => e.kind === 'calls').length;
   const mentions = atlas.edges.length - calls;
   const copyNote = copyCount ? ` (plus ${copyCount} ${copyCount === 1 ? 'copy' : 'copies'} in other folders)` : '';
-  out.push(`Skill Atlas: ${plural(atlas.skills.length, 'skill')}${copyNote} in ${plural(atlas.roots.length, 'folder')}; ${calls} calls, ${mentions} mentions, ${atlas.unresolved.length} unresolved.`);
+  // An unresolved name a skill only mentions runs nothing, so calls and mentions are told apart.
+  const unresolvedCalls = atlas.unresolved.filter((u) => u.kind === 'calls').length;
+  const unresolvedNote = `${unresolvedCalls} ${unresolvedCalls === 1 ? 'call' : 'calls'} and ${atlas.unresolved.length - unresolvedCalls} ${atlas.unresolved.length - unresolvedCalls === 1 ? 'mention' : 'mentions'}`;
+  out.push(`Skill Atlas: ${plural(atlas.skills.length, 'skill')}${copyNote} in ${plural(atlas.roots.length, 'folder')}; ${calls} calls, ${mentions} mentions, ${atlas.unresolved.length} unresolved (${unresolvedNote}).`);
   out.push(`Project: ${atlas.cwd}`);
+  const problems = atlas.insights.filter((i) => i.level === 'problem').length;
+  out.push(`Insights: ${plural(problems, 'problem')} to act on, ${plural(atlas.insights.length - problems, 'note')}.`);
 
   out.push('', 'Folders (skills present, copies included):');
   if (!atlas.roots.length) out.push('  (none found; pass --root <dir> to name a skill folder)');
@@ -48,18 +53,21 @@ export function summarize(atlas) {
     out.push(`  ${id}: ${parts.join('; ')}`);
   }
 
-  out.push('', `Unresolved links (${atlas.unresolved.length}):`);
+  out.push('', `Unresolved links (${atlas.unresolved.length}: ${unresolvedNote}):`);
   if (!atlas.unresolved.length) out.push('  (none)');
   for (const u of atlas.unresolved) {
     const step = u.fromStep ? ` step ${u.fromStep.split('#').pop()}` : '';
-    out.push(`  ${u.from}${step} -> ${u.name} (line ${u.evidence.line ?? '?'}: ${u.evidence.text})`);
+    out.push(`  ${u.from}${step} ${u.kind} ${u.name} (line ${u.evidence.line ?? '?'}: ${u.evidence.text})`);
   }
 
   const kinds = (k) => atlas.insights.filter((i) => i.kind === k);
+  // A fact, not a verdict: which version an agent reads is its own rule.
   const dups = kinds('duplicate-name');
-  out.push('', `Duplicate names, differing folders (${dups.length}):`);
+  out.push('', `Names with different versions (${dups.length}):`);
   if (!dups.length) out.push('  (none)');
-  for (const i of dups) out.push(`  ${i.skills.map((id) => `${id} [${byId.get(id)?.root}]`).join(', ')}`);
+  for (const i of dups) {
+    out.push(`  ${i.params.name}: ${i.skills.length} versions, in ${i.params.copies.map((c) => `${c.path} [${c.id}]`).join(', ')}; an agent reading more than one of these folders picks one by its own rules`);
+  }
 
   const cycles = kinds('cycle');
   out.push('', `Cycles (${cycles.length}):`);
@@ -83,10 +91,13 @@ export function summarize(atlas) {
     for (const s of shared) out.push(`  ${named(s.id)}: ${[s.root, ...s.copies.map((c) => c.root)].join(', ')}`);
   }
 
-  const other = ['invalid-frontmatter', 'oversized', 'missing-description', 'name-mismatch', 'stale-annotation'];
-  const rest = atlas.insights.filter((i) => other.includes(i.kind));
-  if (rest.length) {
-    out.push('', 'Other issues:');
+  // The insights' levels as the page shows them [insights.mjs levelOf]; each one not listed
+  // above under its own heading, an unresolved link or a skill with no steps, is listed here.
+  const listed = new Set(['duplicate-name', 'cycle', 'unresolved-link', 'no-steps']);
+  for (const [level, heading] of [['problem', 'Other problems'], ['note', 'Other notes']]) {
+    const rest = atlas.insights.filter((i) => i.level === level && !listed.has(i.kind));
+    if (!rest.length) continue;
+    out.push('', `${heading} (${rest.length}):`);
     for (const i of rest) out.push(`  ${i.kind}: ${i.message}`);
   }
   return out.join('\n') + '\n';

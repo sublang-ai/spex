@@ -59,7 +59,11 @@ export function applyAnnotations(doc, atlas) {
   // else of the first of the name; an id is its own skill's key.
   for (const [name, list] of byName) byKey.set(name, list.find((s) => !s.id.includes('@')) ?? list[0]);
   for (const s of atlas.skills) byKey.set(s.id, s);
-  const resolveSkill = (ref) => (typeof ref === 'string' ? byKey.get(ref) ?? null : null);
+  // A link's target: a name reaches the skill a scanned link from the same
+  // skill reaches [links.mjs resolve]; an id that is no name, its own skill.
+  const byId = new Map(atlas.skills.map((s) => [s.id, s]));
+  const targetFrom = (from) => (ref) => (typeof ref !== 'string' ? null
+    : byId.get(atlas.resolve?.(ref, from.root)) ?? byKey.get(ref) ?? null);
 
   for (const [key, value] of Object.entries(doc.skills)) {
     const skill = byKey.get(key);
@@ -68,7 +72,7 @@ export function applyAnnotations(doc, atlas) {
     // its digest; a differing skill's own `<name>@<rootId>` key comes first.
     const sameName = key === skill.name ? byName.get(key) : [skill];
     const others = sameName.filter((s) => s !== skill && !Object.hasOwn(doc.skills, s.id));
-    for (const [s, chosen] of entriesFor(skill, others, sameName, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, resolveSkill);
+    for (const [s, chosen] of entriesFor(skill, others, sameName, value, `annotations for "${key}"`)) applyEntry(atlas, s, chosen, targetFrom(s));
   }
 }
 
@@ -95,17 +99,11 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
     } else {
       // Replacing the steps detaches scanned links and tags from the old
       // steps: they stay on the skill as a whole.
-      // Links that were the former steps' are one per target at the skill, calls before mentions.
+      // Links that were the former steps' are one per target, or name, at the skill, calls before mentions.
       for (const e of atlas.edges) if (e.from === skill.id) e.fromStep = null;
       atlas.edges = oneLinkEach(atlas.edges);
-      const seen = new Set();
-      atlas.unresolved = atlas.unresolved.filter((u) => {
-        if (u.from !== skill.id) return true;
-        u.fromStep = null;
-        if (seen.has(u.name)) return false;
-        seen.add(u.name);
-        return true;
-      });
+      for (const u of atlas.unresolved) if (u.from === skill.id) u.fromStep = null;
+      atlas.unresolved = oneLinkEach(atlas.unresolved);
       skill._baseTags = mergeHits(skill._baseTags, ...skill.steps.map((st) => st.tags));
       skill.steps = ann.steps.map((st, n) => {
         const index = n + 1;
@@ -152,10 +150,12 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
   for (const rm of list(ann.removeCalls, 'removeCalls', where)) {
     const step = stepAt(rm?.step);
     if (step === null || typeof rm?.to !== 'string') continue;
+    // A name or id reaching a skill removes the links to that skill alone; one
+    // reaching none, the unresolved links by that name.
     const target = resolveSkill(rm.to);
     const hits = (e) => e.from === skill.id && (!step || e.fromStep === step.id);
-    atlas.edges = atlas.edges.filter((e) => !(hits(e) && (e.to === target?.id || e.to === rm.to)));
-    atlas.unresolved = atlas.unresolved.filter((u) => !(hits(u) && u.name === rm.to));
+    if (target) atlas.edges = atlas.edges.filter((e) => !(hits(e) && e.to === target.id));
+    else atlas.unresolved = atlas.unresolved.filter((u) => !(hits(u) && u.name === rm.to));
   }
 }
 

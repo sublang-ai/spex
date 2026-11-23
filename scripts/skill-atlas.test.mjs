@@ -202,9 +202,10 @@ Invoke the \`ping\` skill.
   writeSkill(path.join(CLAUDE, 'broken'), `---\nname: broken-name\ndescription: 'unclosed\n  still going\n---\nBody text.\n`);
   writeSkill(path.join(CLAUDE, 'unclosed'), `---\nname: unclosed\ndescription: never closed\nBody without a closing delimiter.\n`);
 
-  // Duplicate name in two real folders, and one folder linked into two roots.
+  // Duplicate name in three real folders, two of them in one root Codex loads, and one folder linked into two roots.
   writeSkill(path.join(CLAUDE, 'dup'), `${fm('dup', 'First copy.')}\nOne.\n`);
   writeSkill(path.join(P, '.codex', 'skills', 'dup'), `${fm('dup', 'Second copy.')}\nTwo.\n`);
+  writeSkill(path.join(P, '.codex', 'skills', 'team', 'dup'), `${fm('dup', 'Third copy.')}\nThree.\n`);
   writeSkill(path.join(P, '.agents', 'skills', 'shared'), `${fm('shared', 'Shared via a link.')}\nShared.\n`);
   try {
     fs.symlinkSync(path.join(P, '.agents', 'skills', 'shared'), path.join(CLAUDE, 'shared'), 'junction');
@@ -487,8 +488,11 @@ describe('scan (skill-atlas-24)', () => {
 
   test('keeps one record for a linked folder and an identical copy, and reports differing ones', (t) => {
     const dup = atlas.insights.filter((i) => i.kind === 'duplicate-name');
-    assert.deepEqual(dup.map((i) => i.skills), [['dup', 'dup@project-codex']], 'only differing skills of one name');
+    assert.deepEqual(dup.map((i) => i.skills), [['dup', 'dup@project-codex', 'dup@project-codex@team.dup']], 'one insight per name');
     assert.deepEqual(skillOf(atlas, 'dup').copies, []);
+    assert.deepEqual(skillOf(atlas, 'dup').sameName, ['dup@project-codex', 'dup@project-codex@team.dup'], 'each differing skill of its name');
+    assert.deepEqual(skillOf(atlas, 'dup@project-codex').sameName, ['dup', 'dup@project-codex@team.dup']);
+    assert.deepEqual(skillOf(atlas, 'alpha').sameName, [], 'none where no other skill has the name');
     const same = atlas.skills.filter((s) => s.name === 'same');
     assert.equal(same.length, 1);
     assert.deepEqual(same[0].copies, [{ root: 'project-gemini', dir: path.join(P, '.gemini', 'skills', 'same') }]);
@@ -515,13 +519,32 @@ describe('scan (skill-atlas-24)', () => {
     // Every insight carries the values its message is built from.
     for (const i of atlas.insights) assert.ok(i.params && typeof i.params === 'object', `${i.kind} has params`);
     const one = (kind, id) => atlas.insights.find((i) => i.kind === kind && i.skills.includes(id));
-    assert.deepEqual(one('duplicate-name', 'dup').params, { name: 'dup' });
-    assert.deepEqual(one('unresolved-link', 'orchestrator').params, { name: 'missing-thing', from: 'orchestrator' });
+    const codexDir = path.join(P, '.codex', 'skills');
+    assert.deepEqual(one('duplicate-name', 'dup').params, { name: 'dup', copies: [
+      { id: 'dup', path: path.join(CLAUDE, 'dup'), root: 'project-claude', rootLabel: 'Project · Claude Code' },
+      { id: 'dup@project-codex', path: path.join(codexDir, 'dup'), root: 'project-codex', rootLabel: 'Project · Codex' },
+      { id: 'dup@project-codex@team.dup', path: path.join(codexDir, 'team', 'dup'), root: 'project-codex', rootLabel: 'Project · Codex' },
+    ] });
+    assert.match(one('duplicate-name', 'dup').message, /^"dup" has 3 different versions in 3 folders: .*\. An agent that reads more than one of these folders picks one by its own rules\.$/);
+    assert.deepEqual(one('unresolved-link', 'orchestrator').params, { name: 'missing-thing', from: 'orchestrator', kind: 'calls' });
     assert.deepEqual([...one('cycle', 'ping').params.path].sort(), ['ping', 'pong']);
     assert.match(one('cycle', 'ping').message, /for example ping \u2192 pong \u2192 ping$/);
     assert.equal(one('oversized', 'big').params.lines, skillOf(atlas, 'big').lines);
     assert.deepEqual(one('name-mismatch', 'other-name').params, { name: 'other-name', folder: 'folder-x' });
     assert.deepEqual(one('no-steps', 'plain').params, {});
+  });
+
+  test('gives each insight its level: a problem where the reader must act, else a note (skill-atlas-5)', () => {
+    const NOTES = ['duplicate-name', 'oversized', 'missing-description', 'name-mismatch', 'no-steps'];
+    const levels = new Map();
+    for (const i of atlas.insights) {
+      const note = NOTES.includes(i.kind) || (i.kind === 'unresolved-link' && i.params.kind === 'mentions');
+      assert.equal(i.level, note ? 'note' : 'problem', `${i.kind} ${i.skills.join(', ')}`);
+      levels.set(i.kind, i.level);
+    }
+    for (const k of ['cycle', 'invalid-frontmatter', 'stale-translation', 'edited-translation', 'translation-steps']) assert.equal(levels.get(k), 'problem', k);
+    for (const k of NOTES) assert.equal(levels.get(k), 'note', k);
+    assert.equal(levels.get('unresolved-link'), 'problem', 'an unresolved call');
   });
 
   test('reports a translation behind its source and one of other steps (skill-atlas-5)', () => {
@@ -699,13 +722,24 @@ test('scan --summary prints the digest (skill-atlas-24, skill-atlas-7)', () => {
   assert.match(r.stdout, /^Skill Atlas: \d+ skills \(plus \d+ cop(y|ies) in other folders\) in \d+ folders;/);
   assert.match(r.stdout, /\nFolders \(skills present, copies included\):\n {2}project-claude +\d+ /);
   assert.match(r.stdout, /\nMost linked:\n {2}\S+: /);
-  assert.match(r.stdout, /\nUnresolved links \(3\):\n {2}orchestrator step 3 -> missing-thing/);
-  assert.match(r.stdout, /\nDuplicate names, differing folders \(1\):\n {2}dup \[project-claude\], dup@project-codex \[project-codex\]/);
+  assert.match(r.stdout, /; \d+ calls, \d+ mentions, 3 unresolved \(3 calls and 0 mentions\)\.\n/);
+  assert.match(r.stdout, /\nUnresolved links \(3: 3 calls and 0 mentions\):\n {2}orchestrator step 3 calls missing-thing/);
+  assert.match(r.stdout, /\nNames with different versions \(1\):\n {2}dup: 3 versions, in \S+ \[dup\], \S+ \[dup@project-codex\], \S+ \[dup@project-codex@team\.dup\]; an agent reading more than one of these folders picks one by its own rules\n\n/);
   assert.match(r.stdout, /\nCycles \(2\):\n( {2}.*\n)* {2}ping -> pong -> ping\n/);
   assert.match(r.stdout, /\nCycles \(2\):\n( {2}.*\n)* {2}tri-a, tri-b, tri-c: for example (tri-\w) -> tri-\w -> \2\n/);
   assert.match(r.stdout, /\n {2}no steps \(\d+\): .*plain/);
   assert.match(r.stdout, /\n {2}sections only \(\d+\): .*delta/);
   assert.match(r.stdout, /\nInstalled in several folders \(\d+\):\n(.*\n)* {2}same \(also installed in 1 other folder\): project-claude, project-gemini/);
+  // The insights counted by level as the page counts them, and each not listed above under its level.
+  const atlas = JSON.parse(run(['scan', '--cwd', P, '--no-user', '--no-plugins', '--state', path.join(P, 'state')]).stdout);
+  const problems = atlas.insights.filter((i) => i.level === 'problem').length;
+  assert.ok(problems && problems < atlas.insights.length, 'the fixture has problems and notes');
+  assert.match(r.stdout, new RegExp(`\\nInsights: ${problems} problems to act on, ${atlas.insights.length - problems} notes\\.\\n`));
+  assert.match(r.stdout, /\nOther problems \(\d+\):\n(.*\n)* {2}edited-translation: /);
+  assert.match(r.stdout, /\nOther notes \(\d+\):\n(.*\n)* {2}oversized: /);
+  const section = (heading) => { const at = r.stdout.indexOf(`\n${heading} (`); return r.stdout.slice(at, r.stdout.indexOf('\n\n', at + 1) >>> 0); };
+  assert.doesNotMatch(section('Other problems'), /^ {2}(oversized|missing-description|name-mismatch|no-steps|duplicate-name|cycle|unresolved-link): /m);
+  assert.doesNotMatch(section('Other notes'), /^ {2}(invalid-frontmatter|stale-|edited-|translation-steps|no-steps|unresolved-link)/m);
 });
 
 test('an unreadable annotations file is warned of and skipped', () => {
@@ -889,11 +923,180 @@ test('copies: one skill only where every file is the same, and a call from a cop
   assert.equal(named('dotsame').length, 1, 'alike dot-files included: one skill');
   for (const n of ['near', 'worded', 'extra', 'dotty', 'nm']) {
     assert.deepEqual(named(n).map((s) => s.id), [n, `${n}@project-gemini`], `${n}: a differing file keeps the folders apart`);
+    assert.deepEqual(named(n)[0].sameName, [`${n}@project-gemini`], `${n}: each names the other`);
     assert.ok(atlas.insights.some((i) => i.kind === 'duplicate-name' && i.params.name === n));
   }
   assert.deepEqual(named('helper').map((s) => [s.id, s.copies.map((c) => c.root)]), [['helper', []], ['helper@project-agents', ['project-gemini']]]);
   assert.deepEqual(edge(atlas, 'caller', 'helper@project-agents').map((e) => e.kind), ['calls'], 'the call resolves to the copy in its own folder');
   assert.equal(edge(atlas, 'caller', 'helper').length, 0);
+});
+
+test('differing skills of one name are one fact: a note naming every folder, each skill naming the others, no agent in it, and a plugin\'s name its own (skill-atlas-33, skill-atlas-24, skill-atlas-5, skill-atlas-7)', () => {
+  const home = path.join(tmp, 'same-name-home');
+  const config = path.join(home, '.claude');
+  const project = path.join(tmp, 'same-name-project');
+  fs.mkdirSync(project, { recursive: true });
+  const put = (dir, name, text, body = text) => writeSkill(path.join(dir, name), `${fm(name, text)}\n${body}\n`);
+  put(path.join(home, '.agents', 'skills'), 'review', 'Shared.');
+  put(path.join(config, 'skills'), 'review', 'Personal.');
+  // Two plugins' skills of one bare name, and a plugin's beside a plain skill of it, are of different names.
+  const plugins = {};
+  for (const kit of ['kit-a', 'kit-b']) {
+    const dir = path.join(config, 'plugins', 'cache', kit);
+    put(path.join(dir, 'skills'), 'polish', `${kit}.`);
+    plugins[`${kit}@m`] = [{ scope: 'user', installPath: dir }];
+  }
+  put(path.join(config, 'plugins', 'cache', 'kit-a', 'skills'), 'review', 'Plugin.');
+  fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }));
+  // An unresolved name in a sentence steering away from it, and one called.
+  put(path.join(project, '.claude', 'skills'), 'asker', 'Asks.', 'Do not run the `/gone` command.\n\nInvoke the `away` skill.');
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+  const args = ['--cwd', project, '--state', path.join(tmp, 'same-name-state')];
+  const r = run(['scan', ...args], { env });
+  assert.equal(r.status, 0, r.stderr);
+  const atlas = JSON.parse(r.stdout);
+  const plain = atlas.skills.filter((s) => s.name === 'review' && !s.plugin);
+  assert.deepEqual(plain.map((s) => s.root).sort(), ['user-agents', 'user-claude']);
+  for (const s of plain) assert.deepEqual(s.sameName, plain.filter((o) => o !== s).map((o) => o.id), `${s.id} names the other version`);
+  assert.deepEqual(atlas.skills.find((s) => s.plugin === 'kit-a' && s.name === 'review').sameName, [], "a plugin's skill shares no name outside its plugin");
+  for (const s of atlas.skills.filter((x) => x.name === 'polish')) assert.deepEqual(s.sameName, [], 'two plugins\' skills are of two names');
+  const dups = atlas.insights.filter((i) => i.kind === 'duplicate-name');
+  assert.equal(dups.length, 1, 'one insight per name, none for the plugins');
+  const [dup] = dups;
+  assert.equal(dup.level, 'note', 'a fact, not a verdict');
+  const folders = plain.map((s) => s.dir);
+  assert.deepEqual(dup.params, { name: 'review', copies: plain.map((s) => ({ id: s.id, path: s.dir, root: s.root, rootLabel: atlas.roots.find((x) => x.id === s.root).label })) });
+  assert.equal(dup.message, `"review" has 2 different versions in 2 folders: ${folders.join(', ')}. An agent that reads more than one of these folders picks one by its own rules.`);
+  // No agent in what the atlas says of the name, beyond the folders' own paths and labels.
+  const words = folders.reduce((m, f) => m.split(f).join('<folder>'), dup.message);
+  assert.doesNotMatch(words, /claude|codex|cursor|gemini|agents\b|wins|override|conflict/i);
+  assert.ok(!('agentNames' in atlas), 'no agent names');
+  // An unresolved call is a problem; a name only mentioned runs nothing, a note (skill-atlas-5).
+  assert.deepEqual(atlas.insights.filter((i) => i.kind === 'unresolved-link').map((i) => [i.params.name, i.params.kind, i.level, i.message.split('"')[0]]).sort(), [['away', 'calls', 'problem', 'asker calls '], ['gone', 'mentions', 'note', 'asker mentions ']]);
+  const summary = run(['scan', '--summary', ...args], { env });
+  assert.equal(summary.status, 0, summary.stderr);
+  const listed = plain.map((s) => `${s.dir} [${s.id}]`).join(', ');
+  assert.ok(summary.stdout.includes(`\nNames with different versions (1):\n  review: 2 versions, in ${listed}; an agent reading more than one of these folders picks one by its own rules\n`), summary.stdout);
+});
+
+test('a plugin\'s skill folder linked to a plain skill, or its skills folder linked to a scanned folder, is a copy of that skill going by `<plugin>:<name>` there (skill-atlas-33, skill-atlas-1, skill-atlas-3)', () => {
+  for (const linked of ['skill', 'skills']) {
+    const home = path.join(tmp, `kit-link-${linked}-home`);
+    const config = path.join(home, '.claude');
+    const project = path.join(tmp, `kit-link-${linked}-project`);
+    const put = (dir, name, text, body = text) => writeSkill(path.join(dir, name), `${fm(name, text)}\n${body}\n`);
+    put(path.join(config, 'skills'), 'review', 'Personal.');
+    put(path.join(project, '.claude', 'skills'), 'review', 'Project.');
+    put(path.join(home, '.agents', 'skills'), 'caller', 'Calls.', 'Invoke the `kit:review` skill.');
+    const kit = path.join(config, 'plugins', 'cache', 'kit');
+    fs.mkdirSync(path.join(kit, linked === 'skill' ? 'skills' : ''), { recursive: true });
+    if (linked === 'skill') fs.symlinkSync(path.join(config, 'skills', 'review'), path.join(kit, 'skills', 'review'), 'junction');
+    else fs.symlinkSync(path.join(config, 'skills'), path.join(kit, 'skills'), 'junction');
+    fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'kit@m': [{ scope: 'user', installPath: kit }] } }));
+    const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+    const scan = (...extra) => {
+      const r = run(['scan', '--cwd', project, '--state', path.join(tmp, `kit-link-${linked}-state`), ...extra], { env });
+      assert.equal(r.status, 0, r.stderr);
+      return JSON.parse(r.stdout);
+    };
+    const atlas = scan();
+    const ids = (a) => a.skills.map((s) => s.id).sort();
+    assert.deepEqual(ids(atlas), ids(scan('--no-plugins')), `${linked}: the ids the skills have without the plugin`);
+    const personal = atlas.skills.find((s) => s.root === 'user-claude' && s.name === 'review');
+    assert.deepEqual(personal.copies, [{ root: 'plugin-kit.m', dir: path.join(kit, 'skills', 'review') }], `${linked}: the plugin's folder is a copy of the plain skill`);
+    assert.deepEqual(edge(atlas, 'caller', personal.id).map((e) => e.kind), ['calls'], `${linked}: kit:review reaches the skill`);
+    const dups = atlas.insights.filter((i) => i.kind === 'duplicate-name');
+    assert.deepEqual(dups.map((i) => [i.params.name, i.params.copies.map((c) => c.path).sort()]),
+      [['review', [path.join(config, 'skills', 'review'), path.join(project, '.claude', 'skills', 'review')].sort()]], `${linked}: one note for "review", the plugin's folder not in it`);
+  }
+});
+
+test('a folder two roots name by one path is one place, and one linked by one path one copy (skill-atlas-1, skill-atlas-5, skill-atlas-7)', () => {
+  const home = path.join(tmp, 'one-place-home');
+  const put = (dir, text) => writeSkill(path.join(dir, 'review'), `${fm('review', text)}\n${text}\n`);
+  put(path.join(home, '.claude', 'skills'), 'A.');
+  put(path.join(home, '.agents', 'skills'), 'B.');
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+  // --cwd the home folder: its project and home folder rows name the same paths.
+  const args = ['--cwd', home, '--no-plugins', '--state', path.join(tmp, 'one-place-state')];
+  const atlas = JSON.parse(run(['scan', ...args], { env }).stdout);
+  for (const s of atlas.skills) assert.deepEqual(s.copies, [], `${s.id} lists its own folder once`);
+  const [dup] = atlas.insights.filter((i) => i.kind === 'duplicate-name');
+  assert.equal(dup.params.copies.length, 2, 'each version in its one folder');
+  assert.match(run(['scan', '--summary', ...args], { env }).stdout, /^Skill Atlas: 2 skills in 2 folders;/);
+  // .agents/skills linked to .claude/skills: both rows naming the link add one copy.
+  fs.rmSync(path.join(home, '.agents', 'skills'), { recursive: true });
+  fs.symlinkSync(path.join(home, '.claude', 'skills'), path.join(home, '.agents', 'skills'), 'junction');
+  const linked = JSON.parse(run(['scan', ...args], { env }).stdout);
+  assert.deepEqual(linked.skills.map((s) => s.copies.map((c) => c.dir)), [[path.join(home, '.agents', 'skills', 'review')]]);
+});
+
+test('removing a link by a name another skill has as its id removes only the link the name reaches (skill-atlas-6)', () => {
+  const home = path.join(tmp, 'two-kits-home');
+  const config = path.join(home, '.claude');
+  const project = path.join(tmp, 'two-kits-project');
+  fs.mkdirSync(project, { recursive: true });
+  const put = (dir, name, text, body = text) => writeSkill(path.join(dir, name), `${fm(name, text)}\n${body}\n`);
+  const plugins = {};
+  for (const kit of ['alpha', 'beta']) {
+    const dir = path.join(config, 'plugins', 'cache', kit);
+    put(path.join(dir, 'skills'), 'review', `${kit}.`);
+    plugins[`${kit}@m`] = [{ scope: 'user', installPath: dir }];
+  }
+  put(path.join(config, 'plugins', 'cache', 'beta', 'skills'), 'caller', 'Calls.', 'Invoke the `review` skill.\n\nInvoke the `alpha:review` skill.');
+  fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }));
+  const state = path.join(tmp, 'two-kits-state');
+  fs.mkdirSync(state, { recursive: true });
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+  const scan = () => JSON.parse(run(['scan', '--cwd', project, '--state', state], { env }).stdout);
+  const atlas = scan();
+  const alpha = atlas.skills.find((s) => s.plugin === 'alpha').id;
+  const beta = atlas.skills.find((s) => s.plugin === 'beta' && s.name === 'review').id;
+  assert.equal(alpha, 'review', "alpha's skill has the name as its id");
+  assert.deepEqual(atlas.edges.filter((e) => e.from === 'caller').map((e) => e.to), [beta, alpha], 'the sibling by its name, alpha\'s by its plugin\'s');
+  fs.writeFileSync(path.join(state, 'annotations.json'), JSON.stringify({ version: 1, skills: { caller: { removeCalls: [{ to: 'review' }] } } }));
+  assert.deepEqual(scan().edges.filter((e) => e.from === 'caller').map((e) => e.to), [alpha], 'only the sibling\'s link removed');
+});
+
+test('a link to a name several skills hold reaches the caller\'s sibling, else the first in the atlas\'s order, and `<plugin>:<name>` that plugin\'s (skill-atlas-3)', () => {
+  const home = path.join(tmp, 'sibling-home');
+  const config = path.join(home, '.claude');
+  const project = path.join(tmp, 'sibling-project');
+  fs.mkdirSync(project, { recursive: true });
+  const put = (dir, name, text, body = text) => writeSkill(path.join(dir, name), `${fm(name, text)}\n${body}\n`);
+  put(path.join(project, '.claude', 'skills'), 'helper', 'Project.');
+  put(path.join(config, 'skills'), 'helper', 'Personal.');
+  put(path.join(config, 'skills'), 'home-caller', 'Calls.', 'Invoke the `helper` skill.');
+  put(path.join(project, '.claude', 'skills'), 'project-caller', 'Calls.', 'Invoke the `helper` skill.');
+  put(path.join(home, '.agents', 'skills'), 'shared-caller', 'Calls.', 'Invoke the `helper` skill.\n\nInvoke the `kit:helper` skill.');
+  const kit = path.join(config, 'plugins', 'cache', 'kit');
+  put(path.join(kit, 'skills'), 'helper', 'Plugin.');
+  fs.writeFileSync(path.join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'kit@m': [{ scope: 'user', installPath: kit }] } }));
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: '', CLAUDE_CONFIG_DIR: '', XDG_CONFIG_HOME: '' };
+  const r = run(['scan', '--cwd', project, '--state', path.join(tmp, 'sibling-state')], { env });
+  assert.equal(r.status, 0, r.stderr);
+  const atlas = JSON.parse(r.stdout);
+  const helper = (root) => atlas.skills.find((s) => s.name === 'helper' && s.root === root).id;
+  const to = (from) => atlas.edges.filter((e) => e.from === from).map((e) => e.to);
+  assert.deepEqual(to('home-caller'), [helper('user-claude')], 'the sibling in the home folder');
+  assert.deepEqual(to('project-caller'), [helper('project-claude')], 'the sibling in the project folder');
+  const first = atlas.skills.find((s) => s.name === 'helper').id;
+  const plugin = atlas.skills.find((s) => s.name === 'helper' && s.plugin === 'kit').id;
+  assert.deepEqual(to('shared-caller'), [first, plugin], 'no sibling: the first in the atlas\'s order; `kit:helper` the plugin\'s');
+  // An annotation naming a skill reaches the one a scanned link from the same skill reaches; an id names its own.
+  const state = path.join(tmp, 'sibling-annotated');
+  fs.mkdirSync(state, { recursive: true });
+  const annotate = (skills) => fs.writeFileSync(path.join(state, 'annotations.json'), JSON.stringify({ version: 1, skills }));
+  const rescan = () => JSON.parse(run(['scan', '--cwd', project, '--state', state], { env }).stdout);
+  const sibling = helper('user-claude');
+  assert.notEqual(sibling, first, 'the home caller\'s sibling is not the first of the name');
+  annotate({ 'home-caller': { removeCalls: [{ to: 'helper' }] } });
+  assert.deepEqual(rescan().edges.filter((e) => e.from === 'home-caller'), [], 'removeCalls by name drops the scanned link to the sibling');
+  annotate({ 'shared-caller': { removeCalls: [{ to: 'helper' }, { to: 'kit:helper' }] }, 'home-caller': { addCalls: [{ to: 'helper' }] }, 'project-caller': { addCalls: [{ to: sibling }] } });
+  const after = rescan();
+  assert.deepEqual(after.edges.filter((e) => e.from === 'home-caller').map((e) => [e.to, e.source]), [[sibling, 'annotation']], 'addCalls by name adds the sibling');
+  assert.deepEqual(after.edges.filter((e) => e.from === 'project-caller').map((e) => e.to).sort(), [helper('project-claude'), sibling].sort(), 'addCalls by id adds the skill named');
+  assert.deepEqual(after.edges.filter((e) => e.from === 'shared-caller'), [], 'a plugin\'s name is removed alike');
 });
 
 test('steps: the list opening the body after quoted notes, comments and a full-width colon (skill-atlas-2)', () => {
@@ -1142,7 +1345,9 @@ test('an id is a function of its own folder: distinct folders never share one, a
   const fromChild = scanJson(child, [], state).atlas;
   assert.deepEqual(ids(fromChild), ids(atRoot), 'the skill and root ids the parent\'s folder has without the alias');
   assert.deepEqual(ids(atRoot), ['lint project-agents', 'review project-claude', 'review@project-agents project-agents']);
-  assert.ok(!fromChild.roots.some((r) => r.id === 'project-agents.packages.app'), 'the alias scanned once, as the folder it leads to');
+  // Scanned once, as the folder it leads to, and listed with its skills as copies.
+  assert.equal(fromChild.roots.find((r) => r.id === 'project-agents.packages.app')?.skillCount, 2, 'the alias listed with the skills it reaches');
+  assert.deepEqual(skillOf(fromChild, 'lint').copies, [{ root: 'project-agents.packages.app', dir: path.join(child, '.agents', 'skills', 'lint') }], 'each skill there a copy at the alias');
   // A plugin keeps its id whichever other installs this project enables.
   const config = path.join(tmp, 'plugin-ids-config');
   const install = (n) => { const dir = path.join(config, 'plugins', 'cache', n, 'tool'); writeSkill(path.join(dir, 'skills', `tool-${n}`), `${fm(`tool-${n}`, 'A tool.')}\nText.\n`); return dir; };
@@ -1432,6 +1637,34 @@ Run \`/review\` now. Call Skill(gone) again.
   const { atlas } = scanJson(project);
   assert.deepEqual(edge(atlas, 'twice', 'review').map((e) => [e.fromStep, e.kind]), [[null, 'calls']], 'one link, the call');
   assert.deepEqual(atlas.unresolved.filter((u) => u.from === 'twice').map((u) => [u.fromStep, u.name]), [[null, 'gone']], 'one unresolved link per name');
+});
+
+test('a name not installed, first mentioned and later called by one skill, stays a call with the call\'s line, in the insight, under replaced steps and in the digest (skill-atlas-5, skill-atlas-6, skill-atlas-7)', () => {
+  const project = path.join(tmp, 'mention-then-call');
+  const dir = path.join(project, '.claude', 'skills');
+  const text = `${fm('later', 'Mentions, then calls.')}
+## Step 1: First
+
+Do not run the \`/gone\` command yet.
+
+## Step 2: Second
+
+Invoke the \`gone\` skill now.
+`;
+  writeSkill(path.join(dir, 'later'), text);
+  writeSkill(path.join(dir, 'kept'), text.replace(/later/g, 'kept'));
+  const callLine = text.split('\n').findIndex((l) => l.startsWith('Invoke')) + 1;
+  fs.mkdirSync(path.join(project, 'state'), { recursive: true });
+  fs.writeFileSync(path.join(project, 'state', 'annotations.json'), JSON.stringify({ version: 1, skills: { later: { steps: [{ title: 'Only', summary: 'One step.' }] } } }));
+  const { atlas } = scanJson(project);
+  assert.deepEqual(atlas.unresolved.filter((u) => u.from === 'later').map((u) => [u.fromStep, u.kind, u.evidence.line]), [[null, 'calls', callLine]], 'under replaced steps: the call, with its line');
+  assert.deepEqual(atlas.unresolved.filter((u) => u.from === 'kept').map((u) => [u.fromStep, u.kind]), [['kept#1', 'mentions'], ['kept#2', 'calls']], 'each step keeps its own');
+  const insight = atlas.insights.find((i) => i.kind === 'unresolved-link' && i.skills.includes('kept'));
+  assert.equal(insight.params.kind, 'calls');
+  assert.match(insight.message, new RegExp(`^kept calls "gone", which is not installed \\(line ${callLine}\\)$`), 'the call\'s line, not the mention\'s');
+  const r = run(['scan', '--summary', '--cwd', project, '--no-user', '--no-plugins', '--state', path.join(project, 'state')]);
+  assert.match(r.stdout, /, 3 unresolved \(2 calls and 1 mention\)\.\n/);
+  assert.match(r.stdout, /\nUnresolved links \(3: 2 calls and 1 mention\):\n(.*\n)* {2}kept step 1 mentions gone /);
 });
 
 test('links: `$name` after a verb of use in its clause calls the skill; with no verb, or naming no skill, it is nothing (skill-atlas-3)', () => {
@@ -1760,7 +1993,7 @@ test('plugin skills: installed for this project, enabled, and linkable as plugin
   // The project's settings disable `here` and enable `off` over the user's; its local ones re-enable `local`.
   fs.writeFileSync(path.join(project, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'here@m': false, 'off@m': true, 'local@m': false } }));
   fs.writeFileSync(path.join(project, '.claude', 'settings.local.json'), JSON.stringify({ enabledPlugins: { 'local@m': true } }));
-  // A copy of a plugin's skill, every file the same, in the project's folder.
+  // A plugin's skill copied, every file the same, into the project's folder: of another name there [skill-atlas-33].
   writeSkill(path.join(project, '.agents', 'skills', 'tools-skill'), fs.readFileSync(path.join(config, 'plugins', 'cache', 'm', 'tools', 'skills', 'tools-skill', 'SKILL.md'), 'utf8'));
   fs.mkdirSync(path.join(config, 'plugins', 'marketplaces', 'm', 'skills', 'market-skill'), { recursive: true });
   fs.writeFileSync(path.join(config, 'settings.json'), JSON.stringify({ enabledPlugins: { 'off@m': false, 'local@m': false } }));
@@ -3093,7 +3326,7 @@ describe('export', () => {
 });
 
 // skill-atlas-25: every text the page looks up is in the zh-CN catalog.
-test('the zh-CN catalog holds every text the page looks up (skill-atlas-25, skill-atlas-29)', () => {
+test('the zh-CN catalog holds every text the page looks up, and no other (skill-atlas-25, skill-atlas-29)', () => {
   const viewerFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'viewer.html');
   const catalogFile = path.join(REPO, 'skills', 'skill-atlas', 'assets', 'locales', 'zh-CN.json');
   const html = fs.readFileSync(viewerFile, 'utf8');
@@ -3109,6 +3342,8 @@ test('the zh-CN catalog holds every text the page looks up (skill-atlas-25, skil
   assert.equal(catalog.language, 'zh-CN');
   const missing = [...keys].filter((k) => !Object.prototype.hasOwnProperty.call(catalog.messages ?? {}, k));
   assert.deepEqual(missing, [], 'texts with no zh-CN entry');
+  // And no entry for a text the page no longer shows.
+  assert.deepEqual(Object.keys(catalog.messages).filter((k) => !keys.has(k)), [], 'zh-CN entries the page never looks up');
 });
 
 // agent-skills-7 and agent-skills-8 (specs/packages/agent-skills.md).

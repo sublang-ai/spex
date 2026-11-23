@@ -55,7 +55,7 @@ export function viewerConfig({ stateDir, isStatic, lang = null, rulesFile = BUND
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v) => typeof v === 'string';
 
-/** The catalogs: `{ <tag>: { name, messages } }`, one per readable assets/locales/<tag>.json. */
+/** The catalogs: `{ <tag>: { name, short?, messages } }`, one per readable assets/locales/<tag>.json. */
 export function readLocales(dir) {
   const out = {};
   let names;
@@ -71,7 +71,7 @@ export function readLocales(dir) {
     if (!isObj(doc) || !isObj(doc.messages)) { warn(`catalog ${file} has no "messages" map; skipped`); continue; }
     const messages = {};
     for (const [k, v] of Object.entries(doc.messages)) if (isStr(v)) messages[k] = v;
-    out[tag] = { name: isStr(doc.name) && doc.name ? doc.name : tag, messages };
+    out[tag] = { name: isStr(doc.name) && doc.name ? doc.name : tag, ...(isStr(doc.short) && doc.short ? { short: doc.short } : {}), messages };
   }
   return out;
 }

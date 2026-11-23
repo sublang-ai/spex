@@ -60,6 +60,7 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
       "copies": [                      // other folders holding this same skill, byte for byte
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
       ],
+      "sameName": ["code@user-claude"], // the other skills of this name, each differing from this one (see below)
       "frontmatter": { "name": "code", "description": "…", "allowed-tools": "Bash Read" },
       "lines": 84,                     // SKILL.md line count
       "summary": null,                 // one sentence, set only by annotations
@@ -92,10 +93,10 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
     }
   ],
   "unresolved": [                      // a link to a skill that is not installed
-    { "from": "dev", "fromStep": "dev#2", "name": "branch", "evidence": { "line": 12, "text": "…" } }
+    { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["code", "code@user-claude"], "message": "…" }
+    { "kind": "duplicate-name", "level": "note", "skills": ["code", "code@user-claude"], "params": { "name": "code", "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -112,11 +113,12 @@ A `TagHit`:
 }
 ```
 
-Insight kinds: `duplicate-name`, `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
+Insight kinds: `duplicate-name` (differing skills of one name), `unresolved-link`, `cycle`, `oversized` (SKILL.md over 500 lines), `missing-description`, `name-mismatch` (frontmatter `name` differs from the folder), `invalid-frontmatter` (a field of the frontmatter does not read: that field is left out and every other stands, the folder naming the skill only where `name` does not read), `no-steps`, `stale-annotation` (an `annotations.json` entry written from another text of the skill, not applied).
 
-One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
+One skill installed for several agents — a folder linked into several roots, a root's folder linked to another's included, or copied under one `name`, a plugin's copy included, with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
 A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
-Only skills of one name whose folders differ are a `duplicate-name`.
+A skill goes by its `name` in each of its folders, and by `<plugin>:<name>` in a plugin's.
+Differing skills going by one name each list the others' ids under `sameName`, and that name is one `duplicate-name` note listing, for each of them, the folders where it goes by that name: an agent reading more than one of those folders picks one by its own rules, which the atlas does not model, naming no agent and ranking no skill over another.
 
 ## annotations.json — corrections layered on the scan
 
@@ -146,6 +148,7 @@ The scan is pattern matching; this file is where a reader who understood the ski
 ```
 
 - `step` is the 1-based step index; omit it to address the skill as a whole.
+- `to` is a skill's name, reaching the skill a detected link from the same skill reaches, or the id of one skill.
 - A `steps` entry carries a `title` and a `summary`; give the new steps' tags and links through `addTags` and `addCalls` with `step` and `note`, which apply after the replacement.
   (`tags` and `calls` lists inside a `steps` entry are still read, for tolerance.)
 - A replaced step has `line` and `endLine` null and its `summary` as its `excerpt`; the tags and links the scan found in the former steps stay on the skill as a whole (`fromStep` null), one link per target, `calls` before `mentions`.
@@ -247,8 +250,8 @@ Every insight carries `params`, the values its message is built from, so the pag
 
 | Kind | `params` |
 | --- | --- |
-| `duplicate-name` | `name` |
-| `unresolved-link` | `name`, `from` |
+| `duplicate-name` | `name` (`<plugin>:<name>` in a plugin's folder), `copies` (`{ "id", "path", "root", "rootLabel" }` per folder where one of the skills goes by it, `path` that folder) |
+| `unresolved-link` | `name`, `from`, `kind` (`calls` where any of its links calls, else `mentions`) |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
 | `missing-description`, `no-steps`, `stale-annotation` | — (`{}`) |
@@ -257,6 +260,15 @@ Every insight carries `params`, the values its message is built from, so the pag
 | `stale-translation` | `lang`, `files` (relative paths behind their source), `repairs`, `command` |
 | `edited-translation` | `lang`, `files` (relative paths edited apart from their source), `repairs`, `command` |
 | `translation-steps` | `lang`, `steps`, `expected` |
+
+Every insight carries its `level` too, read alike by the page and the digest: `problem` where the reader must act on it, `note` where not:
+
+| `level` | Kinds |
+| --- | --- |
+| `problem` | `unresolved-link` of the `calls` kind, `cycle`, `invalid-frontmatter`, `stale-translation`, `edited-translation`, `stale-annotation`, `translation-steps` |
+| `note` | `duplicate-name`, `unresolved-link` of the `mentions` kind, `oversized`, `missing-description`, `name-mismatch`, `no-steps` |
+
+The page marks a card and counts on its Insights control the problems alone, and lists the notes after them.
 
 In `annotations.json` a skill's entry may repeat its words per language; words under a tag are always reported under exactly that tag, laid over that tag's own entry where there is one, else over a copy of a translation file's entry under the first tag in name order of the same language and script (`zh` for `zh-CN`, never `zh-TW`), else in an entry of their own (`origin` `"annotation"`).
 A file's own entry is never changed by words for another tag: words under `en-US` and `en-GB` over a `SKILL.en.md` give three entries, `en` (the file's), `en-US` and `en-GB` (each the file's fields with its own words):
@@ -281,7 +293,7 @@ A file's own entry is never changed by words for another tag: words under `en-US
 {
   "lang": "zh-CN",                     // the --lang the command was given, or null
   "locales": {                         // one per file in assets/locales/
-    "zh-CN": { "name": "简体中文", "messages": { "Rescan": "重新扫描" } }
+    "zh-CN": { "name": "简体中文", "short": "中", "messages": { "Rescan": "重新扫描" } }
   },
   "labels": {                          // from references/<name>.<tag>.json
     "zh-CN": {
@@ -296,7 +308,8 @@ A file's own entry is never changed by words for another tag: words under `en-US
 
 ### Catalogs and label files
 
-- `assets/locales/<tag>.json` is a catalog: `{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "messages": { "<English text>": "<translation>" } }`.
+- `assets/locales/<tag>.json` is a catalog: `{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "short": "<its short name>", "messages": { "<English text>": "<translation>" } }`.
+  - `short` is optional: the page's language control shows it, else the tag's primary subtag in capitals (`EN`).
   - A placeholder is `{name}` and is kept in the translation.
   - An English text with two forms is written `one|other` (`"{n} step|{n} steps"`); its translation gives one form, or one per plural category of its language in the order `Intl.PluralRules` lists them.
   - A text with no entry is shown in English.
@@ -346,6 +359,7 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 - A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
 - One link is kept per (skill, step, target), `calls` before `mentions`; a skill's link to itself is dropped.
 - A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); `` `x` skill `` after any word (``the `x` skill``, ``our `x` skill``); and `Skill(x)`, whatever `x` is.
+  Each has the kind its form would have to an installed skill: `` `x` skill `` calls only within a few words after a verb of use, and any form steered away from mentions; one is kept per (skill, step, name), `calls` before `mentions`.
 
 Tags come from `tag-rules.json`: each rule's patterns are tried against every line of the frontmatter description (and the `context` and `agent` keys), the preamble (every body line outside every step) and each step, fenced code included.
 A match negated earlier in its own clause is not evidence: a never, not, no, nor, without, avoid, don't, doesn't, won't, cannot or can't within the 60 characters before it in the same sentence drops it, unless the rule sets `"negatable": false`.

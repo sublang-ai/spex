@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=e76cb06deed8182511f2f2f6f921460a038e547b26022508534e018668713979 own=e887051ca31936b64525021ebaa5e16a708270a809ad2a767b4c58a6a715551c -->
+<!-- skill-atlas:source sha256=7e9f706aad348732df54a1107521f36a5d8b9c226d5651085e3f8234065e45ba own=a9f8dd7e4a0771446f626fdb6a8b4d2718911c7c39b6660b78ef074e639fbb2b -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -63,6 +63,7 @@
       "copies": [                      // 存放同一技能（逐字节相同）的其他文件夹
         { "root": "user-codex", "dir": "/home/me/.codex/skills/code" }
       ],
+      "sameName": ["code@user-claude"], // 此名称下的其他技能，各自与本技能内容不同（见下文）
       "frontmatter": { "name": "code", "description": "…", "allowed-tools": "Bash Read" },
       "lines": 84,                     // SKILL.md 的行数
       "summary": null,                 // 一句话，只由标注设置
@@ -95,10 +96,10 @@
     }
   ],
   "unresolved": [                      // 指向未安装技能的链接
-    { "from": "dev", "fromStep": "dev#2", "name": "branch", "evidence": { "line": 12, "text": "…" } }
+    { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
-    { "kind": "duplicate-name", "skills": ["code", "code@user-claude"], "message": "…" }
+    { "kind": "duplicate-name", "level": "note", "skills": ["code", "code@user-claude"], "params": { "name": "code", "copies": [ /* … */ ] }, "message": "…" }
   ]
 }
 ```
@@ -115,11 +116,12 @@
 }
 ```
 
-洞察类型：`duplicate-name`、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
+洞察类型：`duplicate-name`（同名而内容不同的技能）、`unresolved-link`、`cycle`、`oversized`（SKILL.md 超过 500 行）、`missing-description`、`name-mismatch`（frontmatter 的 `name` 与文件夹名不同）、`invalid-frontmatter`（frontmatter 中有字段无法读取：该字段被略去，其余字段照常保留，只有 `name` 无法读取时才以文件夹名命名技能）、`no-steps`、`stale-annotation`（`annotations.json` 中按该技能的另一版文本写成、因而未被应用的条目）。
 
-为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，或被复制且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
+为多个代理安装的同一个技能（一个文件夹被链接到多个根目录，包括某个根目录的文件夹链接到另一个根目录的文件夹，或以同一 `name` 被复制（插件中的副本也算）且每个文件都逐字节相同：相对路径相同，译本也算在内，其中每个链接的链接文本也相同）是一条记录，其他位置列在 `copies` 下。
 大到无法完整列出（超过 5,000 个文件或 2,000 个文件夹）、总大小超过 64 MiB、含有指向其外部的链接或含有无法读取的条目的文件夹，算作不同。
-只有同名而文件夹不同的技能才是 `duplicate-name`。
+技能在其每个文件夹中以其 `name` 为名，在插件的文件夹中则以 `<plugin>:<name>` 为名。
+以同一名称为名而内容不同的技能各自在 `sameName` 下列出其余几个的 id，该名称是一条 `duplicate-name` 提示，为其中每个技能列出它以该名称为名的文件夹：读取其中多个文件夹的代理会按自己的规则选用其中一个，图谱不对此建模，既不指名任何代理，也不把任何技能排在其他技能之前。
 
 ## annotations.json — 叠加在扫描之上的修正
 
@@ -149,6 +151,7 @@
 ```
 
 - `step` 是从 1 开始的步骤序号；省略它表示针对整个技能。
+- `to` 是技能的名称，指向同一技能中检测到的链接所指向的那个技能；也可以是某一个技能的 id。
 - `steps` 中的一项包含 `title` 和 `summary`；新步骤的标签和链接通过带 `step` 和 `note` 的 `addTags` 和 `addCalls` 给出，它们在替换之后应用。
   （为了容错，`steps` 项中的 `tags` 和 `calls` 列表仍会被读取。）
 - 被替换的步骤，其 `line` 和 `endLine` 为 null，其 `summary` 作为 `excerpt`；扫描在原步骤中找到的标签和链接保留在整个技能上（`fromStep` 为 null），每个目标一条链接，`calls` 优先于 `mentions`。
@@ -250,8 +253,8 @@
 
 | 类型 | `params` |
 | --- | --- |
-| `duplicate-name` | `name` |
-| `unresolved-link` | `name`、`from` |
+| `duplicate-name` | `name`（在插件的文件夹中为 `<plugin>:<name>`）、`copies`（其中任一技能以该名称为名的每个文件夹一项 `{ "id", "path", "root", "rootLabel" }`，`path` 为该文件夹） |
+| `unresolved-link` | `name`、`from`、`kind`（其中任一链接为调用时为 `calls`，否则为 `mentions`） |
 | `cycle` | `path`（按顺序排列的技能 id：一个最短的环，作为示例；洞察的 `skills` 列出这组相互调用的每一个技能） |
 | `oversized` | `lines` |
 | `missing-description`、`no-steps`、`stale-annotation` | —（`{}`） |
@@ -260,6 +263,15 @@
 | `stale-translation` | `lang`、`files`（落后于源文件的相对路径）、`repairs`、`command` |
 | `edited-translation` | `lang`、`files`（脱离源文件修改过的相对路径）、`repairs`、`command` |
 | `translation-steps` | `lang`、`steps`、`expected` |
+
+每条洞察还带有 `level`，页面和摘要读取的是同一个值：读者必须处理的为 `problem`，否则为 `note`：
+
+| `level` | 类型 |
+| --- | --- |
+| `problem` | `calls` 类的 `unresolved-link`、`cycle`、`invalid-frontmatter`、`stale-translation`、`edited-translation`、`stale-annotation`、`translation-steps` |
+| `note` | `duplicate-name`、`mentions` 类的 `unresolved-link`、`oversized`、`missing-description`、`name-mismatch`、`no-steps` |
+
+页面只为问题在卡片上作标记、在“洞察”按钮上计数，并把提示列在问题之后。
 
 在 `annotations.json` 中，一个技能的条目可以按语言重复给出其文字；某个标签下的文字总是报告在恰为该标签之下：有该标签自己的条目时覆盖在它之上，否则覆盖在名称顺序中第一个语言和文字相同的标签下译本文件条目的副本之上（`zh-CN` 对应 `zh`，绝不对应 `zh-TW`），否则自成一个条目（`origin` 为 `"annotation"`）。
 文件自己的条目绝不因另一个标签的文字而改变：`SKILL.en.md` 之上 `en-US` 和 `en-GB` 下的文字得出三个条目，`en`（文件的）、`en-US` 和 `en-GB`（各为文件的字段加上自己的文字）：
@@ -284,7 +296,7 @@
 {
   "lang": "zh-CN",                     // 命令给出的 --lang，或 null
   "locales": {                         // assets/locales/ 中的每个文件一项
-    "zh-CN": { "name": "简体中文", "messages": { "Rescan": "重新扫描" } }
+    "zh-CN": { "name": "简体中文", "short": "中", "messages": { "Rescan": "重新扫描" } }
   },
   "labels": {                          // 来自 references/<name>.<tag>.json
     "zh-CN": {
@@ -299,7 +311,8 @@
 
 ### 消息目录与名称文件
 
-- `assets/locales/<tag>.json` 是一个消息目录：`{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "messages": { "<English text>": "<translation>" } }`。
+- `assets/locales/<tag>.json` 是一个消息目录：`{ "version": 1, "language": "<tag>", "name": "<the language's own name>", "short": "<its short name>", "messages": { "<English text>": "<translation>" } }`。
+  - `short` 可省略：页面的语言控件显示它，没有时显示语言标签的主子标签的大写形式（`EN`）。
   - 占位符写作 `{name}`，并在译文中保留。
   - 有两种形式的英文文本写作 `one|other`（`"{n} step|{n} steps"`）；其译文给出一种形式，或按 `Intl.PluralRules` 列出的顺序，为该语言的每个复数类别各给一种形式。
   - 没有条目的文本以英文显示。
@@ -349,6 +362,7 @@
 - 被多个技能共用的名称，解析为发出链接的技能所在文件夹中的那个（副本所在的文件夹也算），否则为最先找到的那个；`<plugin>:N` 也指在该插件中有副本的技能。
 - 每个（技能、步骤、目标）只保留一条链接，`calls` 优先于 `mentions`；技能指向自身的链接被丢弃。
 - 指向未安装技能的链接，只有三种形式会在 `unresolved` 下报告：在提到 skill、command、slash 或 type 的句子中带反引号的 `` `/x` ``（且 `x` 不是类似文件夹的名称，也不是宿主的内置命令，例如 `/help`、`/clear` 或 `/compact`）；任意词之后的 `` `x` skill ``（``the `x` skill``、``our `x` skill``）；以及 `Skill(x)`，无论 `x` 是什么。
+  每个的类型与该形式指向已安装技能时相同：`` `x` skill `` 只有在某个表示使用的动词之后几个词以内才是调用，任何被引开的形式都是提及；每个（技能、步骤、名称）只保留一个，`calls` 优先于 `mentions`。
 
 标签来自 `tag-rules.json`：每条规则的模式会与 frontmatter 描述（以及 `context` 和 `agent` 键）、前言（所有步骤之外的每一行正文）和每个步骤的每一行逐一匹配，围栏代码也包括在内。
 在其所在子句中先前被否定的匹配不算证据：同一句中它之前 60 个字符以内出现 never、not、no、nor、without、avoid、don't、doesn't、won't、cannot 或 can't 时，该匹配被丢弃，除非规则设置了 `"negatable": false`。

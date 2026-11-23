@@ -2,13 +2,18 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Insights over the whole atlas (data-model.md), plus `invalid-frontmatter`
-// for a SKILL.md whose frontmatter could not be read. Each carries `params`,
-// the values its English message is built from, for the page to phrase.
+// for a SKILL.md whose frontmatter could not be read. Each carries its `level`
+// and `params`, the values its English message is built from, for the page to phrase.
 
 import path from 'node:path';
+import { keepLink } from './links.mjs';
 
 export const OVERSIZED_LINES = 500; // data-model.md: a SKILL.md over 500 lines is oversized
 const KIND_ORDER = ['invalid-frontmatter', 'duplicate-name', 'unresolved-link', 'cycle', 'oversized', 'missing-description', 'name-mismatch', 'no-steps', 'stale-translation', 'edited-translation', 'stale-annotation', 'translation-steps'];
+// Each kind's level (data-model.md): a problem where the reader must act on it,
+// else a note. An unresolved name the skill only mentions runs nothing, so it is a note.
+const NOTE_KINDS = new Set(['duplicate-name', 'oversized', 'missing-description', 'name-mismatch', 'no-steps']);
+export const levelOf = (i) => (NOTE_KINDS.has(i.kind) || (i.kind === 'unresolved-link' && i.params?.kind === 'mentions') ? 'note' : 'problem');
 
 export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }) {
   const out = [];
@@ -20,28 +25,32 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
     if (s._fmError) out.push({ kind: 'invalid-frontmatter', skills: [s.id], params: { named }, message: `${s.id}: ${s._fmError}; ${named ? 'the fields that read are used' : 'the folder name is used as its name'}` });
   }
 
+  // One note per name differing skills go by [scan.mjs markSameNames], each
+  // listing the folders where it goes by that name: a fact, since which an
+  // agent picks is its own rule.
   const byName = new Map();
   for (const s of skills) {
-    if (!byName.has(s.name)) byName.set(s.name, []);
-    byName.get(s.name).push(s);
+    for (const name of s._names?.keys() ?? []) {
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name).push(s);
+    }
   }
-  for (const [name, copies] of byName) {
-    if (copies.length < 2) continue;
-    const where = copies.map((c) => `${rootLabel.get(c.root) ?? c.root} (${c.dir})`).join('; ');
+  for (const [name, group] of byName) {
+    if (group.length < 2) continue;
+    const copies = group.flatMap((o) => o._names.get(name).map((p) => ({ id: o.id, path: p.dir, root: p.root, rootLabel: rootLabel.get(p.root) ?? p.root })));
     out.push({
       kind: 'duplicate-name',
-      skills: copies.map((c) => c.id),
-      params: { name },
-      message: `"${name}" is defined differently in ${copies.length} folders: ${where}. An agent loading several of these folders sees only one of them.`,
+      skills: group.map((o) => o.id),
+      params: { name, copies },
+      message: `"${name}" has ${group.length} different versions in ${copies.length} folders: ${copies.map((p) => p.path).join(', ')}. An agent that reads more than one of these folders picks one by its own rules.`,
     });
   }
 
-  const seenUnresolved = new Set();
-  for (const u of unresolved) {
-    const key = `${u.from}\0${u.name}`;
-    if (seenUnresolved.has(key)) continue;
-    seenUnresolved.add(key);
-    out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from }, message: `${u.from} links to "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
+  // One per skill and name: its first call, else its first mention [keepLink].
+  const unresolvedOf = new Map();
+  for (const u of unresolved) keepLink(unresolvedOf, { ...u, fromStep: null });
+  for (const u of unresolvedOf.values()) {
+    out.push({ kind: 'unresolved-link', skills: [u.from], params: { name: u.name, from: u.from, kind: u.kind }, message: `${u.from} ${u.kind} "${u.name}", which is not installed (line ${u.evidence.line ?? '?'})` });
   }
 
   for (const { members, path: cycle } of callCycles(skills, edges)) {
@@ -101,7 +110,7 @@ export function findInsights({ skills, edges, unresolved, roots, scanArgs = '' }
       out.push({ kind: 'translation-steps', skills: [s.id], params: { lang, steps, expected }, message: `${s.id}: the ${lang} translation of SKILL.md has ${steps} steps where the skill has ${expected}, so its steps are not shown` });
     }
   }
-  return out.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+  return out.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)).map((i) => ({ kind: i.kind, level: levelOf(i), ...i }));
 }
 
 /**

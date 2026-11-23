@@ -1,5 +1,5 @@
 {
-  "translationOf": { "sha256": "3e4a8eeb8ba430839e1be2aaa41bf6c7802381f0c618644dcbd03dfd845dafd0" },
+  "translationOf": { "sha256": "d8d054402d7239593e075c97ba42798ec84c23e75f472a3536858112bf48d43e" },
   "version": 1,
   "about": "视图如何呈现图谱。编辑后重新扫描（或重新加载）即可生效。",
   "title": "技能图谱",
