@@ -1047,8 +1047,8 @@ msgstr "captain must resolve an adapter"
 
 #. Guidance for a path placement whose configured Git remote named origin belongs to a known Space
 #: src/space.ts
-msgid "Change or remove the records clone's origin in Git, then retry."
-msgstr "Change or remove the records clone's origin in Git, then retry."
+msgid "Change or remove this project's records remote in Git, then retry."
+msgstr "Change or remove this project's records remote in Git, then retry."
 
 #. Guidance after a Space refused a records write
 #: src/space-git.ts

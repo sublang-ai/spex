@@ -176,7 +176,7 @@ test("projects-17: register a Git root, read its local status, refuse invalid fo
   mkdirSync(broken);
   writeFileSync(join(broken, ".git"), "gitdir: missing\n");
   for (const [path, diagnostic] of [
-    [broken, /^fatal: not a git repository:/],
+    [broken, /^fatal: (not a git repository|gitfile does not point to a valid repository):/],
     [upstream, /^fatal: this operation must be run in a work tree/],
   ] as const) {
     const rejected = await client.command("project.register", { path });

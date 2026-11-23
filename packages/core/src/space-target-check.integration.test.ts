@@ -199,7 +199,7 @@ test("space-142: a Space path placement beside a hosted placement names only the
   const { outcome } = pathPlacement;
   assert.ok(outcome?.kind === "stopped" && outcome.step === "check" && outcome.cause === "git" && outcome.retry, JSON.stringify(outcome));
   assert.equal(outcome.message, "Choose that Space as a sync destination");
-  assert.equal(outcome.guidance, "Change or remove the records clone's origin in Git, then retry.");
+  assert.equal(outcome.guidance, "Change or remove this project's records remote in Git, then retry.");
   assert.ok(!JSON.stringify(row).includes(ssh), "no row field exposes the path placement's transport address");
   assert.equal(git(clone, "remote", "get-url", "origin"), ssh);
 

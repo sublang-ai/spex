@@ -5942,7 +5942,7 @@ export class SpaceManager {
     if (!this.spaceForRecords(remote)) return;
     if (source === "configured") {
       const guidance = i18n._({
-        id: "Change or remove the records clone's origin in Git, then retry.",
+        id: "Change or remove this project's records remote in Git, then retry.",
         comment: "Guidance for a path placement whose configured Git remote named origin belongs to a known Space",
       });
       throw new SpaceStopped(step, { cause: "git", message: chooseSpaceDestination(), guidance, retry: true }, false);
