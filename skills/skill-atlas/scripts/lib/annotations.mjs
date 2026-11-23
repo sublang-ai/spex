@@ -95,17 +95,11 @@ function applyEntry(atlas, skill, { ann, where }, resolveSkill) {
     } else {
       // Replacing the steps detaches scanned links and tags from the old
       // steps: they stay on the skill as a whole.
-      // Links that were the former steps' are one per target at the skill, calls before mentions.
+      // Links that were the former steps' are one per target, or name, at the skill, calls before mentions.
       for (const e of atlas.edges) if (e.from === skill.id) e.fromStep = null;
       atlas.edges = oneLinkEach(atlas.edges);
-      const seen = new Set();
-      atlas.unresolved = atlas.unresolved.filter((u) => {
-        if (u.from !== skill.id) return true;
-        u.fromStep = null;
-        if (seen.has(u.name)) return false;
-        seen.add(u.name);
-        return true;
-      });
+      for (const u of atlas.unresolved) if (u.from === skill.id) u.fromStep = null;
+      atlas.unresolved = oneLinkEach(atlas.unresolved);
       skill._baseTags = mergeHits(skill._baseTags, ...skill.steps.map((st) => st.tags));
       skill.steps = ann.steps.map((st, n) => {
         const index = n + 1;

@@ -25,7 +25,12 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page
   Claude Code prefers the home folder's skill to a project's and the repository root's to a nearer folder's, keeping the nearer one under another name, and names a plugin's skills by their plugin [[1]].
   Codex offers both skills of a name and ranks neither [[2]].
   Gemini CLI prefers a workspace's skill to the user's and, in one of them, the shared `.agents` folder's to its own [[3]].
-  Two agents loading both copies may so load different ones.
+  OpenCode prefers its own folders to the shared `.agents` and that to Claude Code's, a project's over the home folder's in each [[4]].
+  Kimi Code prefers a project's skill to the user's and, in each, its own, Claude Code's and Codex's folders to the shared ones [[7]].
+  Roo Code prefers a project's skill to the global one and, in each, its own folder's to the shared `.agents` [[8]].
+  Agents name skills differently too: OpenCode and Cursor by the folder, Claude Code, Codex and GitHub Copilot by the declared name, Claude Code a plugin's skill by its plugin [[1]] [[2]] [[4]] [[5]] [[6]].
+  Several load other agents' folders as well, Cursor Claude Code's and Codex's, OpenCode and GitHub Copilot Claude Code's, each in its own order or none [[4]] [[5]] [[6]].
+  Two agents loading both copies may so load different ones, and a call reaches the copy the agent running its caller loads.
 - Every insight weighed alike: a skill with no steps or a long `SKILL.md` carried the same dot and count as a conflict, so the dot and the count stopped telling a reader where to act.
 - The page's chrome said more than it meant:
   - a native list chose the language, unlike every other control;
@@ -47,13 +52,15 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page
 - The exported page is read-only: it shows the atlas and the workflows, and offers no control that would change them.
 - The page shows dependencies only, the calls between skills, and names the relation a dependency.
   - The scan still classifies every link as a call or a mention, an unresolved one included, and reports both.
-- Each differing skill of a shared name is reported with how it stands to each other one, told from the places each agent loads them from: a conflict, an override naming the skill loaded, or another agent's copy.
-  - An agent ranks a project's folder over the home folder's and a nearer project folder over a farther one, unless its documentation ranks otherwise; Claude Code, Codex and Gemini CLI rank as their documentation says.
-  - Where the agents loading both copies differ in the one they load, each copy loaded is reported with the agents loading it, alike from either side.
+- One loading model says, per agent, the places it loads, the name it invokes a skill by and its ranking of the places, each as its documentation says; where the documentation states no ranking, the places rank alike.
+- Each differing skill of a shared name is reported with how it stands to each other one, told from that model: a conflict where an agent may run either, an override naming the skill loaded where an agent runs one over the other, or another agent's copy.
+  - An agent may run the copies under a name that no other copy it loads under that name outranks, so copies ranked below the one it runs are no conflict.
+  - A link reaches the skill an agent loading its caller runs under the name, so a dependency and an override name the same skill, and a name reaching none is unresolved, as one not installed is.
+  - Where the agents loading both copies differ in the one they load, each copy loaded is reported with the agents loading it, alike from either side, and one agent's conflict hides no other's override.
   - Another agent's copy names no agent loading both, as there is none; the page names the agents loading it from its folders.
   - A plugin's skill shares its name only with the same plugin's skills.
-- Only a conflict is a problem: it names the agents that may load either copy and each copy's folder, and says to keep one.
-  An override and another agent's copy carry a quiet note instead, and the page can show any two copies side by side.
+- Only a conflict is a problem, one per name and set of copies an agent may run: it names the agents that may load either copy and each copy's folder, and says to delete one, rename one's folder and declared name alike, or move it out of those agents' folders.
+  An override and another agent's copy carry a quiet note instead, the note naming a conflict's other copies too, and the page can show any two copies side by side, never marking a line alike in both as differing.
 - Every insight has a level the scan sets, the one test being whether the reader must act on it:
   - a problem: a conflict, a call to a skill not installed, a cycle, frontmatter that does not read, a translation behind its source, edited apart from it or with other steps, an annotation written from another text;
   - a note: no steps, over 500 lines, no description, a name differing from its folder, and a name only mentioned that is not installed, as it runs nothing.
@@ -73,7 +80,7 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page
 - An exported page has fewer controls, and a reader who wants to arrange workflows runs the page from the skill.
 - A mention no longer shows on the page; an unresolved name the skill steers away from is not shown either.
 - A machine with intended overrides shows no insight for them, so the insights left are the ones to act on.
-- An agent whose ranking the scanner does not know is read by the common rule, so its overrides may be reported where it ranks otherwise.
+- An agent whose documentation states no ranking is read as ranking none, so its copies of one name are reported as a conflict, which renaming or removing one settles.
 - A machine whose skills are only long or unannotated shows no count, so a count means there is something to fix.
 - An atlas from an older scan, holding no levels, reads every insight as a problem.
 - A catalog may name its language's short name; the page's text gains entries for its new words and loses those of the retired controls.
@@ -83,3 +90,8 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page
 [1]: https://code.claude.com/docs/en/skills "Claude Code: Extend Claude with skills"
 [2]: https://learn.chatgpt.com/docs/build-skills "Codex: Build skills"
 [3]: https://geminicli.com/docs/cli/skills "Gemini CLI: Agent Skills"
+[4]: https://opencode.ai/docs/skills/ "OpenCode: Agent Skills"
+[5]: https://cursor.com/help/customization/skills "Cursor: Skills"
+[6]: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference "GitHub Copilot CLI command reference"
+[7]: https://moonshotai.github.io/kimi-cli/en/customization/skills.html "Kimi Code CLI: Agent Skills"
+[8]: https://roocodeinc.github.io/Roo-Code/features/skills "Roo Code: Skills"

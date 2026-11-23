@@ -19,6 +19,7 @@ import { loadAnnotations, applyAnnotations } from './annotations.mjs';
 import { fileLanguage } from './language.mjs';
 import { findInsights } from './insights.mjs';
 import { relateSameNames } from './same-name.mjs';
+import { loadingModel } from './loading.mjs';
 import { warn } from './log.mjs';
 
 export const ATLAS_VERSION = 1;
@@ -71,6 +72,7 @@ export function scan(opts) {
     if (!cur || before(root, cur)) scannedAs.set(real, root);
   }
 
+  const counts = new Map(); // root id -> the skills present in its folder
   for (const root of listed) {
     if (!isDir(root.path)) {
       if (root.explicit) warn(`--root ${root.path} is not a folder; skipped`);
@@ -88,15 +90,31 @@ export function scan(opts) {
       byReal.set(real, rec);
       skills.push(rec);
     }
-    if (root.requireSkills && !present) continue;
-    const { requireSkills, explicit, depth, linked, ...rec } = root;
-    roots.push({ ...rec, skillCount: present }); // copies included: the skills present in this folder
+    counts.set(root.id, present);
   }
   skills = mergeIdenticalCopies(skills);
 
   assignIds(skills, idOrder, new Map(listed.map((r) => [r.id, r.path])));
-  const conflicts = relateSameNames(skills, new Map(listed.map((r) => [r.id, r])));
-  const matcher = buildLinkMatcher(skills, new Map(roots.map((r) => [r.id, r.plugin])));
+  // Each other row reaching a scanned folder loads its skills there too: each
+  // is listed at that row's folder as a copy, after the ids, which it changes not.
+  for (const root of listed) {
+    const as = isDir(root.path) ? scannedAs.get(realOr(root.path)) : null;
+    if (!as || as === root) continue;
+    counts.set(root.id, counts.get(as.id));
+    for (const s of skills) {
+      for (const p of [{ root: s.root, dir: s.dir }, ...s.copies]) {
+        if (p.root === as.id) s.copies.push({ root: root.id, dir: path.join(root.path, path.relative(as.path, p.dir)) });
+      }
+    }
+  }
+  for (const root of listed) {
+    if (!counts.has(root.id) || root.requireSkills && !counts.get(root.id)) continue;
+    const { requireSkills, explicit, depth, dist, row, linked, ...rec } = root;
+    roots.push({ ...rec, skillCount: counts.get(root.id) }); // copies included: the skills present in this folder
+  }
+  const model = loadingModel(skills, new Map(listed.map((r) => [r.id, r])));
+  const conflicts = relateSameNames(model);
+  const matcher = buildLinkMatcher(model);
   let edges = [];
   let unresolved = [];
   for (const s of skills) {

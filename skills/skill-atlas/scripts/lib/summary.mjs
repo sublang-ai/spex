@@ -20,7 +20,10 @@ export function summarize(atlas) {
   const calls = atlas.edges.filter((e) => e.kind === 'calls').length;
   const mentions = atlas.edges.length - calls;
   const copyNote = copyCount ? ` (plus ${copyCount} ${copyCount === 1 ? 'copy' : 'copies'} in other folders)` : '';
-  out.push(`Skill Atlas: ${plural(atlas.skills.length, 'skill')}${copyNote} in ${plural(atlas.roots.length, 'folder')}; ${calls} calls, ${mentions} mentions, ${atlas.unresolved.length} unresolved.`);
+  // An unresolved name a skill only mentions runs nothing, so calls and mentions are told apart.
+  const unresolvedCalls = atlas.unresolved.filter((u) => u.kind === 'calls').length;
+  const unresolvedNote = `${unresolvedCalls} ${unresolvedCalls === 1 ? 'call' : 'calls'} and ${atlas.unresolved.length - unresolvedCalls} ${atlas.unresolved.length - unresolvedCalls === 1 ? 'mention' : 'mentions'}`;
+  out.push(`Skill Atlas: ${plural(atlas.skills.length, 'skill')}${copyNote} in ${plural(atlas.roots.length, 'folder')}; ${calls} calls, ${mentions} mentions, ${atlas.unresolved.length} unresolved (${unresolvedNote}).`);
   out.push(`Project: ${atlas.cwd}`);
   const problems = atlas.insights.filter((i) => i.level === 'problem').length;
   out.push(`Insights: ${plural(problems, 'problem')} to act on, ${plural(atlas.insights.length - problems, 'note')}.`);
@@ -52,11 +55,11 @@ export function summarize(atlas) {
     out.push(`  ${id}: ${parts.join('; ')}`);
   }
 
-  out.push('', `Unresolved links (${atlas.unresolved.length}):`);
+  out.push('', `Unresolved links (${atlas.unresolved.length}: ${unresolvedNote}):`);
   if (!atlas.unresolved.length) out.push('  (none)');
   for (const u of atlas.unresolved) {
     const step = u.fromStep ? ` step ${u.fromStep.split('#').pop()}` : '';
-    out.push(`  ${u.from}${step} -> ${u.name} (line ${u.evidence.line ?? '?'}: ${u.evidence.text})`);
+    out.push(`  ${u.from}${step} ${u.kind} ${u.name} (line ${u.evidence.line ?? '?'}: ${u.evidence.text})`);
   }
 
   const kinds = (k) => atlas.insights.filter((i) => i.kind === k);

@@ -398,6 +398,7 @@ button.col-name:hover { background: var(--surface-3); }
 .cmp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); font: 12px/1.5 var(--mono); border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: calc(100vh - 220px); }
 .cmp-head { position: sticky; top: 0; z-index: 1; background: var(--surface-2); padding: 6px 8px; font: 600 12px var(--font); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .cmp-head .sub { display: block; font: 11px var(--mono); color: var(--text-3); font-weight: 400; }
+.cmp-head select { width: 100%; min-width: 0; font-weight: 400; }
 .cmp-cell { display: flex; gap: 8px; padding: 0 8px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmp-cell:nth-child(odd) { border-right: 1px solid var(--border); }
 .cmp-cell .n { flex: none; min-width: 28px; text-align: right; color: var(--text-3); user-select: none; }
@@ -555,7 +556,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         h('ul', null, p.copies.map((c, i) => h('li', null,
           copyRootTitle(c), ' ', code(c && c.path), copyPathButton(c && c.path),
           i && c ? compareButton(p.copies[0] && p.copies[0].id, c.id) : null))),
-        h('p', { text: state.mode === 'live' ? t('Keep one: delete or rename the other folder, then Rescan.') : t('Keep one: delete or rename the other folder.') }),
+        // Renaming the folder and the declared name alike parts the copies for every agent, whichever it names a skill by.
+        h('p', { text: state.mode === 'live' ? t('Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load, then Rescan.') : t('Delete one, rename one’s folder and the name in its SKILL.md alike, or move it out of the folders these agents load.') }),
       ],
     },
     'unresolved-link': {
@@ -855,7 +857,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     collapsed: new Set(),       // "<grouping>:<groupId>"
     expanded: new Set(),        // skill ids whose steps are shown
     openSteps: new Set(),       // step ids unfolded inline
-    selection: null,            // {type:'skill', id} | {type:'phase', id}
+    selection: null,            // {type:'skill', id, from?: the focus key of the card it was opened from} | {type:'phase', id}
     highlight: new Set(),       // skill ids highlighted from an insight
     focus: null,                // skill id the canvas is focused on
     search: '',
@@ -964,7 +966,19 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       byName.get(s.name).push(s);
     }
     skills.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-    const edges = atlas.edges.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({
+    // The differing skills of one name any two of which can be compared: each skill's relations
+    // [skill-atlas-14] followed through any number of them, in the page's order.
+    const near = new Map(skills.map((s) => [s.id, new Set()]));
+    for (const s of skills) for (const x of s.sameName) if (near.has(x.id)) { near.get(s.id).add(x.id); near.get(x.id).add(s.id); }
+    const sameGroup = new Map();
+    for (const s of skills) {
+      if (sameGroup.has(s.id) || !near.get(s.id).size) continue;
+      const reached = new Set([s.id]);
+      for (const id of reached) for (const o of near.get(id)) reached.add(o);
+      const ids = skills.filter((x) => reached.has(x.id)).map((x) => x.id);
+      for (const id of ids) sameGroup.set(id, ids);
+    }
+    const edges =atlas.edges.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({
       from: e.from, to: e.to, fromStep: e.fromStep ? String(e.fromStep) : null,
       source: e.source || 'scan', evidence: e.evidence && typeof e.evidence === 'object' ? e.evidence : null,
     }));
@@ -976,7 +990,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (!unresolvedBy.has(u.from)) unresolvedBy.set(u.from, []);
       unresolvedBy.get(u.from).push(u);
     }
-    return { skills, byId, byName, rootById, stepById, tagById, edges, unresolvedBy, roots: atlas.roots, insights: atlas.insights };
+    return { skills, byId, byName, rootById, stepById, tagById, sameGroup, edges, unresolvedBy, roots: atlas.roots, insights: atlas.insights };
   }
 
   const kindsNaming = (atlas, id, level) => [...new Set(atlas.insights.filter((i) => i.level === level && arr(i.skills).includes(id)).map((i) => String(i.kind)))];
@@ -2095,6 +2109,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const issueText = s.problems.map((k) => insightIssue(k)).join(' ');
     const desc = shownDesc(s), summary = shownSummary(s);
     const n = s.copies.length + 1;
+    // Its folders by their sources' titles, a folder's path beside a title another shares.
+    const folders = [{ root: s.root, dir: s.dir }, ...s.copies].map((c) => { const r = state.idx.rootById.get(c.root); return { title: r ? rootTitle(r) : str(c.root), dir: str(c.dir) }; });
+    const places = t('Installed in {n} places: {folders}', { n, folders: list(folders.map((f) => (folders.filter((o) => o.title === f.title).length > 1 ? `${f.title} (${f.dir})` : f.title))) });
     const main = h('button', {
       type: 'button', class: 'card-main', 'data-act': 'card', 'data-skill': s.id, 'data-fk': `card|${key}|${s.id}`,
       'aria-expanded': String(expanded), 'aria-controls': expanded ? stepsId : null,
@@ -2102,7 +2119,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       h('span', { class: 'card-top' },
         h('span', { class: 'card-name', title: s.id === s.name ? '/' + s.name : `/${s.name} (${s.id})`, text: '/' + s.name }),
         dup ? h('span', { class: 'card-src', title: t('{source} — id {id}', { source: rootLabel(s), id: s.id }), text: rootLabel(s) }) : null,
-        s.copies.length ? h('span', { class: 'card-copies', role: 'img', title: t('Installed in {n} folders', { n }), 'aria-label': t('Installed in {n} folders', { n }) }, t('{n} places', { n })) : null,
+        s.copies.length ? h('span', { class: 'card-copies', role: 'img', title: places, 'aria-label': places }, t('{n} places', { n })) : null,
         s.problems.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': t('Has issues: {issues}', { issues: issueText }), title: issueText }) : null),
       h('span', { class: 'card-desc', title: desc || null, text: summary || desc || t('No description') }),
       h('span', { class: 'card-foot' },
@@ -2328,10 +2345,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Selection and emphasis (class toggles only; no re-render)
   // ===================================================================
   let markedCards = [];
-  // The skills selected, with the one whose card holds focus; hovering emphasizes nothing.
+  // The skills selected, an insight's all of them beside the one its details show, with the one
+  // whose card holds focus; hovering emphasizes nothing.
   function selectedSet() {
     const sel = state.selection;
-    if (sel && sel.type === 'skill') return new Set([sel.id]);
+    if (sel && sel.type === 'skill') return new Set([sel.id, ...state.highlight]);
     if (sel && sel.type === 'phase') { const p = findPhase(sel.id); return p ? new Set(p.skills) : null; }
     if (state.highlight.size) return state.highlight;
     return null;
@@ -2378,10 +2396,16 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const sel = state.selection;
     return !!sel && (sel.type === 'skill' ? state.idx.byId.has(sel.id) : !!findPhase(sel.id));
   }
-  // What a selection was made on: its card or its phase's name.
+  // What a selection was made on: the card it was opened from, else its skill's first card, or
+  // its phase's name.
   function selectionAnchor(sel) {
     if (!sel) return null;
-    if (sel.type === 'skill') { const inst = (anchors.get(sel.id) || []).find((x) => !x.group); return inst ? inst.card.querySelector('.card-main') : null; }
+    if (sel.type === 'skill') {
+      const from = sel.from && els.board.querySelector(`[data-fk="${CSS.escape(sel.from)}"]`);
+      if (from) return from;
+      const inst = (anchors.get(sel.id) || []).find((x) => !x.group);
+      return inst ? inst.card.querySelector('.card-main') : null;
+    }
     return els.board.querySelector(`[data-fk="${CSS.escape('pn|' + sel.id)}"]`);
   }
   // Closing the details clears the selection; focus inside them, or lost with them, goes back
@@ -2418,6 +2442,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     flush();
     const inst = (anchors.get(id) || []).find((x) => !x.group);
     if (!inst) return;
+    state.selection.from = inst.card.querySelector('.card-main')?.dataset.fk;
     const target = opts.openStep && inst.steps.get(opts.openStep) ? inst.steps.get(opts.openStep) : inst.card;
     target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
     inst.card.classList.remove('flash');
@@ -2610,13 +2635,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const name = (id) => (same ? str(idx.byId.get(id).dir) : skillLabel(id));
     return h('button', { type: 'button', class: 'linkish', 'data-act': 'compare', 'data-a': a, 'data-b': b, 'aria-label': t('Compare {a} with {b}', { a: name(a), b: name(b) }) }, t('Compare'));
   }
-  // One quiet note on how a skill stands to the differing skills of its name that no agent loads
-  // in its stead by chance: one it overrides, one overriding it, one another agent loads. A
-  // conflict is an issue of its own, told by its insight.
+  // One quiet note on how a skill stands to each differing skill of its name, each comparable:
+  // one it conflicts with, one it overrides, one overriding it, one another agent loads. A
+  // conflict is also an issue of its own, told by its insight.
   // Where the agents loading both differ in the one they load, each line names its agents.
   function sameNameNote(s) {
     const idx = state.idx;
-    const others = s.sameName.filter((x) => x.relation !== 'conflict' && idx.byId.has(x.id));
+    const others = s.sameName.filter((x) => idx.byId.has(x.id));
     // The agents loading a skill: those of its folder and of each copy's.
     const loaders = (o) => [...new Set([o.root, ...o.copies.map((c) => c.root)].flatMap((r) => (idx.rootById.get(r) || { agents: [] }).agents))].sort();
     const lines = others.map((x) => {
@@ -2624,11 +2649,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const split = others.filter((y) => y.id === x.id).length > 1;
       const agents = list(x.agents.map(agentName));
       const theirs = list(loaders(idx.byId.get(x.id)).map(agentName));
-      const text = x.relation === 'override'
-        ? (x.wins === s.id
-          ? (split ? t('Overrides the copy in {place} for {agents}', { place, agents }) : t('Overrides the copy in {place}', { place }))
-          : (split ? t('Overridden by the copy in {place} for {agents}', { place, agents }) : t('Overridden by the copy in {place}', { place })))
-        : theirs ? t('Also installed for {agents} with different content', { agents: theirs }) : t('Also in {place}, which no agent loads, with different content', { place });
+      const text = x.relation === 'conflict'
+        ? (split ? t('Conflicts with the copy in {place} for {agents}', { place, agents }) : t('Conflicts with the copy in {place}', { place }))
+        : x.relation === 'override'
+          ? (x.wins === s.id
+            ? (split ? t('Overrides the copy in {place} for {agents}', { place, agents }) : t('Overrides the copy in {place}', { place }))
+            : (split ? t('Overridden by the copy in {place} for {agents}', { place, agents }) : t('Overridden by the copy in {place}', { place })))
+          : theirs ? t('Also installed for {agents} with different content', { agents: theirs }) : t('Also in {place}, which no agent loads, with different content', { place });
       return h('li', null, text, compareButton(s.id, x.id));
     });
     return lines.length ? h('ul', { class: 'same-note', 'aria-label': t('Same name') }, lines) : null;
@@ -2891,32 +2918,51 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   // Two texts' lines paired into rows of `a` and `b` (a line's index on each side, or null) and
-  // whether the row's lines are the same: a longest common subsequence of lines between the
-  // shared head and tail, past a bound on its table every middle line counted as changed.
-  const DIFF_MAX_CELLS = 4e6;
+  // whether the row's lines are the same: true, false, or null where they were not compared.
+  // Between the shared head and tail, Myers's shortest edit script; past a bound on its edits the
+  // lines between are left uncompared, never counted as changed.
+  const DIFF_MAX_EDITS = 2000;
   function lineDiff(a, b) {
     let head = 0;
     while (head < a.length && head < b.length && a[head] === b[head]) head++;
     let tail = 0;
     while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
     const n = a.length - head - tail, m = b.length - head - tail;
-    const ops = []; // [ai, bi]: both alike; [ai, null] only in a; [null, bi] only in b
-    if (n * m <= DIFF_MAX_CELLS) {
-      const w = m + 1, L = new Uint16Array((n + 1) * w);
-      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
-        L[i * w + j] = a[head + i] === b[head + j] ? L[(i + 1) * w + j + 1] + 1 : Math.max(L[(i + 1) * w + j], L[i * w + j + 1]);
+    const A = (i) => a[head + i], B = (j) => b[head + j];
+    let ops = null; // [ai, bi]: both alike; [ai, null] only in a; [null, bi] only in b
+    // trace[d][k + d]: the furthest x on diagonal k = x - y after d edits.
+    const trace = [];
+    for (let d = 0; d <= Math.min(n + m, DIFF_MAX_EDITS) && !ops; d++) {
+      const prev = trace[d - 1], v = new Int32Array(2 * d + 1);
+      trace.push(v);
+      for (let k = -d; k <= d; k += 2) {
+        let x = d === 0 ? 0 : k === -d || (k !== d && prev[k - 1 + d - 1] < prev[k + 1 + d - 1]) ? prev[k + 1 + d - 1] : prev[k - 1 + d - 1] + 1;
+        let y = x - k;
+        while (x < n && y < m && A(x) === B(y)) { x++; y++; }
+        v[k + d] = x;
+        if (x >= n && y >= m) {
+          // Walk back from the end: each edit's snake, then the edit, then the first snake.
+          ops = [];
+          for (let e = d; e > 0; e--) {
+            const p = trace[e - 1], kk = x - y;
+            const down = kk === -e || (kk !== e && p[kk - 1 + e - 1] < p[kk + 1 + e - 1]);
+            const pk = down ? kk + 1 : kk - 1, px = p[pk + e - 1];
+            while (x > (down ? px : px + 1)) ops.push([head + --x, head + --y]);
+            if (down) ops.push([null, head + --y]); else ops.push([head + --x, null]);
+          }
+          while (x > 0) ops.push([head + --x, head + --y]);
+          ops.reverse();
+          break;
+        }
       }
-      for (let i = 0, j = 0; i < n || j < m;) {
-        if (i < n && j < m && a[head + i] === b[head + j]) ops.push([head + i++, head + j++]);
-        else if (j < m && (i >= n || L[i * w + j + 1] >= L[(i + 1) * w + j])) ops.push([null, head + j++]);
-        else ops.push([head + i++, null]);
-      }
-    } else {
-      for (let i = 0; i < n; i++) ops.push([head + i, null]);
-      for (let j = 0; j < m; j++) ops.push([null, head + j]);
     }
     const rows = [];
     for (let i = 0; i < head; i++) rows.push({ a: i, b: i, same: true });
+    if (!ops) {
+      for (let k = 0; k < Math.max(n, m); k++) rows.push({ a: k < n ? head + k : null, b: k < m ? head + k : null, same: null });
+      for (let k = tail; k > 0; k--) rows.push({ a: a.length - k, b: b.length - k, same: true });
+      return rows;
+    }
     // A run of changed lines pairs its two sides' lines row by row.
     let gone = [], come = [];
     const pair = () => {
@@ -2938,30 +2984,58 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return h('span', null, line.slice(0, m.index), h('span', { class: 'ws', title: t('Spaces, tabs or a carriage return at the end of the line'), text: [...m[0]].map((c) => WS_MARKS[c]).join('') }));
   }
   // Two skills' SKILL.md side by side, the lines that differ marked; read from the server.
+  // Where the name has more than two differing copies, each side chooses its copy among them all.
   async function compareDialog(aId, bId, back) {
     const idx = state.idx;
-    const sa = idx.byId.get(aId), sb = idx.byId.get(bId);
-    if (!sa || !sb) return;
-    const sum = h('p', { class: 'cmp-sum', role: 'status', text: t('Loading…') });
+    const sa = idx.byId.get(aId);
+    if (!sa || !idx.byId.has(bId)) return;
+    const copies = idx.sameGroup.get(aId) || [aId, bId];
+    // A group holding several names (an agent naming skills by folder) names each copy's skill.
+    const names = [...new Set([sa.name, ...copies.map((id) => idx.byId.get(id).name)])];
+    const named = (o) => (names.length > 1 ? '/' + o.name + ' · ' : '') + rootLabel(o);
+    const pick = { a: aId, b: bId };
+    const sum = h('p', { class: 'cmp-sum', role: 'status' });
     const grid = h('div', { class: 'cmp', tabindex: '0', 'aria-label': t('SKILL.md of each copy, side by side') });
-    const p = modal(t('Compare {skill}', { skill: '/' + sa.name }), [sum, grid], [], { wide: true, initialFocus: () => grid, returnFocus: () => (back && back.isConnected ? back : els.insights) });
+    const choosers = {};
+    const head = (side) => {
+      const s = idx.byId.get(pick[side]);
+      if (copies.length < 3) return h('div', { class: 'cmp-head' }, named(s), h('span', { class: 'sub', text: str(s.dir) }));
+      const name = (id) => { const o = idx.byId.get(id); return named(o) + ' · ' + str(o.dir); };
+      choosers[side] = h('select', { 'aria-label': side === 'a' ? t('Copy on the left') : t('Copy on the right'), onchange: () => { pick[side] = choosers[side].value; show(); } },
+        copies.map((id) => h('option', { value: id, text: name(id) })));
+      choosers[side].value = pick[side];
+      return h('div', { class: 'cmp-head' }, choosers[side]);
+    };
+    grid.append(head('a'), head('b'));
+    const p = modal(t('Compare {skill}', { skill: list(names.map((n) => '/' + n)) }), [sum, grid], [], { wide: true, initialFocus: () => grid, returnFocus: () => (back && back.isConnected ? back : els.insights) });
     const read = async (id) => {
       const res = await fetch(`/api/file?skill=${encodeURIComponent(id)}&path=SKILL.md`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       return (await res.text()).split('\n');
     };
-    try {
-      const [la, lb] = await Promise.all([read(aId), read(bId)]);
-      const rows = lineDiff(la, lb);
-      const head = (s) => h('div', { class: 'cmp-head' }, rootLabel(s), h('span', { class: 'sub', text: str(s.dir) }));
-      const cell = (lines, i, changed) => (i == null ? h('div', { class: 'cmp-cell empty' })
-        : h('div', { class: 'cmp-cell' + (changed ? ' changed' : '') }, h('span', { class: 'n', text: fmtNum(i + 1) }), changed ? h('span', { class: 'sr-only', text: t('Differs:') + ' ' }) : null, changed ? shownLine(lines[i]) : h('span', { text: lines[i] })));
-      grid.append(head(sa), head(sb), ...rows.flatMap((r) => [cell(la, r.a, !r.same), cell(lb, r.b, !r.same)]));
-      const changed = rows.filter((r) => !r.same).length;
-      sum.textContent = changed ? t('{n} line differs|{n} lines differ', { n: changed }) : t('SKILL.md is the same in both; the copies differ in their other files.');
-    } catch {
-      sum.textContent = t('Couldn’t read {path}.', { path: 'SKILL.md' });
+    let shown = 0;
+    async function show() {
+      const mine = ++shown;
+      // A copy chosen on one side is not offered on the other.
+      for (const side of Object.keys(choosers)) for (const o of choosers[side].options) o.disabled = o.value === pick[side === 'a' ? 'b' : 'a'];
+      while (grid.children.length > 2) grid.lastChild.remove();
+      sum.textContent = t('Loading…');
+      try {
+        const [la, lb] = await Promise.all([read(pick.a), read(pick.b)]);
+        if (mine !== shown) return;
+        const rows = lineDiff(la, lb);
+        const cell = (lines, i, changed) => (i == null ? h('div', { class: 'cmp-cell empty' })
+          : h('div', { class: 'cmp-cell' + (changed ? ' changed' : '') }, h('span', { class: 'n', text: fmtNum(i + 1) }), changed ? h('span', { class: 'sr-only', text: t('Differs:') + ' ' }) : null, changed ? shownLine(lines[i]) : h('span', { text: lines[i] })));
+        grid.append(...rows.flatMap((r) => [cell(la, r.a, r.same === false), cell(lb, r.b, r.same === false)]));
+        const changed = rows.filter((r) => r.same === false).length;
+        sum.textContent = rows.some((r) => r.same === null)
+          ? t('Too many lines differ to compare them line by line; only the lines alike at the start and the end are known to be the same, and none is marked.')
+          : changed ? t('{n} line differs|{n} lines differ', { n: changed }) : t('SKILL.md is the same in both; the copies differ in their other files.');
+      } catch {
+        if (mine === shown) sum.textContent = t('Couldn’t read {path}.', { path: 'SKILL.md' });
+      }
     }
+    show();
     return p;
   }
 
@@ -3078,7 +3152,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!s) return;
     const wf = canEdit() ? activeWorkflow() : null;
     const items = [
-      { label: t('Open details'), run: () => select({ type: 'skill', id: sid }) },
+      { label: t('Open details'), run: () => select({ type: 'skill', id: sid, from: anchor.closest('.card')?.querySelector('.card-main')?.dataset.fk }) },
       { label: state.expanded.has(sid) ? t('Hide steps') : t('Show steps'), run: () => toggleExpand(sid) },
       { label: t('Focus on dependencies'), disabled: !(state.derived.out.get(sid).size || state.derived.inc.get(sid).size), run: () => setFocus(sid) },
     ];
@@ -3337,7 +3411,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       case 'card': {
         const wasSelected = state.selection && state.selection.type === 'skill' && state.selection.id === sid;
         if (state.expanded.has(sid)) state.expanded.delete(sid); else state.expanded.add(sid);
-        state.selection = { type: 'skill', id: sid };
+        state.selection = { type: 'skill', id: sid, from: tgt.dataset.fk };
         if (!wasSelected) state.highlight = new Set();
         invalidate('chrome', 'canvas', 'details');
         break;

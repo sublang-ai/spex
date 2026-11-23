@@ -68,27 +68,17 @@ const NAME_END = String.raw`(?![\w/-]|[.:]\w)`;
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Build matchers from every discovered skill. Each skill is registered under
- * its own root and under every copy's, so a skill in a copy's folder resolves
- * to it as a sibling, and as `<plugin>:<name>` where a copy sits in a plugin.
- * @param {{ id:string, name:string, plugin:string|null, root:string, copies?:{ root:string }[] }[]} skills in preference order
- * @param {Map<string, string|null>} [pluginOfRoot] root id -> its plugin's name
+ * Build matchers from every discovered skill: a link names a skill by any
+ * name an agent loads it under, `<plugin>:<name>` included, or by its own
+ * name where no agent loads it, and reaches the skill the loading model
+ * resolves it to [loading.mjs resolve].
+ * @param {ReturnType<import('./loading.mjs').loadingModel>} model
  */
-export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
-  const targets = new Map(); // text form -> [{ id, root }], in preference order
-  const add = (key, id, root) => {
-    if (!targets.has(key)) targets.set(key, []);
-    targets.get(key).push({ id, root });
-  };
-  for (const s of skills) {
-    const places = [{ root: s.root, plugin: s.plugin }, ...(s.copies ?? []).map((c) => ({ root: c.root, plugin: pluginOfRoot.get(c.root) ?? null }))];
-    for (const { root, plugin } of places) {
-      add(s.name, s.id, root);
-      if (plugin) add(`${plugin}:${s.name}`, s.id, root);
-    }
-  }
-  const keys = [...targets.keys()].sort((a, b) => b.length - a.length);
-  if (!keys.length) return { targets, forms: [], strong: strongForms() };
+export function buildLinkMatcher(model) {
+  const targets = model.linkNames();
+  const keys = [...targets].sort((a, b) => b.length - a.length);
+  const resolve = (name, from) => (targets.has(name) ? model.resolve(name, from)?.id ?? null : null);
+  if (!keys.length) return { targets, resolve, forms: [], strong: strongForms() };
   const ALT = keys.map(escape).join('|');
   const before = String.raw`(?<![\w/.~:@-])(?<!\]\()`;
   const forms = [
@@ -106,15 +96,7 @@ export function buildLinkMatcher(skills, pluginOfRoot = new Map()) {
     { kind: 'calls', re: new RegExp(String.raw`\b(?:${VERBS})\b[^.!?;]{0,40}?\bcommands?\s+(?:\x60/?|/)(${ALT})${NAME_END}`, 'gi') },
     { kind: 'mentions', re: new RegExp(String.raw`\x60/?(${ALT})\x60`, 'g'), needsSkillWord: true },
   ];
-  return { targets, forms, strong: strongForms() };
-}
-
-// A name held by several skills resolves to the copy in the caller's own
-// root (a sibling), else to the preferred copy.
-function resolve(matcher, name, fromRoot) {
-  const list = matcher.targets.get(name);
-  if (!list) return null;
-  return (list.find((t) => t.root === fromRoot) ?? list[0]).id;
+  return { targets, resolve, forms, strong: strongForms() };
 }
 
 // Strong forms that name a skill even when it is not installed, each of the
@@ -212,7 +194,7 @@ function locate(unit, at) {
 /**
  * Find links in a skill's prose.
  * @param {object} matcher from buildLinkMatcher
- * @param {{ id:string, root:string }} from the skill scanned
+ * @param {object} from the skill scanned, as the loading model holds it
  * @param {ReturnType<typeof proseUnits>} units prose (fenced code removed) as proseUnits reads it
  * @returns {{ edges: object[], unresolved: object[] }}
  */
@@ -227,7 +209,7 @@ export function findLinks(matcher, from, units) {
     const sentences = sentencesOf(text);
     // The name found at `at` by `form`, kept as a link unless its sentence rules it out.
     const consider = (form, name, at) => {
-      const to = resolve(matcher, name, from.root);
+      const to = matcher.resolve(name, from);
       if (!to || to === fromId) return; // no skill's (or case differs, in a case-insensitive form), or a self-link
       const sentence = sentences.at(at);
       let kind = form.kind;
@@ -254,7 +236,9 @@ export function findLinks(matcher, from, units) {
       form.re.lastIndex = 0;
       for (const m of text.matchAll(form.re)) {
         const name = m[1];
-        if (matcher.targets.has(name)) continue;
+        // A name reaching a skill for this caller is a link [consider]; one
+        // reaching none, installed or not, is unresolved.
+        if (matcher.resolve(name, from) !== null) continue;
         const at = m.index + m[0].indexOf(name);
         const sentence = sentences.at(at);
         if (form.slash) {
@@ -266,8 +250,7 @@ export function findLinks(matcher, from, units) {
         // Steered as a link to an installed skill is, one per step and name, calls before mentions.
         let kind = form.needsVerb && !VERB_BEFORE.test(text.slice(Math.max(sentence.start, m.index - 80), m.index)) ? 'mentions' : 'calls';
         if (steeredAway(text.slice(Math.max(sentence.start, at - STEER_REACH), at)) || sentence.says(STEER_AWAY_SENTENCE)) kind = 'mentions';
-        const key = `${step}\0${name}`;
-        if (!unresolved.has(key) || (kind === 'calls' && unresolved.get(key).kind === 'mentions')) unresolved.set(key, { from: fromId, fromStep: step, name, kind, evidence: where(at) });
+        keepLink(unresolved, { from: fromId, fromStep: step, name, kind, evidence: where(at) });
       }
     }
   }
@@ -275,20 +258,21 @@ export function findLinks(matcher, from, units) {
 }
 
 /**
- * Keep one link per (skill, step, target) in `best`: the first found, unless
- * it mentions and this one calls. Every place the scan or an annotation
- * gathers links keeps them by this rule.
+ * Keep one link per (skill, step, target) in `best`, an unresolved one per
+ * (skill, step, name): the first found, unless it mentions and this one
+ * calls. Every place the scan or an annotation gathers links keeps them by
+ * this rule.
  * @param {Map<string, object>} best
- * @param {{ from:string, fromStep:string|null, to:string, kind:string }} edge
+ * @param {{ from:string, fromStep:string|null, to?:string, name?:string, kind:string }} edge
  */
 export function keepLink(best, edge) {
-  const key = `${edge.from}\0${edge.fromStep}\0${edge.to}`;
+  const key = `${edge.from}\0${edge.fromStep}\0${edge.to ?? `\0${edge.name}`}`;
   const prev = best.get(key);
   if (prev && (prev.kind === 'calls' || edge.kind === 'mentions')) return;
   best.set(key, edge);
 }
 
-/** `edges` with one link per (skill, step, target) by keepLink, in the order first found. */
+/** `edges`, or unresolved links, one per (skill, step, target or name) by keepLink, in the order first found. */
 export function oneLinkEach(edges) {
   const best = new Map();
   for (const e of edges) keepLink(best, e);

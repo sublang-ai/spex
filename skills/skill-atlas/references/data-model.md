@@ -96,7 +96,7 @@ Every skill is keyed by its id — its `name`, or for a later differing skill of
       "evidence": { "line": 44, "text": "…invoke the `review` skill once…" }
     }
   ],
-  "unresolved": [                      // a link to a skill that is not installed
+  "unresolved": [                      // a link reaching no installed skill
     { "from": "dev", "fromStep": "dev#2", "name": "branch", "kind": "calls", "evidence": { "line": 12, "text": "…" } }
   ],
   "insights": [
@@ -121,18 +121,33 @@ Insight kinds: `duplicate-name` (differing skills of one name an agent may load 
 
 One skill installed for several agents — a folder linked into several roots, or copied with every file byte for byte the same (the same relative paths, translations included) and every link inside it of the same link text — is one record listing the others under `copies`.
 A folder too large to list whole (over 5,000 files or 2,000 folders), holding over 64 MiB, a link leading out of it or an entry that cannot be read, counts as differing.
-Skills of one name whose folders differ each list the others under `sameName`, `{ "id", "relation", "agents", "wins" }`, the relation told from the folders each agent loads them from, copies included, by the first row that applies:
+Skills of one name whose folders differ each list the others under `sameName`, `{ "id", "relation", "agents", "wins" }`, told from one loading model: each agent loads the places its documentation lists, copies included, under the name it invokes a skill by, ranking them as the table below says.
+For each agent and name, the skills it may run are those no other it loads under the name outranks; how two skills stand is every row that applies, each agent loading both giving its own, so one agent's conflict hides no other's override:
 
 | `relation` | When | `agents` | `wins` |
 | --- | --- | --- | --- |
-| `conflict` | an agent loads both, from folders it ranks alike | those agents | null |
-| `override` | each agent loading both prefers one folder | the agents loading `wins` | the id those agents load; where the agents differ in it, one entry per id they load |
-| `other-agent` | no agent loads both, so each sees one, the two perhaps drifted apart | none, as no agent loads both | null |
+| `conflict` | an agent may run either | those agents | null |
+| `override` | an agent runs one and outranks the other | the agents running `wins` | the id those agents run; where the agents differ in it, one entry per id they run |
+| `other-agent` | they go by one name, and no agent loads both under it, so each sees one, the two perhaps drifted apart | none, as no agent loads both | null |
 
-- An agent ranks a project's folder over the home folder's, and a nearer project folder over a farther one; Claude Code ranks the home folder's over a project's and a farther project folder's over a nearer one, Codex offers both under the name, ranking none, and Gemini CLI also ranks the shared `.agents` folders over its own in one place (`AGENT_PRECEDENCE` in `scripts/lib/roots.mjs`).
-- A plugin's skill is named `<plugin>:<name>`, so it shares a name only with the skills of the same plugin; a `--root`'s and a project's own `skills/` are loaded by no agent.
+| Agent | Invokes a skill by | Loads, highest first (`=` ranks alike) |
+| --- | --- | --- |
+| Claude Code | its `name` | `~/.claude/skills`; the repository root's `.claude/skills`; the nested folders' `.claude/skills` =; a plugin's skill as `<plugin>:<name>`, its bare name only where no other skill has it |
+| Codex | its `name` | `.agents/skills` (project and home), `~/.codex/skills/.system`, and its own `.codex/skills` (project and home) = |
+| GitHub Copilot | its `name` | `--cwd`'s `.github/skills`; its `.agents/skills`; its `.claude/skills`; each folder above's `.github/skills` =; `~/.copilot/skills`; `~/.agents/skills` |
+| Cursor | its folder | `--cwd`'s and the home folder's `.cursor/skills`, `.agents/skills`, `.claude/skills`, `.codex/skills` = |
+| Gemini CLI | its `name` | the project's `.agents/skills` =; its `.gemini/skills` =; `~/.agents/skills`; `~/.gemini/skills` |
+| Kimi Code | its `name` | at the repository root `.kimi/skills`; `.claude/skills`; `.codex/skills`; `.agents/skills`; then the same in the home folder, `~/.config/agents/skills` = `~/.agents/skills` |
+| OpenCode | its folder | `.opencode/skills`, the nearer first; `~/.config/opencode/skills`; `.agents/skills`, the nearer first; `~/.agents/skills`; `.claude/skills`, the nearer first; `~/.claude/skills`; `~/.opencode/skills` in no order |
+| Roo Code | its folder | at the project's root `.roo/skills`; `.agents/skills`; `~/.roo/skills`; `~/.agents/skills` |
+| Windsurf, Goose | its `name` | their own folders and the shared ones =, as no documentation was found |
+
+- A place an agent loads in no documented order ranks alike with every other, so two skills it may run there conflict, and one it may run there overrides none (`AGENTS` in `scripts/lib/roots.mjs`, each entry citing its documentation).
+- A plugin's skills are named by their plugin, so they share a name only with the same plugin's skills; a `--root`'s and a project's own `skills/` are loaded by no agent, and a skill there goes by its `name`.
+- A folder a row reaches through a link to another row's is scanned once, and its skills are listed at that row's folder as copies, so its agents are kept.
 - The agents loading another agent's copy are those of its folders' `agents`.
-- Only a name holding a `conflict` is a `duplicate-name` insight, covering the conflicting copies; an override and another agent's copy are no problem.
+- One `duplicate-name` insight is reported per name and set of skills an agent may run under it, naming those agents and the folders they load the skills from; an override and another agent's copy are no problem.
+  Renaming one's folder and its `name` alike, or moving it out of the folders those agents load, parts them for every agent; else delete one.
 
 ## annotations.json — corrections layered on the scan
 
@@ -263,7 +278,7 @@ Every insight carries `params`, the values its message is built from, so the pag
 
 | Kind | `params` |
 | --- | --- |
-| `duplicate-name` | `name`, `agents` (that may load either copy), `copies` (`{ "id", "path", "root", "rootLabel" }` per conflicting copy, `path` its folder) |
+| `duplicate-name` | `name` (the name those agents invoke the copies by, `<plugin>:<name>` for a plugin's), `agents` (that may load either copy), `copies` (`{ "id", "path", "root", "rootLabel" }` per conflicting copy, `path` its folder) |
 | `unresolved-link` | `name`, `from`, `kind` (`calls` where any of its links calls, else `mentions`) |
 | `cycle` | `path` (skill ids in order: one shortest cycle, an example; the insight's `skills` name every skill of the group calling one another) |
 | `oversized` | `lines` |
@@ -343,10 +358,10 @@ Folders scanned:
   Of the differing skills of one name, letter case aside, the one first by its first folder — by depth below the repository's root (the root's own folders and those outside the project at none, the shallower first), then the project's rows before the home folder's, the plugins' and `--root`'s, the project's and the home folder's rows in the scanner's fixed order of agents (`AGENT_ROOTS` in `scripts/lib/roots.mjs`) and the plugins and `--root`s by their ids, then by its folder's path in its root, compared character by character — has the name as its id, so the plain id follows which skills of the name are installed, and where the first is removed the next takes it; every other's id is a function of its own name, root and folder alone: `<name>@<rootId>`, and `@` and its folder's path in the root as above where that path is not its name (`foo@project-agents@a.foo` for `a/foo`).
   A name holding `@`, `#`, `/`, `\` or a control character, or `.` or `..`, stands in an id as its slug, `_` and eight hex digits of its SHA-256.
   No two ids differ in letter case alone, so each names its own folder under the state folder's `translations/` on any file system: of two names differing only in case, the second is qualified as above.
-  A folder reached by several rows (`--cwd` the home folder, a `--root` or `CLAUDE_CONFIG_DIR` naming a project's folder, or one folder's skills linked to another's) is scanned once, as a project's row before the home folder's, a plugin's and a `--root`'s, of one kind the row reaching it through no link of its own, each then first in id order, so the other row changes no id.
+  A folder reached by several rows (`--cwd` the home folder, a `--root` or `CLAUDE_CONFIG_DIR` naming a project's folder, or one folder's skills linked to another's) is scanned once, as a project's row before the home folder's, a plugin's and a `--root`'s, of one kind the row reaching it through no link of its own, each then first in id order, so the other row changes no id; the other row is listed too, its skills as copies there.
   Its label adds that path: `Project (packages/ui) · Universal`.
-- Each agent's skill folder in each project folder and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills` (loaded as `.agents/skills` is), `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills` (`XDG_CONFIG_HOME`, where set, standing for the home folder's `.config`), each project folder's `.github/skills`, and each project folder's `skills` where it holds a skill.
-- `--agent <id>` keeps that agent's folders, `.agents/skills` and `.config/agents/skills` where that agent loads them (every agent but Claude Code does), and `--root`'s; the project's `skills` is left out.
+- Each agent's skill folder in each project folder and in the home folder (`.claude/skills`, `.agents/skills`, `.codex/skills`, `.cursor/skills`, ...; `CLAUDE_CONFIG_DIR` and `CODEX_HOME` stand for the home folder's `.claude` and `.codex`), Codex's bundled skills in `.system` under the home folder's Codex skills, the home folder's `.config/opencode/skills`, `.config/agents/skills`, `.config/goose/skills`, `.copilot/skills` and `.codeium/windsurf/skills` (`XDG_CONFIG_HOME`, where set, standing for the home folder's `.config`), each project folder's `.github/skills`, and each project folder's `skills` where it holds a skill.
+- `--agent <id>` keeps the folders that agent loads (see `sameName` above), `.agents/skills` and `.config/agents/skills` under `universal`, and `--root`'s; the project's `skills` is left out.
 - A Claude Code plugin's `skills`, where `plugins/installed_plugins.json` records the plugin for the user or for this project and `enabledPlugins` does not set it `false`: the user's `settings.json`, then the project's `.claude/settings.json`, then its `.claude/settings.local.json`, each of the project's folders read the farther first, a later file's value for a plugin over an earlier one's.
 - In each folder, a folder or a folder one below it holding `SKILL.md` is a skill; folders whose name starts with a dot, and `node_modules`, are passed over.
 
@@ -369,9 +384,9 @@ Links from a skill to another installed skill named `N` (or `<plugin>:N`), read 
 | `` `N` `` alone, when the sentence says skill or the name has a hyphen | `mentions` |
 
 - A negation holds to the end of its sentence unless a clause opening with a verb of use follows it, so ``do not run `$lint` and then run `$review` `` mentions both, and ``do not run `$lint`, but run `$review` `` calls `review`.
-- A name held by several skills resolves to the one in the linking skill's own folder, a copy's folder included, else the first found; `<plugin>:N` names a skill with a copy in that plugin too.
+- A name resolves by the loading model above to the skill an agent loading the linking skill runs under it, so a link and `sameName`'s `wins` agree: the agent the linking skill's first folder is named for decides, else the first by key running one, and of several it may run the first in the atlas's order; where none runs one, a skill going by the name in the linking skill's own folder, a copy's included, else the first found.
 - One link is kept per (skill, step, target), `calls` before `mentions`; a skill's link to itself is dropped.
-- A link to a skill that is not installed is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); `` `x` skill `` after any word (``the `x` skill``, ``our `x` skill``); and `Skill(x)`, whatever `x` is.
+- A link reaching no skill — none installed by the name, or none the linking skill's agents run under it, such as a bare name two plugins share — is reported under `unresolved` for three forms only: `` `/x` `` in backticks in a sentence saying skill, command, slash or type (and `x` not a folder-like name, nor a host built-in command such as `/help`, `/clear` or `/compact`); `` `x` skill `` after any word (``the `x` skill``, ``our `x` skill``); and `Skill(x)`, whatever `x` is.
   Each has the kind its form would have to an installed skill: `` `x` skill `` calls only within a few words after a verb of use, and any form steered away from mentions; one is kept per (skill, step, name), `calls` before `mentions`.
 
 Tags come from `tag-rules.json`: each rule's patterns are tried against every line of the frontmatter description (and the `context` and `agent` keys), the preamble (every body line outside every step) and each step, fenced code included.
