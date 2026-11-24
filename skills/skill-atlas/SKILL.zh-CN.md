@@ -5,12 +5,12 @@ license: Apache-2.0
 compatibility: 需要 Node.js 18 或更高版本。交互式视图需要同一台机器上的浏览器；在其他环境中，请导出一个独立的 HTML 文件。
 metadata:
   author: sublang-ai
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=2f82e0de27f7a780ba2724b000b529c7e386e077876b18be5c7dd71e02551210 own=7769b8b985a878a6bb2648adbc93311d3cd463cc47f23815357c5859bbef4a0c -->
+<!-- skill-atlas:source sha256=55420eae8b2ba0d7830f1ad036c5f1db34023bde7aa225d8ef01b0491d42cb5d own=7d70ecf45cc92f6305fb25ee134072bf01ab397c66e798bcec9be3d370fd7ed4 -->
 
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 

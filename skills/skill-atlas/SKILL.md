@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires Node.js 18 or later. The interactive view needs a browser on the same machine; elsewhere, export a standalone HTML file.
 metadata:
   author: sublang-ai
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->

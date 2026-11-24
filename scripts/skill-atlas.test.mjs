@@ -3486,6 +3486,61 @@ describe('the repository\'s skills', () => {
     });
   }
 
+  // A skill's version: metadata.version in a SKILL file's frontmatter, as written.
+  const versionOf = (text) => {
+    const front = /^---\n([\s\S]*?)\n---\n/.exec(text.replace(/^﻿/, '').replace(/\r\n?/g, '\n'));
+    const metadata = front && /^metadata:[ \t]*\n((?:[ \t]+.*(?:\n|$))*)/m.exec(front[1]);
+    const version = metadata && /^[ \t]+version:[ \t]*(?:"([^"]*)"|'([^']*)'|(\S+))[ \t]*$/m.exec(metadata[1]);
+    return version ? (version[1] ?? version[2] ?? version[3]) : undefined;
+  };
+  // Semantic Versioning 2.0.0, its recommended expression.
+  const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+  // Semantic Versioning precedence: below zero where a precedes b.
+  const compareVersions = (a, b) => {
+    const [ma, mb] = [SEMVER.exec(a), SEMVER.exec(b)];
+    for (let i = 1; i <= 3; i++) if (Number(ma[i]) !== Number(mb[i])) return Number(ma[i]) - Number(mb[i]);
+    if (!ma[4] || !mb[4]) return (ma[4] ? -1 : 0) - (mb[4] ? -1 : 0);
+    const [pa, pb] = [ma[4].split('.'), mb[4].split('.')];
+    for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+      if (pa[i] === pb[i]) continue;
+      const [na, nb] = [/^\d+$/.test(pa[i]), /^\d+$/.test(pb[i])];
+      if (na && nb) return Number(pa[i]) - Number(pb[i]);
+      if (na !== nb) return na ? -1 : 1;
+      return pa[i] < pb[i] ? -1 : 1;
+    }
+    return pa.length - pb.length;
+  };
+  const git = (args) => spawnSync('git', args, { cwd: REPO, encoding: 'utf8' });
+  // The merge base with origin/main the CI fetches with full history.
+  let mergeBase;
+  before(() => {
+    const r = git(['merge-base', 'origin/main', 'HEAD']);
+    mergeBase = r.status === 0 ? r.stdout.trim() : undefined;
+  });
+
+  for (const name of folders) {
+    test(`${name}: one semantic version in SKILL.md and its translations, raised where the folder changed since origin/main`, () => {
+      const dir = path.join(SKILLS, name);
+      const version = versionOf(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'));
+      assert.ok(version !== undefined, 'SKILL.md declares metadata.version');
+      assert.match(version, SEMVER, `${version} is a semantic version`);
+      for (const file of fs.readdirSync(dir).filter((f) => f !== 'SKILL.md' && isTranslation(path.join(dir, f)) && f.startsWith('SKILL.'))) {
+        assert.equal(versionOf(fs.readFileSync(path.join(dir, file), 'utf8')), version, `${file} declares the version of SKILL.md`);
+      }
+
+      assert.ok(mergeBase, 'origin/main and its merge base with HEAD are fetched (git fetch origin main with full history)');
+      const rel = `skills/${name}`;
+      if (git(['cat-file', '-e', `${mergeBase}:${rel}/SKILL.md`]).status !== 0) return; // a new skill: its first version is not compared
+      const diff = git(['diff', '--quiet', mergeBase, '--', rel]);
+      assert.ok(diff.status === 0 || diff.status === 1, `git diff ran: ${diff.stderr}`);
+      const untracked = git(['ls-files', '--others', '--exclude-standard', '--', rel]).stdout.trim();
+      if (diff.status === 0 && !untracked) return; // unchanged since the merge base
+      const before = versionOf(git(['show', `${mergeBase}:${rel}/SKILL.md`]).stdout);
+      assert.ok(before === undefined || !SEMVER.test(before) || compareVersions(version, before) > 0,
+        `${rel} changed since ${mergeBase.slice(0, 8)} on origin/main, so its version ${version} must be higher than ${before} there`);
+    });
+  }
+
   test('what the scan reads from code, review and decide (agent-skills-8)', () => {
     const [code, review, decide] = ['code', 'review', 'decide'].map(byName);
     assert.ok(code && review && decide, 'the three workflow skills are reported');
