@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=2e3f5ef64e95277edd88a29bf4f10bcf21b2ca12fd9ca44cd70a836ecf37280c own=6631842ebf579d33b9ee378cb0a2f1bf660c6ef4b60aa1f1828c6f90ce350d4b -->
+<!-- skill-atlas:source sha256=7d0b0186e81232645e718e7fbff090053054b6e1574d0147ac0210202d79f219 own=7fd8d536efdf4252b925dab42375481b9523677bed3e773c82cb42b08f93379f -->
 
 > 本文件是 `translate.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
@@ -78,7 +78,7 @@ node <skill-dir>/scripts/atlas.mjs pin --check --state <state> <scan options> <s
 
 1. 把 `assets/locales/zh-CN.json` 复制为 `assets/locales/fr-FR.json`；设置 `language` 和 `name`（该语言自己的名称），翻译 `messages` 的每个值，保留每个键（英文原文）和每个 `{placeholder}`。
    写作 `one|other` 的英文文本，译文给出一种形式，或按 `Intl.PluralRules` 列出的顺序，为该语言的每个复数类别各给一种形式。
-2. 把 `references/tag-rules.zh-CN.json`、`references/workflow-presets.zh-CN.json` 和 `references/view-settings.zh-CN.json` 复制为以 `fr-FR` 命名的同名文件，翻译其中 `about`、`title`、`label`、`name` 和 `description` 的值；保留每个 id、每个键，以及每个预设中各阶段的顺序。
+2. 把 `references/tag-rules.zh-CN.json`、`references/pipeline-presets.zh-CN.json` 和 `references/view-settings.zh-CN.json` 复制为以 `fr-FR` 命名的同名文件，翻译其中 `about`、`title`、`label`、`name` 和 `description` 的值；保留每个 id、每个键，以及每个预设中各阶段的顺序。
 3. 按文件名为这三个名称文件记录哈希值：`node <skill-dir>/scripts/atlas.mjs pin <skill-dir>/references/*.fr-FR.json`，然后重新加载页面，该语言就会出现在页面的语言切换器中。
 
 技能更新时会替换这些文件；请保留一份副本，或把该语言回馈给技能的作者。

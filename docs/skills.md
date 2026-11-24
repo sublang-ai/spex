@@ -11,7 +11,7 @@ npx skills add sublang-ai/spex --skill skill-atlas
 
 | Skill | What it does |
 | --- | --- |
-| [`skill-atlas`](../skills/skill-atlas/SKILL.md) | Scans the skills installed for your agent, shows how they link, what each step reads, writes, runs and asks, and lets you sort them into workflow phases on a local page |
+| [`skill-atlas`](../skills/skill-atlas/SKILL.md) | Scans the skills installed for your agent, shows how they link, what each step reads, writes, runs and asks, and lets you sort them into pipeline phases on a local page |
 | [`code`](../skills/code/SKILL.md) | Implements a request as single-commit phases, then has the change reviewed once |
 | [`review`](../skills/review/SKILL.md) | Reviews committed work in up to three rounds between an independent Reviewer and a Coder |
 | [`decide`](../skills/decide/SKILL.md) | Turns a topic into decision records or spec items from two independent proposals, then has them reviewed |
@@ -34,7 +34,7 @@ Each gets one part of the design.
 
 **One hierarchy, opened a click at a time.**
 Group → skill → step.
-A group is a workflow phase, a call depth or an install location, as the reader chooses.
+A group is a pipeline phase, a call depth or an install location, as the reader chooses.
 A link is always drawn between the innermost things currently open: from the step that makes the call when its skill is open, from the skill when it is closed, from the phase when the phase is closed.
 So the overview and the full graph are the same picture at different openings, and "what does this call" and "what are this skill's steps" are the same gesture.
 Most skills link to nothing, which is why the page is columns rather than a force-directed cloud: every skill has a place even with no link.
@@ -45,13 +45,13 @@ Most skills link to nothing, which is why the page is columns rather than a forc
 | --- | --- | --- | --- |
 | What the text says | `atlas.json` | the scan | Instant, free, the same every run |
 | What the text means | `annotations.json` | an agent that read the skill, or the user | Patterns miss prose; a correction must outlive the next scan |
-| How I use them | `workflows.json` | the user, on the page | Organization is personal, and survives reinstalling a skill |
+| How I use them | `pipelines.json` | the user, on the page | Organization is personal, and survives reinstalling a skill |
 
 The scan is deliberately pattern matching, not a model call per skill: a hundred model reads on every open would be slow, costly and different each time.
 Every tag and link carries the line it was read from, so an automatic claim can be checked at a glance and a wrong one is visibly wrong.
 The agent's judgment enters only where asked, through the deep-read prompt, and lands in a file a person can read and edit.
 
-**Tags answer the questions people ask of a workflow.**
+**Tags answer the questions people ask of a pipeline.**
 Four categories — data in, data out, tools, human — are attached to steps and roll up to the skill and to any phase holding it.
 A phase's rollup is the useful one: "the Verify phase needs my approval twice and pushes to a Git host" is what someone planning their day wants to know.
 
@@ -79,7 +79,7 @@ Each row names a guideline and where to see it.
 | **Scripts for deterministic work; say whether to run or read them** | "Run the script; do not read it into context." Scanning, serving and exporting are code; the agent's tokens go to the user's question |
 | **Scripts solve, they do not punt** | A malformed `SKILL.md` becomes an issue on that skill and the scan continues; a bad user regex is skipped with a warning; a busy port falls back to a free one |
 | **No unexplained constants** | Limits are named and explained in the script; thresholds a user may disagree with (which words mean "approval") are data in `tag-rules.json`, not code |
-| **Consistent terms** | One word per thing throughout: *Captain*, *Coder*, *Reviewer*; *phase* (of a workflow or a coding run), *step* (of a skill), *link* with kinds *calls* and *mentions* in the scan, and *dependency* for a call on the page, which shows no mention; *state folder* |
+| **Consistent terms** | One word per thing throughout: *Captain*, *Coder*, *Reviewer*; *phase* (of a pipeline on the atlas's page, or of a `code` run), *step* (of a skill), *link* with kinds *calls* and *mentions* in the scan, and *dependency* for a call on the page, which shows no mention; *state folder* |
 | **Examples over description** | The input handed to `review` is shown as the literal quoted block to fill in; the data model is annotated JSON, not prose about JSON |
 | **State requirements up front** | The `compatibility` field names Node 18, git, the sibling skill a skill invokes, and the repository layout the prompts assume |
 | **Degrade honestly** | Each skill says what to do without subagents or without a browser; `review` and `decide` require saying in the result that independence was lost ("the Reviewer was not independent") |
@@ -93,7 +93,7 @@ Every skill has a *Customizing* section naming plain files under `references/`.
 | Skill | File | Changes |
 | --- | --- | --- |
 | `skill-atlas` | `tag-rules.json` | Which words produce which tag; new tags |
-| | `workflow-presets.json` | The workflows offered on the page and the keywords that place skills |
+| | `pipeline-presets.json` | The pipelines offered on the page and the keywords that place skills |
 | | `view-settings.json` | Title, category labels and colours, defaults |
 | | `deep-read.md` | How the agent reads a skill in depth and what it records |
 | `code` | `coder-phases.md` | How work is sized, which conventions the Coder consults, what a commit must contain |
@@ -143,8 +143,8 @@ What was run on the delivered files, and what it showed:
 
 | Check | Result |
 | --- | --- |
-| `node --test scripts/skill-atlas.test.mjs` | 121 tests pass: the scan over fixture skill folders, a folder two roots name by one path listed once, differing skills of one name reported as one note naming their folders and no agent, a plugin's copy of a skill, linked or byte for byte the same, one skill reached by its plugin's name, a link to a shared name reaching the caller's sibling, each insight's level, translations and annotations, the server, the `workflows`, `pin` and `digest` commands, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
-| `npm run e2e -- skill-atlas` | 43 browser journeys pass against the real server: groupings, steps, dependencies with a mention neither drawn nor counted, a card's counts shown only where not zero and its folders counted and named, the shown cards' steps opened and closed together, problems marked and counted apart from notes, a selected or focused skill's dependencies, and an insight's skills' all of them, drawn over the dimmed rest, a property's fields a row each, Rescan busy, the details opened by a selection alone and closed back to it, to the very card a skill in two phases was opened from, Help with the legend and the keys, the toolbar at a phone's width, a followed dependency, a folder above the working folder, details, search, filter, focus, insights, an unresolved call listed and an unresolved mention not, frontmatter in error, a name with different versions noted with both folders and compared side by side, any two of three versions compared, versions in any folders noted alike naming no agent, a comparison showing a line's ending and a `SKILL.md` the same in both, 2,002 lines differing only in the first and last, and texts too far apart to pair left unmarked, markup shown as text, workflows with an edit undone, notes in two workflows undone apart, a save as the page is hidden, the save conflict, a refused deletion keeping the served page's presets, the unreadable file, the read-only exported page, a skill in its original language, one in Arabic marked alike in its details and its file, the page in Chinese, an annotation written from another text, an atlas reporting no languages, a translation under a compatible tag, one behind its source under the first tag read over a current one under a later tag, a translation refreshed in the state folder over a skill's own behind its source, annotation words over a translation, a language chosen from the page's menu |
+| `node --test scripts/skill-atlas.test.mjs` | 121 tests pass: the scan over fixture skill folders, a folder two roots name by one path listed once, differing skills of one name reported as one note naming their folders and no agent, a plugin's copy of a skill, linked or byte for byte the same, one skill reached by its plugin's name, a link to a shared name reaching the caller's sibling, each insight's level, translations and annotations, the server, the `pipelines`, `pin` and `digest` commands, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
+| `npm run e2e -- skill-atlas` | 43 browser journeys pass against the real server: groupings, steps, dependencies with a mention neither drawn nor counted, a card's counts shown only where not zero and its folders counted and named, the shown cards' steps opened and closed together, problems marked and counted apart from notes, a selected or focused skill's dependencies, and an insight's skills' all of them, drawn over the dimmed rest, a property's fields a row each, Rescan busy, the details opened by a selection alone and closed back to it, to the very card a skill in two phases was opened from, Help with the legend and the keys, the toolbar at a phone's width, a followed dependency, a folder above the working folder, details, search, filter, focus, insights, an unresolved call listed and an unresolved mention not, frontmatter in error, a name with different versions noted with both folders and compared side by side, any two of three versions compared, versions in any folders noted alike naming no agent, a comparison showing a line's ending and a `SKILL.md` the same in both, 2,002 lines differing only in the first and last, and texts too far apart to pair left unmarked, markup shown as text, pipelines with an edit undone, notes in two pipelines undone apart, a save as the page is hidden, the save conflict, a refused deletion keeping the served page's presets, the unreadable file, the read-only exported page, a skill in its original language, one in Arabic marked alike in its details and its file, the page in Chinese, an annotation written from another text, an atlas reporting no languages, a translation under a compatible tag, one behind its source under the first tag read over a current one under a later tag, a translation refreshed in the state folder over a skill's own behind its source, annotation words over a translation, a language chosen from the page's menu |
 | `spex lint` | No errors in the new decision record and packages |
 | A scan of a real machine | 88 skill folders across 8 locations read as 32 skills and 56 identical copies (copies then compared by `SKILL.md` alone); every one of the links reported as a call is a real one, and `code` and `decide` both link to `review` from the step that invokes it |
 | An independent review | Four reviewers (scan and server, page, skill writing and playbook equivalence, specs), each finding then checked by a second agent that tried to refute it. 40 findings survived and were fixed, among them a page that could overwrite a `workflows.json` changed elsewhere, links invented from URL paths, and three claims in this report |

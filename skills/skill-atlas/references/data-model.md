@@ -4,14 +4,14 @@
 # Skill Atlas data model
 
 The three JSON documents Skill Atlas reads and writes.
-Read this file before editing `annotations.json` by hand, changing `workflows.json` through `atlas.mjs workflows`, or consuming `atlas.json` from another tool.
+Read this file before editing `annotations.json` by hand, changing `pipelines.json` through `atlas.mjs pipelines`, or consuming `atlas.json` from another tool.
 
 ## Contents
 
 - [Files and where they live](#files-and-where-they-live)
 - [atlas.json — what the scan found](#atlasjson--what-the-scan-found)
 - [annotations.json — corrections layered on the scan](#annotationsjson--corrections-layered-on-the-scan)
-- [workflows.json — how the user organizes skills](#workflowsjson--how-the-user-organizes-skills)
+- [pipelines.json — how the user organizes skills](#pipelinesjson--how-the-user-organizes-skills)
 - [Languages](#languages)
 - [Detection rules](#detection-rules)
 
@@ -21,7 +21,7 @@ Read this file before editing `annotations.json` by hand, changing `workflows.js
 | --- | --- | --- | --- |
 | `atlas.json` | `atlas.mjs scan` | viewer, agent | stdout, or `--out <file>` |
 | `annotations.json` | agent or user | `atlas.mjs scan` | state directory |
-| `workflows.json` | viewer (or user), agent through `atlas.mjs workflows` | viewer, agent | state directory |
+| `pipelines.json` | viewer (or user), agent through `atlas.mjs pipelines` | viewer, agent | state directory |
 
 The state directory is `~/.skill-atlas/` unless `--state <dir>` names another, for example `.skill-atlas/` inside a repository a team shares.
 Every skill is keyed by its id — its `name`, or for a later differing skill of the same name `<name>@<rootId>` (see [Detection rules](#detection-rules)) — never by a path, so both state files survive a reinstall or a move.
@@ -162,13 +162,13 @@ The scan is pattern matching; this file is where a reader who understood the ski
   Skills of one name whose `SKILL.md` are the same and whose other files differ share the digest, so under the name the last entry recording it is each one's, and the one whose files it does not list reports `stale-annotation`: key each by its own id instead.
   Each skill of the name is judged on its own: one that no entry applies to reports a `stale-annotation` insight where an entry records its `digest` (a listed file has changed) or a digest no skill of that name has, since the state folder serves every project and such an entry may have been written for an earlier text of any of them.
 
-## workflows.json — how the user organizes skills
+## pipelines.json — how the user organizes skills
 
 ```jsonc
 {
   "version": 1,
-  "active": "sdlc",                    // id of the workflow the viewer opens on, or null
-  "workflows": [
+  "active": "sdlc",                    // id of the pipeline the viewer opens on, or null
+  "pipelines": [
     {
       "id": "sdlc",
       "name": "SDLC",
@@ -182,12 +182,13 @@ The scan is pattern matching; this file is where a reader who understood the ski
 ```
 
 - A skill may sit in several phases, and in none (the viewer lists it under Unassigned).
-- An entry is a skill id. One with no installed skill is kept and shown as missing, so a workflow survives an uninstall.
-- The viewer saves with `PUT /api/workflows`, sending in `If-Match` the `ETag` of the version it last read; a save against a file changed since is refused (412) and the stored file stands.
-  The check and the write hold `workflows.json.lock` in the state folder, so of servers sharing the folder only one writes against a version; a lock still held after a second answers 503 (`busy`, save again), and one older than 10 seconds is broken as left by a server that stopped mid-save.
+- An entry is a skill id. One with no installed skill is kept and shown as missing, so a pipeline survives an uninstall.
+- With no `pipelines.json`, the pipelines in a `workflows.json` an atlas before 2.0.0 wrote, under the key `workflows`, are read as the document of no file (etag `"none"`), and the first save writes them to `pipelines.json`; `workflows.json` is never written, and one that cannot be read so is left as it is.
+- The viewer saves with `PUT /api/pipelines`, sending in `If-Match` the `ETag` of the version it last read; a save against a file changed since is refused (412) and the stored file stands.
+  The check and the write hold `pipelines.json.lock` in the state folder, so of servers sharing the folder only one writes against a version; a lock still held after a second answers 503 (`busy`, save again), and one older than 10 seconds is broken as left by a server that stopped mid-save.
 - An agent reads and writes the file the same way:
-  - `atlas.mjs workflows [--state <dir>]` prints `{ "etag": "<version>", "doc": { … } }`, an empty document and `"none"` where there is no file, and fails naming the file where it cannot be read as a workflows document;
-  - `atlas.mjs workflows --put <file|-> --if-match <etag> [--state <dir>]` writes the document under the server's conditions and lock, and prints the new etag; a file changed since it was read (read it again), an invalid document and an unreadable stored file fail it, the stored file standing.
+  - `atlas.mjs pipelines [--state <dir>]` prints `{ "etag": "<version>", "doc": { … } }`, an empty document and `"none"` where there is no file, and fails naming the file where it cannot be read as a pipelines document;
+  - `atlas.mjs pipelines --put <file|-> --if-match <etag> [--state <dir>]` writes the document under the server's conditions and lock, and prints the new etag; a file changed since it was read (read it again), an invalid document and an unreadable stored file fail it, the stored file standing.
 
 ## Languages
 
@@ -313,7 +314,7 @@ A file's own entry is never changed by words for another tag: words under `en-US
   - A placeholder is `{name}` and is kept in the translation.
   - An English text with two forms is written `one|other` (`"{n} step|{n} steps"`); its translation gives one form, or one per plural category of its language in the order `Intl.PluralRules` lists them.
   - A text with no entry is shown in English.
-- `references/tag-rules.<tag>.json`, `references/workflow-presets.<tag>.json` and `references/view-settings.<tag>.json` are label files: the same shape as the file they sit beside, from which only `title`, `label`, `name` and `description` are read — tags and presets by `id`, categories by key, a preset's phases by position.
+- `references/tag-rules.<tag>.json`, `references/pipeline-presets.<tag>.json` and `references/view-settings.<tag>.json` are label files: the same shape as the file they sit beside, from which only `title`, `label`, `name` and `description` are read — tags and presets by `id`, categories by key, a preset's phases by position.
   Patterns, keywords, colors and every other setting come from the source file alone.
   Under `labels` a tag holds the fields of its own label files alone, and the page reads each of the three under its own tag, by the rule a skill's translation is chosen by, so one file's tag never hides another's.
 - The page's language is the reader's choice on the page (kept in the browser), else `--lang`, else the browser's language where a catalog's tag is it or shares its primary subtag and script (`zh` and `zh-SG` name `zh-CN`, `zh-TW` none), else `en-US`.

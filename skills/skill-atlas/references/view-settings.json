@@ -2,8 +2,7 @@
   "version": 1,
   "about": "How the viewer presents the atlas. Edit and rescan (or reload) to apply.",
   "title": "Skill Atlas",
-  "defaultGrouping": "workflow",
-  "maxTagsPerCard": 6,
+  "defaultGrouping": "pipeline",
   "categories": {
     "input": { "label": "Data in", "color": "#2f7d6d" },
     "output": { "label": "Data out", "color": "#b4621b" },

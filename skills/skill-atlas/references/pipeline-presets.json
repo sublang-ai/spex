@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Starting points offered by the viewer's New workflow menu. Each phase's keywords place a skill there when they appear in the skill's name or description; the user can move anything afterwards. Add your own presets or edit these.",
+  "about": "Starting points offered by the viewer's New pipeline menu. Each phase's keywords place a skill there when they appear in the skill's name or description; the user can move anything afterwards. Add your own presets or edit these.",
   "presets": [
     {
       "id": "sdlc",

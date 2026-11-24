@@ -161,7 +161,7 @@ describes the retained originals and migration boundaries.
 **Skills you can install without Spex.** The [`skills/`](skills) folder
 ships Agent Skills for any coding agent: `skill-atlas` maps the skills
 you have installed — which call which, what each step reads, writes,
-runs and asks — and lets you sort them into workflow phases on a local
+runs and asks — and lets you sort them into pipeline phases on a local
 page; `code`, `review` and `decide` carry the built-in playbooks'
 procedure as plain skills. Each ships in English and Simplified
 Chinese, and the atlas's page shows a skill in the reader's language

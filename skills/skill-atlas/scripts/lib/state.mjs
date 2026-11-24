@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Bundled files, the viewer config, and workflows.json in the state folder.
+// Bundled files, the viewer config, and pipelines.json in the state folder.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,14 +14,14 @@ import { warn } from './log.mjs';
 export const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const BUNDLED = {
   rules: path.join(SKILL_DIR, 'references', 'tag-rules.json'),
-  presets: path.join(SKILL_DIR, 'references', 'workflow-presets.json'),
+  presets: path.join(SKILL_DIR, 'references', 'pipeline-presets.json'),
   view: path.join(SKILL_DIR, 'references', 'view-settings.json'),
   viewer: path.join(SKILL_DIR, 'assets', 'viewer.html'),
   locales: path.join(SKILL_DIR, 'assets', 'locales'),
 };
-export const WORKFLOWS_FILE = 'workflows.json';
-export const EMPTY_WORKFLOWS = Object.freeze({ version: 1, active: null, workflows: [] });
-const STATE_DIR_MODE = 0o700; // workflows may name private skills; keep the folder to its owner
+export const PIPELINES_FILE = 'pipelines.json';
+export const EMPTY_PIPELINES = Object.freeze({ version: 1, active: null, pipelines: [] });
+const STATE_DIR_MODE = 0o700; // pipelines may name private skills; keep the folder to its owner
 
 function readJson(file, what) {
   try {
@@ -39,7 +39,7 @@ function readJson(file, what) {
  * @param {{ stateDir:string, isStatic:boolean, lang?:string|null, rulesFile?:string }} opts
  */
 export function viewerConfig({ stateDir, isStatic, lang = null, rulesFile = BUNDLED.rules }) {
-  const presets = readJson(BUNDLED.presets, 'workflow presets');
+  const presets = readJson(BUNDLED.presets, 'pipeline presets');
   const view = readJson(BUNDLED.view, 'view settings');
   return {
     presets: Array.isArray(presets?.presets) ? presets.presets : [],
@@ -149,18 +149,18 @@ export function readLabels(sources) {
 }
 
 /**
- * The stored workflows.json, read for a conditional update.
+ * The stored pipelines.json, read for a conditional update.
  * @returns {{ file:string, exists:boolean, valid:boolean, doc:object|null, etag:string|null, error:string|null }}
  *   etag is `"<sha256 hex of the file's bytes>"`, or `"none"` when no file exists;
  *   an invalid file has no etag and no doc.
  */
-export function readWorkflowsState(stateDir) {
-  const file = path.join(stateDir, WORKFLOWS_FILE);
+export function readPipelinesState(stateDir) {
+  const file = path.join(stateDir, PIPELINES_FILE);
   let bytes;
   try {
     bytes = fs.readFileSync(file);
   } catch (err) {
-    if (err.code === 'ENOENT') return { file, exists: false, valid: true, doc: structuredClone(EMPTY_WORKFLOWS), etag: NO_FILE_ETAG, error: null };
+    if (err.code === 'ENOENT') return { file, exists: false, valid: true, doc: readLegacyPipelines(stateDir) ?? structuredClone(EMPTY_PIPELINES), etag: NO_FILE_ETAG, error: null };
     return { file, exists: true, valid: false, doc: null, etag: null, error: `cannot read ${file}: ${err.message}` };
   }
   let doc;
@@ -169,34 +169,57 @@ export function readWorkflowsState(stateDir) {
   } catch (err) {
     return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is not valid JSON (${err.message})` };
   }
-  const checked = validateWorkflows(doc);
-  if (!checked.ok) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is not a workflows document: ${checked.error}` };
+  const checked = validatePipelines(doc);
+  if (!checked.ok) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is not a pipelines document: ${checked.error}` };
   // One no save could write again is reported, never shown as a document the page cannot save.
-  const size = workflowsBytes(checked.doc).length;
-  if (size > WORKFLOWS_MAX_BYTES) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is ${size} bytes as a save stores it, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` };
+  const size = pipelinesBytes(checked.doc).length;
+  if (size > PIPELINES_MAX_BYTES) return { file, exists: true, valid: false, doc: null, etag: null, error: `${file} is ${size} bytes as a save stores it, over the ${PIPELINES_MAX_BYTES / 1024 / 1024} MiB limit a save takes` };
   return { file, exists: true, valid: true, doc, etag: etagOf(bytes), error: null };
+}
+
+// The file an atlas before 2.0.0 kept its pipelines in, under their former name.
+export const LEGACY_PIPELINES_FILE = 'workflows.json';
+
+/**
+ * With no pipelines.json, the pipelines a workflows.json of an earlier atlas
+ * holds, as a pipelines document; the first save writes them to
+ * pipelines.json, and workflows.json is never written. One that cannot be
+ * read as such a document is left as it is and gives null.
+ */
+function readLegacyPipelines(stateDir) {
+  let doc;
+  try {
+    doc = JSON.parse(fs.readFileSync(path.join(stateDir, LEGACY_PIPELINES_FILE), 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc) || !Array.isArray(doc.workflows) || 'pipelines' in doc) return null;
+  const { workflows, ...rest } = doc;
+  const checked = validatePipelines({ ...rest, pipelines: workflows });
+  if (!checked.ok || pipelinesBytes(checked.doc).length > PIPELINES_MAX_BYTES) return null;
+  return checked.doc;
 }
 
 export const NO_FILE_ETAG = '"none"';
 export function etagOf(bytes) { return `"${crypto.createHash('sha256').update(bytes).digest('hex')}"`; }
 
 /**
- * Check a workflows document against data-model.md. Unknown extra fields are
+ * Check a pipelines document against data-model.md. Unknown extra fields are
  * kept; a missing phase `note` becomes "".
  * @returns {{ ok: true, doc: object } | { ok: false, error: string }}
  */
-export function validateWorkflows(doc) {
+export function validatePipelines(doc) {
   const fail = (error) => ({ ok: false, error });
   const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
   const isStr = (v) => typeof v === 'string';
   if (!isObj(doc)) return fail('the document must be a JSON object');
   if (doc.version !== 1) return fail('"version" must be 1');
-  if (doc.active !== null && !isStr(doc.active)) return fail('"active" must be a workflow id or null');
-  if (!Array.isArray(doc.workflows)) return fail('"workflows" must be a list');
+  if (doc.active !== null && !isStr(doc.active)) return fail('"active" must be a pipeline id or null');
+  if (!Array.isArray(doc.pipelines)) return fail('"pipelines" must be a list');
   const ids = new Set();
-  const workflows = [];
-  for (const [n, w] of doc.workflows.entries()) {
-    const at = `workflows[${n}]`;
+  const pipelines = [];
+  for (const [n, w] of doc.pipelines.entries()) {
+    const at = `pipelines[${n}]`;
     if (!isObj(w)) return fail(`${at} must be an object`);
     if (!isStr(w.id) || !w.id) return fail(`${at}.id must be a non-empty string`);
     if (ids.has(w.id)) return fail(`${at}.id "${w.id}" is used twice`);
@@ -209,28 +232,28 @@ export function validateWorkflows(doc) {
       const pat = `${at}.phases[${k}]`;
       if (!isObj(p)) return fail(`${pat} must be an object`);
       if (!isStr(p.id) || !p.id) return fail(`${pat}.id must be a non-empty string`);
-      if (phaseIds.has(p.id)) return fail(`${pat}.id "${p.id}" is used twice in workflow "${w.id}"`);
+      if (phaseIds.has(p.id)) return fail(`${pat}.id "${p.id}" is used twice in pipeline "${w.id}"`);
       phaseIds.add(p.id);
       if (!isStr(p.name)) return fail(`${pat}.name must be a string`);
       if (p.note !== undefined && !isStr(p.note)) return fail(`${pat}.note must be a string`);
       if (!Array.isArray(p.skills) || !p.skills.every(isStr)) return fail(`${pat}.skills must be a list of skill names`);
       phases.push({ ...p, note: p.note ?? '', skills: [...p.skills] });
     }
-    workflows.push({ ...w, phases });
+    pipelines.push({ ...w, phases });
   }
-  if (doc.active !== null && !ids.has(doc.active)) return fail(`"active" names "${doc.active}", which is not a workflow id`);
-  return { ok: true, doc: { ...doc, version: 1, active: doc.active, workflows } };
+  if (doc.active !== null && !ids.has(doc.active)) return fail(`"active" names "${doc.active}", which is not a pipeline id`);
+  return { ok: true, doc: { ...doc, version: 1, active: doc.active, pipelines } };
 }
 
 /**
- * Write workflows.json atomically (temp file, then rename).
+ * Write pipelines.json atomically (temp file, then rename).
  * @returns {{ doc: object, etag: string }}
  */
-export function writeWorkflows(stateDir, doc) {
+export function writePipelines(stateDir, doc) {
   fs.mkdirSync(stateDir, { recursive: true, mode: STATE_DIR_MODE });
-  const file = path.join(stateDir, WORKFLOWS_FILE);
-  const tmp = path.join(stateDir, `.${WORKFLOWS_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
-  const bytes = workflowsBytes(doc);
+  const file = path.join(stateDir, PIPELINES_FILE);
+  const tmp = path.join(stateDir, `.${PIPELINES_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+  const bytes = pipelinesBytes(doc);
   try {
     fs.writeFileSync(tmp, bytes, { mode: 0o600 });
     fs.renameSync(tmp, file);
@@ -241,38 +264,38 @@ export function writeWorkflows(stateDir, doc) {
   return { doc, etag: etagOf(bytes) };
 }
 
-// The largest workflows document a save takes, the page's and `workflows --put`'s alike: far above any real one.
+// The largest pipelines document a save takes, the page's and `pipelines --put`'s alike: far above any real one.
 // It bounds the body sent and the document as stored, which is never smaller than the
 // compact form the server returns, so a document read can always be saved again.
-export const WORKFLOWS_MAX_BYTES = 1024 * 1024;
+export const PIPELINES_MAX_BYTES = 1024 * 1024;
 
-/** A validated workflows document as workflows.json stores it. */
-export function workflowsBytes(doc) {
+/** A validated pipelines document as pipelines.json stores it. */
+export function pipelinesBytes(doc) {
   return Buffer.from(JSON.stringify(doc, null, 2) + '\n', 'utf8');
 }
 
-export const WORKFLOWS_LOCK_FILE = `${WORKFLOWS_FILE}.lock`;
+export const PIPELINES_LOCK_FILE = `${PIPELINES_FILE}.lock`;
 const LOCK_WAIT_MS = 1000; // a save holds the lock for milliseconds
 const LOCK_RETRY_MS = 20;
 export const LOCK_STALE_MS = 10_000; // a lock this old was left by a server that stopped mid-save
 
-/** Thrown when another process holds the workflows lock past the wait. */
+/** Thrown when another process holds the pipelines lock past the wait. */
 export class LockBusyError extends Error {
   constructor(file) {
-    super(`another skill-atlas server sharing this state folder is saving workflows.json (${file} is held); save again in a moment`);
+    super(`another skill-atlas server sharing this state folder is saving pipelines.json (${file} is held); save again in a moment`);
     this.code = 'ELOCKBUSY';
   }
 }
 
 /**
- * Run `fn` holding workflows.json.lock in the state folder, so that the
+ * Run `fn` holding pipelines.json.lock in the state folder, so that the
  * version check and the write are one step among every process sharing it.
  * Waits up to LOCK_WAIT_MS while another holds it, breaks a lock older than
  * LOCK_STALE_MS, and throws LockBusyError when it cannot be taken.
  */
-export function withWorkflowsLock(stateDir, fn) {
+export function withPipelinesLock(stateDir, fn) {
   fs.mkdirSync(stateDir, { recursive: true, mode: STATE_DIR_MODE });
-  const file = path.join(stateDir, WORKFLOWS_LOCK_FILE);
+  const file = path.join(stateDir, PIPELINES_LOCK_FILE);
   const token = `${process.pid}.${crypto.randomBytes(8).toString('hex')}`;
   const body = JSON.stringify({ pid: process.pid, time: new Date().toISOString(), token });
   const sleeper = new Int32Array(new SharedArrayBuffer(4));
@@ -333,9 +356,9 @@ function isStale(file) {
 }
 
 /**
- * Save a workflows document as the server's PUT and `atlas.mjs workflows
+ * Save a pipelines document as the server's PUT and `atlas.mjs pipelines
  * --put` do, one step among every process sharing the state folder: under
- * workflows.json.lock, check the stored version, then validate and write.
+ * pipelines.json.lock, check the stored version, then validate and write.
  * @param {string} stateDir
  * @param {string} body the document's JSON text
  * @param {{ ifMatch?:string, replaceInvalid?:boolean }} conditions
@@ -343,24 +366,24 @@ function isStale(file) {
  *   invalid stored file aside and replace it
  * @returns {{ status:number, value:object, etag?:string }} the answer: status
  *   200 with the document written, else a refusal whose `value.error` names
- *   it: too-large, invalid-workflows, not-invalid, precondition-required,
+ *   it: too-large, invalid-pipelines, not-invalid, precondition-required,
  *   changed, invalid-body or write-failed. Only `status` tells the two apart:
  *   a document may hold a field named `error` of its own.
  * @throws {LockBusyError} when another process holds the lock past the wait
  */
-export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false } = {}) {
+export function savePipelines(stateDir, body, { ifMatch, replaceInvalid = false } = {}) {
   // The body as sent, and the document as it would be stored, under the one limit.
-  const tooLarge = (size, as) => ({ status: 413, value: { error: 'too-large', message: `the workflows document is ${size} bytes${as}, over the ${WORKFLOWS_MAX_BYTES / 1024 / 1024} MiB limit a save takes` } });
+  const tooLarge = (size, as) => ({ status: 413, value: { error: 'too-large', message: `the pipelines document is ${size} bytes${as}, over the ${PIPELINES_MAX_BYTES / 1024 / 1024} MiB limit a save takes` } });
   const size = Buffer.byteLength(body, 'utf8');
-  if (size > WORKFLOWS_MAX_BYTES) return tooLarge(size, '');
-  return withWorkflowsLock(stateDir, () => {
-    const cur = readWorkflowsState(stateDir);
+  if (size > PIPELINES_MAX_BYTES) return tooLarge(size, '');
+  return withPipelinesLock(stateDir, () => {
+    const cur = readPipelinesState(stateDir);
     if (replaceInvalid) {
-      if (cur.valid) return { status: 409, value: { error: 'not-invalid', message: 'the stored workflows.json is valid; send If-Match with its ETag instead' }, etag: cur.etag };
+      if (cur.valid) return { status: 409, value: { error: 'not-invalid', message: 'the stored pipelines.json is valid; send If-Match with its ETag instead' }, etag: cur.etag };
     } else {
-      if (!cur.valid) return { status: 409, value: { error: 'invalid-workflows', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file } };
-      if (ifMatch === undefined) return { status: 428, value: { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/workflows' } };
-      if (ifMatch !== cur.etag) return { status: 412, value: { error: 'changed', message: 'workflows.json changed since it was read; reload it and apply the change again' }, etag: cur.etag };
+      if (!cur.valid) return { status: 409, value: { error: 'invalid-pipelines', message: `${cur.error}; send X-Skill-Atlas-Replace-Invalid: 1 to set it aside and replace it`, path: cur.file } };
+      if (ifMatch === undefined) return { status: 428, value: { error: 'precondition-required', message: 'send If-Match with the ETag of GET /api/pipelines' } };
+      if (ifMatch !== cur.etag) return { status: 412, value: { error: 'changed', message: 'pipelines.json changed since it was read; reload it and apply the change again' }, etag: cur.etag };
     }
     let doc;
     try {
@@ -368,25 +391,25 @@ export function saveWorkflows(stateDir, body, { ifMatch, replaceInvalid = false 
     } catch (err) {
       return { status: 400, value: { error: 'invalid-body', message: `the body is not valid JSON: ${err.message}` } };
     }
-    const checked = validateWorkflows(doc);
-    if (!checked.ok) return { status: 400, value: { error: 'invalid-body', message: `invalid workflows document: ${checked.error}` } };
-    const stored = workflowsBytes(checked.doc).length;
-    if (stored > WORKFLOWS_MAX_BYTES) return tooLarge(stored, ' as stored');
+    const checked = validatePipelines(doc);
+    if (!checked.ok) return { status: 400, value: { error: 'invalid-body', message: `invalid pipelines document: ${checked.error}` } };
+    const stored = pipelinesBytes(checked.doc).length;
+    if (stored > PIPELINES_MAX_BYTES) return tooLarge(stored, ' as stored');
     try {
       if (replaceInvalid && cur.exists) setAsideInvalid(stateDir);
-      const written = writeWorkflows(stateDir, checked.doc);
+      const written = writePipelines(stateDir, checked.doc);
       return { status: 200, value: written.doc, etag: written.etag };
     } catch (err) {
-      return { status: 500, value: { error: 'write-failed', message: `cannot write workflows.json in ${stateDir}: ${err.message}` } };
+      return { status: 500, value: { error: 'write-failed', message: `cannot write pipelines.json in ${stateDir}: ${err.message}` } };
     }
   });
 }
 
-/** Move an invalid workflows.json aside as workflows.invalid-<n>.json (first free n). */
+/** Move an invalid pipelines.json aside as pipelines.invalid-<n>.json (first free n). */
 export function setAsideInvalid(stateDir) {
-  const file = path.join(stateDir, WORKFLOWS_FILE);
+  const file = path.join(stateDir, PIPELINES_FILE);
   for (let n = 1; ; n++) {
-    const aside = path.join(stateDir, `workflows.invalid-${n}.json`);
+    const aside = path.join(stateDir, `pipelines.invalid-${n}.json`);
     if (fs.existsSync(aside)) continue;
     fs.renameSync(file, aside);
     return aside;

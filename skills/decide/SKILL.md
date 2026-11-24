@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires git and the review skill installed beside this one. Independent proposals need an agent that can run subagents in parallel. The bundled prompts assume a Spex-scaffolded repository (specs/map.md, specs/meta.md, specs/decisions/, specs/packages/). Not for a folder where Spex already places its own skills named decide and review, which start the playbooks instead.
 metadata:
   author: sublang-ai
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->

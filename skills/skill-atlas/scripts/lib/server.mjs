@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The local viewer server: 127.0.0.1 only, Host-checked against DNS
-// rebinding, and writing nothing but workflows.json (and its lock) in the state folder.
+// rebinding, and writing nothing but pipelines.json (and its lock) in the state folder.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { viewerConfig, readWorkflowsState, saveWorkflows, LockBusyError, WORKFLOWS_MAX_BYTES } from './state.mjs';
+import { viewerConfig, readPipelinesState, savePipelines, LockBusyError, PIPELINES_MAX_BYTES } from './state.mjs';
 import { canonicalTag, findTranslation } from './translations.mjs';
 import { fileLanguage } from './language.mjs';
 
 export const HOST = '127.0.0.1';
-export const BODY_MAX_BYTES = WORKFLOWS_MAX_BYTES; // the save's own limit, refused here before the body is read whole
+export const BODY_MAX_BYTES = PIPELINES_MAX_BYTES; // the save's own limit, refused here before the body is read whole
 export const FILE_MAX_BYTES = 512 * 1024; // 512 KiB: larger files are not skill text worth showing
 const MUTATION_HEADER = 'x-skill-atlas';
 const REPLACE_INVALID_HEADER = 'x-skill-atlas-replace-invalid';
@@ -67,21 +67,21 @@ export function startServer(opts) {
         }
         return send(res, 200, atlas);
       }
-      case 'GET /api/workflows': {
-        const cur = readWorkflowsState(opts.stateDir);
-        if (!cur.valid) return send(res, 409, { error: 'invalid-workflows', message: `${cur.error}; replace it from the page or fix the file`, path: cur.file });
+      case 'GET /api/pipelines': {
+        const cur = readPipelinesState(opts.stateDir);
+        if (!cur.valid) return send(res, 409, { error: 'invalid-pipelines', message: `${cur.error}; replace it from the page or fix the file`, path: cur.file });
         return send(res, 200, cur.doc, { headers: { ETag: cur.etag } });
       }
-      case 'PUT /api/workflows': {
+      case 'PUT /api/pipelines': {
         const body = await readBody(req, res);
         if (body === null) return undefined;
         let answer;
         try {
           // The check and the write as one step among every process sharing the state folder.
-          answer = saveWorkflows(opts.stateDir, body, { ifMatch: req.headers['if-match'], replaceInvalid: req.headers[REPLACE_INVALID_HEADER] === '1' });
+          answer = savePipelines(opts.stateDir, body, { ifMatch: req.headers['if-match'], replaceInvalid: req.headers[REPLACE_INVALID_HEADER] === '1' });
         } catch (err) {
           if (err instanceof LockBusyError) return send(res, 503, { error: 'busy', message: err.message }, { headers: { 'Retry-After': '1' } });
-          return send(res, 500, { error: 'write-failed', message: `cannot save workflows.json in ${opts.stateDir}: ${err.message}` });
+          return send(res, 500, { error: 'write-failed', message: `cannot save pipelines.json in ${opts.stateDir}: ${err.message}` });
         }
         return send(res, answer.status, answer.value, { headers: answer.etag ? { ETag: answer.etag } : {} });
       }
@@ -94,7 +94,7 @@ export function startServer(opts) {
       case 'GET /api/file':
         return serveSkillFile(res, atlas, url.searchParams.get('skill'), url.searchParams.get('path') ?? 'SKILL.md', url.searchParams.get('lang'), opts.stateDir);
       default:
-        if (['/', '/index.html', '/api/atlas', '/api/rescan', '/api/workflows', '/api/config', '/api/file'].includes(url.pathname)) {
+        if (['/', '/index.html', '/api/atlas', '/api/rescan', '/api/pipelines', '/api/config', '/api/file'].includes(url.pathname)) {
           return send(res, 405, { error: `${req.method} is not supported on ${url.pathname}` });
         }
         return send(res, 404, { error: `no route ${url.pathname}` });

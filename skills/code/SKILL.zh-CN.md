@@ -5,12 +5,12 @@ license: Apache-2.0
 compatibility: 需要 git，并需在本技能旁安装 review 技能。在能运行子代理的代理上效果最佳。内置提示词假定仓库由 Spex 搭建（specs/map.md、specs/meta.md、specs/intents/、specs/packages/git.md）。不适用于 Spex 已放置了自己名为 code 和 review 的技能的文件夹，那些技能会改为启动 playbook。
 metadata:
   author: sublang-ai
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=17d66629ef8b3ec4566d76b60089612959af7c95dea390179116bb84162b2490 own=6de98c2ae7a381b44262b2fa81c90a7fc83af640d7cb2bce9f605a659fe1df14 -->
+<!-- skill-atlas:source sha256=bf8e4652b0043b575612d3c14c08f2ac7f6a206fdac55197fe63fd271507c4a1 own=d52dd7a1591f380c520a41b236b9fc5d7897bcf811658a00b0fe1a87c420633e -->
 > 本文件是 `SKILL.md` 的简体中文译本，供人阅读；代理加载的是 `SKILL.md`。
 
 # Code

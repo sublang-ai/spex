@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires git and a repository with committed work. Review independence needs an agent that can run subagents. The bundled prompts assume a Spex-scaffolded repository (specs/map.md, specs/meta.md, specs/packages/git.md). Not for a folder where Spex already places its own skill named review, which starts the playbook instead.
 metadata:
   author: sublang-ai
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0 -->
