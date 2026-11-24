@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), and their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md).
+This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), and their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md).
 It owns their form and procedure, not the atlas that reads them.
 
 ## External Behavior
@@ -30,6 +30,22 @@ Each Markdown file of a skill under `skills/`, and each file under its `referenc
 
 - a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens with a quoted note saying that agents load `SKILL.md`;
 - a translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
+
+#### agent-skills-11
+
+Each skill under `skills/` shall declare a semantic version [[2]] as the string `metadata.version` in the frontmatter of its `SKILL.md` and the same string in that of each translation of `SKILL.md`.
+
+#### agent-skills-12
+
+When a change alters any file of a skill's folder, the change shall raise that skill's version [[agent-skills-11](#agent-skills-11)] above the version the folder has at the change's merge base with `main`, by the part the change calls for:
+
+| Change | Part raised |
+| --- | --- |
+| something a user, their saved state or a calling skill relied on removed or changed incompatibly | major |
+| behavior added, with what was relied on still holding | minor |
+| anything else, such as a fix, a wording or a translation | patch |
+
+- A folder absent at the merge base is new, and its first version is not compared.
 
 ### Workflow skills
 
@@ -71,7 +87,7 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-7
 
-When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and, where Markdown, its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)].
+When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and, where Markdown, its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)], and its version a semantic version equal in `SKILL.md` and each translation [[agent-skills-11](#agent-skills-11)] and, where the folder's files differ from those at its merge base with `origin/main`, higher than the version there [[agent-skills-12](#agent-skills-12)].
 
 #### agent-skills-8
 
@@ -86,3 +102,4 @@ When the repository's `skills/` alone is scanned by the atlas, the test shall as
 ## References
 
 [1]: https://agentskills.io/specification "Agent Skills specification"
+[2]: https://semver.org/spec/v2.0.0.html "Semantic Versioning 2.0.0"
