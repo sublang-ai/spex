@@ -156,7 +156,8 @@ While the page shows an atlas, the page shall present groups holding skills hold
 | Source | the scanned folders, a skill under its own and each copy's |
 
 - a dependency is a call [[skill-atlas-3](#skill-atlas-3)], a mention being neither drawn, listed nor counted anywhere on the page;
-- a skill states how many skills it depends on, how many use it, how many steps it has and how many tags of each category, each only where it is not zero, and the number of folders it is installed in where that is more than one, naming those folders;
+- a skill states how many skills it depends on, how many use it and how many steps it has, each only where it is not zero, and the number of folders it is installed in where that is more than one, naming those folders;
+- a closed skill states how many tags of each category it has, only where not zero, each count naming its category and its tags in its tooltip and accessible name, and an opened skill names each of its tags once in place of those counts, beside its category's mark and naming that category in its tooltip and accessible name;
 - a skill with a problem [[skill-atlas-5](#skill-atlas-5)] is marked, and the control opening the insights counts the problems alone.
 
 #### skill-atlas-37
@@ -339,7 +340,7 @@ When the server is started on a free port by the test, the test shall assert:
 
 When the page is opened in a browser against the server over skill folders built for the test, the journey shall assert:
 
-- each grouping's groups, a project's folder above the working folder grouped and named apart from the working folder's, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn, counted nor listed, a card's counts of the skills it depends on and that use it, of its steps and of each category of its tags, each only where not zero, the categories named with their counts, and of the folders it is installed in, each folder named alike to the eye and to assistive technology, its name holding the count it shows, a problem marking its skill and counted where a note does neither, and the served page with no pipeline left by a refused deletion offering its presets [[skill-atlas-13](#skill-atlas-13)];
+- each grouping's groups, a project's folder above the working folder grouped and named apart from the working folder's, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn, counted nor listed, a card's counts of the skills it depends on and that use it, of its steps and, while it is closed, of each category of its tags, each only where not zero, each category's count naming the category and its tags, an opened card naming each tag once with its category and no count, and of the folders it is installed in, each folder named alike to the eye and to assistive technology, its name holding the count it shows, a problem marking its skill and counted where a note does neither, and the served page with no pipeline left by a refused deletion offering its presets [[skill-atlas-13](#skill-atlas-13)];
 - the shown cards' steps opened and closed together with a closed group left closed, a card with no steps opened by hand closed by it, and nothing to open where no shown card has steps [[skill-atlas-37](#skill-atlas-37)];
 - Rescan named and busy while it scans, Help saying it opens a dialog, and the language control named by the short name it shows [[skill-atlas-38](#skill-atlas-38)];
 - at a phone's width the toolbar's controls each 24 pixels or more with no sideways scroll [[skill-atlas-39](#skill-atlas-39)];
