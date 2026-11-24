@@ -8,6 +8,7 @@
 Accepted (2026-11-22).
 Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls.
 Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page's settings and their labels, retiring the setting for mentions, and in the control choosing the page's language.
+Amended in the name of workflows, pipelines since, by [DR-250](250-the-atlas-arranges-pipelines.md).
 
 ## Context
 

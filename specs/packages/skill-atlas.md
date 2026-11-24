@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package lets a person with many agent skills see what each does, how they link, and where each sits in their work, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), in the reader's language per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md) as amended by [DR-247](../decisions/247-a-refreshed-translation-is-the-one-read.md), with dependencies and differing versions per [DR-248](../decisions/248-the-atlas-shows-dependencies-and-differing-versions.md).
+This package lets a person with many agent skills see what each does, how they link, and where each sits in their work, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), in the reader's language per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md) as amended by [DR-247](../decisions/247-a-refreshed-translation-is-the-one-read.md), with dependencies and differing versions per [DR-248](../decisions/248-the-atlas-shows-dependencies-and-differing-versions.md), and its arrangements named pipelines per [DR-250](../decisions/250-the-atlas-arranges-pipelines.md).
 It owns the `skill-atlas` skill's scan, its served page and its state files, not the skills it reads.
 
 ## External Behavior
@@ -129,12 +129,19 @@ When the page asks to rescan, the server shall scan again, reading the rules and
 
 #### skill-atlas-12
 
-When the page saves the workflows document, the server shall write it to the state folder only where it has the workflows shape and the stored file is the version the page last read:
+When the page saves the pipelines document, the server shall write it to the state folder only where it has the pipelines shape and the stored file is the version the page last read:
 
 - a document of another shape is refused and the stored file stands;
-- a document sent over 1 MiB, or over it as it would be stored, is refused and the stored file stands, and a stored file over it as a save would store it cannot be read as a workflows document, so every document read can be saved again as it was served;
+- a document sent over 1 MiB, or over it as it would be stored, is refused and the stored file stands, and a stored file over it as a save would store it cannot be read as a pipelines document, so every document read can be saved again as it was served;
 - a save against a file changed since is refused and the stored file stands, the check and the write being one step among every server sharing the state folder;
-- a stored file that cannot be read as a workflows document is reported as such, never as empty, and is replaced only on the page's explicit request, the file kept beside it under another name.
+- a stored file that cannot be read as a pipelines document is reported as such, never as empty, and is replaced only on the page's explicit request, the file kept beside it under another name.
+
+#### skill-atlas-40
+
+Where the state folder holds no `pipelines.json` and holds a `workflows.json`, the file an atlas before 2.0.0 kept its pipelines in under their former name, the server and the `pipelines` command shall read that file's pipelines as the stored document of a state folder with no file, so that the first save writes them to `pipelines.json`:
+
+- `workflows.json` is never written;
+- one that cannot be read as a pipelines document under its former key `workflows` is left as it is, and the stored document is empty.
 
 ### Page
 
@@ -144,7 +151,7 @@ While the page shows an atlas, the page shall present groups holding skills hold
 
 | Grouping | Groups |
 | --- | --- |
-| Workflow | the active workflow's phases in order, then the skills in no phase; with no workflow, the presets to start one from where workflows can be edited |
+| Pipeline | the active pipeline's phases in order, then the skills in no phase; with no pipeline, the presets to start one from where pipelines can be edited |
 | Dependencies | skills that call others and are called by none, each further call depth, skills called only within a cycle, then skills with no dependency |
 | Source | the scanned folders, a skill under its own and each copy's |
 
@@ -196,7 +203,7 @@ While skills are selected, a skill, a phase's skills or an insight's, or a skill
 
 #### skill-atlas-36
 
-When the reader opens the help, the page shall show the legend of its marks, a tag category's, a dependency's and a problem's, and the keys and gestures it answers to, those editing only where workflows can be edited, until the reader closes it, focus returning to the control that opened it.
+When the reader opens the help, the page shall show the legend of its marks, a tag category's, a dependency's and a problem's, and the keys and gestures it answers to, those editing only where pipelines can be edited, until the reader closes it, focus returning to the control that opened it.
 
 #### skill-atlas-18
 
@@ -210,31 +217,31 @@ While the page shows an atlas, each of its controls shall say what it does, and 
 
 While the page is shown at a phone's width, the page shall fit its controls without sideways scroll, each at least 24 pixels across.
 
-### Workflows
+### Pipelines
 
 #### skill-atlas-19
 
-Where the page is served, when the reader edits a workflow on the page, the page shall save the workflows document with the change:
+Where the page is served, when the reader edits a pipeline on the page, the page shall save the pipelines document with the change:
 
-- a workflow is created blank or from a preset, renamed, duplicated and deleted;
+- a pipeline is created blank or from a preset, renamed, duplicated and deleted;
 - a preset, where the reader asks it to place skills, puts each skill into the one phase whose keyword occurs earliest in the skill's name, else in its description, the earlier phase on a tie, a keyword matching at a word's start and one of three characters or fewer as a whole word;
 - a phase is added, renamed, reordered, noted and deleted;
 - a skill is put into a phase, moved between phases and removed by dragging or by a menu, and may sit in several phases;
 - a phase holds skill ids, and an id no reported skill has is shown as missing;
-- the document is kept as it was read with the reader's changes alone, what the page shows for a field left unset, such as the workflow shown while none is active or the word for an empty name, never written into it;
+- the document is kept as it was read with the reader's changes alone, what the page shows for a field left unset, such as the pipeline shown while none is active or the word for an empty name, never written into it;
 - the latest edit alone can be undone, whichever edit it was, until the next.
 
 #### skill-atlas-20
 
-When a save is refused because the stored workflows changed, the page shall stop saving, say that the last edit was not saved, and allow no workflow edit until the reader loads the stored workflows.
+When a save is refused because the stored pipelines changed, the page shall stop saving, say that the last edit was not saved, and allow no pipeline edit until the reader loads the stored pipelines.
 
 #### skill-atlas-21
 
-While the stored workflows file cannot be read, the page shall name the file, allow no workflow edit, and offer to start fresh with the file kept.
+While the stored pipelines file cannot be read, the page shall name the file, allow no pipeline edit, and offer to start fresh with the file kept.
 
 #### skill-atlas-31
 
-When `workflows` is invoked, the command shall print the stored workflows document with its version, and with `--put` write the document given to it under the conditions of the server's save [[skill-atlas-12](#skill-atlas-12)], the version being the one `--if-match` names and a document over the server's limit refused.
+When `pipelines` is invoked, the command shall print the stored pipelines document with its version, and with `--put` write the document given to it under the conditions of the server's save [[skill-atlas-12](#skill-atlas-12)], the version being the one `--if-match` names and a document over the server's limit refused.
 
 #### skill-atlas-32
 
@@ -246,11 +253,11 @@ When `digest` is invoked with files, the command shall print each file's digest 
 
 #### skill-atlas-22
 
-When `export` is invoked, the command shall write the page as one file holding the atlas, the workflows, the settings and the catalogs, opening in `--lang`'s language, in which no held value can end the page's data element, and which opens with no server and shows the atlas and its workflows with no control editing a workflow, saying it is read-only.
+When `export` is invoked, the command shall write the page as one file holding the atlas, the pipelines, the settings and the catalogs, opening in `--lang`'s language, in which no held value can end the page's data element, and which opens with no server and shows the atlas and its pipelines with no control editing a pipeline, saying it is read-only.
 
 #### skill-atlas-23
 
-When the page loads, the page shall take its workflow presets and its view settings from the skill's `references/` files, their labels in a language from the files named `<name>.<tag>.json` beside them and beside the tag rules, and its catalogs from `assets/locales/`, as they then stand:
+When the page loads, the page shall take its pipeline presets and its view settings from the skill's `references/` files, their labels in a language from the files named `<name>.<tag>.json` beside them and beside the tag rules, and its catalogs from `assets/locales/`, as they then stand:
 
 - a label file has its source's shape, and gives a tag's, a category's, a preset's and a phase's label, name and description, and the page's title, by id, a preset's phases by position.
 
@@ -286,7 +293,7 @@ While the page shows an atlas, the page shall present its own text, the labels o
 - a file is shown under the name of the file returned [[skill-atlas-10](#skill-atlas-10)];
 - a skill with no translation in the language is shown in its original, and marked as such where the reader opens it, its language, which the scan reports, being the one its frontmatter's `metadata.language` names, else Chinese, Japanese or Korean by the script most of its words are in, else English where they are in Latin script, else unknown and marked in every language, a file's language being told from its own words, and another than the page's where their primary subtag or script differs; a translation behind its source or edited apart from it is shown and marked, an edited one as text agents do not follow;
 - a search matches a skill's text in the language shown and in its original;
-- a workflow's and a phase's name and note are shown as typed.
+- a pipeline's and a phase's name and note are shown as typed.
 
 #### skill-atlas-30
 
@@ -310,7 +317,7 @@ When the command is run against skill folders built for the test, the test shall
 - a translation in the skill's folder and one in the state folder reported with frontmatter, description and steps, the folder's first, one with other steps reported without them, one behind its source and one edited apart from it each marked, the state folder's reported where only the skill's is behind and it records its source's digest, one recording none never, none listed as a file or a skill, and tags and links unchanged by them [[skill-atlas-27](#skill-atlas-27)];
 - an annotation's summary and step titles under a language's tag, reported under exactly that tag over its own entry, else over a copy of a file's under a tag of the same language and script with the file's entry unchanged, else alone [[skill-atlas-6](#skill-atlas-6)];
 - each skill's language, its declared one first, in a flow mapping as in the block form, Chinese, Japanese, Korean, English and unknown told from its text outside fenced code [[skill-atlas-29](#skill-atlas-29)];
-- `workflows` printing the stored document with its version, `--put` writing one against that version and printing the new one, a document holding its own `error` field written, and refusing one against a changed file, an invalid one, one over the limit and one while the lock is held, the stored file standing [[skill-atlas-31](#skill-atlas-31)], one over the limit only as it would be stored refused and a stored file over it reported [[skill-atlas-12](#skill-atlas-12)];
+- `pipelines` printing the stored document with its version, `--put` writing one against that version and printing the new one, a document holding its own `error` field written, and refusing one against a changed file, an invalid one, one over the limit and one while the lock is held, the stored file standing [[skill-atlas-31](#skill-atlas-31)], one over the limit only as it would be stored refused and a stored file over it reported [[skill-atlas-12](#skill-atlas-12)], and a former `workflows.json` read as the stored document of no file, its pipelines written by the first `--put` to `pipelines.json` with `workflows.json` unchanged, and one that cannot be read as such read as no document [[skill-atlas-40](#skill-atlas-40)];
 - `digest` printing each file's digest of its bytes, and, through a pipe past 64 KiB, every readable file's line whole before failing on a file it cannot read, named on stderr [[skill-atlas-32](#skill-atlas-32)];
 - insights for a translation behind its source, for one edited apart from it, each repair given in the insight's params with the command its message gives, each repair command run as given from another folder for a skill found through `--root` with a translation's path holding a space, a skill folder's one behind its source refreshed into the state folder and that file pinned, the installed one unchanged, and for one of other steps [[skill-atlas-5](#skill-atlas-5)];
 - `pin` recording a digest in a Markdown and a JSON translation, a Markdown one's own digest recorded, `pin --check` failing on one behind, on one edited and on one with none, changing no file, and both commands failing on one in the state folder of a skill not reported, on one there under no skill's folder, on a folder holding none and on a folder not read whole, a folder walked at every depth with hidden folders but not `.git` or `node_modules`, a folder linked in twice and a link loop walked once, both commands failing on a link they cannot follow, a file its source links to, symbolically or hard, passed over in a folder, refused where named and never written, a translation that is the same file as the source of another translation, in its skill or another's, as a skill's `SKILL.md`, its own skill's or another scanned skill's, beside its own source or not, or as a translation of another source, in the state folder too, failing both commands, naming both files, and one hard-linked to a file under `node_modules` or outside every folder read failing them too, with no file written, two names translating one source pinned as one, a state folder's translation linked to a file of another name there pinned as translating the file its own name names, as the scan reads it, and one file reached as the translation of two sources failing both commands, naming both, with no file written [[skill-atlas-28](#skill-atlas-28)].
@@ -323,7 +330,7 @@ When the server is started on a free port by the test, the test shall assert:
 - a foreign `Host` and a change without the header refused [[skill-atlas-9](#skill-atlas-9)];
 - a skill's file returned, a path outside its folder refused, and a file asked in a language returned as its translation from the skill's folder, as the state folder's, as one under a tag of the same language and script and never of another script, as the state folder's where only the skill folder's is behind its source and the state folder's records its source's digest, never one recording none, under the tag asked or else the first of its language and script with folders compared within that tag alone, as the scan reports it for that tag, and as the original where there is none, each with its path, a file asked through a link translated, its language told and named by the name asked [[skill-atlas-10](#skill-atlas-10)], and a file its source links to no translation, in the scan as in the file returned [[skill-atlas-27](#skill-atlas-27)];
 - a skill added after the start reported by a rescan [[skill-atlas-11](#skill-atlas-11)];
-- a saved document returned and standing in the state folder, a malformed one and one against a changed file refused with the stored file standing, and an unreadable stored file reported and replaced only on request with the file kept, of two servers' saves against one version one written and one refused, a held lock refusing a save and a stale one broken, of three servers' saves against one version over a stale lock one written, and a document under 1 MiB sent but over it as stored refused while a document read saves again [[skill-atlas-12](#skill-atlas-12)], and a document at the limit as stored, with no workflow active, an empty name and no notes, kept by the page's own reading as it was served and saved again [[skill-atlas-19](#skill-atlas-19)];
+- a saved document returned and standing in the state folder, a malformed one and one against a changed file refused with the stored file standing, and an unreadable stored file reported and replaced only on request with the file kept, of two servers' saves against one version one written and one refused, a held lock refusing a save and a stale one broken, of three servers' saves against one version over a stale lock one written, and a document under 1 MiB sent but over it as stored refused while a document read saves again [[skill-atlas-12](#skill-atlas-12)], and a document at the limit as stored, with no pipeline active, an empty name and no notes, kept by the page's own reading as it was served and saved again [[skill-atlas-19](#skill-atlas-19)];
 - an exported file holding the atlas, the catalogs and `--lang`'s language with no text able to close its data element and a value holding `$&` kept as written [[skill-atlas-22](#skill-atlas-22)];
 - an edited presets file, an edited label file and an edited catalog returned by the next read of the settings [[skill-atlas-23](#skill-atlas-23)];
 - every text the page looks up present in the `zh-CN` catalog and no other, an original file returned with the language of its own text, and the page's catalog and label files chosen, from tags their file names order otherwise, by the rule a skill's translation is, each label file under its own tag [[skill-atlas-29](#skill-atlas-29)].
@@ -332,7 +339,7 @@ When the server is started on a free port by the test, the test shall assert:
 
 When the page is opened in a browser against the server over skill folders built for the test, the journey shall assert:
 
-- each grouping's groups, a project's folder above the working folder grouped and named apart from the working folder's, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn, counted nor listed, a card's counts of the skills it depends on and that use it, of its steps and of each category of its tags, each only where not zero, the categories named with their counts, and of the folders it is installed in, each folder named alike to the eye and to assistive technology, its name holding the count it shows, a problem marking its skill and counted where a note does neither, and the served page with no workflow left by a refused deletion offering its presets [[skill-atlas-13](#skill-atlas-13)];
+- each grouping's groups, a project's folder above the working folder grouped and named apart from the working folder's, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn, counted nor listed, a card's counts of the skills it depends on and that use it, of its steps and of each category of its tags, each only where not zero, the categories named with their counts, and of the folders it is installed in, each folder named alike to the eye and to assistive technology, its name holding the count it shows, a problem marking its skill and counted where a note does neither, and the served page with no pipeline left by a refused deletion offering its presets [[skill-atlas-13](#skill-atlas-13)];
 - the shown cards' steps opened and closed together with a closed group left closed, a card with no steps opened by hand closed by it, and nothing to open where no shown card has steps [[skill-atlas-37](#skill-atlas-37)];
 - Rescan named and busy while it scans, Help saying it opens a dialog, and the language control named by the short name it shows [[skill-atlas-38](#skill-atlas-38)];
 - at a phone's width the toolbar's controls each 24 pixels or more with no sideways scroll [[skill-atlas-39](#skill-atlas-39)];
@@ -344,9 +351,9 @@ When the page is opened in a browser against the server over skill folders built
 - two skills compared from a name's insight and from a skill's note, the differing line marked and no other, any two of three versions compared from each one's note, two texts of 2,002 lines differing in their first and last line showing those two lines alone as differing, two texts too far apart to pair shown with no line marked and said to be so, a carriage return ending a differing line shown, versions whose `SKILL.md` is the same said to differ in their other files, and closed by Escape with focus returned, the exported page offering no comparison [[skill-atlas-34](#skill-atlas-34)];
 - a selected skill's dependencies, an insight's skills' all of them, and then a focused one's at full strength and the others dimmed, with nothing selected none dimmed, and a pointer on a card changing nothing, in the light and the dark theme [[skill-atlas-35](#skill-atlas-35)];
 - a skill whose name and step hold markup shown as text [[skill-atlas-18](#skill-atlas-18)];
-- a workflow made from a preset with its skills placed, a phase added and renamed, a skill moved by the menu, an edit undone, a menu's edit undone by the keyboard after its notice has gone, an edit saved as the page is hidden followed by a further edit saved, and the result standing after a reload [[skill-atlas-19](#skill-atlas-19)];
+- a pipeline made from a preset with its skills placed, a phase added and renamed, a skill moved by the menu, an edit undone, a menu's edit undone by the keyboard after its notice has gone, an edit saved as the page is hidden followed by a further edit saved, and the result standing after a reload [[skill-atlas-19](#skill-atlas-19)];
 - a file changed behind the page refusing the next edit with the file standing [[skill-atlas-20](#skill-atlas-20)];
 - an unreadable file named, and started fresh with the file kept [[skill-atlas-21](#skill-atlas-21)];
-- an exported file opened from disk showing its workflows with no control editing a workflow, a phase or a skill's place, saying it is read-only, its grouping, steps, search and details still at work [[skill-atlas-22](#skill-atlas-22)];
+- an exported file opened from disk showing its pipelines with no control editing a pipeline, a phase or a skill's place, saying it is read-only, its grouping, steps, search and details still at work [[skill-atlas-22](#skill-atlas-22)];
 - a browser of Chinese opening the page in Chinese with its chrome, tag labels and presets, a translated skill's description, frontmatter values, steps and file in Chinese with the file named as its translation, an untranslated skill in its original and marked, a translation behind its source and one edited apart from it each marked, a skill written in Japanese, one in English quoting Chinese, and one declaring Traditional Chinese marked as original, one in Chinese holding a katakana middle dot not, a skill in Cyrillic and one described in English and written in Arabic with no steps marked as original in their details and their files alike on the English page, a skill folder's `zh` translation behind its source shown and marked over a current `zh-Hans` one, and a state folder's current `zh` one shown over the skill folder's in the card, the details and the file alike, a file marked by its own language, an atlas reporting no language marking nothing, and a search for a step's text in either language finding the skill [[skill-atlas-29](#skill-atlas-29)];
 - the language control showing the shown language's short name and opening a menu of each language in its own name, the shown one checked, worked by the keyboard and closed by Escape and by a click elsewhere [[skill-atlas-29](#skill-atlas-29)], and a language chosen from it applied with the open skill, the selection and the filter kept, and standing after a reload [[skill-atlas-30](#skill-atlas-30)].
