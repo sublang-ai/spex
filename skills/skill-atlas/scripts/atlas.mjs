@@ -4,7 +4,7 @@
 
 // Skill Atlas command line: scan installed agent skills, serve the viewer,
 // export a standalone copy, pin translations to their sources, print files'
-// digests, or read and write the stored workflows.
+// digests, or read and write the stored pipelines.
 // See ../SKILL.md and ../references/data-model.md.
 
 import fs from 'node:fs';
@@ -16,7 +16,7 @@ import { scan } from './lib/scan.mjs';
 import { summarize } from './lib/summary.mjs';
 import { startServer } from './lib/server.mjs';
 import { writeExport } from './lib/export.mjs';
-import { BUNDLED, viewerConfig, readWorkflowsState, readLocales, saveWorkflows, LockBusyError } from './lib/state.mjs';
+import { BUNDLED, viewerConfig, readPipelinesState, readLocales, savePipelines, LockBusyError } from './lib/state.mjs';
 import { canonicalTag, matchingTag, sha256Hex } from './lib/translations.mjs';
 import { pin } from './lib/pin.mjs';
 import { UsageError, warn } from './lib/log.mjs';
@@ -56,19 +56,19 @@ Commands:
                        file's bytes, as an annotation's "source" and a translation's record
                        hold it; every file read is printed, and the command exits 1
                        naming on stderr each file that cannot be read
-  workflows [--state <dir>]
-                       Print the stored workflows.json as one JSON object
+  pipelines [--state <dir>]
+                       Print the stored pipelines.json as one JSON object
                        { "etag": "<version>", "doc": { ... } }: an empty document and the
                        etag "none" where there is no file; exit 1 naming the file where
-                       it cannot be read as a workflows document
-  workflows --put <file|-> --if-match <etag> [--state <dir>]
-                       Write the workflows document in <file> (- reads stdin) where it
-                       has the workflows shape and the stored file is still the version
-                       <etag> names (as \`workflows\` printed it), under the lock the
+                       it cannot be read as a pipelines document
+  pipelines --put <file|-> --if-match <etag> [--state <dir>]
+                       Write the pipelines document in <file> (- reads stdin) where it
+                       has the pipelines shape and the stored file is still the version
+                       <etag> names (as \`pipelines\` printed it), under the lock the
                        server's save holds; print the new etag. Exit 1, the stored file
                        standing, where it changed since it was read (read it again,
                        apply the change, put again), the document is invalid or over
-                       1 MiB, or the stored file cannot be read as a workflows document
+                       1 MiB, or the stored file cannot be read as a pipelines document
 
 Options:
   --cwd <dir>          Project to scan (default: the current folder)
@@ -77,7 +77,7 @@ Options:
                        and --root's; repeatable
   --no-user            Skip skill folders in the home folder
   --no-plugins         Skip Claude Code plugin skills
-  --state <dir>        Folder of workflows.json, annotations.json and translations/
+  --state <dir>        Folder of pipelines.json, annotations.json and translations/
                        (default: ~/.skill-atlas)
   --rules <file>       Tag rules (default: the bundled references/tag-rules.json)
   --out <file>         Output file (scan, export)
@@ -88,12 +88,12 @@ Options:
   --lang <tag>         serve, export: the language the page opens in until the reader picks
                        one, such as en-US or zh-CN (default: the browser's)
   --check              pin: check the recorded digests instead of writing them
-  --put <file|->       workflows: the document to write
-  --if-match <etag>    workflows: the version --put writes over
+  --put <file|->       pipelines: the document to write
+  --if-match <etag>    pipelines: the version --put writes over
   --help               Show this help
 `;
 
-const COMMANDS = new Set(['scan', 'serve', 'export', 'pin', 'digest', 'workflows']);
+const COMMANDS = new Set(['scan', 'serve', 'export', 'pin', 'digest', 'pipelines']);
 const VALUE_OPTIONS = new Set(['--cwd', '--root', '--agent', '--state', '--rules', '--out', '--port', '--viewer', '--lang', '--put', '--if-match']);
 const FLAG_OPTIONS = new Set(['--no-user', '--no-plugins', '--summary', '--no-open', '--check', '--help', '-h']);
 const REPEATABLE = new Set(['--root', '--agent']);
@@ -120,7 +120,7 @@ function parseArgs(argv) {
     } else if (arg.startsWith('-')) {
       throw new UsageError(`unknown option ${arg}; see --help`);
     } else if (!opts.command) {
-      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve, export, pin, digest or workflows (see --help)`);
+      if (!COMMANDS.has(arg)) throw new UsageError(`unknown command "${arg}"; use scan, serve, export, pin, digest or pipelines (see --help)`);
       opts.command = arg;
     } else if (opts.command === 'pin' || opts.command === 'digest') {
       opts.paths.push(arg);
@@ -187,18 +187,18 @@ function digest(files) {
   if (failures.length) throw new UsageError(`cannot read ${failures.join('; ')}`);
 }
 
-// `workflows`: print the stored document with its version, or with --put write
-// one under the conditions of the server's save (saveWorkflows).
-function workflows(opts) {
+// `pipelines`: print the stored document with its version, or with --put write
+// one under the conditions of the server's save (savePipelines).
+function pipelines(opts) {
   const stateDir = path.resolve(opts.state ?? path.join(os.homedir(), '.skill-atlas'));
   if (opts.put === undefined) {
     if (opts['if-match'] !== undefined) throw new UsageError('--if-match goes with --put <file|->; see --help');
-    const cur = readWorkflowsState(stateDir);
+    const cur = readPipelinesState(stateDir);
     if (!cur.valid) throw new UsageError(`${cur.error}; fix the file, or move it aside to start fresh`);
     process.stdout.write(JSON.stringify({ etag: cur.etag, doc: cur.doc }, null, 2) + '\n');
     return;
   }
-  if (opts['if-match'] === undefined) throw new UsageError('--put needs --if-match <etag>, the etag `workflows` printed when you read the document');
+  if (opts['if-match'] === undefined) throw new UsageError('--put needs --if-match <etag>, the etag `pipelines` printed when you read the document');
   // The etag as printed, its quotes included; one given without them is quoted.
   const ifMatch = /^".*"$/.test(opts['if-match']) ? opts['if-match'] : `"${opts['if-match']}"`;
   let body;
@@ -209,16 +209,16 @@ function workflows(opts) {
   }
   let answer;
   try {
-    answer = saveWorkflows(stateDir, body, { ifMatch });
+    answer = savePipelines(stateDir, body, { ifMatch });
   } catch (err) {
     if (err instanceof LockBusyError) throw new UsageError(err.message);
-    throw new UsageError(`cannot save workflows.json in ${stateDir}: ${err.message}`);
+    throw new UsageError(`cannot save pipelines.json in ${stateDir}: ${err.message}`);
   }
   // The answer's status alone says whether it was written: a stored document may hold an "error" field of its own.
   if (answer.status !== 200) {
     const { error, message, path: file } = answer.value;
-    if (error === 'changed') throw new UsageError(`${path.join(stateDir, 'workflows.json')} changed since it was read; read it again with \`workflows\`, apply the change and put it again`);
-    if (error === 'invalid-workflows') throw new UsageError(`${message.replace(/; send X-Skill-Atlas-Replace-Invalid.*$/, '')}; fix ${file}, or move it aside to start fresh`);
+    if (error === 'changed') throw new UsageError(`${path.join(stateDir, 'pipelines.json')} changed since it was read; read it again with \`pipelines\`, apply the change and put it again`);
+    if (error === 'invalid-pipelines') throw new UsageError(`${message.replace(/; send X-Skill-Atlas-Replace-Invalid.*$/, '')}; fix ${file}, or move it aside to start fresh`);
     throw new UsageError(message ?? `the save was refused (${answer.status})`);
   }
   process.stdout.write(`${answer.etag}\n`);
@@ -232,8 +232,8 @@ async function main(argv) {
     return;
   }
   if (opts.check && opts.command !== 'pin') throw new UsageError('--check is an option of pin; see --help');
-  for (const o of ['put', 'if-match']) if (opts[o] !== undefined && opts.command !== 'workflows') throw new UsageError(`--${o} is an option of workflows; see --help`);
-  if (opts.command === 'workflows') return workflows(opts);
+  for (const o of ['put', 'if-match']) if (opts[o] !== undefined && opts.command !== 'pipelines') throw new UsageError(`--${o} is an option of pipelines; see --help`);
+  if (opts.command === 'pipelines') return pipelines(opts);
   if (opts.command === 'digest') return digest(opts.paths);
   const sopts = scanOptions(opts);
   const viewerFile = opts.viewer ? path.resolve(opts.viewer) : BUNDLED.viewer;
@@ -265,11 +265,11 @@ async function main(argv) {
     if (!opts.out) throw new UsageError('export needs --out <file.html>');
     const atlas = scan(sopts);
     // Only a valid stored document is embedded; an invalid one stays on disk untouched.
-    const stored = readWorkflowsState(sopts.stateDir);
-    if (!stored.valid) warn(`${stored.error}; exporting with no workflows`);
-    const workflows = stored.valid ? stored.doc : { version: 1, active: null, workflows: [] };
+    const stored = readPipelinesState(sopts.stateDir);
+    if (!stored.valid) warn(`${stored.error}; exporting with no pipelines`);
+    const pipelines = stored.valid ? stored.doc : { version: 1, active: null, pipelines: [] };
     const config = viewerConfig({ stateDir: sopts.stateDir, isStatic: true, lang, rulesFile: sopts.rulesFile });
-    const file = writeExport(viewerFile, opts.out, { atlas, workflows, config });
+    const file = writeExport(viewerFile, opts.out, { atlas, pipelines, config });
     process.stderr.write(`skill-atlas: wrote ${file}\n`);
     return;
   }

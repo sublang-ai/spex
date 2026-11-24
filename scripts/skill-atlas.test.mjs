@@ -100,7 +100,7 @@ More detail.
 Present findings.
 `);
 
-  writeSkill(path.join(CLAUDE, 'beta'), `${fm('beta', 'Beta has a workflow list.')}
+  writeSkill(path.join(CLAUDE, 'beta'), `${fm('beta', 'Beta has a pipeline list.')}
 ## Common issues
 
 1. Stale commands
@@ -320,7 +320,7 @@ Invoke the \`code\` skill. Ask the user which branch to use.
   stateTrans('alpha', 'SKILL.zh-CN.md', `${fm('alpha', '\u963F\u5C14\u6CD5\u3002')}## \u7B2C 1 \u9636\u6BB5 \u2014 \u6536\u96C6\n\n\u8BFB\u914D\u7F6E\u3002\n\n## \u7B2C 2 \u9636\u6BB5 \u2014 \u6784\u5EFA\n\n\u8FD0\u884C\u3002\n`);
   fs.writeFileSync(path.join(CLAUDE, 'gamma', 'SKILL.zh-CN.md'), `${fm('gamma', '\u4F3D\u9A6C\u3002')}## \u5DE5\u4F5C\u6D41\u7A0B\n\n1. \u4E00\u3002\n2. \u4E8C\u3002\n3. \u4E09\u3002\n`);
   // A translation edited apart from its source: the source's digest matches, its own does not.
-  fs.writeFileSync(path.join(CLAUDE, 'zhlist', 'SKILL.en-US.md'), `${fm('zhlist', 'A skill with a workflow list.')}${mdRecord(sha(path.join(CLAUDE, 'zhlist', 'SKILL.md')), '1'.repeat(64))}
+  fs.writeFileSync(path.join(CLAUDE, 'zhlist', 'SKILL.en-US.md'), `${fm('zhlist', 'A skill with a pipeline list.')}${mdRecord(sha(path.join(CLAUDE, 'zhlist', 'SKILL.md')), '1'.repeat(64))}
 ## Workflow
 
 1. **Gather input**: everything.
@@ -611,7 +611,7 @@ describe('scan (skill-atlas-24)', () => {
     assert.equal(skillOf(atlas, 'delta').translations['zh-CN'].edited, false, 'one recording no own digest is not edited');
     const en = skillOf(atlas, 'zhlist').translations['en-US'];
     assert.deepEqual([en.stale, en.edited], [false, true], 'a translation edited apart from its source is marked');
-    assert.equal(en.description, 'A skill with a workflow list.');
+    assert.equal(en.description, 'A skill with a pipeline list.');
     assert.deepEqual(skillOf(atlas, 'beta').translations, {}, 'a skill with none has an empty map');
 
     // A translation is no file, no skill, and adds no link and no tag.
@@ -1312,7 +1312,7 @@ test('an id is a function of its own folder: distinct folders never share one, a
   const state = path.join(tmp, 'distinct-ids-state');
   const idOf = (atlas, dir) => atlas.roots.find((r) => r.path === path.join(dir, '.agents', 'skills'))?.id;
   // The reviewer's case: a skill below ui-kit, qualified by its root's id, and
-  // saved in a workflow, keeps its id when an empty packages/ui/kit appears.
+  // saved in a pipeline, keeps its id when an empty packages/ui/kit appears.
   writeSkill(path.join(repo, '.agents', 'skills', 'kit-tool'), `${fm('kit-tool', 'At the root.')}\nText.\n`);
   writeSkill(path.join(dash, '.agents', 'skills', 'kit-tool'), `${fm('kit-tool', 'In ui-kit.')}\nText.\n`);
   const before = scanJson(dash, [], state).atlas;
@@ -1881,59 +1881,90 @@ test('translations: the skill folder\'s first, the state folder\'s where only th
   assert.deepEqual(staleFiles('both-behind').sort(), ['SKILL.zh-CN.md', 'references/a.zh-CN.md']);
 });
 
-test('workflows reads the stored document with its version and --put writes it as the server\'s save does (skill-atlas-31)', () => {
-  const state = path.join(tmp, 'cli-workflows-state');
-  const wf = (name) => JSON.stringify({ version: 1, active: null, workflows: [{ id: 'w', name, phases: [{ id: 'p', name: 'P', skills: ['alpha'] }] }] });
-  const file = path.join(tmp, 'cli-workflows.json');
+test('pipelines reads the stored document with its version and --put writes it as the server\'s save does (skill-atlas-31)', () => {
+  const state = path.join(tmp, 'cli-pipelines-state');
+  const wf = (name) => JSON.stringify({ version: 1, active: null, pipelines: [{ id: 'w', name, phases: [{ id: 'p', name: 'P', skills: ['alpha'] }] }] });
+  const file = path.join(tmp, 'cli-pipelines.json');
   const read = () => {
-    const r = run(['workflows', '--state', state]);
+    const r = run(['pipelines', '--state', state]);
     assert.equal(r.status, 0, r.stderr);
     return JSON.parse(r.stdout);
   };
   const empty = read();
-  assert.deepEqual(empty, { etag: '"none"', doc: { version: 1, active: null, workflows: [] } }, 'an empty document where there is no file');
+  assert.deepEqual(empty, { etag: '"none"', doc: { version: 1, active: null, pipelines: [] } }, 'an empty document where there is no file');
   fs.writeFileSync(file, wf('First'));
-  const put = run(['workflows', '--put', file, '--if-match', empty.etag, '--state', state]);
+  const put = run(['pipelines', '--put', file, '--if-match', empty.etag, '--state', state]);
   assert.equal(put.status, 0, put.stderr);
-  const stored = fs.readFileSync(path.join(state, 'workflows.json'));
+  const stored = fs.readFileSync(path.join(state, 'pipelines.json'));
   assert.equal(put.stdout.trim(), `"${crypto.createHash('sha256').update(stored).digest('hex')}"`, 'the new etag');
   assert.deepEqual(read(), { etag: put.stdout.trim(), doc: JSON.parse(stored.toString('utf8')) });
-  const stale = spawnSync(process.execPath, [CLI, 'workflows', '--put', '-', '--if-match', empty.etag, '--state', state], { input: wf('Stale'), encoding: 'utf8', timeout: CLI_TIMEOUT_MS });
+  const stale = spawnSync(process.execPath, [CLI, 'pipelines', '--put', '-', '--if-match', empty.etag, '--state', state], { input: wf('Stale'), encoding: 'utf8', timeout: CLI_TIMEOUT_MS });
   assert.notEqual(stale.status, 0);
   assert.match(stale.stderr, /changed since it was read; read it again/);
-  fs.writeFileSync(file, JSON.stringify({ version: 1, active: 'nope', workflows: [] }));
-  const invalid = run(['workflows', '--put', file, '--if-match', put.stdout.trim(), '--state', state]);
+  fs.writeFileSync(file, JSON.stringify({ version: 1, active: 'nope', pipelines: [] }));
+  const invalid = run(['pipelines', '--put', file, '--if-match', put.stdout.trim(), '--state', state]);
   assert.notEqual(invalid.status, 0);
-  assert.match(invalid.stderr, /invalid workflows document/);
-  assert.deepEqual(fs.readFileSync(path.join(state, 'workflows.json')), stored, 'a refused put leaves the stored file');
-  fs.writeFileSync(path.join(state, 'workflows.json.lock'), '{}');
+  assert.match(invalid.stderr, /invalid pipelines document/);
+  assert.deepEqual(fs.readFileSync(path.join(state, 'pipelines.json')), stored, 'a refused put leaves the stored file');
+  fs.writeFileSync(path.join(state, 'pipelines.json.lock'), '{}');
   try {
     fs.writeFileSync(file, wf('Locked'));
-    const locked = run(['workflows', '--put', file, '--if-match', put.stdout.trim().slice(1, -1), '--state', state]);
+    const locked = run(['pipelines', '--put', file, '--if-match', put.stdout.trim().slice(1, -1), '--state', state]);
     assert.notEqual(locked.status, 0, 'a held lock refuses the put, as it does a server\'s save');
     assert.match(locked.stderr, /is held/);
   } finally {
-    fs.rmSync(path.join(state, 'workflows.json.lock'));
+    fs.rmSync(path.join(state, 'pipelines.json.lock'));
   }
   // A document holding a field "error" of its own saves: the outcome is the save's, never a field of the document.
   fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(wf('Errorish')), error: 'changed' }));
-  const errorish = run(['workflows', '--put', file, '--if-match', put.stdout.trim(), '--state', state]);
+  const errorish = run(['pipelines', '--put', file, '--if-match', put.stdout.trim(), '--state', state]);
   assert.equal(errorish.status, 0, errorish.stderr);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(state, 'workflows.json'), 'utf8')).error, 'changed', 'written');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(state, 'pipelines.json'), 'utf8')).error, 'changed', 'written');
   const after = read();
   assert.equal(errorish.stdout.trim(), after.etag, 'the new etag printed');
   // A document over the limit the page's save takes is refused alike, the limit named.
   const big = JSON.parse(wf('Big'));
-  big.workflows[0].phases[0].note = 'x'.repeat(1024 * 1024);
+  big.pipelines[0].phases[0].note = 'x'.repeat(1024 * 1024);
   fs.writeFileSync(file, JSON.stringify(big));
-  const tooLarge = run(['workflows', '--put', file, '--if-match', after.etag, '--state', state]);
+  const tooLarge = run(['pipelines', '--put', file, '--if-match', after.etag, '--state', state]);
   assert.notEqual(tooLarge.status, 0);
   assert.match(tooLarge.stderr, /over the 1 MiB limit/);
   assert.equal(read().etag, after.etag, 'the stored file stands');
-  fs.writeFileSync(path.join(state, 'workflows.json'), '{ broken');
-  const broken = run(['workflows', '--state', state]);
+  fs.writeFileSync(path.join(state, 'pipelines.json'), '{ broken');
+  const broken = run(['pipelines', '--state', state]);
   assert.notEqual(broken.status, 0);
-  assert.ok(broken.stderr.includes(path.join(state, 'workflows.json')), 'names the file');
+  assert.ok(broken.stderr.includes(path.join(state, 'pipelines.json')), 'names the file');
+});
+
+test('a workflows.json an earlier atlas kept is read as the stored pipelines until the first save (skill-atlas-40)', () => {
+  const state = path.join(tmp, 'cli-legacy-state');
+  fs.mkdirSync(state, { recursive: true });
+  const legacy = path.join(state, 'workflows.json');
+  const pipelines = [{ id: 'w', name: 'Delivery', phases: [{ id: 'p', name: 'Build', note: '', skills: ['alpha'] }] }];
+  fs.writeFileSync(legacy, JSON.stringify({ version: 1, active: 'w', workflows: pipelines }));
+  const legacyBytes = fs.readFileSync(legacy);
+  const read = () => {
+    const r = run(['pipelines', '--state', state]);
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout);
+  };
+  const first = read();
+  assert.deepEqual(first, { etag: '"none"', doc: { version: 1, active: 'w', pipelines } }, 'its pipelines, as the document of no file');
+  const file = path.join(tmp, 'cli-legacy-put.json');
+  fs.writeFileSync(file, JSON.stringify(first.doc));
+  const put = run(['pipelines', '--put', file, '--if-match', first.etag, '--state', state]);
+  assert.equal(put.status, 0, put.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(state, 'pipelines.json'), 'utf8')).pipelines, pipelines, 'the first put writes them to pipelines.json');
+  assert.deepEqual(fs.readFileSync(legacy), legacyBytes, 'workflows.json is never written');
+  assert.equal(read().etag, put.stdout.trim(), 'pipelines.json is read from then on');
+
+  const unreadable = path.join(tmp, 'cli-legacy-unreadable');
+  fs.mkdirSync(unreadable, { recursive: true });
+  fs.writeFileSync(path.join(unreadable, 'workflows.json'), '{ broken');
+  const r = run(['pipelines', '--state', unreadable]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), { etag: '"none"', doc: { version: 1, active: null, pipelines: [] } }, 'one that cannot be read gives no document');
+  assert.equal(fs.readFileSync(path.join(unreadable, 'workflows.json'), 'utf8'), '{ broken', 'and is left as it is');
 });
 
 test('a very long line is scanned in bounded time', () => {
@@ -2390,10 +2421,10 @@ test('digest prints every readable file\'s line whole through a pipe before fail
   assert.ok(r.stderr.includes(missing), 'the unreadable file named on stderr');
 });
 
-// A workflows document of phases with no note, as large as fits in `max` bytes sent compact.
-function notelessWorkflows(max) {
+// A pipelines document of phases with no note, as large as fits in `max` bytes sent compact.
+function notelessPipelines(max) {
   const phases = [];
-  const doc = { version: 1, active: null, workflows: [{ id: 'w', name: 'W', phases }] };
+  const doc = { version: 1, active: null, pipelines: [{ id: 'w', name: 'W', phases }] };
   let size = JSON.stringify(doc).length;
   for (;;) {
     const phase = { id: `p${phases.length}`, name: '', skills: [] };
@@ -2404,24 +2435,24 @@ function notelessWorkflows(max) {
   }
 }
 
-test('a workflows document over the limit as stored is refused, and a stored one over it reported (skill-atlas-31, skill-atlas-12)', () => {
-  const state = path.join(tmp, 'cli-workflows-size-state');
-  const file = path.join(tmp, 'cli-workflows-size.json');
-  const read = () => run(['workflows', '--state', state]);
+test('a pipelines document over the limit as stored is refused, and a stored one over it reported (skill-atlas-31, skill-atlas-12)', () => {
+  const state = path.join(tmp, 'cli-pipelines-size-state');
+  const file = path.join(tmp, 'cli-pipelines-size.json');
+  const read = () => run(['pipelines', '--state', state]);
   // Phases with no note, sent compact just under 1 MiB: stored with every note filled in and indented, it is over.
-  const doc = notelessWorkflows(1024 * 1024);
+  const doc = notelessPipelines(1024 * 1024);
   fs.writeFileSync(file, JSON.stringify(doc));
   assert.ok(fs.statSync(file).size <= 1024 * 1024);
-  const put = run(['workflows', '--put', file, '--if-match', 'none', '--state', state]);
+  const put = run(['pipelines', '--put', file, '--if-match', 'none', '--state', state]);
   assert.notEqual(put.status, 0, 'refused, so no document read can be over the limit when saved again');
   assert.match(put.stderr, /bytes as stored, over the 1 MiB limit/);
-  assert.ok(!fs.existsSync(path.join(state, 'workflows.json')), 'nothing written');
+  assert.ok(!fs.existsSync(path.join(state, 'pipelines.json')), 'nothing written');
   // A valid stored file over the limit as a save stores it is reported, never offered for edits no save takes.
   fs.mkdirSync(state, { recursive: true });
-  fs.writeFileSync(path.join(state, 'workflows.json'), JSON.stringify(doc));
+  fs.writeFileSync(path.join(state, 'pipelines.json'), JSON.stringify(doc));
   const big = read();
   assert.notEqual(big.status, 0);
-  assert.ok(big.stderr.includes(path.join(state, 'workflows.json')) && /over the 1 MiB limit/.test(big.stderr), big.stderr);
+  assert.ok(big.stderr.includes(path.join(state, 'pipelines.json')) && /over the 1 MiB limit/.test(big.stderr), big.stderr);
 });
 
 test('pin passes over a file its source links to, refuses it named, and writes nothing into it (skill-atlas-28)', (t) => {
@@ -2784,15 +2815,15 @@ describe('serve (skill-atlas-25)', () => {
     assert.equal(cfg.stateDir, state);
   });
 
-  const WF = () => path.join(state, 'workflows.json');
-  const wfDoc = (name) => ({ version: 1, active: 'w', workflows: [{ id: 'w', name, phases: [{ id: 'p1', name: 'One', skills: ['alpha', 'gone'] }] }] });
-  const put = (doc, extra = {}) => request({ method: 'PUT', pathname: '/api/workflows', headers: { ...json, ...extra }, body: typeof doc === 'string' ? doc : JSON.stringify(doc) });
+  const WF = () => path.join(state, 'pipelines.json');
+  const wfDoc = (name) => ({ version: 1, active: 'w', pipelines: [{ id: 'w', name, phases: [{ id: 'p1', name: 'One', skills: ['alpha', 'gone'] }] }] });
+  const put = (doc, extra = {}) => request({ method: 'PUT', pathname: '/api/pipelines', headers: { ...json, ...extra }, body: typeof doc === 'string' ? doc : JSON.stringify(doc) });
 
-  test('saves workflows only against the version last read', async () => {
-    const first = await request({ pathname: '/api/workflows' });
+  test('saves pipelines only against the version last read', async () => {
+    const first = await request({ pathname: '/api/pipelines' });
     assert.equal(first.status, 200);
     assert.equal(first.headers.etag, '"none"', 'no stored file');
-    assert.deepEqual(JSON.parse(first.text), { version: 1, active: null, workflows: [] });
+    assert.deepEqual(JSON.parse(first.text), { version: 1, active: null, pipelines: [] });
 
     assert.equal((await put(wfDoc('W'))).status, 428, 'a save without If-Match');
     assert.ok(!fs.existsSync(WF()));
@@ -2802,11 +2833,11 @@ describe('serve (skill-atlas-25)', () => {
     const bytes = fs.readFileSync(WF());
     const stored = JSON.parse(bytes.toString('utf8'));
     assert.equal(saved.headers.etag, `"${crypto.createHash('sha256').update(bytes).digest('hex')}"`);
-    assert.equal(stored.workflows[0].phases[0].note, '', 'a missing note is stored as ""');
-    assert.deepEqual(stored.workflows[0].phases[0].skills, ['alpha', 'gone'], 'an id with no skill is kept');
+    assert.equal(stored.pipelines[0].phases[0].note, '', 'a missing note is stored as ""');
+    assert.deepEqual(stored.pipelines[0].phases[0].skills, ['alpha', 'gone'], 'an id with no skill is kept');
     if (process.platform !== 'win32') assert.equal(fs.statSync(state).mode & 0o777, 0o700);
 
-    const again = await request({ pathname: '/api/workflows' });
+    const again = await request({ pathname: '/api/pipelines' });
     assert.deepEqual(JSON.parse(again.text), stored);
     assert.equal(again.headers.etag, saved.headers.etag);
 
@@ -2817,10 +2848,10 @@ describe('serve (skill-atlas-25)', () => {
     assert.deepEqual(fs.readFileSync(WF()), bytes, 'nothing written');
 
     const ifMatch = { 'If-Match': saved.headers.etag };
-    const bad = await put({ version: 1, active: 'nope', workflows: [] }, ifMatch);
+    const bad = await put({ version: 1, active: 'nope', pipelines: [] }, ifMatch);
     assert.equal(bad.status, 400);
     assert.match(JSON.parse(bad.text).message, /active/);
-    assert.equal((await put({ version: 2, active: null, workflows: [] }, ifMatch)).status, 400, 'another version');
+    assert.equal((await put({ version: 2, active: null, pipelines: [] }, ifMatch)).status, 400, 'another version');
     assert.equal((await put('{ nope', ifMatch)).status, 400);
     assert.deepEqual(fs.readFileSync(WF()), bytes, 'a refused document leaves the stored one');
     assert.equal((await put(wfDoc('W'), { 'X-Skill-Atlas-Replace-Invalid': '1' })).status, 409, 'a valid file is not replaced as invalid');
@@ -2829,28 +2860,28 @@ describe('serve (skill-atlas-25)', () => {
   test('reports an unreadable stored file and replaces it only on request, keeping it', async () => {
     fs.mkdirSync(state, { recursive: true });
     fs.writeFileSync(WF(), '{ broken');
-    fs.writeFileSync(path.join(state, 'workflows.invalid-1.json'), 'an earlier one');
-    const got = await request({ pathname: '/api/workflows' });
+    fs.writeFileSync(path.join(state, 'pipelines.invalid-1.json'), 'an earlier one');
+    const got = await request({ pathname: '/api/pipelines' });
     assert.equal(got.status, 409);
     const body = JSON.parse(got.text);
-    assert.equal(body.error, 'invalid-workflows');
+    assert.equal(body.error, 'invalid-pipelines');
     assert.equal(body.path, WF());
     assert.equal((await put(wfDoc('W'), { 'If-Match': '"none"' })).status, 409, 'an ordinary save does not overwrite it');
     assert.equal(fs.readFileSync(WF(), 'utf8'), '{ broken');
 
-    fs.writeFileSync(WF(), JSON.stringify({ version: 1, active: null, workflows: 'nope' }));
-    assert.equal((await request({ pathname: '/api/workflows' })).status, 409, 'a file of the wrong shape is invalid too');
+    fs.writeFileSync(WF(), JSON.stringify({ version: 1, active: null, pipelines: 'nope' }));
+    assert.equal((await request({ pathname: '/api/pipelines' })).status, 409, 'a file of the wrong shape is invalid too');
 
     const replaced = await put(wfDoc('Fresh'), { 'X-Skill-Atlas-Replace-Invalid': '1' });
     assert.equal(replaced.status, 200, replaced.text);
-    assert.equal(JSON.parse(fs.readFileSync(WF(), 'utf8')).workflows[0].name, 'Fresh');
-    assert.equal(fs.readFileSync(path.join(state, 'workflows.invalid-1.json'), 'utf8'), 'an earlier one');
-    assert.match(fs.readFileSync(path.join(state, 'workflows.invalid-2.json'), 'utf8'), /"nope"/, 'the invalid file kept beside it');
-    assert.equal(replaced.headers.etag, (await request({ pathname: '/api/workflows' })).headers.etag);
+    assert.equal(JSON.parse(fs.readFileSync(WF(), 'utf8')).pipelines[0].name, 'Fresh');
+    assert.equal(fs.readFileSync(path.join(state, 'pipelines.invalid-1.json'), 'utf8'), 'an earlier one');
+    assert.match(fs.readFileSync(path.join(state, 'pipelines.invalid-2.json'), 'utf8'), /"nope"/, 'the invalid file kept beside it');
+    assert.equal(replaced.headers.etag, (await request({ pathname: '/api/pipelines' })).headers.etag);
   });
 
   test('returns edited presets and view settings on the next read', async () => {
-    const presetsFile = path.join(copy, 'references', 'workflow-presets.json');
+    const presetsFile = path.join(copy, 'references', 'pipeline-presets.json');
     const viewFile = path.join(copy, 'references', 'view-settings.json');
     const presets = JSON.parse(fs.readFileSync(presetsFile, 'utf8'));
     presets.presets.push({ id: 'mine', name: 'Mine', description: 'Added.', phases: [{ name: 'Only', keywords: [] }] });
@@ -2867,7 +2898,7 @@ describe('serve (skill-atlas-25)', () => {
     const refs = path.join(copy, 'references');
     const write = (file, doc) => fs.writeFileSync(file, JSON.stringify(doc, null, 2));
     write(path.join(refs, 'tag-rules.zh-CN.json'), { version: 1, tags: [{ id: 'tool.shell', category: 'tool', label: 'SHELL-ZH', patterns: ['ignored'] }] });
-    write(path.join(refs, 'workflow-presets.zh-CN.json'), { version: 1, presets: [{ id: 'sdlc', name: 'S-ZH', description: 'D-ZH', phases: [{ name: 'P1', keywords: ['x'] }, { name: 'P2' }] }] });
+    write(path.join(refs, 'pipeline-presets.zh-CN.json'), { version: 1, presets: [{ id: 'sdlc', name: 'S-ZH', description: 'D-ZH', phases: [{ name: 'P1', keywords: ['x'] }, { name: 'P2' }] }] });
     write(path.join(refs, 'view-settings.zh-CN.json'), { version: 1, title: 'T-ZH', categories: { input: { label: 'I-ZH', color: '#000' } } });
     fs.mkdirSync(path.join(copy, 'assets', 'locales'), { recursive: true });
     const catalog = path.join(copy, 'assets', 'locales', 'zh-CN.json');
@@ -3021,11 +3052,11 @@ describe('serve (skill-atlas-25)', () => {
   test('refuses a foreign Host and unmarked mutations', async () => {
     const foreign = await request({ pathname: '/api/atlas', headers: { Host: `evil.example:${port}` } });
     assert.equal(foreign.status, 403);
-    const noHeader = await request({ method: 'PUT', pathname: '/api/workflows', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const noHeader = await request({ method: 'PUT', pathname: '/api/pipelines', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(noHeader.status, 403);
     const wrongType = await request({ method: 'POST', pathname: '/api/rescan', headers: { 'X-Skill-Atlas': '1', 'Content-Type': 'text/plain' }, body: '{}' });
     assert.equal(wrongType.status, 415);
-    const huge = await request({ method: 'PUT', pathname: '/api/workflows', headers: json, body: 'x'.repeat(1024 * 1024 + 1) });
+    const huge = await request({ method: 'PUT', pathname: '/api/pipelines', headers: json, body: 'x'.repeat(1024 * 1024 + 1) });
     assert.equal(huge.status, 413);
   });
 
@@ -3091,10 +3122,10 @@ describe('serve (skill-atlas-25)', () => {
   });
 
   test('refuses a document over the limit as stored, so a document read can always be saved again (skill-atlas-12)', async () => {
-    const cur = await request({ pathname: '/api/workflows' });
+    const cur = await request({ pathname: '/api/pipelines' });
     assert.equal(cur.status, 200, cur.text);
-    const doc = notelessWorkflows(1024 * 1024);
-    const { phases } = doc.workflows[0];
+    const doc = notelessPipelines(1024 * 1024);
+    const { phases } = doc.pipelines[0];
     const before = fs.existsSync(WF()) ? fs.readFileSync(WF()) : null;
     const big = await put(doc, { 'If-Match': cur.headers.etag });
     assert.equal(big.status, 413, 'a body under 1 MiB whose stored form is over it');
@@ -3103,7 +3134,7 @@ describe('serve (skill-atlas-25)', () => {
     phases.length = Math.floor(phases.length / 4);
     const saved = await put(doc, { 'If-Match': cur.headers.etag });
     assert.equal(saved.status, 200, saved.text);
-    const read = await request({ pathname: '/api/workflows' });
+    const read = await request({ pathname: '/api/pipelines' });
     assert.equal((await put(read.text, { 'If-Match': read.headers.etag })).status, 200, 'the document as read saves again');
   });
 
@@ -3115,40 +3146,40 @@ describe('serve (skill-atlas-25)', () => {
       assert.ok(at >= 0, `the page defines ${head.trim()}`);
       return html.slice(at, html.indexOf('\n', at + 1));
     });
-    const code = /\n {2}function normalizeWorkflows\(doc\) \{[\s\S]*?\n {2}\}\n/.exec(html);
-    assert.ok(code, 'the page defines normalizeWorkflows');
-    const normalize = new Function(`${helpers.join('')}${code[0]}; return normalizeWorkflows;`)();
+    const code = /\n {2}function normalizePipelines\(doc\) \{[\s\S]*?\n {2}\}\n/.exec(html);
+    assert.ok(code, 'the page defines normalizePipelines');
+    const normalize = new Function(`${helpers.join('')}${code[0]}; return normalizePipelines;`)();
     // As stored: each phase holding its note, two spaces deep.
-    const stored = (doc) => Buffer.byteLength(JSON.stringify({ ...doc, workflows: doc.workflows.map((w) => ({ ...w, phases: w.phases.map((ph) => ({ ...ph, note: ph.note ?? '' })) })) }, null, 2)) + 1;
+    const stored = (doc) => Buffer.byteLength(JSON.stringify({ ...doc, pipelines: doc.pipelines.map((w) => ({ ...w, phases: w.phases.map((ph) => ({ ...ph, note: ph.note ?? '' })) })) }, null, 2)) + 1;
     const limit = 1024 * 1024;
-    const doc = notelessWorkflows(limit);
+    const doc = notelessPipelines(limit);
     doc.extra = { kept: true };
-    doc.workflows[0].name = '';
-    doc.workflows.push({ id: 'second', name: 'Second', phases: [{ id: 'a', name: 'A', note: 'n', skills: ['x', 'x', ''] }], own: 1 });
-    const all = doc.workflows[0].phases;
+    doc.pipelines[0].name = '';
+    doc.pipelines.push({ id: 'second', name: 'Second', phases: [{ id: 'a', name: 'A', note: 'n', skills: ['x', 'x', ''] }], own: 1 });
+    const all = doc.pipelines[0].phases;
     let [lo, hi] = [0, all.length]; // the most phases whose document fits as stored
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
-      doc.workflows[0].phases = all.slice(0, mid);
+      doc.pipelines[0].phases = all.slice(0, mid);
       if (stored(doc) <= limit) lo = mid; else hi = mid - 1;
     }
-    doc.workflows[0].phases = all.slice(0, lo);
+    doc.pipelines[0].phases = all.slice(0, lo);
     assert.ok(stored(doc) > limit - 64, `a document at the limit as stored: ${stored(doc)}`);
-    const cur = await request({ pathname: '/api/workflows' });
+    const cur = await request({ pathname: '/api/pipelines' });
     const saved = await put(doc, { 'If-Match': cur.headers.etag });
     assert.equal(saved.status, 200, saved.text);
     for (const active of [null, 'second']) {
-      if (active) assert.equal((await put({ ...JSON.parse((await request({ pathname: '/api/workflows' })).text), active }, { 'If-Match': (await request({ pathname: '/api/workflows' })).headers.etag })).status, 200);
-      const read = await request({ pathname: '/api/workflows' });
+      if (active) assert.equal((await put({ ...JSON.parse((await request({ pathname: '/api/pipelines' })).text), active }, { 'If-Match': (await request({ pathname: '/api/pipelines' })).headers.etag })).status, 200);
+      const read = await request({ pathname: '/api/pipelines' });
       const body = JSON.stringify(normalize(JSON.parse(read.text)));
       assert.equal(body, read.text, `the page sends what it was served, active ${active}`);
       assert.equal((await put(body, { 'If-Match': read.headers.etag })).status, 200, 'and it saves again');
     }
     // A stored file whose phases hold no note, written there by hand, is served and kept so too.
-    fs.writeFileSync(path.join(state, 'workflows.json'), `${JSON.stringify({ ...doc, active: null }, null, 2)}\n`);
-    const read = await request({ pathname: '/api/workflows' });
+    fs.writeFileSync(path.join(state, 'pipelines.json'), `${JSON.stringify({ ...doc, active: null }, null, 2)}\n`);
+    const read = await request({ pathname: '/api/pipelines' });
     assert.equal(read.status, 200, read.text);
-    assert.ok(JSON.parse(read.text).workflows[0].phases.every((ph) => !('note' in ph)), 'served with no notes');
+    assert.ok(JSON.parse(read.text).pipelines[0].phases.every((ph) => !('note' in ph)), 'served with no notes');
     const body = JSON.stringify(normalize(JSON.parse(read.text)));
     assert.equal(body, read.text, 'the page sends a noteless document as it was served');
     assert.equal((await put(body, { 'If-Match': read.headers.etag })).status, 200, 'and it saves again');
@@ -3201,29 +3232,29 @@ describe('servers sharing a state folder (skill-atlas-25)', () => {
   });
   after(async () => { await Promise.all(servers.map((s) => s.stop())); });
   const json = { 'X-Skill-Atlas': '1', 'Content-Type': 'application/json' };
-  const doc = (name) => JSON.stringify({ version: 1, active: null, workflows: [{ id: 'w', name, phases: [] }] });
-  const put = (server, name, etag) => server.request({ method: 'PUT', pathname: '/api/workflows', headers: { ...json, 'If-Match': etag }, body: doc(name) });
-  const lock = () => path.join(state, 'workflows.json.lock');
+  const doc = (name) => JSON.stringify({ version: 1, active: null, pipelines: [{ id: 'w', name, phases: [] }] });
+  const put = (server, name, etag) => server.request({ method: 'PUT', pathname: '/api/pipelines', headers: { ...json, 'If-Match': etag }, body: doc(name) });
+  const lock = () => path.join(state, 'pipelines.json.lock');
 
   test('of two saves against one version, exactly one is written (skill-atlas-12)', async () => {
     for (let n = 0; n < 20; n++) {
-      const etag = (await servers[0].request({ pathname: '/api/workflows' })).headers.etag;
-      assert.equal((await servers[1].request({ pathname: '/api/workflows' })).headers.etag, etag, 'both read one version');
+      const etag = (await servers[0].request({ pathname: '/api/pipelines' })).headers.etag;
+      assert.equal((await servers[1].request({ pathname: '/api/pipelines' })).headers.etag, etag, 'both read one version');
       const answers = await Promise.all([put(servers[0], `A${n}`, etag), put(servers[1], `B${n}`, etag)]);
       assert.deepEqual(answers.map((a) => a.status).sort(), [200, 412], `round ${n}: ${answers.map((a) => a.text).join(' | ')}`);
       const won = answers.find((a) => a.status === 200);
-      assert.equal(won.headers.etag, `"${sha(path.join(state, 'workflows.json'))}"`, 'the stored file is the one saved');
+      assert.equal(won.headers.etag, `"${sha(path.join(state, 'pipelines.json'))}"`, 'the stored file is the one saved');
       assert.ok(!fs.existsSync(lock()), 'the lock is released');
     }
   });
 
   test('a lock left behind is broken once stale, and a held one answers 503 (skill-atlas-12)', async () => {
-    const etag = (await servers[0].request({ pathname: '/api/workflows' })).headers.etag;
+    const etag = (await servers[0].request({ pathname: '/api/pipelines' })).headers.etag;
     fs.writeFileSync(lock(), JSON.stringify({ pid: 999999, time: new Date().toISOString(), token: 'held' }));
     const busy = await put(servers[0], 'Busy', etag);
     assert.equal(busy.status, 503, busy.text);
     assert.match(JSON.parse(busy.text).message, /another skill-atlas server/);
-    assert.equal((await servers[0].request({ pathname: '/api/workflows' })).headers.etag, etag, 'nothing written');
+    assert.equal((await servers[0].request({ pathname: '/api/pipelines' })).headers.etag, etag, 'nothing written');
     const old = new Date(Date.now() - 60_000);
     fs.utimesSync(lock(), old, old);
     const saved = await put(servers[1], 'After a stale lock', etag);
@@ -3233,13 +3264,13 @@ describe('servers sharing a state folder (skill-atlas-25)', () => {
 
   test('of three saves against one version over a stale lock, exactly one is written (skill-atlas-12)', async () => {
     for (let n = 0; n < 40; n++) {
-      const etag = (await servers[0].request({ pathname: '/api/workflows' })).headers.etag;
+      const etag = (await servers[0].request({ pathname: '/api/pipelines' })).headers.etag;
       fs.writeFileSync(lock(), JSON.stringify({ pid: 999999, time: new Date().toISOString(), token: 'left' }));
       const old = new Date(Date.now() - 60_000);
       fs.utimesSync(lock(), old, old);
       const answers = await Promise.all(servers.map((server, i) => put(server, `S${n}.${i}`, etag)));
       assert.deepEqual(answers.map((a) => a.status).sort(), [200, 412, 412], `round ${n}: ${answers.map((a) => a.text).join(' | ')}`);
-      assert.equal(answers.find((a) => a.status === 200).headers.etag, `"${sha(path.join(state, 'workflows.json'))}"`, 'the stored file is the one saved');
+      assert.equal(answers.find((a) => a.status === 200).headers.etag, `"${sha(path.join(state, 'pipelines.json'))}"`, 'the stored file is the one saved');
       assert.deepEqual(fs.readdirSync(state).filter((f) => f.includes('.lock')), [], 'no lock or breaker left');
     }
   });
@@ -3261,7 +3292,7 @@ describe('export', () => {
     assert.ok(!m[1].includes('<'), 'no raw < inside the element');
     const data = JSON.parse(m[1]);
     assert.equal(data.config.static, true);
-    assert.deepEqual(data.workflows, { version: 1, active: null, workflows: [] });
+    assert.deepEqual(data.pipelines, { version: 1, active: null, pipelines: [] });
     assert.equal(skillOf(data.atlas, 'html').description, 'Breaks </script> tags');
     assert.equal(skillOf(data.atlas, 'dollars').description, 'Keeps $& and $$ and $1 and $\' as written', 'no replacement pattern rewrites the data');
   });
@@ -3301,19 +3332,19 @@ describe('export', () => {
     assert.ok(JSON.parse(m[1]).atlas.skills.some((s) => s.id === 'orchestrator'));
   });
 
-  test('embeds only a valid stored workflows file', () => {
+  test('embeds only a valid stored pipelines file', () => {
     const project = path.join(tmp, 'export-invalid');
     writeSkill(path.join(project, '.claude', 'skills', 'one'), `${fm('one', 'One.')}\nText.\n`);
     fs.mkdirSync(path.join(project, 'state'), { recursive: true });
-    fs.writeFileSync(path.join(project, 'state', 'workflows.json'), '{ broken');
+    fs.writeFileSync(path.join(project, 'state', 'pipelines.json'), '{ broken');
     const viewer = path.join(tmp, 'export-viewer.html');
     const out = path.join(tmp, 'export-invalid.html');
     const r = run(['export', '--out', out, '--cwd', project, '--no-user', '--no-plugins', '--state', path.join(project, 'state'), '--viewer', viewer]);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /workflows\.json is not valid JSON.*exporting with no workflows/);
+    assert.match(r.stderr, /pipelines\.json is not valid JSON.*exporting with no pipelines/);
     const m = /<script id="atlas-embedded" type="application\/json">([\s\S]*?)<\/script>/.exec(fs.readFileSync(out, 'utf8'));
-    assert.deepEqual(JSON.parse(m[1]).workflows, { version: 1, active: null, workflows: [] });
-    assert.equal(fs.readFileSync(path.join(project, 'state', 'workflows.json'), 'utf8'), '{ broken', 'the file stands');
+    assert.deepEqual(JSON.parse(m[1]).pipelines, { version: 1, active: null, pipelines: [] });
+    assert.equal(fs.readFileSync(path.join(project, 'state', 'pipelines.json'), 'utf8'), '{ broken', 'the file stands');
   });
 
   test('fails clearly when the viewer has no marker', () => {
@@ -3543,7 +3574,7 @@ describe('the repository\'s skills', () => {
 
   test('what the scan reads from code, review and decide (agent-skills-8)', () => {
     const [code, review, decide] = ['code', 'review', 'decide'].map(byName);
-    assert.ok(code && review && decide, 'the three workflow skills are reported');
+    assert.ok(code && review && decide, 'the three pipeline skills are reported');
 
     assert.deepEqual(code.steps.map((st) => st.title), ['Run the first phase', 'Judge the phase', 'Run the next IR task', 'Have the change reviewed once', 'Return the result']);
     assert.deepEqual(code.steps[3].calls, [review.id], 'code\'s review step calls review');

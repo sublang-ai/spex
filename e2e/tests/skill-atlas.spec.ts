@@ -83,11 +83,11 @@ const MARKUP = "<img src=x onerror=window.__atlasXss=1>";
 const STEP_TITLE = 'Echo <img src=x onerror="window.__atlasXss = 3">';
 const STEP_TEXT = "Print <b onmouseover=\"window.__atlasXss = 4\">bold</b> verbatim.";
 const ANNOTATIONS = { version: 1, skills: { [MARKUP]: { steps: [{ title: STEP_TITLE, summary: STEP_TEXT }, { title: "Done", summary: "Nothing else." }] } } };
-const WORKFLOWS = "workflows.json";
+const PIPELINES = "pipelines.json";
 const FLOW = {
   version: 1,
   active: "flow",
-  workflows: [{
+  pipelines: [{
     id: "flow",
     name: "Flow",
     phases: [
@@ -138,15 +138,15 @@ async function stop(child: ChildProcess | undefined) {
   await exited;
 }
 
-// Each journey starts from its own workflows document, or none, and no set-aside copies.
+// Each journey starts from its own pipelines document, or none, and no set-aside copies.
 test.beforeEach(() => {
-  rmSync(join(state, WORKFLOWS), { force: true });
-  if (existsSync(state)) for (const f of readdirSync(state)) if (/^workflows\.invalid-\d+\.json$/.test(f)) rmSync(join(state, f));
+  rmSync(join(state, PIPELINES), { force: true });
+  if (existsSync(state)) for (const f of readdirSync(state)) if (/^pipelines\.invalid-\d+\.json$/.test(f)) rmSync(join(state, f));
 });
 
-function writeWorkflows(doc: unknown) {
+function writePipelines(doc: unknown) {
   mkdirSync(state, { recursive: true });
-  writeFileSync(join(state, WORKFLOWS), JSON.stringify(doc));
+  writeFileSync(join(state, PIPELINES), JSON.stringify(doc));
 }
 
 const groups = (page: Page) => page.locator("#board > section.col");
@@ -178,12 +178,12 @@ function linkEndsOn(page: Page, selector: string) {
 }
 
 test("skill-atlas-13: each grouping's groups, a skill opened to its steps, a dependency re-anchored to a closed group, a mention neither drawn nor counted", async ({ page }) => {
-  writeWorkflows(FLOW);
+  writePipelines(FLOW);
   await page.goto(url);
-  // Workflow: the active workflow's phases in order, then the skills in no phase.
+  // Pipeline: the active pipeline's phases in order, then the skills in no phase.
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
   // A phase entry no reported skill has is shown as missing (skill-atlas-19).
-  await expect(page.getByRole("region", { name: /^Make,/ })).toContainText("Not installed — kept in this workflow");
+  await expect(page.getByRole("region", { name: /^Make,/ })).toContainText("Not installed — kept in this pipeline");
 
   // Dependencies: entry points, each further call depth, then skills with none;
   // `guide`, which only mentions `review`, depends on nothing.
@@ -395,7 +395,7 @@ test("skill-atlas-14: a property holding fields shows each on a row of its own, 
 });
 
 test("skill-atlas-14: the details open on a selection alone and close by their Close and by Escape, focus back on what was selected", async ({ page }) => {
-  writeWorkflows(FLOW);
+  writePipelines(FLOW);
   await page.goto(url);
   // No control opens the details: with nothing selected they are closed.
   await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveCount(0);
@@ -419,7 +419,7 @@ test("skill-atlas-14: the details open on a selection alone and close by their C
   await expect(details(page)).toBeHidden();
   await expect(main).toBeFocused();
   // A phase selected opens them; Escape closes them, focus back on its name.
-  await groupBy(page, "Workflow");
+  await groupBy(page, "Pipeline");
   const plan = page.getByRole("region", { name: /^Plan,/ }).getByRole("button", { name: "Plan", exact: true });
   await plan.click();
   await expect(details(page).getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
@@ -434,7 +434,7 @@ test("skill-atlas-14: the details open on a selection alone and close by their C
 });
 
 test("skill-atlas-14: a skill in two phases gets focus back on the card its details were opened from, by Close, Escape and F6", async ({ page }) => {
-  writeWorkflows({ ...FLOW, workflows: [{ ...FLOW.workflows[0], phases: [{ id: "p-plan", name: "Plan", note: "", skills: ["decide", "code"] }, { id: "p-make", name: "Make", note: "", skills: ["code", "review"] }] }] });
+  writePipelines({ ...FLOW, pipelines: [{ ...FLOW.pipelines[0], phases: [{ id: "p-plan", name: "Plan", note: "", skills: ["decide", "code"] }, { id: "p-make", name: "Make", note: "", skills: ["code", "review"] }] }] });
   await page.goto(url);
   const inMake = page.getByRole("region", { name: /^Make,/ }).locator('.card[data-skill="code"] .card-main');
   await inMake.click();
@@ -530,7 +530,7 @@ test("skill-atlas-39: at a phone's width the toolbar wraps, every control at lea
 });
 
 test("skill-atlas-14: a skill's, a step's and a phase's details with tags and evidence", async ({ page }) => {
-  writeWorkflows(FLOW);
+  writePipelines(FLOW);
   await page.goto(url);
   await groupBy(page, "Dependencies");
 
@@ -559,7 +559,7 @@ test("skill-atlas-14: a skill's, a step's and a phase's details with tags and ev
   await expect(body.locator(".ev-tag", { hasText: "Needs approval" }).locator(".ev li")).toContainText("Wait for the user's approval");
 
   // A phase: its skills and the union of their tags, each with the skills it comes from.
-  await groupBy(page, "Workflow");
+  await groupBy(page, "Pipeline");
   await page.getByRole("region", { name: /^Plan,/ }).getByRole("button", { name: "Plan", exact: true }).click();
   await expect(panel.getByRole("heading", { name: "Plan", exact: true })).toBeVisible();
   await expect(panel).toContainText("Phase 1 of 2 · Flow");
@@ -936,10 +936,10 @@ test("skill-atlas-18: a skill whose name and step hold markup is shown as text",
   expect(await page.evaluate(() => (window as unknown as { __atlasXss?: number }).__atlasXss)).toBeUndefined();
 });
 
-test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a skill moved by the menu, an edit undone, standing after a reload", async ({ page }) => {
+test("skill-atlas-19: a pipeline from a preset, a phase added and renamed, a skill moved by the menu, an edit undone, standing after a reload", async ({ page }) => {
   await page.goto(url);
-  // No workflow yet: the presets are offered.
-  await expect(page.getByRole("heading", { name: "Organize your skills into a workflow" })).toBeVisible();
+  // No pipeline yet: the presets are offered.
+  await expect(page.getByRole("heading", { name: "Organize your skills into a pipeline" })).toBeVisible();
   await page.getByRole("button", { name: /^Software delivery/ }).click();
   // Each skill goes to the one phase whose keyword its name, else its description, holds earliest.
   await expect.poll(() => groupLabels(page)).toEqual([
@@ -992,11 +992,11 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
   await expect(hardening.getByRole("button", { name: /^\/lint-docs\b/ })).toBeVisible();
   await expect(page.locator("#save-status")).toHaveText("Saved");
 
-  // The workflows file in the state folder holds the change.
-  const file = join(state, WORKFLOWS);
+  // The pipelines file in the state folder holds the change.
+  const file = join(state, PIPELINES);
   expect(existsSync(file)).toBe(true);
   const doc = JSON.parse(readFileSync(file, "utf8"));
-  const wf = doc.workflows.find((w: { id: string }) => w.id === doc.active);
+  const wf = doc.pipelines.find((w: { id: string }) => w.id === doc.active);
   expect(wf.name).toBe("Software delivery");
   const phase = (n: string) => wf.phases.find((p: { name: string }) => p.name === n);
   expect(wf.phases.map((p: { name: string }) => p.name)).toEqual(["Discover", "Decide", "Build", "Verify", "Ship", "Operate", "Hardening"]);
@@ -1005,7 +1005,7 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
 
   // And the page shows it again after a reload.
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "Active workflow" })).toHaveValue(wf.id);
+  await expect(page.getByRole("combobox", { name: "Active pipeline" })).toHaveValue(wf.id);
   await expect.poll(() => groupLabels(page)).toEqual([
     "Discover, 1 skill", "Decide, 1 skill", "Build, 1 skill", "Verify, 1 skill", "Ship, 1 skill", "Operate, 0 skills", "Hardening, 1 skill", "Unassigned, 4 skills",
   ]);
@@ -1013,11 +1013,11 @@ test("skill-atlas-19: a workflow from a preset, a phase added and renamed, a ski
 });
 
 test("skill-atlas-19: an edit saved as the page is hidden, then a further edit saved, not refused", async ({ page }) => {
-  writeWorkflows(FLOW);
+  writePipelines(FLOW);
   await page.goto(url);
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
   const make = page.getByRole("region", { name: /^Make,/ });
-  const stored = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows[0].phases[1].skills as string[];
+  const stored = () => JSON.parse(readFileSync(join(state, PIPELINES), "utf8")).pipelines[0].phases[1].skills as string[];
 
   // The edit and the page being hidden in one task, so the save as the page is hidden writes it.
   await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
@@ -1041,17 +1041,17 @@ test("skill-atlas-19: an edit saved as the page is hidden, then a further edit s
   expect(stored()).toEqual(expect.arrayContaining(["lone", "guide"]));
 });
 
-test("skill-atlas-19: notes typed in two workflows from one preset undo apart, the reader staying on the workflow shown", async ({ page }) => {
+test("skill-atlas-19: notes typed in two pipelines from one preset undo apart, the reader staying on the pipeline shown", async ({ page }) => {
   await page.goto(url);
   await page.getByRole("button", { name: /^Software delivery/ }).click();
-  const active = page.getByRole("combobox", { name: "Active workflow" });
+  const active = page.getByRole("combobox", { name: "Active pipeline" });
   await expect(active).toHaveValue("wf-software-delivery");
-  // A second workflow from the same preset: its phases take the same ids.
+  // A second pipeline from the same preset: its phases take the same ids.
   await active.selectOption("__new");
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name" }).fill("Second delivery");
   await dialog.getByRole("radio", { name: /^Software delivery/ }).check();
-  await dialog.getByRole("button", { name: "Create workflow" }).click();
+  await dialog.getByRole("button", { name: "Create pipeline" }).click();
   await expect(active).toHaveValue("wf-second-delivery");
 
   const note = details(page).getByRole("textbox", { name: "Note" });
@@ -1061,20 +1061,20 @@ test("skill-atlas-19: notes typed in two workflows from one preset undo apart, t
     await note.pressSequentially(text);
     await note.press("Escape");
   };
-  // Typed in the first workflow's Discover, then, after a switch, in the second's.
+  // Typed in the first pipeline's Discover, then, after a switch, in the second's.
   await active.selectOption("wf-software-delivery");
   await typeNote("first");
   await active.selectOption("wf-second-delivery");
   await typeNote("second");
 
-  // Undo reverts the latest typing alone and leaves the reader on the workflow shown.
+  // Undo reverts the latest typing alone and leaves the reader on the pipeline shown.
   await page.keyboard.press("Control+z");
   await expect(note).toHaveValue("");
   await expect(active).toHaveValue("wf-second-delivery");
   await expect(page.locator("#save-status")).toHaveText("Saved");
-  const notes = () => JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows.map((w: { phases: { note: string }[] }) => w.phases[0]!.note);
+  const notes = () => JSON.parse(readFileSync(join(state, PIPELINES), "utf8")).pipelines.map((w: { phases: { note: string }[] }) => w.phases[0]!.note);
   expect(notes()).toEqual(["first", ""]);
-  // Nothing more to undo: the first workflow's note stands.
+  // Nothing more to undo: the first pipeline's note stands.
   await page.keyboard.press("Control+z");
   await active.selectOption("wf-software-delivery");
   await page.getByRole("region", { name: /^Discover,/ }).getByRole("button", { name: "Discover", exact: true }).click();
@@ -1083,66 +1083,66 @@ test("skill-atlas-19: notes typed in two workflows from one preset undo apart, t
 });
 
 test("skill-atlas-20: a file changed behind the page refuses the next edit and stands", async ({ page }) => {
-  writeWorkflows(FLOW);
+  writePipelines(FLOW);
   await page.goto(url);
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
 
   // Someone else (another tab, the agent) rewrites the file.
-  const changed = { ...FLOW, workflows: [{ ...FLOW.workflows[0], name: "Flow, changed elsewhere" }] };
-  writeWorkflows(changed);
-  const stored = readFileSync(join(state, WORKFLOWS), "utf8");
+  const changed = { ...FLOW, pipelines: [{ ...FLOW.pipelines[0], name: "Flow, changed elsewhere" }] };
+  writePipelines(changed);
+  const stored = readFileSync(join(state, PIPELINES), "utf8");
 
   await page.getByRole("region", { name: /^Unassigned,/ }).getByRole("button", { name: "Actions for /lone" }).click();
   await page.getByRole("menuitem", { name: "Make", exact: true }).first().click();
   const banner = page.getByRole("alert");
-  await expect(banner).toHaveText(/Workflows were changed elsewhere — your last edit was not saved\./);
-  expect(readFileSync(join(state, WORKFLOWS), "utf8")).toBe(stored);
-  // No further edit is offered until the stored workflows are loaded.
+  await expect(banner).toHaveText(/Pipelines were changed elsewhere — your last edit was not saved\./);
+  expect(readFileSync(join(state, PIPELINES), "utf8")).toBe(stored);
+  // No further edit is offered until the stored pipelines are loaded.
   await expect(page.getByRole("button", { name: "Add phase" })).toHaveCount(0);
 
   await banner.getByRole("button", { name: "Reload" }).click();
   await expect(banner).toBeHidden();
-  await expect(page.getByRole("combobox", { name: "Active workflow" }).locator("option:checked")).toHaveText("Flow, changed elsewhere");
+  await expect(page.getByRole("combobox", { name: "Active pipeline" }).locator("option:checked")).toHaveText("Flow, changed elsewhere");
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
-  expect(readFileSync(join(state, WORKFLOWS), "utf8")).toBe(stored);
+  expect(readFileSync(join(state, PIPELINES), "utf8")).toBe(stored);
 });
 
-test("skill-atlas-13: with no workflow left by a deletion refused as the file changed, the served page offers its presets, never the exported copy's words", async ({ page }) => {
-  writeWorkflows(FLOW);
+test("skill-atlas-13: with no pipeline left by a deletion refused as the file changed, the served page offers its presets, never the exported copy's words", async ({ page }) => {
+  writePipelines(FLOW);
   await page.goto(url);
   await expect.poll(() => groupLabels(page)).toEqual(["Plan, 2 skills", "Make, 1 skill", "Unassigned, 7 skills"]);
-  writeWorkflows({ ...FLOW, workflows: [{ ...FLOW.workflows[0], name: "Flow, changed elsewhere" }] });
-  await page.getByRole("button", { name: "Workflow actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete workflow…" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Delete workflow" }).click();
-  await expect(page.getByRole("alert")).toHaveText(/Workflows were changed elsewhere/);
-  await expect(page.getByRole("heading", { name: "Organize your skills into a workflow" })).toBeVisible();
+  writePipelines({ ...FLOW, pipelines: [{ ...FLOW.pipelines[0], name: "Flow, changed elsewhere" }] });
+  await page.getByRole("button", { name: "Pipeline actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete pipeline…" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete pipeline" }).click();
+  await expect(page.getByRole("alert")).toHaveText(/Pipelines were changed elsewhere/);
+  await expect(page.getByRole("heading", { name: "Organize your skills into a pipeline" })).toBeVisible();
   await expect(page.locator("#board")).not.toContainText("exported copy");
 });
 
-test("skill-atlas-21: an unreadable workflows file is named, and started fresh with the file kept", async ({ page }) => {
-  const broken = '{ "version": 1, "workflows": [ }';
+test("skill-atlas-21: an unreadable pipelines file is named, and started fresh with the file kept", async ({ page }) => {
+  const broken = '{ "version": 1, "pipelines": [ }';
   mkdirSync(state, { recursive: true });
-  writeFileSync(join(state, WORKFLOWS), broken);
+  writeFileSync(join(state, PIPELINES), broken);
   await page.goto(url);
-  const notice = page.getByRole("region", { name: "Workflows file unreadable" });
-  await expect(notice).toContainText(join(state, WORKFLOWS));
-  // No workflow edit is offered, here or from a card in another grouping.
-  await expect(page.getByRole("combobox", { name: "Active workflow" })).toBeDisabled();
+  const notice = page.getByRole("region", { name: "Pipelines file unreadable" });
+  await expect(notice).toContainText(join(state, PIPELINES));
+  // No pipeline edit is offered, here or from a card in another grouping.
+  await expect(page.getByRole("combobox", { name: "Active pipeline" })).toBeDisabled();
   await groupBy(page, "Dependencies");
   await page.getByRole("button", { name: "Actions for /lone" }).click();
   await expect(page.getByRole("menuitem")).toHaveText(["Open details", "Show steps", "Focus on dependencies"]);
   await page.keyboard.press("Escape");
-  await groupBy(page, "Workflow");
+  await groupBy(page, "Pipeline");
 
   await notice.getByRole("button", { name: /^Start fresh/ }).click();
-  await expect(page.getByRole("heading", { name: "Organize your skills into a workflow" })).toBeVisible();
-  expect(readFileSync(join(state, "workflows.invalid-1.json"), "utf8")).toBe(broken);
-  expect(JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8")).workflows).toEqual([]);
+  await expect(page.getByRole("heading", { name: "Organize your skills into a pipeline" })).toBeVisible();
+  expect(readFileSync(join(state, "pipelines.invalid-1.json"), "utf8")).toBe(broken);
+  expect(JSON.parse(readFileSync(join(state, PIPELINES), "utf8")).pipelines).toEqual([]);
 });
 
-test("skill-atlas-22: an exported file opened from disk is read-only: its workflows shown with no control editing them, and saying so", async ({ page }) => {
-  writeWorkflows(FLOW);
+test("skill-atlas-22: an exported file opened from disk is read-only: its pipelines shown with no control editing them, and saying so", async ({ page }) => {
+  writePipelines(FLOW);
   const out = join(tmp, "atlas.html");
   execFileSync(process.execPath, [CLI, "export", "--out", out, "--cwd", project, "--no-user", "--no-plugins", "--state", state]);
   await page.goto(pathToFileURL(out).href);
@@ -1151,9 +1151,9 @@ test("skill-atlas-22: an exported file opened from disk is read-only: its workfl
   await expect(page.getByRole("button", { name: "Rescan" })).toBeHidden();
   await expect(page.getByRole("button", { name: /Download/ })).toHaveCount(0);
 
-  // No control creating, renaming, reordering, duplicating or deleting a workflow or a phase, or moving a skill.
-  await expect(page.getByRole("button", { name: "Workflow actions" })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "Active workflow" }).locator("option")).toHaveText(["Flow"]);
+  // No control creating, renaming, reordering, duplicating or deleting a pipeline or a phase, or moving a skill.
+  await expect(page.getByRole("button", { name: "Pipeline actions" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Active pipeline" }).locator("option")).toHaveText(["Flow"]);
   await expect(page.getByRole("button", { name: "Add phase" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Rename phase|^Actions for phase|^Remove / })).toHaveCount(0);
   await expect(page.locator("#board [draggable]")).toHaveCount(0);
@@ -1356,8 +1356,8 @@ test.describe("in a browser of Chinese", () => {
     await expect(page.getByRole("button", { name: zh("Rescan"), exact: true })).toBeVisible();
     await expect(page.getByRole("radio", { name: zh("Dependencies") })).toBeVisible();
     await expect(page.getByRole("button", { name: zh("{language}, Language", { language: ZH.short }), exact: true })).toHaveText(ZH.short);
-    await expect(page.getByRole("heading", { name: zh("Organize your skills into a workflow") })).toBeVisible();
-    const sdlc = zhLabels("workflow-presets.zh-CN.json").presets.find((p: { id: string }) => p.id === "sdlc");
+    await expect(page.getByRole("heading", { name: zh("Organize your skills into a pipeline") })).toBeVisible();
+    const sdlc = zhLabels("pipeline-presets.zh-CN.json").presets.find((p: { id: string }) => p.id === "sdlc");
     const phases: string[] = sdlc.phases.map((p: { name: string }) => p.name);
     // A preset used in Chinese makes phases with its Chinese names, its skills placed by the source's keywords.
     await page.getByRole("button", { name: startsWith(sdlc.name) }).click();
@@ -1365,9 +1365,9 @@ test.describe("in a browser of Chinese", () => {
     await expect(verify.locator('.card[data-skill="lint-docs"]')).toBeVisible();
     await expect(verify.locator('.card[data-skill="review"]')).toBeVisible();
     await expect(page.locator("#save-status")).toHaveText(zh("Saved"));
-    const doc = JSON.parse(readFileSync(join(state, WORKFLOWS), "utf8"));
-    expect(doc.workflows[0].name).toBe(sdlc.name);
-    expect(doc.workflows[0].phases.map((p: { name: string }) => p.name)).toEqual(phases);
+    const doc = JSON.parse(readFileSync(join(state, PIPELINES), "utf8"));
+    expect(doc.pipelines[0].name).toBe(sdlc.name);
+    expect(doc.pipelines[0].phases.map((p: { name: string }) => p.name)).toEqual(phases);
 
     // Tags and their categories labelled in Chinese; the evidence quotes SKILL.md's own line.
     const tagZh = (id: string) => zhLabels("tag-rules.zh-CN.json").tags.find((tg: { id: string }) => tg.id === id).label as string;

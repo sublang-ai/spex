@@ -1,20 +1,20 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
-<!-- skill-atlas:source sha256=7e9f706aad348732df54a1107521f36a5d8b9c226d5651085e3f8234065e45ba own=a9f8dd7e4a0771446f626fdb6a8b4d2718911c7c39b6660b78ef074e639fbb2b -->
+<!-- skill-atlas:source sha256=95b199187363ea8394c927da73cc93aac10ed4f36a33d97024e9e4f64cd7b866 own=a673064a9d0b81a4954501210f89f260fcd1b42525a59e51a8311e269bf6b868 -->
 
 > 本文件是 `data-model.md` 的简体中文译本，供人阅读；代理使用的是原文件。
 
 # 技能图谱数据模型
 
 技能图谱读写的三个 JSON 文档。
-手工编辑 `annotations.json`、通过 `atlas.mjs workflows` 修改 `workflows.json`，或在其他工具中使用 `atlas.json` 之前，请先阅读本文件。
+手工编辑 `annotations.json`、通过 `atlas.mjs pipelines` 修改 `pipelines.json`，或在其他工具中使用 `atlas.json` 之前，请先阅读本文件。
 
 ## 目录
 
 - [文件及其位置](#文件及其位置)
 - [atlas.json — 扫描发现了什么](#atlasjson--扫描发现了什么)
 - [annotations.json — 叠加在扫描之上的修正](#annotationsjson--叠加在扫描之上的修正)
-- [workflows.json — 用户如何整理技能](#workflowsjson--用户如何整理技能)
+- [pipelines.json — 用户如何整理技能](#pipelinesjson--用户如何整理技能)
 - [语言](#语言)
 - [检测规则](#检测规则)
 
@@ -24,7 +24,7 @@
 | --- | --- | --- | --- |
 | `atlas.json` | `atlas.mjs scan` | 视图、代理 | stdout，或 `--out <file>` |
 | `annotations.json` | 代理或用户 | `atlas.mjs scan` | 状态目录 |
-| `workflows.json` | 视图（或用户）、通过 `atlas.mjs workflows` 的代理 | 视图、代理 | 状态目录 |
+| `pipelines.json` | 视图（或用户）、通过 `atlas.mjs pipelines` 的代理 | 视图、代理 | 状态目录 |
 
 状态目录为 `~/.skill-atlas/`，除非 `--state <dir>` 指定了其他目录，例如团队共享的仓库中的 `.skill-atlas/`。
 每个技能都以其 id 为键：即它的 `name`，同名而内容不同的后续技能则为 `<name>@<rootId>`（见[检测规则](#检测规则)）；从不以路径为键，因此两个状态文件在重新安装或移动后依然有效。
@@ -165,13 +165,13 @@
   同名、`SKILL.md` 相同而其他文件不同的技能共用同一个哈希值，因此在名称下，最后一个记录它的条目是每个这类技能的注解，其文件未被该条目列出的那个报告 `stale-annotation`：应改为以各自的 id 为键。
   同名的每个技能各自判断：没有任何条目应用于它、而有条目记录了它的 `digest`（某个列出的文件已改动）或记录了不属于任何同名技能的哈希值时，它报告 `stale-annotation` 洞察，因为状态目录为所有项目共用，这样的条目可能是为其中任何一个技能的早先文本写的。
 
-## workflows.json — 用户如何整理技能
+## pipelines.json — 用户如何整理技能
 
 ```jsonc
 {
   "version": 1,
-  "active": "sdlc",                    // 视图打开时显示的工作流 id，或 null
-  "workflows": [
+  "active": "sdlc",                    // 视图打开时显示的流水线 id，或 null
+  "pipelines": [
     {
       "id": "sdlc",
       "name": "SDLC",
@@ -185,12 +185,13 @@
 ```
 
 - 一个技能可以位于多个阶段，也可以不在任何阶段（视图把它列在“未分配”下）。
-- 每一项是一个技能 id。没有对应已安装技能的项会被保留并显示为缺失，因此卸载技能后工作流依然完好。
-- 视图用 `PUT /api/workflows` 保存，并在 `If-Match` 中发送它上次读取的版本的 `ETag`；针对此后已被修改的文件的保存会被拒绝（412），所存文件保持不变。
-  检查与写入期间持有状态目录中的 `workflows.json.lock`，因此在共享该目录的服务器中，针对同一版本只有一个会写入；一秒后锁仍被持有时回答 503（`busy`，请稍后再次保存），超过 10 秒的锁会被视为中途停止的服务器留下的而被打破。
+- 每一项是一个技能 id。没有对应已安装技能的项会被保留并显示为缺失，因此卸载技能后流水线依然完好。
+- 没有 `pipelines.json` 时，2.0.0 之前的技能图谱写下的 `workflows.json` 中键 `workflows` 下的流水线，会被当作没有文件时的文档读取（etag 为 `"none"`），第一次保存会把它们写入 `pipelines.json`；`workflows.json` 从不被写入，无法这样读取的则保持原样。
+- 视图用 `PUT /api/pipelines` 保存，并在 `If-Match` 中发送它上次读取的版本的 `ETag`；针对此后已被修改的文件的保存会被拒绝（412），所存文件保持不变。
+  检查与写入期间持有状态目录中的 `pipelines.json.lock`，因此在共享该目录的服务器中，针对同一版本只有一个会写入；一秒后锁仍被持有时回答 503（`busy`，请稍后再次保存），超过 10 秒的锁会被视为中途停止的服务器留下的而被打破。
 - 代理以同样的方式读写该文件：
-  - `atlas.mjs workflows [--state <dir>]` 打印 `{ "etag": "<version>", "doc": { … } }`，没有文件时为空文档和 `"none"`，文件无法作为工作流文档读取时失败并指出该文件；
-  - `atlas.mjs workflows --put <file|-> --if-match <etag> [--state <dir>]` 在服务器的条件和锁之下写入该文档，并打印新的 etag；文件在读取之后已被修改（请重新读取）、文档无效或所存文件无法读取时都会失败，所存文件保持不变。
+  - `atlas.mjs pipelines [--state <dir>]` 打印 `{ "etag": "<version>", "doc": { … } }`，没有文件时为空文档和 `"none"`，文件无法作为流水线文档读取时失败并指出该文件；
+  - `atlas.mjs pipelines --put <file|-> --if-match <etag> [--state <dir>]` 在服务器的条件和锁之下写入该文档，并打印新的 etag；文件在读取之后已被修改（请重新读取）、文档无效或所存文件无法读取时都会失败，所存文件保持不变。
 
 ## 语言
 
@@ -316,7 +317,7 @@
   - 占位符写作 `{name}`，并在译文中保留。
   - 有两种形式的英文文本写作 `one|other`（`"{n} step|{n} steps"`）；其译文给出一种形式，或按 `Intl.PluralRules` 列出的顺序，为该语言的每个复数类别各给一种形式。
   - 没有条目的文本以英文显示。
-- `references/tag-rules.<tag>.json`、`references/workflow-presets.<tag>.json` 和 `references/view-settings.<tag>.json` 是名称文件：与它们旁边的文件结构相同，从中只读取 `title`、`label`、`name` 和 `description`：标签和预设按 `id`，类别按键，预设的阶段按位置。
+- `references/tag-rules.<tag>.json`、`references/pipeline-presets.<tag>.json` 和 `references/view-settings.<tag>.json` 是名称文件：与它们旁边的文件结构相同，从中只读取 `title`、`label`、`name` 和 `description`：标签和预设按 `id`，类别按键，预设的阶段按位置。
   模式、关键词、颜色和其他所有设置只取自源文件。
   在 `labels` 下，一个标签只含它自己的名称文件的字段，页面按选择技能译本的同一规则，为三个名称文件各自选择标签，因此一个文件的标签绝不会遮住另一个文件的。
 - 页面的语言依次取：读者在页面上的选择（保存在浏览器中），否则 `--lang`，否则浏览器的语言（当某个消息目录的标签就是它，或与它的主子标签和书写系统都相同时：`zh` 和 `zh-SG` 对应 `zh-CN`，`zh-TW` 没有对应），否则 `en-US`。

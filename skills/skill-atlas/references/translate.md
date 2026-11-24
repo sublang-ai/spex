@@ -75,7 +75,7 @@ To add a language, here `fr-FR`:
 
 1. Copy `assets/locales/zh-CN.json` to `assets/locales/fr-FR.json`; set `language` and `name` (the language's own name), and translate every value of `messages`, keeping each key (the English text) and every `{placeholder}`.
    An English text written `one|other` gets one form, or one per plural category of the language in the order `Intl.PluralRules` lists them.
-2. Copy `references/tag-rules.zh-CN.json`, `references/workflow-presets.zh-CN.json` and `references/view-settings.zh-CN.json` to the same names with `fr-FR`, and translate their `about`, `title`, `label`, `name` and `description` values; keep every id, key and the order of each preset's phases.
+2. Copy `references/tag-rules.zh-CN.json`, `references/pipeline-presets.zh-CN.json` and `references/view-settings.zh-CN.json` to the same names with `fr-FR`, and translate their `about`, `title`, `label`, `name` and `description` values; keep every id, key and the order of each preset's phases.
 3. Pin the three label files by name, `node <skill-dir>/scripts/atlas.mjs pin <skill-dir>/references/*.fr-FR.json`, and reload the page: the language appears in its switcher.
 
 An update of the skill replaces these files; keep a copy, or offer the language back to the skill's authors.

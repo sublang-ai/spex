@@ -481,14 +481,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   <div class="bar-row">
     <span class="seg-label" id="seg-label">Group by</span>
     <div class="seg" id="grouping" role="radiogroup" aria-labelledby="seg-label">
-      <button type="button" role="radio" data-g="workflow" aria-checked="false">Workflow</button>
+      <button type="button" role="radio" data-g="pipeline" aria-checked="false">Pipeline</button>
       <button type="button" role="radio" data-g="dependencies" aria-checked="false">Dependencies</button>
       <button type="button" role="radio" data-g="source" aria-checked="false">Source</button>
     </div>
     <div class="wf-tools" id="wf-tools">
-      <label class="sr-only" for="wf-select" id="wf-label">Active workflow</label>
+      <label class="sr-only" for="wf-select" id="wf-label">Active pipeline</label>
       <select id="wf-select"></select>
-      <button id="wf-menu" class="icon-btn" type="button" aria-label="Workflow actions" aria-haspopup="true" aria-expanded="false"></button>
+      <button id="wf-menu" class="icon-btn" type="button" aria-label="Pipeline actions" aria-haspopup="true" aria-expanded="false"></button>
     </div>
     <div class="search">
       <input id="search" type="search" placeholder="Search skills" aria-label="Search skills by name, description or step" autocomplete="off" spellcheck="false">
@@ -523,10 +523,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // Constants
   // ===================================================================
   const CATS = ['input', 'output', 'tool', 'human'];
-  const GROUPINGS = ['workflow', 'dependencies', 'source'];
+  const GROUPINGS = ['pipeline', 'dependencies', 'source'];
   // Labels here are the page's own fallbacks, looked up in the reader's language when shown.
   const DEFAULT_VIEW = {
-    title: '', defaultGrouping: 'workflow', maxTagsPerCard: 6,
+    title: '', defaultGrouping: 'pipeline', maxTagsPerCard: 6,
     categories: {
       input: { label: '', color: '#2f7d6d' },
       output: { label: '', color: '#b4621b' },
@@ -855,8 +855,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     idx: null,
     config: { presets: [], view: DEFAULT_VIEW, static: false },
     view: DEFAULT_VIEW,
-    workflows: { version: 1, active: null, workflows: [] },
-    grouping: 'workflow',
+    pipelines: { version: 1, active: null, pipelines: [] },
+    grouping: 'pipeline',
     collapsed: new Set(),       // "<grouping>:<groupId>"
     expanded: new Set(),        // skill ids whose steps are shown
     openSteps: new Set(),       // step ids unfolded inline
@@ -1099,18 +1099,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return seen;
   }
 
-  // ---------- workflows (pure helpers) ----------
+  // ---------- pipelines (pure helpers) ----------
   // The document as it is read and kept: a document the server accepts comes back as it was
   // served, byte for byte once serialized, so a document read can always be saved again; only a
-  // part of no workflows shape (an older page's local copy) is left out or set to its empty value.
-  // What the page shows for what the document leaves unset (the workflow shown while `active` is
+  // part of no pipelines shape (an older page's local copy) is left out or set to its empty value.
+  // What the page shows for what the document leaves unset (the pipeline shown while `active` is
   // null, the label of an empty name, an empty note) is read where it is shown, never written in.
-  function normalizeWorkflows(doc) {
+  function normalizePipelines(doc) {
     doc = doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
     const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
     const text = (v) => (typeof v === 'string' ? v : str(v));
     const wfIds = new Set();
-    const workflows = arr(doc.workflows).filter(isObj).map((w) => {
+    const pipelines = arr(doc.pipelines).filter(isObj).map((w) => {
       const id = uniqueId(typeof w.id === 'string' && w.id ? w.id : 'wf-' + slugify(w.name), wfIds); wfIds.add(id);
       const pIds = new Set();
       const phases = arr(w.phases).filter(isObj).map((p) => {
@@ -1121,17 +1121,17 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       });
       return { ...w, id, name: text(w.name), phases };
     });
-    const active = typeof doc.active === 'string' && workflows.some((w) => w.id === doc.active) ? doc.active : null;
-    return { ...doc, version: 1, active, workflows };
+    const active = typeof doc.active === 'string' && pipelines.some((w) => w.id === doc.active) ? doc.active : null;
+    return { ...doc, version: 1, active, pipelines };
   }
-  // The workflow shown: the active one, else the first while none is active.
-  const activeWorkflow = () => { const all = state.workflows.workflows; return all.find((w) => w.id === state.workflows.active) || all[0] || null; };
-  const shownWorkflowId = () => { const wf = activeWorkflow(); return wf ? wf.id : null; };
+  // The pipeline shown: the active one, else the first while none is active.
+  const activePipeline = () => { const all = state.pipelines.pipelines; return all.find((w) => w.id === state.pipelines.active) || all[0] || null; };
+  const shownPipelineId = () => { const wf = activePipeline(); return wf ? wf.id : null; };
   // A name as shown: an empty one under the page's word for it.
-  const wfName = (w) => (w && w.name) || t('Workflow');
+  const wfName = (w) => (w && w.name) || t('Pipeline');
   const phaseName = (p) => (p && p.name) || t('Phase');
-  const findPhase = (pid) => { const wf = activeWorkflow(); return wf ? wf.phases.find((p) => p.id === pid) || null : null; };
-  const phasesOf = (skillId) => { const wf = activeWorkflow(); return wf ? wf.phases.filter((p) => p.skills.includes(skillId)) : []; };
+  const findPhase = (pid) => { const wf = activePipeline(); return wf ? wf.phases.find((p) => p.id === pid) || null : null; };
+  const phasesOf = (skillId) => { const wf = activePipeline(); return wf ? wf.phases.filter((p) => p.skills.includes(skillId)) : []; };
 
   // Position of the keyword's first occurrence in text, or -1. Short keywords ("pr", "qa") must be
   // whole words; longer ones may be word prefixes ("analy" matches "analyze").
@@ -1166,8 +1166,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ---------- grouping (pure over state) ----------
   function computeGroups() {
     const idx = state.idx;
-    if (state.grouping === 'workflow') {
-      const wf = activeWorkflow();
+    if (state.grouping === 'pipeline') {
+      const wf = activePipeline();
       if (!wf) return null;
       const inPhase = new Set();
       const groups = wf.phases.map((p, i) => {
@@ -1204,8 +1204,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const g of groups) g.wide = g.ids.length > 16;
     return groups;
   }
-  // Collapse state is per workflow, so presets that share phase ids don't share it.
-  const groupPrefix = () => state.grouping === 'workflow' ? 'workflow:' + (shownWorkflowId() || '') + ':' : state.grouping + ':';
+  // Collapse state is per pipeline, so presets that share phase ids don't share it.
+  const groupPrefix = () => state.grouping === 'pipeline' ? 'pipeline:' + (shownPipelineId() || '') + ':' : state.grouping + ':';
   const groupKey = (g) => groupPrefix() + g.id;
   const wideCols = (n) => Math.max(1, Math.min(4, Math.ceil(n / 10)));
 
@@ -1218,18 +1218,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // ===================================================================
   // Loading
   // ===================================================================
-  // GET /api/workflows: the document and its ETag, or why it can't be edited.
+  // GET /api/pipelines: the document and its ETag, or why it can't be edited.
   // Never treat a failure as an empty document: the first edit would overwrite the file.
-  async function fetchWorkflows() {
+  async function fetchPipelines() {
     let res;
-    try { res = await fetch('/api/workflows', { headers: { Accept: 'application/json' }, cache: 'no-store' }); } catch {
+    try { res = await fetch('/api/pipelines', { headers: { Accept: 'application/json' }, cache: 'no-store' }); } catch {
       return { doc: null, etag: null, blocked: { kind: 'unavailable', message: '', status: 0 } };
     }
     let body = null;
     try { body = await res.json(); } catch { body = null; }
     if (res.ok) return { doc: body, etag: res.headers.get('ETag'), blocked: null };
     if (res.status === 404) return { doc: null, etag: null, blocked: null };
-    if (res.status === 409 && body && body.error === 'invalid-workflows') {
+    if (res.status === 409 && body && body.error === 'invalid-pipelines') {
       return { doc: null, etag: null, blocked: { kind: 'invalid', path: str(body.path), message: str(body.message) } };
     }
     return { doc: null, etag: null, blocked: { kind: 'unavailable', message: str(body && (body.message || body.error)), status: res.status } };
@@ -1242,7 +1242,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   async function load() {
     const embedded = document.getElementById('atlas-embedded');
     const raw = embedded ? embedded.textContent.trim() : '';
-    let atlas, workflows, config;
+    let atlas, pipelines, config;
     if (raw) {
       let doc;
       try { doc = JSON.parse(raw); } catch {
@@ -1250,24 +1250,24 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         return fatal(t('The atlas embedded in this page could not be read.'), t('Generate the page again with the Skill Atlas script.'));
       }
       state.mode = 'static';
-      atlas = doc.atlas; config = doc.config || {}; workflows = doc.workflows;
+      atlas = doc.atlas; config = doc.config || {}; pipelines = doc.pipelines;
     } else {
       const configP = getJSON('/api/config').catch(() => ({}));
       let wfResult;
       try {
-        [atlas, wfResult, config] = await Promise.all([getJSON('/api/atlas'), fetchWorkflows(), configP]);
+        [atlas, wfResult, config] = await Promise.all([getJSON('/api/atlas'), fetchPipelines(), configP]);
       } catch (err) {
         setupLanguages(await configP);
         return fatal(t('This page needs the Skill Atlas server.'), t('Start it with node <skill-dir>/scripts/atlas.mjs serve, or open a static page made with the export command.'), true);
       }
-      workflows = wfResult.doc;
+      pipelines = wfResult.doc;
       save.etag = wfResult.etag;
       state.wfBlocked = wfResult.blocked;
     }
     setupLanguages(config);
     applyConfig(config);
     setAtlas(atlas);
-    state.workflows = normalizeWorkflows(workflows);
+    state.pipelines = normalizePipelines(pipelines);
     restorePrefs();
     recompute();
     renderStaticText();
@@ -1329,7 +1329,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     }
     state.view = {
       title: str(v.title),
-      defaultGrouping: GROUPINGS.includes(v.defaultGrouping) ? v.defaultGrouping : 'workflow',
+      defaultGrouping: GROUPINGS.includes(v.defaultGrouping) ? v.defaultGrouping : 'pipeline',
       maxTagsPerCard: Number.isFinite(v.maxTagsPerCard) ? Math.max(0, v.maxTagsPerCard) : 6,
       categories: cats,
     };
@@ -1394,10 +1394,10 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     els.lang.title = t('Language');
     els.langShort.textContent = languageShort(i18n.lang);
     $('#seg-label').textContent = t('Group by');
-    const groupingNames = { workflow: t('Workflow'), dependencies: t('Dependencies'), source: t('Source') };
+    const groupingNames = { pipeline: t('Pipeline'), dependencies: t('Dependencies'), source: t('Source') };
     for (const b of els.seg.querySelectorAll('button[data-g]')) b.textContent = groupingNames[b.dataset.g];
-    $('#wf-label').textContent = t('Active workflow');
-    els.wfMenu.setAttribute('aria-label', t('Workflow actions'));
+    $('#wf-label').textContent = t('Active pipeline');
+    els.wfMenu.setAttribute('aria-label', t('Pipeline actions'));
     els.search.placeholder = t('Search skills');
     els.search.setAttribute('aria-label', t('Search skills by name, description or step'));
     $('[data-i18n="tags"]').textContent = t('Tags');
@@ -1459,7 +1459,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   // ===================================================================
-  // Saving workflows
+  // Saving pipelines
   // ===================================================================
   const save = { version: 0, saved: 0, inFlight: false, keepalive: false, timer: 0, status: 'idle', etag: null };
   // The exported page is read-only [skill-atlas-22]; the served page's editing is off while the
@@ -1475,13 +1475,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // A keepalive request outlives the page only under the browser's 64 KiB budget; a larger body
   // is sent as an ordinary request, which still completes while the page is merely hidden.
   const KEEPALIVE_MAX_BYTES = 60000;
-  function putWorkflows(doc, extraHeaders, keepalive) {
+  function putPipelines(doc, extraHeaders, keepalive) {
     const headers = { 'Content-Type': 'application/json', 'X-Skill-Atlas': '1', ...(extraHeaders || {}) };
     if (save.etag) headers['If-Match'] = save.etag;
     const body = JSON.stringify(doc);
-    return fetch('/api/workflows', { method: 'PUT', headers, body, keepalive: !!keepalive && new TextEncoder().encode(body).length < KEEPALIVE_MAX_BYTES });
+    return fetch('/api/pipelines', { method: 'PUT', headers, body, keepalive: !!keepalive && new TextEncoder().encode(body).length < KEEPALIVE_MAX_BYTES });
   }
-  // The one path that writes the workflows: the timed save and the save as the page is hidden
+  // The one path that writes the pipelines: the timed save and the save as the page is hidden
   // (`keepalive`) both come here, so the ETag, the saved version, a conflict and an unreadable
   // file are handled alike.
   async function flushSave(opts) {
@@ -1495,11 +1495,11 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const v = save.version;
     setSaveStatus('saving');
     try {
-      const res = await putWorkflows(state.workflows, null, keepalive);
+      const res = await putPipelines(state.pipelines, null, keepalive);
       if (res.status === 412) {
         // Someone else changed the file: stop, never overwrite, let the reader reload.
         save.inFlight = false;
-        blockWorkflows({ kind: 'conflict' });
+        blockPipelines({ kind: 'conflict' });
         setSaveStatus('conflict');
         return;
       }
@@ -1507,9 +1507,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         // The stored file became unreadable after the page loaded: never overwrite it silently.
         let body = null;
         try { body = await res.json(); } catch { body = null; }
-        if (body && body.error === 'invalid-workflows') {
+        if (body && body.error === 'invalid-pipelines') {
           save.inFlight = false;
-          blockWorkflows({ kind: 'invalid', path: str(body.path), message: str(body.message) });
+          blockPipelines({ kind: 'invalid', path: str(body.path), message: str(body.message) });
           setSaveStatus('idle');
           return;
         }
@@ -1521,8 +1521,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       try { stored = await res.json(); } catch { stored = null; }
       save.saved = v;
       if (stored && save.version === v) {
-        const norm = normalizeWorkflows(stored);
-        if (JSON.stringify(norm) !== JSON.stringify(state.workflows)) { state.workflows = norm; invalidate('chrome', 'canvas', 'details'); }
+        const norm = normalizePipelines(stored);
+        if (JSON.stringify(norm) !== JSON.stringify(state.pipelines)) { state.pipelines = norm; invalidate('chrome', 'canvas', 'details'); }
       }
       save.inFlight = false;
       const followKeepalive = save.keepalive;
@@ -1536,36 +1536,36 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   // Editing stops while the stored file is unreadable or was changed elsewhere; an undo would
   // restore over a file the page no longer holds, so the latest edit can no longer be undone.
-  function blockWorkflows(blocked) {
+  function blockPipelines(blocked) {
     state.wfBlocked = blocked;
     clearLatestEdit();
     invalidate('chrome', 'canvas', 'details');
   }
   // Re-read the stored document after a conflict, dropping the unsaved edit.
-  async function reloadWorkflows() {
-    const r = await fetchWorkflows();
+  async function reloadPipelines() {
+    const r = await fetchPipelines();
     state.wfBlocked = r.blocked;
     clearLatestEdit();
     if (!r.blocked) {
       save.etag = r.etag;
-      state.workflows = normalizeWorkflows(r.doc);
+      state.pipelines = normalizePipelines(r.doc);
       save.saved = save.version;
       if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
       setSaveStatus('idle');
-      toast(t('Reloaded the workflows'));
+      toast(t('Reloaded the pipelines'));
     } else setSaveStatus('idle');
     invalidate('chrome', 'canvas', 'details');
   }
   // Replace an unreadable file; the server keeps it as a backup.
   async function startFresh() {
-    const doc = { version: 1, active: null, workflows: [] };
+    const doc = { version: 1, active: null, pipelines: [] };
     try {
-      const res = await putWorkflows(doc, { 'X-Skill-Atlas-Replace-Invalid': '1' });
+      const res = await putPipelines(doc, { 'X-Skill-Atlas-Replace-Invalid': '1' });
       if (!res.ok) throw new Error(String(res.status));
       save.etag = res.headers.get('ETag') || save.etag;
       let stored = null;
       try { stored = await res.json(); } catch { stored = null; }
-      state.workflows = normalizeWorkflows(stored || doc);
+      state.pipelines = normalizePipelines(stored || doc);
       state.wfBlocked = null;
       clearLatestEdit();
       save.saved = save.version;
@@ -1603,36 +1603,36 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // The latest edit alone can be undone, whichever edit it was, until the next: its snapshot is
   // kept here, apart from any notice, and both Ctrl/Cmd+Z and a notice's Undo restore it.
   // `key` names a run of edits that undo as one (a phase's note typed in one go); switching the
-  // workflow ends the run. `active` is the workflow shown once the edit was made: switching
-  // workflows is no edit, so an undo after a switch leaves the reader where they are.
+  // pipeline ends the run. `active` is the pipeline shown once the edit was made: switching
+  // pipelines is no edit, so an undo after a switch leaves the reader where they are.
   let latestEdit = null;
   function recordEdit(before, key) {
-    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null, active: shownWorkflowId() };
+    if (!(key && latestEdit && latestEdit.key === key)) latestEdit = { before, key: key || null, active: shownPipelineId() };
   }
   function endEditRun() { if (latestEdit) latestEdit.key = null; }
   function clearLatestEdit() { latestEdit = null; dismissUndos(); }
-  // Every workflow edit goes through here: snapshot for undo, apply, save, re-render.
+  // Every pipeline edit goes through here: snapshot for undo, apply, save, re-render.
   function mutate(fn) {
     if (!canEdit()) {
-      if (state.wfBlocked) toast(state.wfBlocked.kind === 'conflict' ? t('Reload the workflows before editing them again') : t('Workflows can’t be edited until the stored file can be read'));
+      if (state.wfBlocked) toast(state.wfBlocked.kind === 'conflict' ? t('Reload the pipelines before editing them again') : t('Pipelines can’t be edited until the stored file can be read'));
       return null;
     }
-    const before = clone(state.workflows);
-    fn(state.workflows);
+    const before = clone(state.pipelines);
+    fn(state.pipelines);
     markDirty();
     recordEdit(before);
     invalidate('chrome', 'canvas', 'details');
     return before;
   }
   // Restore the latest edit's snapshot; undoing clears it (there is no redo). Where the reader
-  // switched workflows since the edit, the one they view stays shown while it still exists.
+  // switched pipelines since the edit, the one they view stays shown while it still exists.
   function undoLatest() {
     if (!latestEdit || !canEdit()) return false;
     const { before, active } = latestEdit;
     latestEdit = null;
-    const viewing = shownWorkflowId();
-    const stay = viewing !== active && arr(before.workflows).some((w) => w && str(w.id) === viewing);
-    state.workflows = normalizeWorkflows(stay ? { ...before, active: viewing } : before);
+    const viewing = shownPipelineId();
+    const stay = viewing !== active && arr(before.pipelines).some((w) => w && str(w.id) === viewing);
+    state.pipelines = normalizePipelines(stay ? { ...before, active: viewing } : before);
     if (state.selection && state.selection.type === 'phase' && !findPhase(state.selection.id)) state.selection = null;
     markDirty();
     invalidate('chrome', 'canvas', 'details');
@@ -1641,7 +1641,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   // A notice's Undo: the same snapshot Ctrl/Cmd+Z restores.
   const undoAction = () => ({ label: t('Undo'), run: undoLatest });
 
-  // ---------- workflow operations ----------
+  // ---------- pipeline operations ----------
   function addToPhase(pid, sid) { mutate(() => { const p = findPhase(pid); if (p && !p.skills.includes(sid)) p.skills.push(sid); }); }
   function removeFromPhase(pid, sid) { mutate(() => { const p = findPhase(pid); if (p) p.skills = p.skills.filter((x) => x !== sid); }); }
   function moveSkill(sid, fromPid, toPid) {
@@ -1659,7 +1659,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     toast(msg, undoAction());
   }
   function addPhase() {
-    const wf = activeWorkflow();
+    const wf = activePipeline();
     if (!wf) return;
     const names = new Set(wf.phases.map((p) => p.name));
     const name = uniqueId(t('New phase'), names).replace(/-(\d+)$/, ' $1');
@@ -1673,7 +1673,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     mutate(() => { p.name = name; });
   }
   function movePhase(pid, toIndex) {
-    const wf = activeWorkflow();
+    const wf = activePipeline();
     if (!wf) return;
     const from = wf.phases.findIndex((p) => p.id === pid);
     if (from < 0) return;
@@ -1682,7 +1682,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     mutate(() => { const [p] = wf.phases.splice(from, 1); wf.phases.splice(toIndex, 0, p); });
   }
   async function deletePhase(pid) {
-    const wf = activeWorkflow();
+    const wf = activePipeline();
     const p = findPhase(pid);
     if (!wf || !p) return;
     if (p.skills.length) {
@@ -1694,9 +1694,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (state.selection && state.selection.type === 'phase' && state.selection.id === pid) state.selection = null;
     toast(t('Deleted phase {name}', { name: phaseName(p) }), undoAction());
   }
-  function createWorkflow(name, preset, place) {
-    const doc = state.workflows;
-    const id = uniqueId('wf-' + slugify(name), new Set(doc.workflows.map((w) => w.id)));
+  function createPipeline(name, preset, place) {
+    const doc = state.pipelines;
+    const id = uniqueId('wf-' + slugify(name), new Set(doc.pipelines.map((w) => w.id)));
     // A preset's phases take their names in the shown language; the keywords stay the source's.
     const presetPhases = preset ? arr(preset.phases) : [{ name: t('Phase {n}', { n: 1 }), keywords: [] }];
     const pIds = new Set();
@@ -1706,8 +1706,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       return { id: pid, name: pname, note: '', skills: [] };
     });
     const wf = { id, name, phases };
-    if (!mutate((d) => { d.workflows.push(wf); d.active = id; })) return;
-    state.grouping = 'workflow';
+    if (!mutate((d) => { d.pipelines.push(wf); d.active = id; })) return;
+    state.grouping = 'pipeline';
     savePrefs();
     if (place && preset) {
       const { placed, count } = placeByKeywords(presetPhases, state.idx.skills);
@@ -1720,29 +1720,29 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
     }
   }
-  async function renameWorkflow() {
-    const wf = activeWorkflow();
+  async function renamePipeline() {
+    const wf = activePipeline();
     if (!wf) return;
-    const name = await promptDialog({ title: t('Rename workflow'), label: t('Name'), value: wf.name, confirm: t('Rename') });
+    const name = await promptDialog({ title: t('Rename pipeline'), label: t('Name'), value: wf.name, confirm: t('Rename') });
     if (name && name !== wf.name) mutate(() => { wf.name = name; });
   }
-  function duplicateWorkflow() {
-    const wf = activeWorkflow();
+  function duplicatePipeline() {
+    const wf = activePipeline();
     if (!wf) return;
-    const names = new Set(state.workflows.workflows.map((w) => w.name));
+    const names = new Set(state.pipelines.pipelines.map((w) => w.name));
     const name = uniqueId(t('{name} copy', { name: wfName(wf) }), names).replace(/-(\d+)$/, ' $1');
-    const id = uniqueId('wf-' + slugify(name), new Set(state.workflows.workflows.map((w) => w.id)));
-    if (mutate((d) => { const c = clone(wf); c.id = id; c.name = name; d.workflows.splice(d.workflows.indexOf(wf) + 1, 0, c); d.active = id; })) toast(t('Duplicated as {name}', { name }));
+    const id = uniqueId('wf-' + slugify(name), new Set(state.pipelines.pipelines.map((w) => w.id)));
+    if (mutate((d) => { const c = clone(wf); c.id = id; c.name = name; d.pipelines.splice(d.pipelines.indexOf(wf) + 1, 0, c); d.active = id; })) toast(t('Duplicated as {name}', { name }));
   }
-  async function deleteWorkflow() {
-    const wf = activeWorkflow();
+  async function deletePipeline() {
+    const wf = activePipeline();
     if (!wf) return;
-    const ok = await confirmDialog({ title: t('Delete workflow “{name}”?', { name: wfName(wf) }), body: t('Its {n} phase and its placements are removed. Skills are not affected.|Its {n} phases and their placements are removed. Skills are not affected.', { n: wf.phases.length }), confirm: t('Delete workflow'), danger: true });
+    const ok = await confirmDialog({ title: t('Delete pipeline “{name}”?', { name: wfName(wf) }), body: t('Its {n} phase and its placements are removed. Skills are not affected.|Its {n} phases and their placements are removed. Skills are not affected.', { n: wf.phases.length }), confirm: t('Delete pipeline'), danger: true });
     if (!ok) return;
-    const before = mutate((d) => { d.workflows = d.workflows.filter((w) => w.id !== wf.id); d.active = d.workflows.length ? d.workflows[0].id : null; });
+    const before = mutate((d) => { d.pipelines = d.pipelines.filter((w) => w.id !== wf.id); d.active = d.pipelines.length ? d.pipelines[0].id : null; });
     if (!before) return;
     if (state.selection && state.selection.type === 'phase') state.selection = null;
-    toast(t('Deleted workflow {name}', { name: wfName(wf) }), undoAction());
+    toast(t('Deleted pipeline {name}', { name: wfName(wf) }), undoAction());
   }
 
   // ===================================================================
@@ -1781,14 +1781,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       b.setAttribute('aria-checked', String(on));
       b.tabIndex = on ? 0 : -1;
     }
-    els.wfTools.hidden = state.grouping !== 'workflow';
+    els.wfTools.hidden = state.grouping !== 'pipeline';
     const sel = els.wfSelect;
     sel.replaceChildren();
-    const wfs = state.workflows.workflows;
-    if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, t('No workflows yet')));
-    const shownId = shownWorkflowId();
+    const wfs = state.pipelines.pipelines;
+    if (!wfs.length) sel.append(h('option', { value: '', disabled: true, selected: true }, t('No pipelines yet')));
+    const shownId = shownPipelineId();
     for (const w of wfs) sel.append(h('option', { value: w.id, selected: w.id === shownId ? true : null }, wfName(w)));
-    if (!staticMode) sel.append(h('option', { value: '__new' }, t('New workflow…')));
+    if (!staticMode) sel.append(h('option', { value: '__new' }, t('New pipeline…')));
     sel.value = shownId || '';
     const blocked = state.wfBlocked;
     sel.disabled = !!blocked;
@@ -1800,8 +1800,8 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       els.banner.dataset.lang = i18n.lang;
       els.banner.replaceChildren();
       if (conflict) {
-        els.banner.append(h('span', { text: t('Workflows were changed elsewhere — your last edit was not saved.') }),
-          h('button', { type: 'button', class: 'btn small', 'data-act': 'reload-workflows' }, t('Reload')));
+        els.banner.append(h('span', { text: t('Pipelines were changed elsewhere — your last edit was not saved.') }),
+          h('button', { type: 'button', class: 'btn small', 'data-act': 'reload-pipelines' }, t('Reload')));
       }
     }
     const nTags = state.tagFilter.size;
@@ -1846,9 +1846,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const idx = state.idx;
     if (!idx.skills.length) { board.append(renderNoSkills()); return; }
     const blocked = state.wfBlocked;
-    if (state.grouping === 'workflow' && blocked && blocked.kind !== 'conflict') { board.append(renderWorkflowBlocked(blocked)); return; }
+    if (state.grouping === 'pipeline' && blocked && blocked.kind !== 'conflict') { board.append(renderPipelineBlocked(blocked)); return; }
     const groups = computeGroups();
-    if (!groups) { board.append(renderWorkflowEmpty()); return; }
+    if (!groups) { board.append(renderPipelineEmpty()); return; }
     const frag = document.createDocumentFragment();
     groups.forEach((g, i) => {
       if (g.kind === 'unassigned') { const add = renderAddPhase(); if (add) frag.append(add); }
@@ -1881,34 +1881,34 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       state.mode === 'live' ? h('p', { style: 'margin-top:14px', text: t('Install a skill, then use Rescan.') }) : null);
   }
 
-  function renderWorkflowBlocked(b) {
+  function renderPipelineBlocked(b) {
     if (b.kind === 'invalid') {
-      return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Workflows file unreadable') },
-        h('h2', { text: t('The workflows file can’t be read') }),
-        h('p', null, h('code', { text: b.path || 'workflows.json' })),
+      return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Pipelines file unreadable') },
+        h('h2', { text: t('The pipelines file can’t be read') }),
+        h('p', null, h('code', { text: b.path || 'pipelines.json' })),
         b.message ? h('p', { class: 'notice-msg', text: b.message }) : null,
-        h('p', { text: t('Workflows can’t be edited until it is fixed or replaced. Fix the file and reload, or start fresh.') }),
+        h('p', { text: t('Pipelines can’t be edited until it is fixed or replaced. Fix the file and reload, or start fresh.') }),
         h('div', { class: 'd-actions' },
           h('button', { type: 'button', class: 'btn primary', 'data-act': 'start-fresh' }, t('Start fresh (the unreadable file is kept as a backup)')),
-          h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, t('Reload'))));
+          h('button', { type: 'button', class: 'btn', 'data-act': 'reload-pipelines' }, t('Reload'))));
     }
     const msg = b.message || (b.status ? t('The server answered {status}.', { status: String(b.status) }) : t('The server did not answer.'));
-    return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Workflows unavailable') },
-      h('h2', { text: t('Workflows couldn’t be loaded') }),
+    return h('div', { class: 'empty notice', role: 'region', 'aria-label': t('Pipelines unavailable') },
+      h('h2', { text: t('Pipelines couldn’t be loaded') }),
       h('p', { class: 'notice-msg', text: msg }),
-      h('div', { class: 'd-actions' }, h('button', { type: 'button', class: 'btn', 'data-act': 'reload-workflows' }, t('Try again'))));
+      h('div', { class: 'd-actions' }, h('button', { type: 'button', class: 'btn', 'data-act': 'reload-pipelines' }, t('Try again'))));
   }
 
-  function renderWorkflowEmpty() {
+  function renderPipelineEmpty() {
     if (state.mode === 'static') {
-      return h('div', { class: 'empty' }, h('h2', { text: t('No workflows') }),
-        h('p', { text: t('This exported copy holds no workflow; group by Dependencies or Source to explore the skills.') }));
+      return h('div', { class: 'empty' }, h('h2', { text: t('No pipelines') }),
+        h('p', { text: t('This exported copy holds no pipeline; group by Dependencies or Source to explore the skills.') }));
     }
     const presets = state.config.presets.filter((p) => p.id !== 'blank');
     const blank = state.config.presets.find((p) => p.id === 'blank');
     return h('div', { class: 'empty', style: 'max-width:760px' },
-      h('h2', { text: t('Organize your skills into a workflow') }),
-      h('p', { text: t('A workflow arranges skills into the phases of how you work — say Decide, Build, Verify, Ship — so you can see what runs when and how work passes between phases.') }),
+      h('h2', { text: t('Organize your skills into a pipeline') }),
+      h('p', { text: t('A pipeline arranges skills into the phases of how you work — say Decide, Build, Verify, Ship — so you can see what runs when and how work passes between phases.') }),
       presets.length ? h('div', { class: 'presets' }, presets.map((p) => h('button', { type: 'button', class: 'preset-btn', 'data-act': 'preset-start', 'data-preset': p.id },
         h('b', { text: presetName(p) }), presetDescription(p) ? h('span', { text: presetDescription(p) }) : null,
         h('span', { class: 'phases', text: arr(p.phases).map((x, i) => presetPhaseName(p, i)).join(' → ') })))) : null,
@@ -1918,7 +1918,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function renderAddPhase() {
-    if (state.grouping !== 'workflow' || !canEdit()) return null;
+    if (state.grouping !== 'pipeline' || !canEdit()) return null;
     return h('div', { class: 'add-phase-col' },
       h('button', { type: 'button', class: 'add-phase', 'data-act': 'add-phase', 'data-fk': 'add-phase' }, icon('plus'), t('Add phase')));
   }
@@ -2029,7 +2029,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const cats = rollupSkills(visIds);
     const isPhase = g.kind === 'phase';
     const editable = canEdit();
-    const droppable = state.grouping === 'workflow' && editable;
+    const droppable = state.grouping === 'pipeline' && editable;
     const col = h('section', {
       class: 'col' + (collapsed ? ' collapsed' : '') + (!collapsed && g.wide ? ' wide' : '') + (isPhase ? ' phase' : ''),
       'data-group': key, 'data-gid': g.id, 'data-phase': isPhase ? g.id : null, 'data-drop': droppable ? (isPhase ? g.id : '__unassigned') : null,
@@ -2082,7 +2082,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     return h('article', { class: 'card missing', 'data-missing': name },
       h('div', { class: 'card-main' },
         h('span', { class: 'card-top' }, h('span', { class: 'card-name', title: name, text: '/' + name })),
-        h('span', { class: 'card-desc', text: t('Not installed — kept in this workflow') })),
+        h('span', { class: 'card-desc', text: t('Not installed — kept in this pipeline') })),
       canEdit() && h('div', { class: 'card-tools' },
         h('button', { type: 'button', class: 'icon-btn', 'data-act': 'missing-remove', 'data-phase': g.id, 'data-name': name, 'data-fk': `mr|${g.id}|${name}`, 'aria-label': t('Remove missing {skill} from {phase}', { skill: '/' + name, phase: g.title }), title: t('Remove from phase') }, icon('x'))));
   }
@@ -2095,7 +2095,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const expanded = state.expanded.has(s.id);
     const inPhase = g.kind === 'phase';
     const editable = canEdit();
-    const draggable = state.grouping === 'workflow' && !!activeWorkflow() && editable;
+    const draggable = state.grouping === 'pipeline' && !!activePipeline() && editable;
     const d = state.derived;
     const outN = d.out.get(s.id).size, inN = d.inc.get(s.id).size;
     const dup = isShared(s);
@@ -2425,7 +2425,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       setSearch(''); state.tagFilter.clear(); state.focus = null; recompute();
       toast(t('Cleared filters to show {skill}', { skill: skillLabel(id) }));
     }
-    if (state.grouping === 'workflow' && !activeWorkflow()) state.grouping = 'dependencies';
+    if (state.grouping === 'pipeline' && !activePipeline()) state.grouping = 'dependencies';
     const groups = computeGroups() || [];
     const containing = groups.filter((g) => g.ids.includes(id));
     if (containing.length && containing.every((g) => state.collapsed.has(groupKey(g)))) state.collapsed.delete(groupKey(containing[0]));
@@ -2498,18 +2498,18 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       state.mode === 'live' ? h('button', { type: 'button', class: 'btn small', 'data-act': 'view-file', 'data-skill': s.id, 'data-path': 'SKILL.md' }, t('View SKILL.md')) : null);
     body.append(actions);
 
-    const wf = state.wfBlocked && state.wfBlocked.kind !== 'conflict' ? null : activeWorkflow();
+    const wf = state.wfBlocked && state.wfBlocked.kind !== 'conflict' ? null : activePipeline();
     if (wf && state.mode !== 'live') {
       // The exported copy lists the phases holding the skill, with nothing to change them.
       const names = phasesOf(s.id).map(phaseName);
-      body.append(sec(t('Phases in {workflow}', { workflow: wfName(wf) }), h('span', { class: names.length ? null : 'muted', text: names.length ? list(names) : t('In no phase.') })));
+      body.append(sec(t('Phases in {pipeline}', { pipeline: wfName(wf) }), h('span', { class: names.length ? null : 'muted', text: names.length ? list(names) : t('In no phase.') })));
     } else if (wf) {
       const checks = h('div', { class: 'phase-checks' });
-      if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: t('This workflow has no phases yet.') }));
+      if (!wf.phases.length) checks.append(h('span', { class: 'muted', text: t('This pipeline has no phases yet.') }));
       for (const p of wf.phases) {
         checks.append(h('label', { class: 'check' }, h('input', { type: 'checkbox', 'data-act': 'phase-check', 'data-phase': p.id, 'data-skill': s.id, checked: p.skills.includes(s.id), disabled: !canEdit() }), phaseName(p)));
       }
-      body.append(sec(t('Phases in {workflow}', { workflow: wfName(wf) }), checks));
+      body.append(sec(t('Phases in {pipeline}', { pipeline: wfName(wf) }), checks));
     }
 
     const srcKids = [h('div', { style: 'margin-bottom:4px' }, root ? rootTitle(root) : str(s.root) || t('Unknown source'), s.plugin ? h('span', { class: 'muted', text: ' · ' + t('plugin {name}', { name: s.plugin }) }) : null)];
@@ -2638,7 +2638,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
 
   function renderPhaseDetails(p) {
-    const wf = activeWorkflow();
+    const wf = activePipeline();
     const i = wf.phases.indexOf(p);
     const idx = state.idx;
     const body = h('div', { class: 'd-body' });
@@ -2699,7 +2699,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       h('span', { class: 'top' }, v.pairs.map((pp, j) => [j ? h('span', { class: 'muted', text: '·' }) : null,
         h('button', { type: 'button', class: 'linkish mono', 'data-act': 'follow', 'data-to': v.out ? pp.from : pp.to, text: pp.text })]))))) :
       h('span', { class: 'muted', text: t('No calls cross into other phases.') })));
-    return [detailsHead(t('Phase {i} of {n} · {workflow}', { i: i + 1, n: wf.phases.length, workflow: wfName(wf) }), phaseName(p)), body];
+    return [detailsHead(t('Phase {i} of {n} · {pipeline}', { i: i + 1, n: wf.phases.length, pipeline: wfName(wf) }), phaseName(p)), body];
   }
 
   // ===================================================================
@@ -2820,7 +2820,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       initialFocus: () => { setTimeout(() => input.select(), 0); return input; },
     });
   }
-  function newWorkflowDialog(defaultPreset) {
+  function newPipelineDialog(defaultPreset) {
     const presets = state.config.presets;
     const name = h('input', { type: 'text', value: '', maxlength: '80', placeholder: t('e.g. Delivery') });
     const err = h('div', { class: 'err-text', 'aria-live': 'polite' });
@@ -2835,14 +2835,14 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const syncName = () => {
       const pid = (radios.querySelector('input:checked') || {}).value;
       const pr = presets.find((p) => p.id === pid);
-      if (!name.dataset.touched) name.value = pr && pr.id !== 'blank' ? presetName(pr) : t('Workflow');
+      if (!name.dataset.touched) name.value = pr && pr.id !== 'blank' ? presetName(pr) : t('Pipeline');
       place.hidden = !pr || !arr(pr.phases).some((x) => arr(x.keywords).length);
     };
     name.addEventListener('input', () => { name.dataset.touched = '1'; });
     radios.addEventListener('change', syncName);
     syncName();
-    return modal(t('New workflow'), [h('label', { class: 'field' }, t('Name'), name), h('div', { class: 'field' }, h('div', { style: 'font-weight:600;font-size:12px;margin-bottom:4px', text: t('Start from') }), radios), place, err],
-      [{ label: t('Cancel'), value: null }, { label: t('Create workflow'), primary: true }], {
+    return modal(t('New pipeline'), [h('label', { class: 'field' }, t('Name'), name), h('div', { class: 'field' }, h('div', { style: 'font-weight:600;font-size:12px;margin-bottom:4px', text: t('Start from') }), radios), place, err],
+      [{ label: t('Cancel'), value: null }, { label: t('Create pipeline'), primary: true }], {
         returnFocus: () => els.wfSelect.isConnected && !els.wfTools.hidden ? els.wfSelect : null,
         onSubmit: () => {
           const v = name.value.trim();
@@ -2850,7 +2850,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
           const pid = (radios.querySelector('input:checked') || {}).value;
           return { name: v, preset: presets.find((p) => p.id === pid) || null, place: !place.hidden && placeChk.checked };
         },
-      }).then((r) => { if (r) createWorkflow(r.name, r.preset, r.place); });
+      }).then((r) => { if (r) createPipeline(r.name, r.preset, r.place); });
   }
   async function fileDialog(skillId, path) {
     const s = state.idx.byId.get(skillId);
@@ -3109,7 +3109,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         key('F6', t('Move between the canvas and the open details')),
         canEdit() ? key('Ctrl/⌘ Z', t('Undo the latest edit')) : null,
         h('li', { text: t('Click a card to open it; click a call chip to go to the skill it calls.') }),
-        state.grouping === 'workflow' && canEdit() ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null)));
+        state.grouping === 'pipeline' && canEdit() ? h('li', { text: t('Drag cards between phases, or use a card’s ⋯ menu.') }) : null)));
     openPopover(anchor, wrap, '');
   }
   function showInsight(ids) {
@@ -3124,7 +3124,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     const fromPid = anchor.dataset.phase || null;
     const s = state.idx.byId.get(sid);
     if (!s) return;
-    const wf = canEdit() ? activeWorkflow() : null;
+    const wf = canEdit() ? activePipeline() : null;
     const items = [
       { label: t('Open details'), run: () => select({ type: 'skill', id: sid, from: anchor.closest('.card')?.querySelector('.card-main')?.dataset.fk }) },
       { label: state.expanded.has(sid) ? t('Hide steps') : t('Show steps'), run: () => toggleExpand(sid) },
@@ -3132,7 +3132,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     ];
     if (wf) {
       const member = new Set(phasesOf(sid).map((p) => p.id));
-      if (state.grouping === 'workflow') {
+      if (state.grouping === 'pipeline') {
         const moveTargets = wf.phases.filter((p) => p.id !== fromPid && !(fromPid === null && member.has(p.id)));
         if (moveTargets.length || fromPid) {
           items.push({ sep: true }, { heading: fromPid ? t('Move to…') : t('Add to…') });
@@ -3150,7 +3150,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       } else {
         const also = wf.phases.filter((p) => !member.has(p.id));
         if (also.length) {
-          items.push({ sep: true }, { heading: t('Add to {workflow}…', { workflow: wfName(wf) }) });
+          items.push({ sep: true }, { heading: t('Add to {pipeline}…', { pipeline: wfName(wf) }) });
           for (const p of also) items.push({ label: phaseName(p), run: () => { addToPhase(p.id, sid); toast(t('Added {skill} to {phase}', { skill: '/' + s.name, phase: phaseName(p) })); } });
         }
       }
@@ -3165,7 +3165,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   }
   function phaseMenu(anchor) {
     const pid = anchor.dataset.phase;
-    const wf = activeWorkflow();
+    const wf = activePipeline();
     const i = wf ? wf.phases.findIndex((p) => p.id === pid) : -1;
     if (i < 0) return;
     openMenu(anchor, [
@@ -3177,13 +3177,13 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       { label: t('Delete phase'), danger: true, run: () => deletePhase(pid) },
     ]);
   }
-  function workflowMenu(anchor) {
+  function pipelineMenu(anchor) {
     openMenu(anchor, [
-      { label: t('New workflow…'), run: () => newWorkflowDialog() },
-      { label: t('Rename…'), run: renameWorkflow },
-      { label: t('Duplicate'), run: duplicateWorkflow },
+      { label: t('New pipeline…'), run: () => newPipelineDialog() },
+      { label: t('Rename…'), run: renamePipeline },
+      { label: t('Duplicate'), run: duplicatePipeline },
       { sep: true },
-      { label: t('Delete workflow…'), danger: true, run: deleteWorkflow },
+      { label: t('Delete pipeline…'), danger: true, run: deletePipeline },
     ]);
   }
 
@@ -3220,7 +3220,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     if (!canEdit()) return;
     renameReturn = returnFk || null;
     const g = state.grouping;
-    if (g !== 'workflow') { state.grouping = 'workflow'; savePrefs(); }
+    if (g !== 'pipeline') { state.grouping = 'pipeline'; savePrefs(); }
     state.collapsed.delete(groupPrefix() + pid);
     state.renaming = pid;
     invalidate('chrome', 'canvas');
@@ -3312,17 +3312,17 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     });
     els.wfSelect.addEventListener('change', () => {
       const v = els.wfSelect.value;
-      if (v === '__new') { els.wfSelect.value = shownWorkflowId() || ''; newWorkflowDialog(); return; }
-      // Showing another workflow is no edit: the exported copy shows it and saves nothing.
-      if (v && v !== shownWorkflowId() && !state.wfBlocked) {
-        state.workflows.active = v;
+      if (v === '__new') { els.wfSelect.value = shownPipelineId() || ''; newPipelineDialog(); return; }
+      // Showing another pipeline is no edit: the exported copy shows it and saves nothing.
+      if (v && v !== shownPipelineId() && !state.wfBlocked) {
+        state.pipelines.active = v;
         endEditRun();
         if (state.selection && state.selection.type === 'phase') state.selection = null;
         if (canEdit()) markDirty();
         invalidate('chrome', 'canvas', 'details');
       }
     });
-    els.wfMenu.addEventListener('click', () => { if (popoverOpenFor(els.wfMenu)) closePopover(); else workflowMenu(els.wfMenu); });
+    els.wfMenu.addEventListener('click', () => { if (popoverOpenFor(els.wfMenu)) closePopover(); else pipelineMenu(els.wfMenu); });
     els.lang.addEventListener('click', () => { if (popoverOpenFor(els.lang)) closePopover(); else languageMenu(els.lang); });
     // The box is the source of truth: state.search only follows it, so nothing can put old text back.
     els.search.addEventListener('input', () => {
@@ -3418,20 +3418,20 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       }
       case 'phase-rename': startRename(pid, tgt.dataset.fk); break;
       case 'phase-menu': if (popoverOpenFor(tgt)) closePopover(); else phaseMenu(tgt); break;
-      case 'phase-left': { const wf = activeWorkflow(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) - 1); break; }
-      case 'phase-right': { const wf = activeWorkflow(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) + 1); break; }
+      case 'phase-left': { const wf = activePipeline(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) - 1); break; }
+      case 'phase-right': { const wf = activePipeline(); movePhase(pid, wf.phases.findIndex((p) => p.id === pid) + 1); break; }
       case 'phase-delete': deletePhase(pid); break;
       case 'add-phase': addPhase(); flush(); break;
-      case 'reload-workflows': reloadWorkflows(); break;
+      case 'reload-pipelines': reloadPipelines(); break;
       case 'start-fresh': startFresh(); break;
       case 'preset-start': {
         const p = state.config.presets.find((x) => x.id === tgt.dataset.preset);
-        if (p) createWorkflow(presetName(p), p, true);
+        if (p) createPipeline(presetName(p), p, true);
         break;
       }
       case 'blank-start': {
         const p = state.config.presets.find((x) => x.id === 'blank');
-        createWorkflow(t('Workflow'), p || null, false);
+        createPipeline(t('Pipeline'), p || null, false);
         break;
       }
       case 'close-details': closeDetails(); break;
@@ -3462,9 +3462,9 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       if (!p || !canEdit()) return;
       // A note typed with no other edit between is one edit to undo; the details are not
       // re-rendered under the reader's typing, so this is not a mutate(). Phase ids repeat across
-      // workflows made from one preset, so the run is keyed by both.
-      const key = 'note:' + shownWorkflowId() + '\u0000' + p.id;
-      const before = latestEdit && latestEdit.key === key ? null : clone(state.workflows);
+      // pipelines made from one preset, so the run is keyed by both.
+      const key = 'note:' + shownPipelineId() + '\u0000' + p.id;
+      const before = latestEdit && latestEdit.key === key ? null : clone(state.pipelines);
       p.note = tgt.value;
       markDirty();
       if (before) recordEdit(before, key);
@@ -3566,7 +3566,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       const to = col.dataset.drop === '__unassigned' ? null : col.dataset.drop;
       moveSkill(d.id, d.from, to);
     } else if (d.type === 'phase' && col.dataset.phase && col.dataset.phase !== d.id) {
-      const wf = activeWorkflow();
+      const wf = activePipeline();
       const from = wf.phases.findIndex((p) => p.id === d.id);
       let to = wf.phases.findIndex((p) => p.id === col.dataset.phase) + (after ? 1 : 0);
       if (from < to) to--;
