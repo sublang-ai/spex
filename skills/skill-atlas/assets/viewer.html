@@ -250,7 +250,7 @@ button.col-name:hover { background: var(--surface-3); }
 .card.missing { background: transparent; box-shadow: inset 0 0 0 1px var(--border-2); border: 0; }
 .card.missing .card-main { cursor: default; }
 .card.missing .card-name { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 50%, transparent); }
-.card-taglist { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; }
+.card-foot .tagnames { display: inline-flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 
 /* ---------- steps ---------- */
 .steps { border-top: 1px solid var(--border); padding: 4px 0 6px; }
@@ -526,7 +526,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
   const GROUPINGS = ['pipeline', 'dependencies', 'source'];
   // Labels here are the page's own fallbacks, looked up in the reader's language when shown.
   const DEFAULT_VIEW = {
-    title: '', defaultGrouping: 'pipeline', maxTagsPerCard: 6,
+    title: '', defaultGrouping: 'pipeline',
     categories: {
       input: { label: '', color: '#2f7d6d' },
       output: { label: '', color: '#b4621b' },
@@ -1330,7 +1330,6 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     state.view = {
       title: str(v.title),
       defaultGrouping: GROUPINGS.includes(v.defaultGrouping) ? v.defaultGrouping : 'pipeline',
-      maxTagsPerCard: Number.isFinite(v.maxTagsPerCard) ? Math.max(0, v.maxTagsPerCard) : 6,
       categories: cats,
     };
     state.config = { presets: arr(config.presets).filter((p) => p && arr(p.phases).length >= 0 && p.name), static: !!config.static, stateDir: config.stateDir || null };
@@ -1928,9 +1927,21 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
     for (const c of CATS) {
       const ids = cats[c];
       if (!ids.length) continue;
-      // A count names its category and number; a bare mark, with no number, its tags.
-      const label = opts.bare ? t('{category}: {tags}', { category: catLabel(c), tags: list(ids.map((id) => tagLabel(id))) }) : t('{category}: {n}', { category: catLabel(c), n: ids.length });
+      // A mark names its category and its tags, a count its number too: the names are a hover away, never shown twice.
+      const tags = list(ids.map((id) => tagLabel(id)));
+      const label = opts.bare ? t('{category}: {tags}', { category: catLabel(c), tags }) : t('{category} ({n}): {tags}', { category: catLabel(c), n: ids.length, tags });
       wrap.append(h('span', { class: `pill cat-${c}${opts.bare ? ' bare' : ''}`, role: 'img', 'aria-label': label, title: label }, icon(c), opts.bare ? null : fmtNum(ids.length)));
+    }
+    return wrap;
+  }
+  // An opened card's tags by name, in place of its counts: each once, its category's mark beside it and named in its tooltip.
+  function tagNamesFor(cats) {
+    const wrap = h('span', { class: 'tagnames' });
+    for (const c of CATS) {
+      for (const id of cats[c]) {
+        const label = t('{category}: {tags}', { category: catLabel(c), tags: tagLabel(id) });
+        wrap.append(h('span', { class: `tagchip cat-${c}`, title: label }, icon(c), h('span', { class: 'sr-only', text: catLabel(c) + ': ' }), tagLabel(id)));
+      }
     }
     return wrap;
   }
@@ -2118,7 +2129,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
         s.problems.length ? h('span', { class: 'issue-dot', role: 'img', 'aria-label': t('Has issues: {issues}', { issues: issueText }), title: issueText }) : null),
       h('span', { class: 'card-desc', title: desc || null, text: summary || desc || t('No description') }),
       h('span', { class: 'card-foot' },
-        pillsFor(s._cats),
+        expanded ? tagNamesFor(s._cats) : pillsFor(s._cats),
         h('span', { class: 'card-meta' },
           s.steps.length ? h('span', { text: stepNoun(s, s.steps.length) }) : null,
           outN || inN ? h('span', { class: 'card-deps', text: [outN ? t('Depends on {n}', { n: outN }) : '', inN ? t('Used by {n}', { n: inN }) : ''].filter(Boolean).join(' · ') }) : null)));
@@ -2128,21 +2139,7 @@ dialog.dlg::backdrop { background: rgba(10, 12, 16, .35); }
       inPhase && editable ? h('button', { type: 'button', class: 'icon-btn', 'data-act': 'card-remove', 'data-skill': s.id, 'data-phase': g.id, 'data-fk': `cr|${key}|${s.id}`, 'aria-label': t('Remove {skill} from {phase}', { skill: '/' + s.name, phase: g.title }), title: t('Remove from {phase}', { phase: g.title }) }, icon('x')) : null);
     card.append(tools);
     const inst = { el: card, card, group: false, col: colIndex, steps: new Map() };
-    if (expanded) {
-      const maxT = state.view.maxTagsPerCard;
-      if (maxT > 0 && s._tagIds.size) {
-        const tagList = h('div', { class: 'card-taglist' });
-        const ids = CATS.flatMap((c) => s._cats[c]);
-        for (const id of ids.slice(0, maxT)) {
-          const tg = state.idx.tagById.get(id);
-          const c = tg ? tg.category : catOf(id);
-          tagList.append(h('span', { class: `tagchip cat-${c}`, title: t('{category}: {tags}', { category: catLabel(c), tags: tagLabel(id) }) }, icon(c), tagLabel(id)));
-        }
-        if (ids.length > maxT) tagList.append(h('span', { class: 'muted', style: 'font-size:11.5px;align-self:center', text: t('+{n} more', { n: ids.length - maxT }) }));
-        card.append(tagList);
-      }
-      card.append(renderSteps(s, key, stepsId, inst));
-    }
+    if (expanded) card.append(renderSteps(s, key, stepsId, inst));
     pushAnchor(s.id, inst);
     return card;
   }

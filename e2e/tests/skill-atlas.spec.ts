@@ -237,16 +237,36 @@ test("skill-atlas-13: a card reads what it depends on and what uses it, and a st
   await expect(usedBy.getByRole("button", { name: "/guide" })).toHaveCount(0);
 });
 
-test("skill-atlas-13: a card's tag categories show only those it has, each named with its count", async ({ page }) => {
+test("skill-atlas-13: a closed card counts the tag categories it has, each count naming its tags; an opened one names each tag once in their place", async ({ page }) => {
   await page.goto(url);
   await groupBy(page, "Dependencies");
   const counts = (id: string) => card(page, id).locator(".card-foot .pill");
+  const names = (id: string) => card(page, id).locator(".card-foot .tagchip");
   await expect(counts("decide")).toHaveCount(2);
-  for (const name of ["Data in: 1", "Human: 1"]) {
-    await expect(card(page, "decide").getByRole("img", { name, exact: true })).toHaveAttribute("title", name);
-  }
   await expect(counts("decide")).toHaveText(["1", "1"]);
+  await expect(names("decide")).toHaveCount(0);
+  // Each count names its category, its number and its tags, alike in its tooltip and to assistive technology.
+  const tagsOf: string[] = [];
+  for (const [i, category] of ["Data in", "Human"].entries()) {
+    const label = (await counts("decide").nth(i).getAttribute("aria-label"))!;
+    const m = new RegExp(`^${category} \\(1\\): (.+)$`).exec(label);
+    expect(m, `${label} names ${category}, its count and its tag`).not.toBeNull();
+    await expect(counts("decide").nth(i)).toHaveAttribute("title", label);
+    tagsOf.push(`${category}: ${m![1]}`);
+  }
   await expect(counts("lone")).toHaveCount(0);
+
+  // Opened, the card names each tag once with its category, and no count is left beside the names.
+  await cardButton(page, "decide").click();
+  await expect(cardButton(page, "decide")).toHaveAttribute("aria-expanded", "true");
+  await expect(counts("decide")).toHaveCount(0);
+  await expect(names("decide")).toHaveText(tagsOf);
+  for (const [i, name] of tagsOf.entries()) await expect(names("decide").nth(i)).toHaveAttribute("title", name);
+  await expect(card(page, "decide").locator(".tagchip")).toHaveCount(tagsOf.length);
+
+  await cardButton(page, "decide").click();
+  await expect(counts("decide")).toHaveCount(2);
+  await expect(names("decide")).toHaveCount(0);
 });
 
 test("skill-atlas-13: a skill installed in several folders says in how many and names them, by its tooltip and its name alike", async ({ page }) => {
