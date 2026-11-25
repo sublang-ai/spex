@@ -5,137 +5,161 @@
 
 ## Status
 
-Proposed (2026-11-25), as the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md).
-Extends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex verify` and `spex approve`, and [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) with the `guard` skill.
+Proposed (2026-11-25) as the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE.
+It reads those two records narrowly in the places its Decision lists.
+Extends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`.
+Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need: the `guard` skill needs the `spex` command.
+Extends [DR-145](145-merge-on-green.md) and [DR-199](199-release-gated-full-validation.md) with `spex verify` in this repository's checks.
 
 ## Context
 
-DR-243 and DR-244 say what a guard is, how it is checked and what a result means.
-They leave open where a project keeps a guard, how a person's approval is recorded and who drafts the readings.
+[DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md) leave open where a project keeps a guard, how a person's approval is recorded and who drafts the readings.
 The command line has no model to call, and a project may have no IDE, running app or account.
-The first stage checks with fast-check alone and leaves the IDE out.
+A prototype of this stage ran one guard on Spex's package library and a second rule on the core's ledger, and what it found is in the choices below.
 
 Considered and declined:
 
-- Keeping a guard's files under `specs/`. Specs state behavior and never name the tests that realize them, and a binding, a patch or a run record names code.
-- Marking a guard in the spec law. A guard file that names item IDs leaves `meta.md`, the scaffold and `spex lint` as they are.
-- Calling a model from the command line. A check would then depend on an agent's sign-in, and DR-244 keeps agents out of a verification run.
-- JavaScript as the stored form of a reading. No fixed rule translates arbitrary code for TLC or Z3.
-- An existing expression language. Each would bring types that the later tools cannot take, so Spex would still own a subset.
-- Signed approvals, or asking who is at the keyboard. A committed record under the project's own review is as strong as the project's other rules and needs no account.
-- Checking the project's code in place. A stale build would be checked under a fresh digest.
-- A new seed on every run. A result would then change with no input changing.
+- a guard's files under `specs/`: the assertion and examples are already there as items, while a binding, a patch and an approval record name code and change with it; `spex lint` warns of any other entry under `specs/`, and a release carries one spec file, so nothing kept there would travel with a package;
+- a rule in `meta.md` marking guard items: the guard's folder and file name them by ID, so `meta.md`, the scaffold and `spex lint` do not change;
+- a model called from the command line: a check would depend on an agent's sign-in, and [DR-244](244-a-guard-is-checked-on-the-implementation.md) allows no agent in a verification run;
+- JavaScript as a reading's stored form: no fixed rule translates arbitrary code for TLC or Z3, and code could read the implementation or the clock;
+- an existing expression language: each has values TLC or Z3 cannot take, so Spex would still define a subset;
+- a signed approval, or asking who is at the keyboard: a project may have no account, and a committed record shows in every review of the change;
+- checking the code where it stands: a build older than its sources would be checked as if it were current;
+- a new seed on every run: a result would change with no input changing, and a long-hidden violation would land on an unrelated change;
+- a stored result that lets a run skip a guard: to be trusted it would have to name every installed dependency and tool, and CI stores none;
+- tool versions in the approval: a tool is installed with the command line and not kept in the repository, so a record would hold on one machine and fail on another with nothing to review.
 
 ## Decision
 
 ### Where a guard is kept
 
-A guard's meaning stays in `specs/`.
-Its assertion and its examples are GEARS test items in the package that holds the behavior item, each citing that item as the spec law requires of any test item.
-The guard takes its name from its assertion item.
-
-Everything else is kept in a committed `guards/` folder at the project's root, beside the code it names.
+A guard's assertion and examples are GEARS test items in the package that holds the behavior item, and each cites that item [[meta-20](../meta.md#meta-20)].
+A guard is named by its assertion item's ID.
+Its other files are committed under `guards/`, beside `specs/`.
 
 | Kept | Where |
 | --- | --- |
-| The guard file: its items, binding, checks, examples as sequences and kept faults | `guards/<assertion>/guard.yaml` |
+| The guard file: its binding, its bounds and each example's sequence | `guards/<assertion>/guard.yaml` |
 | The surviving readings | `guards/<assertion>/readings/` |
 | Each kept fault, as a patch | `guards/<assertion>/faults/` |
 | The approval record | `guards/<assertion>/approval.json` |
-| Each violation, kept after closure | `guards/<assertion>/violations/` |
 | A binding: its declaration and its module | `guards/bindings/<name>/` |
-| The results of runs, never committed | `.spex/verify/` |
 
-The guard file says which item is the assertion, which items are its examples, whether each is permitted or forbidden, and which permitted one shows the protected behavior happening.
+The guard file names each example item as permitted or forbidden and holds it again as the sequence of events and stated effects the item describes.
+A run keeps nothing: no result and no copy.
 
 ### What is stored
 
-A reading is data.
-It holds its own state with starting values and, for each event, when the event is legal, the effect its rules expect and how the state changes.
+A reading is data, not code.
+It holds its own state and, for each event, when the event is legal and how the state changes with the observed effect.
 It holds the assertion as when it applies and what must then hold of the observed effect.
-
-Conditions are written in one small closed language.
-It has truth values, whole numbers, names from finite sets, and sets and maps over those, with comparison, logic, arithmetic, membership, and “all” and “any” over a finite set.
-It has no loops, no definitions and no input or output, so every condition has a value.
-Spex runs a reading directly on a sequence, and the same form can later be translated for TLC and Z3 by fixed rules.
-
-An example is stored once in the guard file as its sequence of events and stated effects, beside the item it translates.
-Spex prints any stored sequence, an example's or a violation's, as its events and effects in order.
+Its conditions are written in one small language that Spex defines, over finite values, with no loops, definitions, input or output, so that every condition has a value and fixed rules can later translate it for TLC and Z3.
 
 ### The binding
 
-A binding has a declaration and a module.
-The declaration names the events it can cause with their values, the effects it can observe, the conditions it controls, the project files it drives and the commands that prepare them.
-The conditions are state, clock, order and restart.
-The module is JavaScript that Node loads, and it drives the code under the folder it is given.
+A binding's declaration names the events it can cause, the effects it can observe, the files a run copies and the commands that build the copy.
+Its module is JavaScript, with one function for each event.
+In this stage a binding controls every condition a check uses.
+Each sequence starts from a fresh state, and a clock or a restart, where a behavior depends on one, is an event the binding causes.
 
-Every run uses a copy.
-Spex copies the declared files, applies a kept fault's patch where there is one, runs the declared commands and drives the module against the copy.
-The project's code and a faulted copy are therefore checked the same way, and a result names the digest of exactly the files copied.
-The declared files are the code the guard reaches.
+Every run uses a copy outside the project.
+Spex copies the declared files and the binding, applies a kept fault's patch where there is one, runs the commands, and runs the module in a process of its own, stopped at the time limit.
+The copy uses the project's installed dependencies.
+A run that loads any other project file from outside the copy is Inconclusive, naming the file.
+A binding that fails, by an error, an effect outside its declaration or a failed command, makes the check Inconclusive and never counts as catching a fault.
+The declared files are the code the guard reaches, and a result names their digest.
 
 ### Approval
 
-`spex approve <guard>` writes the approval record: one digest for each input that needs a person's approval.
-Those are the assertion, the behavior item, the examples and every item they cite to any depth, the guard file, the readings, the kept faults, the binding, each tool by name and major version, and the version of Spex's rules for that tool.
-`spex verify` computes them again.
-A difference names the changed input, and the guard cannot pass until it is approved again.
-The project's code and the tools' exact versions are inputs to a result and not to the approval.
+`spex approve <guard>` prints each example's item beside its stored sequence and names what changed since the last record.
+It then writes the approval record, one digest for each of these inputs.
 
+- the assertion, the behavior item, the examples and the items those cite directly
+- the guard file, the readings, the kept faults and the binding
+
+`spex verify` names each input that changed, was added or is gone, and the guard cannot pass until it is approved again.
 Spex does not try to tell a person from an agent.
-The record is a committed file, and the project's own review of `guards/` is where a person's approval is enforced.
-Removing a guard is deleting its folder with the record in it, which the same review sees.
-A person closes a violation with the same command and a reason, and the closure is one of the approved inputs.
+The record is a committed file, so an approval shows as a change in any review.
+A guard is removed by deleting its folder, which shows the same way.
 
-### What a run checks in this stage
+### What a run checks
 
-`spex verify` checks each guard in this order and calls no model.
+`spex verify` checks every guard, or the ones it is given, and calls no model.
 
-1. It reads the files and the items, and compares the inputs with the approval record.
-2. It checks every example against every reading without the code.
-3. It runs each permitted example on a copy of the project's code.
-4. It runs the sampled check: fast-check generates sequences of the declared events, Spex drives each through the binding and judges every step by every reading, and fast-check shrinks a failing sequence.
-5. It runs the same check at the same bounds on a copy for each kept fault.
-6. It replays each open violation's recorded sequence.
+1. It compares the inputs with the approval record.
+2. It checks every example against every reading, without the code.
+3. It runs each permitted example on a copy.
+4. It runs the sampled check on that copy.
+5. It runs the same check at the same bounds on a copy with each kept fault.
 
-The guard file fixes the bounds of the sampled check: the number of sequences, the most events in one, the seed and a time limit.
+In the sampled check fast-check generates sequences of the declared events, each continuing the start of a permitted example.
+Spex tries an event only when every reading finds it legal, judges each step by every reading, and has fast-check shrink a failing sequence.
+The guard file fixes the bounds: the number of sequences, the most events in one, the seed and the time limit.
 
-| Finding | Result |
+| Finding on the project's code | Result |
 | --- | --- |
-| A step whose observed effect every reading forbids | Violated on the implementation |
-| Under control, an effect that differs from the one an example states or every reading expects, or the showing example not applying | Disagreement with the model |
-| An example a reading does not accept, a step the readings judge differently, the time limit, no sequence in which the assertion applied, or a condition the assertion needs and the binding does not control | Inconclusive |
+| An observed effect every reading forbids | Violated on the implementation |
+| A permitted example whose stated effect the code does not produce, or which shows the protected behavior against the readings and not on the code | Disagreement with the model |
+| A permitted example a reading rejects or a forbidden one it accepts, a step the readings disagree on, a timeout, no sequence in which the assertion applied, or a failing binding | Inconclusive |
 | None of these, with every sequence run | Sampled on the implementation |
 
-Conflict in the items, Violated in the model, Checked within bounds and Proved under assumptions wait for the tools that can establish them.
+A violation comes before any other finding.
+The other four results wait for the tools that can establish them.
+The check of the examples against the readings is reported apart from the checks on the code.
+A result names the versions of fast-check and Spex, the Git revision and the digest of the copied files, the bounds, and each reading's conditions for an event being legal.
 
-A guard passes when its inputs are approved, its required check is Sampled on the implementation, it has at least one kept fault, every kept fault ends Violated on the implementation, and no violation is open.
-A kept fault whose patch no longer applies is not caught.
-Spex records a violation with its sequence and closes it by itself only when a controlled replay of that sequence no longer shows it and the code or the approved inputs have changed since.
-`spex verify` skips a guard whose stored result passed on the same inputs, and runs every guard where no result is stored, as in CI.
-It exits `0` only when every guard it was asked for passes.
+A guard passes only when all of these hold.
+
+- Its inputs are approved.
+- It has a forbidden example and a permitted one that shows the protected behavior happening.
+- The sampled check on the project's code is **Sampled on the implementation**.
+- It has a kept fault, and every kept fault is caught: on its copy the sampled check finds an effect every reading forbids.
+
+A patch that no longer applies, or that changes none of the copied files, is not caught, and the guard waits for an approved replacement.
+`spex verify` exits `0` only when every guard it checked passes.
+
+### Where this stage is narrower
+
+| DR-243 or DR-244 | This stage |
+| --- | --- |
+| A person approves every input change except code and fresh evidence | A tool's version needs no approval. Every run checks every example and catches every kept fault again with the tool it has. |
+| The inputs include every item a guard's meaning depends on through citations | The approval covers the guard's items, the behavior item and the items those cite directly. To any depth the first guard would cover more than 460 of this tree's roughly 1,300 items. |
+| `spex verify` runs for every guard a change reaches | It runs every guard and keeps no result, so none can be stale. |
+| A violation keeps its sequence and replay command, and is closed by a replay or a person | A violation is printed with its shrunk sequence and not recorded. The seed is fixed and every sequence starts fresh, so the same command shows it again until the code or an approved change corrects it. |
+| A binding declares which conditions it controls | A binding controls them all. |
+| Spex derives the readings, and again when their inputs change | The skill's agents draft them, and `spex verify` only names the input that changed. |
+| Spex finds a distinguishing sequence where readings disagree | The skill's agents find one by reading, and Spex compares readings only on the examples and on the sequences it runs. |
+| Disagreement with the model covers any effect the model excludes | A reading states no expected effects yet, so only an example's stated effect can disagree. |
 
 ### Drafting
 
-One shipped skill, `guard`, drafts a guard with the person.
-It writes the assertion and examples as items, has independent agents each draft a reading from the items alone, and settles their differences by example.
-`spex verify` has two aids for it that read no code: one prints the items a reading is drawn from, and one compares the readings and prints a sequence they judge differently.
-The skill drafts the binding and a kept fault only after the readings stand.
-It runs `spex approve` only on the person's word.
+One shipped skill, `guard`, drafts a guard with a person.
+
+1. It writes the assertion and the examples as items, and the binding's events and effects from those items.
+2. It has independent agents each draft a reading from the items and that declaration alone, before any agent reads the code.
+3. Where readings disagree, it shows the person one distinguishing sequence, the person marks it permitted or forbidden, it becomes an example, and the readings it contradicts are dropped.
+4. It then reads the code to write the binding's module, files and commands, and plants a fault or restores a past defect.
+5. It runs `spex verify`, and runs `spex approve` only when the person says so.
+
+When an item changes, the skill drafts the readings again before it asks for approval.
 
 ### The first guard
 
-The first guard is on Spex itself.
-It protects the rule that an install never replaces the placed spec of a package that stays selected with another package's spec.
-Its kept fault restores the defect fixed in `6000e8c`, where the path went to the first package by `<org>`.
-The tests of that day passed with the defect, because they only tried packages that arrived together.
-This repository runs `spex verify` in CI and before a push.
+The first guard is on Spex itself: while a package stays selected, an install never replaces its placed spec with another package's [[environments-41](../packages/environments.md#environments-41)].
+Its kept fault restores the behavior changed on 2026-11-01 in `6000e8c`, where the path went to the first package by `<org>` even over a standing copy.
+The item of that day required that behavior, and the tests tried a later arrival only where the standing package also came first by `<org>`.
+The defect was in the requirement, and the guard's forbidden example is what would have exposed it.
+In the prototype the sampled check passed on today's code and caught the restored fault.
+This repository runs `spex verify` in its pull-request checks and before a push.
 
 ## Consequences
 
-A project adds a guard with the command line and one skill, and a second guard on the same interface reuses the binding.
-Only code that a Node module can drive is reachable until other kinds of binding follow.
-An edit to any item a guard's meaning cites asks for approval again, and so does a new major version of a tool.
-The same seed gives the same sequences on every run, so a wider search is a separate, later check.
-fast-check becomes a dependency of `@sublang/spex` and so of the apps that host its library.
-TLC, Z3, recorded runs, imported proofs and the IDE build on the same stored form and records.
+A project adds a guard with two commands and one skill, and a second guard on the same interface reuses the binding.
+A binding is a JavaScript module until other kinds follow, so only code it can drive is reachable.
+An approval rests on the project's review, and a project that merges without one has only the record's history.
+The seed is fixed, so the same sequences run on every change, and a wider search is a separate, later check.
+Starting each sequence from an example matters: on the prototype's second rule, sequences generated without one caught the restored fault on none of twenty seeds at the same bounds, and with one on all twenty.
+Refactoring the lines a kept fault patches stops the guard until a replacement is approved.
+fast-check becomes a dependency of `@sublang/spex` and of the apps that host its library.
+Violation records, uncontrolled conditions, a model's expected effects, TLC, Z3, recorded runs, imported proofs and the IDE follow on the same stored form.

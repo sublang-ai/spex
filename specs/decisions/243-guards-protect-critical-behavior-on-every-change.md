@@ -7,6 +7,7 @@
 
 Proposed (2026-11-21) as an extension to the CLI in [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex verify`.
 [DR-244](244-a-guard-is-checked-on-the-implementation.md) describes how Spex checks a guard.
+[DR-251](251-a-guard-is-kept-beside-the-code.md) proposes the first stage: where a guard is kept, how approval is recorded and what fast-check alone establishes.
 
 ## Context
 
