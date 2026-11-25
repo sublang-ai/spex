@@ -94,14 +94,17 @@ A guard is removed by deleting its folder, which shows the same way.
 5. It runs the same check at the same bounds on a copy with each kept fault.
 
 In the sampled check fast-check generates sequences of the declared events, each continuing the start of a permitted example.
-Spex tries an event only when every reading finds it legal, judges each step by every reading, and has fast-check shrink a failing sequence.
+Spex causes an event only when every reading finds it legal, and skips it when every reading finds it not legal.
+An event the readings disagree on is not caused, is named in the result, and the sequence goes on without it.
+Spex judges each caused step by every reading and has fast-check shrink a failing sequence.
 The guard file fixes the bounds: the number of sequences, the most events in one, the seed and the time limit.
 
 | Finding on the project's code | Result |
 | --- | --- |
 | An observed effect every reading forbids | Violated on the implementation |
 | A permitted example whose stated effect the code does not produce, or which shows the protected behavior against the readings and not on the code | Disagreement with the model |
-| A permitted example a reading rejects or a forbidden one it accepts, a step the readings disagree on, a timeout, no sequence in which the assertion applied, or a failing binding | Inconclusive |
+| A permitted example a reading rejects, a forbidden one in which a reading finds a step not legal or does not forbid the last effect, a timeout, no sequence in which the assertion applied, or a failing binding | Inconclusive |
+| An event some readings find legal and others not, or a step on which they differ whether the assertion applies or the effect is forbidden | Inconclusive |
 | None of these, with every sequence run | Sampled on the implementation |
 
 A violation comes before any other finding.
@@ -123,10 +126,10 @@ A patch that no longer applies, or that changes none of the copied files, is not
 
 | DR-243 or DR-244 | This stage |
 | --- | --- |
-| A person approves every input change except code and fresh evidence | A tool's version needs no approval. Every run checks every example and catches every kept fault again with the tool it has. |
+| A person approves every input change except code and fresh evidence | The versions of fast-check and Spex need no approval. Every run checks every example and must catch every kept fault again with the versions it has. |
 | The inputs include every item a guard's meaning depends on through citations | The approval covers the guard's items, the behavior item and the items those cite directly. To any depth the first guard would cover more than 460 of this tree's roughly 1,300 items. |
 | `spex verify` runs for every guard a change reaches | It runs every guard and keeps no result, so none can be stale. |
-| A violation keeps its sequence and replay command, and is closed by a replay or a person | A violation is printed with its shrunk sequence and not recorded. The seed is fixed and every sequence starts fresh, so the same command shows it again until the code or an approved change corrects it. |
+| A violation keeps its sequence and replay command, and is closed by a replay or a person | A violation is printed with its shrunk sequence and not recorded. The same command prints it again while nothing the run uses changes, the versions of fast-check and Spex included. A run reports only what it found, and an earlier violation blocks no later run. Whether it was corrected waits for its record and a replay of its sequence. |
 | A binding declares which conditions it controls | A binding controls them all. |
 | Spex derives the readings, and again when their inputs change | The skill's agents draft them, and `spex verify` only names the input that changed. |
 | Spex finds a distinguishing sequence where readings disagree | The skill's agents find one by reading, and Spex compares readings only on the examples and on the sequences it runs. |
@@ -146,7 +149,8 @@ When an item changes, the skill drafts the readings again before it asks for app
 
 ### The first guard
 
-The first guard is on Spex itself: while a package stays selected, an install never replaces its placed spec with another package's [[environments-41](../packages/environments.md#environments-41)].
+The first guard is on Spex itself: while a package's spec stays selected and its release still provides it, an install never replaces its standing copy with another package's [[environments-41](../packages/environments.md#environments-41)].
+Where the spec is no longer selected or provided, its unedited copy leaves and another package may take the path, which a permitted example shows.
 Its kept fault restores the behavior changed on 2026-11-01 in `6000e8c`, where the path went to the first package by `<org>` even over a standing copy.
 The item of that day required that behavior, and the tests tried a later arrival only where the standing package also came first by `<org>`.
 The defect was in the requirement, and the guard's forbidden example is what would have exposed it.
@@ -158,7 +162,7 @@ This repository runs `spex verify` in its pull-request checks and before a push.
 A project adds a guard with two commands and one skill, and a second guard on the same interface reuses the binding.
 A binding is a JavaScript module until other kinds follow, so only code it can drive is reachable.
 An approval rests on the project's review, and a project that merges without one has only the record's history.
-The seed is fixed, so the same sequences run on every change, and a wider search is a separate, later check.
+The seed is fixed, so the same sequences are generated on every change until the version of fast-check or Spex or the guard's inputs change, and a wider search is a separate, later check.
 Starting each sequence from an example matters: on the prototype's second rule, sequences generated without one caught the restored fault on none of twenty seeds at the same bounds, and with one on all twenty.
 Refactoring the lines a kept fault patches stops the guard until a replacement is approved.
 fast-check becomes a dependency of `@sublang/spex` and of the apps that host its library.
