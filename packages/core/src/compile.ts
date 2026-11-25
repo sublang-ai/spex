@@ -148,7 +148,8 @@ export async function bundleRegistryModule(registryTs: string, modulePaths: stri
  * engine (playbook-library-46): its engine links provisioned, and a
  * registry module Spex bundled carrying its own engine bundled again
  * from the wrapper shipped beside it, replacing it atomically under the
- * bytes read — a hard link into the store keeps the store's copy. A
+ * bytes read — a former tree's hard link into the store keeps the
+ * store's copy. A
  * module changed meanwhile stands as it is. Returns why a module
  * carrying its engine was kept as it is, or null.
  */

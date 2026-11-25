@@ -150,7 +150,8 @@ file is missing or out of date: `spex.yaml` changed since, or a folder
 package's `meta.yaml` no longer matches it. `spex update` moves to the
 newest versions `spex.yaml` allows, on purpose. Downloaded files are
 checked against the digests in `spex.lock` and kept once in the home's
-`store/`, then linked or copied into `.spex/packages/`.
+`store/`, then copied into `.spex/packages/`, as npm copies from its
+cache, so a folder's installed files are its own.
 
 Only what a package's `meta.yaml` `provides` is placed: a playbook's
 source spec, or a skill the playbook requires, is installed but placed

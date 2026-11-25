@@ -37,7 +37,7 @@ Ignored files can contain durable local state.
 | `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
 | `<clone>/.spex/` | The global environment's installed spec packages, generated skills and install record, rebuilt from `spex.lock`. A project's stand under its working folder's `.spex/`, which Git ignores. | Ignored |
 | `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
-| `store/`, `cache/` | Spec package files by content digest, shared by every environment on the device, and rebuildable caches such as fetched Git sources. | Outside any clone |
+| `store/`, `cache/` | A cache of verified spec package files by content digest, which every environment on the device copies its installed files from, and rebuildable caches such as fetched Git sources. | Outside any clone |
 | `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
 | `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
 | `local/credentials.yaml` | The app token each instance issued to this device, by the instance's origin, owner-only; removed at sign-out. | Never leaves the device |
