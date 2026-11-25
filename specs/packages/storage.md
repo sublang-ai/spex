@@ -41,7 +41,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `<clone>/sessions/<id>.hints.json`, session leases, staging and atomic-write temporary files | provider hints and writer coordination [[1]] | Ignored |
 | `<clone>/local/`, `<clone>/.spex-uploads/`, `<clone>/.spex-apply.json` | Playbook's own migration receipts, which may hold provider tokens; upload staging; the sync repair marker | Ignored |
 | `home.yaml` | this device, the origin the home was created with, each instance it has signed in to with its account, the personal records folder name, and each working folder with its spex repository [[storage-2](#storage-2)] | — |
-| `store/`, `cache/` | spec package bytes and caches [[environments-7](environments.md#environments-7)] | — |
+| `store/`, `cache/` | the cache of verified spec package bytes that installs copy from, and fetched archives and metadata [[environments-7](environments.md#environments-7)] | — |
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |

@@ -275,15 +275,10 @@ export const portable = (file: string): boolean =>
  * junction goes itself, its target untouched (environments-7). On
  * Windows the Node the app's Electron ships refuses read-only files in
  * `rmSync` and empties a junction's target, so the tree is walked here
- * with `unlinkSync`, which clears a read-only mark — shared by every
- * hard link of the file — and `rmdirSync`. Returns whether a read-only
- * file was removed so. */
-export function removeTree(path: string): boolean {
-  if (process.platform !== "win32") {
-    rmSync(path, { recursive: true, force: true });
-    return false;
-  }
-  return removeEntry(path);
+ * with `unlinkSync`, which clears a read-only mark, and `rmdirSync`. */
+export function removeTree(path: string): void {
+  if (process.platform !== "win32") rmSync(path, { recursive: true, force: true });
+  else removeEntry(path);
 }
 
 /** A folder's rename refused because something holds a file or folder
@@ -343,20 +338,18 @@ export function discardTree(path: string, what: string): void {
   catch (error) { console.error(`spex: ${what} could not be removed at ${path}: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
-/** Remove one entry beneath a Windows tree; whether a read-only file
- * was among what it removed. An entry gone meanwhile counts as removed. */
-function removeEntry(path: string): boolean {
+/** Remove one entry beneath a Windows tree. An entry gone meanwhile
+ * counts as removed. */
+function removeEntry(path: string): void {
   const stat = gone(() => lstatSync(path));
-  if (!stat) return false;
+  if (!stat) return;
   // A link or junction reads as a link, never as a folder.
   if (stat.isDirectory()) {
-    let unmarked = false;
-    for (const name of readdirSync(path)) if (removeEntry(join(path, name))) unmarked = true;
+    for (const name of readdirSync(path)) removeEntry(join(path, name));
     gone(() => rmdirSync(path));
-    return unmarked;
+    return;
   }
   gone(() => unlinkSync(path));
-  return !stat.isSymbolicLink() && (stat.mode & 0o200) === 0;
 }
 
 /** Run a step on an entry, undefined where the entry is gone. */

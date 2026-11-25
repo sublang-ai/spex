@@ -13,6 +13,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in the environment's committed files: the specs an install places stand in the code beside `spex.yaml` and `spex.lock`, committed by the reader.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the removal of group environments. Global and project package sources keep their existing roots.
+Amended by [DR-251](251-installs-copy-from-the-store.md) in the store it says stands as DR-104 decided: an install copies from it.
 
 ## Context
 

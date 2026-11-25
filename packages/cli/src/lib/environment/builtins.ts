@@ -62,15 +62,15 @@ function recordFile(cacheDir: string, version: string): string {
 export async function seedBuiltinPackage(store: ContentStore, cacheDir: string, pkg: BuiltinPackage): Promise<BuiltinRelease> {
   // Seeded already, its files whole in the store: nothing to do.
   const seeded = readRecord(recordFile(cacheDir, pkg.version));
-  if (seeded && seeded.files.every((file) => store.has(file.sha256, file.executable))) return seeded;
+  if (seeded && seeded.files.every((file) => store.has(file.sha256))) return seeded;
   const release = await shippedRecord(pkg);
   if (`${release.manifest.org}/${release.manifest.name}` !== BUILTIN_PACKAGE_NAME || release.manifest.version !== pkg.version) {
     throw new Error(`${pkg.dir} holds ${release.manifest.org}/${release.manifest.name} ${release.manifest.version}, not ${BUILTIN_PACKAGE_NAME} ${pkg.version}`);
   }
   for (const file of release.files) {
-    if (store.has(file.sha256, file.executable)) continue;
+    if (store.has(file.sha256)) continue;
     const bytes = await readFile(join(pkg.dir, ...file.path.split("/")));
-    store.put(bytes, file.sha256, file.executable, `${BUILTIN_PACKAGE_NAME} ${file.path}`);
+    store.put(bytes, file.sha256, `${BUILTIN_PACKAGE_NAME} ${file.path}`);
   }
   const file = recordFile(cacheDir, pkg.version);
   await mkdir(dirname(file), { recursive: true });
@@ -139,7 +139,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
         if (!name.endsWith(".json")) continue;
         const record = readRecord(join(dir, name));
         // A seeded release serves only while the store holds its files.
-        if (record && record.files.every((file) => store.has(file.sha256, file.executable))) out.set(record.version, record);
+        if (record && record.files.every((file) => store.has(file.sha256))) out.set(record.version, record);
       }
     }
     const shipped = shippedRelease();
@@ -169,7 +169,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
   async function bytesOf(release: BuiltinRelease, path: string): Promise<Uint8Array> {
     const file = release.files.find((item) => item.path === path);
     if (!file) throw new RegistryError("not_found", BUILTIN_PACKAGE_NAME, `${BUILTIN_PACKAGE_NAME} ${release.version} has no file ${path}`);
-    if (store.has(file.sha256, file.executable)) return new Uint8Array(await readFile(store.pathOf(file.sha256, file.executable)));
+    if (store.has(file.sha256)) return new Uint8Array(await readFile(store.pathOf(file.sha256)));
     const shipped = options.shipped ?? null;
     if (shipped && shipped.version === release.version) return new Uint8Array(await readFile(join(shipped.dir, ...path.split("/"))));
     throw new RegistryError("not_found", BUILTIN_PACKAGE_NAME, `${BUILTIN_PACKAGE_NAME} ${release.version}: ${path} is not in the store`);

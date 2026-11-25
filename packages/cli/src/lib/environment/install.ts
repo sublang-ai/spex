@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Installing a locked environment (environments-7, DR-104, DR-165): the
-// lock's selected files, verified by digest into the store, are linked
+// Installing a locked environment (environments-7, DR-104, DR-165,
+// DR-251): the lock's selected files, verified by digest into the store,
+// are copied out of it, checked again, as ordinary writable files
 // under `<root>/.spex/packages/<org>/<pkg>/` at their release paths, the
 // environment's root holding `.spex/` with a `.gitignore` of `*`, so Git
 // ignores the installed tree (environments-26). A registry
@@ -47,7 +48,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import { seedServes } from "./builtins.js";
-import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
+import { fileVersion, removeTree, VersionConflictError, type FileVersion } from "../files.js";
 import { instanceFolder, parseOrigin } from "../instance.js";
 import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
 import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
@@ -202,6 +203,12 @@ function lockWithout(lock: Lock, names: readonly string[]): Lock {
   return { ...lock, packages: Object.fromEntries(Object.entries(lock.packages).filter(([name]) => !names.includes(name))) };
 }
 
+/** The install record's format (environments-7, DR-251): `2` says the
+ * tree's files are copies. A tree under the former `1`, hard links into
+ * the store, matches no lock an install installs, so the next install
+ * replaces it whole; it reads installed meanwhile. */
+const INSTALL_RECORD_FORMAT = 2;
+
 function installRecord(lock: Lock): Record<string, unknown> {
   const packages: Record<string, unknown> = {};
   for (const name of Object.keys(lock.packages).sort()) {
@@ -209,7 +216,7 @@ function installRecord(lock: Lock): Record<string, unknown> {
     if (isPathSource(resolution.source)) continue;
     packages[name] = recordEntry(resolution);
   }
-  return { format: 1, packages };
+  return { format: INSTALL_RECORD_FORMAT, packages };
 }
 
 function readInstallRecord(target: string): { text: string; packages: Record<string, unknown> } | null {
@@ -343,7 +350,7 @@ async function cachedArchive(cache: string, registry: RegistrySource, name: stri
 
 function putVerified(store: ContentStore, name: string, file: LockedFile, bytes: Uint8Array): void {
   try {
-    store.put(bytes, file.sha256, file.executable, `${name} ${file.path}`);
+    store.put(bytes, file.sha256, `${name} ${file.path}`);
   } catch (error) {
     if (error instanceof DigestError) throw new InstallError(name, `${name}: ${file.path} does not match spex.lock; nothing was installed`, error);
     throw error;
@@ -355,16 +362,9 @@ function putVerified(store: ContentStore, name: string, file: LockedFile, bytes:
  * no registry serving it (environments-7). */
 async function fetchMissing(options: InstallOptions, name: string, resolution: Resolution): Promise<boolean> {
   const { store } = options;
-  const missing: LockedFile[] = [];
-  for (const file of resolution.files) {
-    if (store.has(file.sha256, file.executable)) continue;
-    // The same bytes in the other mode need no fetch.
-    if (store.has(file.sha256, !file.executable)) {
-      putVerified(store, name, file, readFileSync(store.pathOf(file.sha256, !file.executable)));
-      continue;
-    }
-    missing.push(file);
-  }
+  // A former copy apart serves where the store lacks the file, in
+  // either mode, so a former tree is replaced with nothing fetched.
+  const missing: LockedFile[] = resolution.files.filter((file) => !store.adoptFormer(file.sha256));
   if (missing.length === 0) return true;
   const source = resolution.source;
   if (isRegistrySource(source)) {
@@ -377,7 +377,7 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
     // The first registry's refusal, for a host to phrase by its kind.
     let refusal: RegistryError | undefined;
     for (const registry of options.registries ? options.registries(source) : [options.registry]) {
-      const left = missing.filter((file) => !store.has(file.sha256, file.executable));
+      const left = missing.filter((file) => !store.has(file.sha256));
       if (left.length === 0) return true;
       try {
         if (await fetchFrom(options, registry, name, source, resolution, left)) return true;
@@ -414,7 +414,7 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
 async function fetchSeeded(seed: RegistrySource, store: ContentStore, name: string, source: RegistrySourceLock, resolution: Resolution): Promise<boolean> {
   if (!(await seedServes(seed, source.version, resolution.files))) return false;
   for (const file of resolution.files) {
-    if (store.has(file.sha256, file.executable)) continue;
+    if (store.has(file.sha256)) continue;
     let bytes: Uint8Array;
     try {
       bytes = await seed.file(name, source.version, file.path);
@@ -621,7 +621,12 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
       for (const file of resolution.files) {
         const to = join(root, ...file.path.split("/"));
         mkdirSync(dirname(to), { recursive: true });
-        store.link(file.sha256, file.executable, to);
+        try {
+          store.copy(file.sha256, file.executable, to, `${name} ${file.path}`);
+        } catch (error) {
+          if (error instanceof DigestError) throw new InstallError(name, `${name}: the stored copy of ${file.path} no longer matched spex.lock and was removed; nothing was installed — install again to fetch it`, error);
+          throw error;
+        }
       }
     }
     engineKept = await prepareInstalled(staging, placed, lock, engine, (folder) => join(target, relative(staging, folder)));
@@ -630,10 +635,10 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     // Checked at the instant before the swap, nothing awaited between.
     assertCurrent(options);
     ensureSpexDir(root);
-    replaceTree(staging, target, join(options.cache, "trash", id), store);
+    replaceTree(staging, target, join(options.cache, "trash", id));
   } catch (error) {
     // The failure's own cause is reported, never a cleanup's.
-    try { store.removeLinked(staging); }
+    try { removeTree(staging); }
     catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
@@ -642,8 +647,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
 }
 
 /** Swap a complete staged tree in for the installed one. */
-function replaceTree(staging: string, target: string, trash: string, store: ContentStore): void {
-  let source = staging;
+function replaceTree(staging: string, target: string, trash: string): void {
   const hadOld = existsSync(target);
   if (hadOld) {
     mkdirSync(dirname(trash), { recursive: true });
@@ -659,15 +663,20 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   }
   try {
     try {
-      renameSync(source, target);
+      renameSync(staging, target);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
       const near = `${target}.new-${randomUUID()}`;
-      cpSync(source, near, { recursive: true, verbatimSymlinks: true });
-      // The staged links leave as copies stand in their place.
-      store.removeLinked(source);
-      source = near;
-      renameSync(source, target);
+      try {
+        cpSync(staging, near, { recursive: true, verbatimSymlinks: true });
+        removeTree(staging);
+        renameSync(near, target);
+      } catch (failure) {
+        // The copy beside the tree is a staged tree too: none stays.
+        try { removeTree(near); }
+        catch (cleanup) { console.error(`spex: the staged tree ${near} could not be removed: ${String(cleanup)}`); }
+        throw failure;
+      }
     }
   } catch (error) {
     if (hadOld) renameSync(trash, target);
@@ -677,7 +686,7 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    try { store.removeLinked(trash); }
+    try { removeTree(trash); }
     catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
   }
 }

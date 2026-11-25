@@ -602,7 +602,7 @@ test("environments-34, environments-13, environments-29: a Git source at the sha
   // repository from the cache, an install fetches the locked commit with
   // the credential the second brokers (environments-13).
   const files = lockOf(home, south).packages[NAME]!.files;
-  const stored = files.map((file) => join(home.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256));
+  const stored = files.map((file) => join(home.dataDir, "store", file.sha256));
   assert.ok(stored.length > 0 && stored.every((file) => existsSync(file)), "the store holds its files");
   for (const file of stored) rmSync(file);
   const southRoot = (await home.client.expectOk("environment.get", { repository: south })).pathRoot!;
