@@ -95,8 +95,14 @@ function assertStored(store: ContentStore, lock: Lock, when: string): void {
 /** Where an earlier release kept an executable file's stored copy. */
 const formerExecutable = (store: ContentStore, sha256: string): string => join(store.root, "x", sha256);
 
+/** The fixture's executable file. Windows records no executable flag,
+ * so it is told by its path, and stands under `store/x/` in a former
+ * tree on every platform: a former copy serves a file in either mode. */
+const isScript = (file: { path: string }): boolean => file.path.endsWith("/run.sh");
+const scriptOf = (lock: Lock) => lockedFiles(lock).find(isScript)!;
+
 /** Turn the tree installed at `root` into one an earlier release
- * installed (DR-251): each file a read-only hard link into the store, an
+ * installed (DR-251): each file a read-only hard link into the store, the
  * executable one's stored copy under `store/x/` alone, the install
  * record of `format: 1`. */
 function asFormerTree(root: string, lock: Lock, store: ContentStore): void {
@@ -105,13 +111,13 @@ function asFormerTree(root: string, lock: Lock, store: ContentStore): void {
     for (const file of resolution.files) {
       const installed = join(tree, ...name.split("/"), ...file.path.split("/"));
       const former = formerExecutable(store, file.sha256);
-      if (file.executable && !existsSync(former)) {
+      if (isScript(file) && !existsSync(former)) {
         mkdirSync(dirname(former), { recursive: true });
         renameSync(store.pathOf(file.sha256), former);
         chmodSync(former, 0o555);
       }
       rmSync(installed);
-      linkSync(file.executable ? former : store.pathOf(file.sha256), installed);
+      linkSync(isScript(file) ? former : store.pathOf(file.sha256), installed);
     }
   }
   const record = JSON.parse(readFileSync(join(tree, INSTALL_RECORD), "utf8")) as { format: number };
@@ -178,7 +184,7 @@ test("environments-53: a start takes a former store/x/ copy that a stale lock se
   // The global environment as an earlier release installed it: its
   // executable file's only stored copy under store/x/.
   asFormerTree(own, lock, store);
-  const executable = lockedFiles(lock).find((file) => file.executable)!;
+  const executable = scriptOf(lock);
   assert.equal(store.has(executable.sha256), false, "the executable file's bytes stand under store/x/ alone");
   // spex.yaml changed since: the lock is stale, so the start installs
   // nothing and takes no former copy at an install.
@@ -412,7 +418,7 @@ test("environments-53: a former store/x/ copy that does not match its digest is 
   const { store, root, run, installAt, assertSealed, assertCopies } = scratchInstalls();
   const lock = await installAt("1.0.0");
   asFormerTree(root, lock, store);
-  const executable = lockedFiles(lock).find((file) => file.executable)!;
+  const executable = scriptOf(lock);
   const former = formerExecutable(store, executable.sha256);
   chmodSync(former, 0o755);
   writeFileSync(former, "changed behind the store\n");
