@@ -31,3 +31,5 @@ export function scratchDir(prefix: string): string {
   scratchDirs.push(dir);
   return dir;
 }
+
+// CI baseline marker: no behaviour.
