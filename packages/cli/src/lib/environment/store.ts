@@ -39,7 +39,7 @@ const SHA_RE = /^[0-9a-f]{64}$/;
 
 /** Where an earlier release kept an executable file's own copy, links
  * sharing one mode (DR-251). */
-const FORMER_EXECUTABLES = "x";
+const FORMER_COPIES = "x";
 
 export class ContentStore {
   readonly root: string;
@@ -79,13 +79,14 @@ export class ContentStore {
     return target;
   }
 
-  /** Take an executable file's former copy under `x/` as the stored
-   * file where the store lacks it, verified as any bytes are
-   * (environments-7): whether the store now holds the file. */
+  /** Take a file's former copy under `x/` as the stored file where the
+   * store lacks it, verified as any bytes are (environments-7): whether
+   * the store now holds the file. A copy that does not match its digest
+   * is no stored file. */
   adoptFormer(sha256: string): boolean {
     if (this.has(sha256)) return true;
     try {
-      this.put(readFileSync(join(this.root, FORMER_EXECUTABLES, sha256)), sha256);
+      this.put(readFileSync(join(this.root, FORMER_COPIES, sha256)), sha256);
       return true;
     } catch {
       return false;
@@ -117,17 +118,23 @@ export class ContentStore {
   }
 
   /** Remove every stored file no lock selects, read-only as it is, and
-   * the former `x/` whole; returns the removed digests
-   * (environments-52). */
+   * the former `x/`, each of its copies a lock selects taken as the
+   * stored file first where the store lacks it — a lock whose install
+   * did not run, stale or with no folder here, keeps its bytes; returns
+   * the removed digests (environments-52). */
   gc(selected: Set<string>): string[] {
     const removed: string[] = [];
+    if (!existsSync(this.root)) return removed;
+    const former = join(this.root, FORMER_COPIES);
+    if (existsSync(former)) {
+      for (const name of readdirSync(former)) if (selected.has(name)) this.adoptFormer(name);
+      removeTree(former);
+    }
     for (const key of this.keys()) {
       if (selected.has(key)) continue;
       removeTree(join(this.root, key));
       removed.push(key);
     }
-    if (!existsSync(this.root)) return removed;
-    removeTree(join(this.root, FORMER_EXECUTABLES));
     // A temporary file an interrupted put left behind, once it is old
     // enough not to be a put still running.
     const before = Date.now() - 60 * 60 * 1000;

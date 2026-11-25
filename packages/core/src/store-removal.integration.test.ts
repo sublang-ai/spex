@@ -161,10 +161,33 @@ test("environments-53: a start removes a read-only stored file no lock selects a
   mkdirSync(dirname(former), { recursive: true });
   writeFileSync(former, "an earlier release's executable copy\n");
   chmodSync(former, 0o555);
+  // A kept file made writable, as a removed link leaves one on Windows.
+  const [writable, sealed] = storedFiles(store, lock);
+  chmodSync(writable!, 0o644);
   await (await startCore(root)).stop();
   assert.equal(existsSync(stray), false, "[environments-52] the read-only file no lock selects is removed");
   assert.equal(existsSync(dirname(former)), false, "[environments-52] the former store/x/ is removed whole");
   assertStored(store, lock, "after a start");
+  assert.equal(readOnly(writable!), false, "[environments-52] a kept file made writable is left writable");
+  assert.equal(readOnly(sealed!), true, "[environments-52] a kept read-only file is left read-only");
+});
+
+test("environments-53: a start takes a former store/x/ copy that a stale lock selects as the stored file before removing store/x/", async () => {
+  const { root, store, lock } = await homeWithStray();
+  const own = join(root, "home", "workspace", "tester", "tester-spex");
+  // The global environment as an earlier release installed it: its
+  // executable file's only stored copy under store/x/.
+  asFormerTree(own, lock, store);
+  const executable = lockedFiles(lock).find((file) => file.executable)!;
+  assert.equal(store.has(executable.sha256), false, "the executable file's bytes stand under store/x/ alone");
+  // spex.yaml changed since: the lock is stale, so the start installs
+  // nothing and takes no former copy at an install.
+  writeFileSync(join(own, "spex.yaml"), requestsOf("^1.0.0"));
+  await (await startCore(root)).stop();
+  const record = JSON.parse(readFileSync(join(own, ".spex", "packages", INSTALL_RECORD), "utf8")) as { format: number };
+  assert.equal(record.format, 1, "the stale lock installed nothing");
+  assertStored(store, lock, "after a start over a stale lock");
+  assert.equal(existsSync(join(store.root, "x")), false, "[environments-52] the former store/x/ is removed");
 });
 
 test("environments-53: a collection that fails fails no start", {
@@ -303,6 +326,33 @@ test("environments-53: a staged tree copied into place, as across volumes, leave
   assertSealed(lock, "copied into place");
 });
 
+test("environments-53: a staged tree copied into place whose move fails leaves no copy beside the tree, the last files standing", async () => {
+  const { cache, root, installed, run, installAt, leftIn, assertCopies } = scratchInstalls();
+  const first = await installAt("1.0.0");
+  const second = await lockAt(root, cache, "1.1.0");
+  // Another volume, as above, and the copy's own move into place refused.
+  const original = fs.renameSync;
+  const refusal = Object.assign(new Error("EACCES: permission denied, rename"), { code: "EACCES" });
+  fs.renameSync = (from: fs.PathLike, to: fs.PathLike): void => {
+    if (String(to) === installed && String(from).includes(join(cache, "staging"))) {
+      throw Object.assign(new Error(`EXDEV: cross-device link not permitted, rename '${String(from)}' -> '${String(to)}'`), { code: "EXDEV" });
+    }
+    if (String(to) === installed && String(from).includes(".new-")) throw refusal;
+    original(from, to);
+  };
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(run(second), (error: unknown) => error instanceof InstallError && error.cause === refusal);
+  } finally {
+    fs.renameSync = original;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(leftIn(join(root, ".spex")).filter((name) => name.includes(".new-")), [], "[environments-7] no copy stays beside the tree");
+  assert.deepEqual(leftIn(join(cache, "staging")), [], "[environments-7] no staged tree stays");
+  assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] the last tree is put back");
+  assertCopies(root, first, "after a failed move into place");
+});
+
 test("environments-53: an obsolete tree whose install record does not read is removed and the install stands, a second environment's files whole", async (t) => {
   const { cache, root, installed, installAt, leftIn, assertSealed, assertCopies } = scratchInstalls();
   const first = await installAt("1.0.0");
@@ -356,6 +406,21 @@ test("environments-53: an install replaces a former tree of read-only hard links
   store.gc(new Set(lockedFiles(lock).map((file) => file.sha256)));
   assert.equal(existsSync(join(home, "store", "x")), false, "[environments-52] the former store/x/ is removed");
   assertSealed(lock, "collected");
+});
+
+test("environments-53: a former store/x/ copy that does not match its digest is not taken, and the install fetches the file", async () => {
+  const { store, root, run, installAt, assertSealed, assertCopies } = scratchInstalls();
+  const lock = await installAt("1.0.0");
+  asFormerTree(root, lock, store);
+  const executable = lockedFiles(lock).find((file) => file.executable)!;
+  const former = formerExecutable(store, executable.sha256);
+  chmodSync(former, 0o755);
+  writeFileSync(former, "changed behind the store\n");
+  registry.script.clearRequests();
+  assert.deepEqual((await run(lock)).installed, ["acme/kit"]);
+  assert.ok(registry.script.requests.includes(`GET /acme/kit/1.0.0/${executable.path}`), `[environments-7] the file is fetched: ${JSON.stringify(registry.script.requests)}`);
+  assertCopies(root, lock, "over a former copy that does not match");
+  assertSealed(lock, "over a former copy that does not match");
 });
 
 test("environments-53: the migration deleting a clone's former tree of read-only hard links leaves the stored files and a second environment's files whole", async () => {

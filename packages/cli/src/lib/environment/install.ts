@@ -362,9 +362,9 @@ function putVerified(store: ContentStore, name: string, file: LockedFile, bytes:
  * no registry serving it (environments-7). */
 async function fetchMissing(options: InstallOptions, name: string, resolution: Resolution): Promise<boolean> {
   const { store } = options;
-  // An executable file's former copy apart serves where the store
-  // lacks the file, so a former tree is replaced with nothing fetched.
-  const missing: LockedFile[] = resolution.files.filter((file) => !store.has(file.sha256) && !(file.executable && store.adoptFormer(file.sha256)));
+  // A former copy apart serves where the store lacks the file, in
+  // either mode, so a former tree is replaced with nothing fetched.
+  const missing: LockedFile[] = resolution.files.filter((file) => !store.adoptFormer(file.sha256));
   if (missing.length === 0) return true;
   const source = resolution.source;
   if (isRegistrySource(source)) {
@@ -648,7 +648,6 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
 
 /** Swap a complete staged tree in for the installed one. */
 function replaceTree(staging: string, target: string, trash: string): void {
-  let source = staging;
   const hadOld = existsSync(target);
   if (hadOld) {
     mkdirSync(dirname(trash), { recursive: true });
@@ -664,14 +663,20 @@ function replaceTree(staging: string, target: string, trash: string): void {
   }
   try {
     try {
-      renameSync(source, target);
+      renameSync(staging, target);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
       const near = `${target}.new-${randomUUID()}`;
-      cpSync(source, near, { recursive: true, verbatimSymlinks: true });
-      removeTree(source);
-      source = near;
-      renameSync(source, target);
+      try {
+        cpSync(staging, near, { recursive: true, verbatimSymlinks: true });
+        removeTree(staging);
+        renameSync(near, target);
+      } catch (failure) {
+        // The copy beside the tree is a staged tree too: none stays.
+        try { removeTree(near); }
+        catch (cleanup) { console.error(`spex: the staged tree ${near} could not be removed: ${String(cleanup)}`); }
+        throw failure;
+      }
     }
   } catch (error) {
     if (hadOld) renameSync(trash, target);

@@ -11,7 +11,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
@@ -37,6 +37,7 @@ import {
   gitSource,
   GitSourceError,
   install,
+  INSTALL_RECORD,
   InstallError,
   launchModules,
   lockStoreKeys,
@@ -931,17 +932,30 @@ test("playbook-library-108: an install bundles again a module carrying its engin
   assert.match(readFileSync(join(workingFolder, ".git", "info", "exclude"), "utf8"), new RegExp(`^${ENGINE_LINKS_EXCLUDE.replaceAll("*", "\\*")}$`, "m"));
   assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", "tools"]).split("\n").filter((line) => line.includes("node_modules")).length, 0, "[playbook-library-46] Git ignores the links");
 
-  // [playbook-library-46] a tree an earlier app installed — its module
-  // the release's, a hard link into the store as an earlier release
-  // installed it — is prepared where it stands when an install finds
-  // the lock installed already.
+  // [playbook-library-46] a tree the command line installed — its module
+  // the release's, copied from the store, nothing prepared — is prepared
+  // where it stands when an install finds the lock installed already.
   rmSync(module);
-  linkSync(home.store.pathOf(lockedModule.sha256), module);
+  copyFileSync(home.store.pathOf(lockedModule.sha256), module);
+  chmodSync(module, 0o644);
   const again = await installAsOnDisk(base);
   assert.equal(again.unchanged, true);
   assertEngineImported("found installed");
-  assert.notEqual(statSync(module).ino, statSync(home.store.pathOf(lockedModule.sha256)).ino, "[playbook-library-46] replaced, never written through the store's link");
   assert.deepEqual(again.engineKept, report.engineKept);
+
+  // [playbook-library-46] a tree an earlier release installed — its
+  // module a hard link into the store under an install record of
+  // format 1 — is replaced, the module bundled again in the new tree
+  // and never written through the link.
+  rmSync(module);
+  linkSync(home.store.pathOf(lockedModule.sha256), module);
+  const recordFile = join(home.clone, ".spex", "packages", INSTALL_RECORD);
+  writeFileSync(recordFile, JSON.stringify({ ...JSON.parse(readFileSync(recordFile, "utf8")) as object, format: 1 }));
+  const replaced = await installAsOnDisk(base);
+  assert.deepEqual([replaced.installed, replaced.unchanged], [["acme/review-kit"], false], "[environments-7] a former tree is replaced");
+  assertEngineImported("a former tree replaced");
+  assert.notEqual(statSync(module).ino, statSync(home.store.pathOf(lockedModule.sha256)).ino, "[playbook-library-46] no link into the store");
+  assert.deepEqual(replaced.engineKept, report.engineKept);
 });
 
 test("environments-21: a Git source at a branch locks its commit and installs it through the host's credential", async () => {
