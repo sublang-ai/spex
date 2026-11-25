@@ -959,6 +959,14 @@ async function twoInstances(name: string) {
   return { bob, first, second, alpha, beta, home, alphaKey: hostKey(first, "ada/alpha-spex"), betaKey: hostKey(second, "bob/beta-spex") };
 }
 
+/** A row's state in a Space state, undefined where it holds no such
+ * row: for a wait to name the row it goes on to assert. One broadcast
+ * may still pair a heading that reads signed out with a row read before
+ * the sign-out, the next one bringing the row in line. */
+function rowState(state: SpaceState, key: string): RepositoryState["state"] | undefined {
+  return state.repositories.find((repository) => repository.key === key)?.state;
+}
+
 /** The rows an instance's heading holds under one of its entries. */
 function rowsUnder(state: SpaceState, origin: string): [string, string, string | null][] {
   return state.repositories.filter((row) => !row.own && (row.governing ?? row.instance) === origin).map((row) => [row.key, row.state, row.instance]);
@@ -1183,7 +1191,9 @@ test("git-host-24, git-host-4, git-host-10, space-6, space-61: a refresh the fir
   const readsOfSecond = meReads(second);
   mark = home.client.mark();
   await home.client.expectOk("space.fetch", { repository: alphaKey });
-  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.signedIn === false);
+  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, first.url)?.signedIn === false
+    && rowState(state, alphaKey) === "unreachable"
+    && state.repositories.find((repository) => repository.key === HOST_OWN)?.placements.find((line) => line.instance === first.url)?.state === "unreachable");
   assert.deepEqual(entries(), [[first.url, LOGIN, true], [second.url, bob.login, false]]);
   assert.deepEqual(Object.keys(pairs()), [second.url]);
   assert.deepEqual(pairs()[second.url], pairsBefore[second.url], "the second's token stands");
@@ -1417,7 +1427,8 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61
   second.script.revokeDevices();
   mark = home.client.mark();
   await home.client.expectError("space.join", { instance: second.url, hostId: delta.id }, "invalid_request", /Sign in again/);
-  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, second.url)?.signedIn === false, 30_000);
+  const out = await home.client.waitSpace(mark, (state) => instanceOf(state, second.url)?.signedIn === false
+    && rowState(state, betaKey) === "unreachable", 30_000);
   assert.deepEqual([instanceOf(out, second.url)?.hostSignedOut, instanceOf(out, first.url)?.signedIn, instanceOf(out, first.url)?.readAt], [true, true, firstReadAt]);
   assert.deepEqual(Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.signedOut === true]), [[first.url, false], [second.url, true]]);
   assert.deepEqual(pairs(), [first.url]);
