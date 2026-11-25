@@ -82,15 +82,23 @@ export class ContentStore {
   /** Take a file's former copy under `x/` as the stored file where the
    * store lacks it, verified as any bytes are (environments-7): whether
    * the store now holds the file. A copy that does not match its digest
-   * is no stored file. */
+   * is no stored file; one that cannot be taken for another reason is
+   * none here either, an install then fetching the file. */
   adoptFormer(sha256: string): boolean {
+    try { return this.takeFormer(sha256); } catch { return false; }
+  }
+
+  /** `adoptFormer`, throwing where the copy stands and matches or cannot
+   * be read, yet cannot be stored: the store refusing the write, or the
+   * device full. False where no copy stands or it does not match. */
+  private takeFormer(sha256: string): boolean {
     if (this.has(sha256)) return true;
-    try {
-      this.put(readFileSync(join(this.root, FORMER_COPIES, sha256)), sha256);
-      return true;
-    } catch {
-      return false;
-    }
+    let bytes: Uint8Array;
+    try { bytes = readFileSync(join(this.root, FORMER_COPIES, sha256)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+    try { this.put(bytes, sha256); }
+    catch (error) { if (error instanceof DigestError) return false; throw error; }
+    return true;
   }
 
   /** Every stored file's digest. */
@@ -120,29 +128,58 @@ export class ContentStore {
   /** Remove every stored file no lock selects, read-only as it is, and
    * the former `x/`, each of its copies a lock selects taken as the
    * stored file first where the store lacks it — a lock whose install
-   * did not run, stale or with no folder here, keeps its bytes; returns
-   * the removed digests (environments-52). */
+   * did not run, stale or with no folder here, keeps its bytes. A
+   * selected copy that could not be taken for another reason than its
+   * digest stands, with `x/`, for a later collection. Every step is
+   * tried whatever another's failure, and the failures are thrown once
+   * all are done; returns the removed digests (environments-52). */
   gc(selected: Set<string>): string[] {
     const removed: string[] = [];
     if (!existsSync(this.root)) return removed;
-    const former = join(this.root, FORMER_COPIES);
-    if (existsSync(former)) {
-      for (const name of readdirSync(former)) if (selected.has(name)) this.adoptFormer(name);
-      removeTree(former);
-    }
-    for (const key of this.keys()) {
-      if (selected.has(key)) continue;
-      removeTree(join(this.root, key));
-      removed.push(key);
-    }
+    const failures: unknown[] = [];
+    const step = (run: () => void): void => { try { run(); } catch (error) { failures.push(error); } };
+    step(() => this.collectFormer(selected, failures));
+    step(() => {
+      for (const key of this.keys()) {
+        if (selected.has(key)) continue;
+        removeTree(join(this.root, key));
+        removed.push(key);
+      }
+    });
     // A temporary file an interrupted put left behind, once it is old
     // enough not to be a put still running.
-    const before = Date.now() - 60 * 60 * 1000;
-    for (const name of readdirSync(this.root)) {
-      if (!name.startsWith(".tmp-")) continue;
-      const file = join(this.root, name);
-      try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
-    }
+    step(() => {
+      const before = Date.now() - 60 * 60 * 1000;
+      for (const name of readdirSync(this.root)) {
+        if (!name.startsWith(".tmp-")) continue;
+        const file = join(this.root, name);
+        try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
+      }
+    });
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, failures.map((failure) => (failure instanceof Error ? failure.message : String(failure))).join("; "));
     return removed;
+  }
+
+  /** The former `x/` at a collection: each copy a lock selects taken as
+   * the stored file, then removed with every copy no lock selects and
+   * every one that does not match its digest; one that could not be
+   * taken stands, its cause noted in `failures`, and `x/` with it. */
+  private collectFormer(selected: Set<string>, failures: unknown[]): void {
+    const former = join(this.root, FORMER_COPIES);
+    if (!existsSync(former)) return;
+    let kept = false;
+    for (const name of readdirSync(former)) {
+      if (selected.has(name)) {
+        try { this.takeFormer(name); }
+        catch (error) {
+          kept = true;
+          failures.push(new Error(`store/${FORMER_COPIES}/${name} stays, not taken as the stored file: ${error instanceof Error ? error.message : String(error)}`, { cause: error }));
+          continue;
+        }
+      }
+      removeTree(join(former, name));
+    }
+    if (!kept) removeTree(former);
   }
 }

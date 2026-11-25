@@ -196,6 +196,77 @@ test("environments-53: a start takes a former store/x/ copy that a stale lock se
   assert.equal(existsSync(join(store.root, "x")), false, "[environments-52] the former store/x/ is removed");
 });
 
+test("environments-53: a start removes, untaken, a former store/x/ copy of a kept file that does not match its digest", async () => {
+  const { root, store, lock } = await homeWithStray();
+  const own = join(root, "home", "workspace", "tester", "tester-spex");
+  asFormerTree(own, lock, store);
+  const executable = scriptOf(lock);
+  const former = formerExecutable(store, executable.sha256);
+  chmodSync(former, 0o755);
+  writeFileSync(former, "changed behind the store\n");
+  // The lock is stale, so no install takes or refuses the copy first.
+  writeFileSync(join(own, "spex.yaml"), requestsOf("^1.0.0"));
+  await (await startCore(root)).stop();
+  assert.equal(existsSync(join(store.root, "x")), false, "[environments-52] the former store/x/ is removed");
+  assert.equal(store.has(executable.sha256), false, "[environments-52] a copy that does not match its digest is not taken as the stored file");
+});
+
+test("environments-53: a former store/x/ copy of a kept file that the store cannot take stands, reported, and a later start takes it", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async (t) => {
+  const { root, store, lock, stray } = await homeWithStray();
+  const own = join(root, "home", "workspace", "tester", "tester-spex");
+  asFormerTree(own, lock, store);
+  const executable = scriptOf(lock);
+  const former = formerExecutable(store, executable.sha256);
+  // A copy no lock selects beside it, which goes whatever the store takes.
+  const unselected = formerExecutable(store, sha256Hex("selected by no lock\n"));
+  writeFileSync(unselected, "selected by no lock\n");
+  writeFileSync(join(own, "spex.yaml"), requestsOf("^1.0.0"));
+  const diagnostics = t.mock.method(console, "error", () => {});
+  // The store's folder takes no new file: the copy cannot be stored.
+  chmodSync(store.root, 0o555);
+  try {
+    await (await startCore(root)).stop();
+  } finally {
+    chmodSync(store.root, 0o755);
+  }
+  assert.equal(sha256Hex(readFileSync(former)), executable.sha256, "[environments-52] the copy the store could not take stands with its bytes");
+  assert.equal(existsSync(unselected), false, "[environments-52] a copy no lock selects is removed all the same");
+  assert.ok(existsSync(stray), "the stored file the folder would not release stays");
+  const diagnostic = diagnostics.mock.calls.map((call) => String(call.arguments[0])).find((message) => message.includes("the store was not collected"));
+  assert.ok(diagnostic, "[environments-52] a diagnostic reports the collection");
+  assert.match(diagnostic, new RegExp(`store/x/${executable.sha256} stays`), "[environments-52] naming the copy kept");
+  assert.match(diagnostic, /EACCES|EPERM/, "[environments-52] and its cause");
+  // The store writable again: the next start takes the copy.
+  await (await startCore(root)).stop();
+  assertStored(store, lock, "after a later start");
+  assert.equal(existsSync(join(store.root, "x")), false, "[environments-52] the former store/x/ is removed once nothing in it is kept");
+  assert.equal(existsSync(stray), false);
+});
+
+test("environments-53: a former store/x/ that cannot be removed leaves every other stored file collected", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async (t) => {
+  const { root, store, lock, stray } = await homeWithStray();
+  const former = formerExecutable(store, sha256Hex("selected by no lock\n"));
+  mkdirSync(dirname(former), { recursive: true });
+  writeFileSync(former, "selected by no lock\n");
+  const diagnostics = t.mock.method(console, "error", () => {});
+  chmodSync(dirname(former), 0o555);
+  try {
+    await (await startCore(root)).stop();
+  } finally {
+    chmodSync(dirname(former), 0o755);
+  }
+  assert.ok(existsSync(former), "the copy its folder would not release stays");
+  assert.equal(existsSync(stray), false, "[environments-52] the stored file no lock selects is removed all the same");
+  assertStored(store, lock, "after a start that could not remove store/x/");
+  const diagnostic = diagnostics.mock.calls.map((call) => String(call.arguments[0])).find((message) => message.includes("the store was not collected"));
+  assert.ok(diagnostic, "[environments-52] a diagnostic reports the collection");
+  assert.match(diagnostic, /EACCES|EPERM/, "[environments-52] naming its cause");
+});
+
 test("environments-53: a collection that fails fails no start", {
   skip: process.platform === "win32" || process.getuid?.() === 0,
 }, async (t) => {

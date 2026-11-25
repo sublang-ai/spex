@@ -909,8 +909,12 @@ test("playbook-library-108: an install bundles again a module carrying its engin
   assertEngineImported("installed");
   // [playbook-library-46] a module whose wrapper is missing stays as it
   // is, and the install goes on naming it and why.
-  assert.ok(readFileSync(join(installed, "nudge", "nudge.registry.mjs")).equals(carried), "[playbook-library-46] the module without its wrapper stays");
-  assert.deepEqual(report.engineKept, [{ module: join(installed, "nudge", "nudge.registry.mjs"), reason: "its nudge.registry.ts is missing" }]);
+  const wrapperless = join(installed, "nudge", "nudge.registry.mjs");
+  const assertWrapperless = (when: string): void => {
+    assert.ok(readFileSync(wrapperless).equals(carried), `[playbook-library-46] ${when}: the module without its wrapper stays`);
+  };
+  assertWrapperless("installed");
+  assert.deepEqual(report.engineKept, [{ module: wrapperless, reason: "its nudge.registry.ts is missing" }]);
 
   // [playbook-library-46] loaded through the core's own module loader,
   // the installed playbook runs on the very engine module the app runs.
@@ -941,20 +945,26 @@ test("playbook-library-108: an install bundles again a module carrying its engin
   const again = await installAsOnDisk(base);
   assert.equal(again.unchanged, true);
   assertEngineImported("found installed");
+  assertWrapperless("found installed");
   assert.deepEqual(again.engineKept, report.engineKept);
 
   // [playbook-library-46] a tree an earlier release installed — its
-  // module a hard link into the store under an install record of
-  // format 1 — is replaced, the module bundled again in the new tree
-  // and never written through the link.
-  rmSync(module);
-  linkSync(home.store.pathOf(lockedModule.sha256), module);
+  // modules hard links into the store under an install record of
+  // format 1 — is replaced: the module bundled again in the new tree,
+  // the one without its wrapper, which preparation leaves alone, a copy
+  // sharing nothing with the store.
+  for (const linked of [module, wrapperless]) {
+    rmSync(linked);
+    linkSync(home.store.pathOf(lockedModule.sha256), linked);
+  }
+  assert.ok(statSync(wrapperless).nlink > 1, "the former tree's module is a hard link into the store");
   const recordFile = join(home.clone, ".spex", "packages", INSTALL_RECORD);
   writeFileSync(recordFile, JSON.stringify({ ...JSON.parse(readFileSync(recordFile, "utf8")) as object, format: 1 }));
   const replaced = await installAsOnDisk(base);
   assert.deepEqual([replaced.installed, replaced.unchanged], [["acme/review-kit"], false], "[environments-7] a former tree is replaced");
   assertEngineImported("a former tree replaced");
-  assert.notEqual(statSync(module).ino, statSync(home.store.pathOf(lockedModule.sha256)).ino, "[playbook-library-46] no link into the store");
+  assertWrapperless("a former tree replaced");
+  assert.equal(statSync(wrapperless).nlink, 1, "[environments-7] a file preparation leaves alone is a copy, no link into the store");
   assert.deepEqual(replaced.engineKept, report.engineKept);
 });
 
