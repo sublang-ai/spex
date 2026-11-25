@@ -63,16 +63,18 @@ An installed tree shares nothing with the store or with another environment.
 - A tree records how it was installed: the install record under `.spex/packages/` moves to `format: 2`, which says its files are copies.
 - A tree whose record is of the former format is not the lock's installed tree to an install, so the next install by this release replaces it whole with copies, from the store, fetching only what the store lacks.
   Until then it reads installed and runs as it did.
-- The core installs every environment the home knows at its start, so those are copies after the first start with this release; a folder only the command line installed into follows at its next `install`, `add`, `update` or `remove`.
+- The core installs every environment the home knows at its start, so each one whose install runs and succeeds is copies after the first start with this release.
+  One whose install does not run or does not finish keeps its former tree until an install of it succeeds: a lock gone stale, a project with no folder on this device, a fetch that fails.
+  A folder only the command line installed into follows at its next `install`, `add`, `update` or `remove`.
 - A file's former copy under `store/x/<sha256>` is taken as the stored file where the store lacks it, its digest verified as any stored bytes are: at an install that selects the file, and at the collection for every file it keeps, so a lock whose install did not run, stale or with no folder on this device, keeps its bytes.
-  The collection then removes `store/x/`, and replacing a former tree of an environment the home knows needs no network.
+  The collection then removes `store/x/`, keeping only a copy it could not take for a reason other than its digest, such as a store that takes no new file, for a later collection; replacing a former tree of an environment the home knows needs no network.
 - A folder only the command line installed into was never among the locks the collection reads, under the earlier release as now, so its files may have left the store, and replacing its tree may fetch them.
 - No receipt is written under `local/migrations/`.
   A receipt keeps the reader's original bytes so a migration can be undone or resumed; an installed tree holds none, the lock rebuilds it, and its own record says whether it was replaced.
 - The Windows re-marking goes with this release, not after a later one.
-  Removing a former tree there still makes stored files writable, and the file of a former tree in a folder the home does not know may be writable while it still shares bytes with the store.
+  Removing a former tree there still makes stored files writable, and the file of a former tree not yet replaced, in a folder the home does not know or of an environment whose install has not succeeded yet, may be writable while it still shares bytes with the store.
   The check at each copy is what makes that safe for every tree this release installs: bytes changed through such a link are never copied into another environment.
-  Two former trees in folders the home does not know still share their files with each other and with the store until each is installed again, as under the earlier release, now without the read-only mark on Windows once a removal has cleared it.
+  Former trees not yet replaced, wherever they stand, still share their files with each other and with the store until each is installed again, as under the earlier release, now without the read-only mark on Windows once a removal has cleared it.
 - An earlier release installing into a folder links it again, and the next install by this release copies again; the app and the command line upgrade together.
 
 ### Considered and declined
