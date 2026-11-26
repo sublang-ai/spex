@@ -7,7 +7,7 @@
 
 Accepted (2026-10-21) on the owner's direction.
 Amends [DR-057](057-space-surface.md), [DR-103](103-the-home-and-its-groups.md), [DR-111](111-the-core-coordinates-as-git-does.md), [DR-120](120-the-instance-is-the-space.md), [DR-122](122-a-sync-reads-its-destination.md), [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md), [DR-127](127-a-home-signed-in-to-several-instances.md).
-Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-215](215-add-to-a-group-and-start-working.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 

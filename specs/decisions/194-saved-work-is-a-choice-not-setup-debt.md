@@ -13,7 +13,7 @@ Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, att
 
 Amended by [DR-195](195-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
 
-Amended by [DR-196](196-a-review-count-and-a-way-back.md) in the header review count and persistent return path.
+Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the header review count and persistent return path.
 
 Amended by [DR-197](197-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
 
