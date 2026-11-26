@@ -28,7 +28,7 @@ Amends [DR-000](000-spec-structure-format.md), [DR-012](012-spec-package-files.m
   - a change beyond one DR's concern is recorded in a new DR, and what it replaces is removed from the earlier DR;
   - a DR whose remainder would fit as a few bullets of its successor merges into it and is deleted, citations repointed to it;
   - a DR whose subject is retired with no decision surviving is deleted by the retiring change, its citations removed or reworded and the reason stated in the commit.
-- Deleting a DR repoints every citation and mention of it — specs, intents, code, documentation and changelogs — to the DR that now holds its decisions; the ID is retired, never reused.
+- A deleted DR's citations and mentions are handled everywhere they occur — specs, intents, code, documentation and changelogs — as its case above says, and its ID is retired, never reused.
 - A Status holds at most three lines: state and date, the DRs amended, and the DRs amending, by ID [[meta-36](../meta.md#meta-36)]; each change's scope is stated in the amending DR's body.
 - `Amends` and `Amended by` are the only relations, each stated on both sides, and only where a decision the other DR still states changes [[meta-38](../meta.md#meta-38)].
 - A DR's `map.md` summary states its decisions in force in one line [[meta-37](../meta.md#meta-37)].

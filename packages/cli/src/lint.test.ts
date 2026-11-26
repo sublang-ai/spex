@@ -734,6 +734,15 @@ describe("lintSpecs", () => {
       // A label pointing anywhere but that DR's own file.
       "specs/decisions/004-d.md": statusDr("Accepted.\nAmends [DR-005](../map.md)."),
       "specs/decisions/005-e.md": statusDr("Accepted.\nAmended by [DR-004](004-d.md)."),
+      // A citation Markdown does not parse as a link, alone and after a
+      // valid one.
+      "specs/decisions/006-f.md": statusDr("Accepted.\nAmends [DR-005](<005-e.md)."),
+      "specs/decisions/007-g.md": statusDr("Accepted.\nAmends [DR-005](005-e.md), [DR-006](<006-f.md)."),
+      // A relation in place of the state on the first line.
+      "specs/decisions/008-h.md": statusDr("Amends [DR-005](005-e.md)."),
+      // Superseded states as displayed, emphasized and in zh wording.
+      "specs/decisions/009-i.md": statusDr("**Superseded** by [DR-001](001-a.md)."),
+      "specs/decisions/010-j.md": statusDr("已被 [DR-001](001-a.md) 取代。"),
     });
     const by = (rule: string) => findings.filter((f) => f.rule === rule).map((f) => [f.path, f.line]);
     assert.deepEqual(by("record/status-length"), [["specs/decisions/001-a.md", 8]], JSON.stringify(findings));
@@ -744,10 +753,21 @@ describe("lintSpecs", () => {
         ["specs/decisions/001-a.md", 7],
         ["specs/decisions/003-c.md", 6],
         ["specs/decisions/004-d.md", 6],
+        ["specs/decisions/006-f.md", 6],
+        ["specs/decisions/007-g.md", 6],
+        ["specs/decisions/008-h.md", 5],
       ],
       JSON.stringify(findings),
     );
-    assert.deepEqual(by("record/superseded"), [["specs/decisions/002-b.md", 5]], JSON.stringify(findings));
+    assert.deepEqual(
+      by("record/superseded"),
+      [
+        ["specs/decisions/002-b.md", 5],
+        ["specs/decisions/009-i.md", 5],
+        ["specs/decisions/010-j.md", 5],
+      ],
+      JSON.stringify(findings),
+    );
     assert.ok(statusRules(findings).every((f) => f.severity === "error"));
   });
 

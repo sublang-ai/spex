@@ -1363,8 +1363,11 @@ const STATUS_RELATION_FORMS: { kind: "amends" | "amendedBy"; re: RegExp }[] = [
   },
 ];
 // The declared state opening a Status's first line (meta-36), read
-// with link destinations removed so a file name cannot match.
-const STATUS_SUPERSEDED_RE = /^(?:superseded\b|已被取代|被.*取代)/i;
+// as displayed — link destinations and emphasis marks removed — so a
+// file name cannot match and `**Superseded**` or `已被 … 取代` does.
+const STATUS_SUPERSEDED_RE = /^(?:superseded\b|已?被.*取代)/i;
+// Every DR citation a relation line spells, parsed as a link or not.
+const STATUS_CITATION_RE = /\[DR-\d+\]\(/g;
 const DECISION_PATH_RE = /^specs\/decisions\/(\d+)-[^/]+\.md$/;
 
 type DrRelation = { target: string; line: number };
@@ -1400,7 +1403,7 @@ function statusLines(file: SpecFile): { line: number; text: string }[] | null {
  * when a link's label is not `DR-<NNN>` or its destination is not
  * that DR's own decision file.
  */
-function statusRelationTargets(file: SpecFile, line: number): string[] | null {
+function statusRelationTargets(file: SpecFile, line: number, text: string): string[] | null {
   const targets: string[] = [];
   for (const link of file.links) {
     if (link.line !== line || link.kind !== "link") continue;
@@ -1413,7 +1416,10 @@ function statusRelationTargets(file: SpecFile, line: number): string[] | null {
     if (DECISION_PATH_RE.exec(resolved)?.[1] !== label) return null;
     targets.push(label);
   }
-  return targets;
+  // A citation the Markdown parser does not read as a link, such as
+  // `[DR-002](<002-b.md)`, would otherwise drop out of reciprocity.
+  const spelled = text.match(STATUS_CITATION_RE)?.length ?? 0;
+  return targets.length === spelled ? targets : null;
 }
 
 function lintDrStatus(ctx: LintContext): void {
@@ -1448,7 +1454,8 @@ function lintDrStatus(ctx: LintContext): void {
 
     // meta-35: a wholly replaced DR is merged into its successor and
     // deleted, never kept with a superseded state.
-    if (STATUS_SUPERSEDED_RE.test(lines[0].text.replace(/\]\([^)]*\)/g, "]"))) {
+    const displayed = lines[0].text.replace(/\]\([^)]*\)/g, "]").replace(/[*_`]/g, "");
+    if (STATUS_SUPERSEDED_RE.test(displayed)) {
       report(
         ctx,
         entry.relPath,
@@ -1459,9 +1466,21 @@ function lintDrStatus(ctx: LintContext): void {
       );
     }
 
+    // The first line is the state and date; a relation there is misplaced.
+    if (STATUS_RELATION_FORMS.some((candidate) => candidate.re.test(lines[0].text))) {
+      report(
+        ctx,
+        entry.relPath,
+        lines[0].line,
+        "error",
+        "record/status-form",
+        `a DR Status opens with its state and date; "Amends" and "Amended by" follow it on lines of their own (meta-36)`,
+      );
+    }
+
     for (const { line, text } of lines.slice(1)) {
       const form = STATUS_RELATION_FORMS.find((candidate) => candidate.re.test(text));
-      const targets = form === undefined ? null : statusRelationTargets(file, line);
+      const targets = form === undefined ? null : statusRelationTargets(file, line, text);
       if (form === undefined || targets === null) {
         report(
           ctx,

@@ -31,9 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   record's concern, a version floor or a default included, revises that
   record in place instead of adding one; a change beyond it rewrites the
   earlier record without what it replaced; a record whose remainder
-  would fit as a few bullets of its successor, or whose subject is
-  retired, merges into the successor and is deleted with its citations
-  repointed. A record's Status holds at most three lines, `Amends` and
+  would fit as a few bullets of its successor merges into it and is
+  deleted with its citations repointed; a record whose subject is
+  retired with nothing surviving is deleted and its citations removed
+  or reworded. A record's Status holds at most three lines, `Amends` and
   `Amended by` are stated on both sides, and its `map.md` summary is one
   line (meta-35 to meta-38). Git history keeps the earlier text.
   `spex scaffold --update` brings the new rules into an existing project.

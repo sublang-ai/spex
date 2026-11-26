@@ -107,8 +107,9 @@ Where an item is linted, prose outside fenced blocks, lists, tables, blockquotes
 Where a DR's `## Status` section is linted, its content starting after the heading's last line, the linter shall report:
 
 - an error for a Status holding more than three non-empty lines [[meta-36](../meta.md#meta-36)];
-- an error for a Status line after the first that is not `Amends` or `Amended by` followed by DR citations alone, comma-separated and ending in a period — or the zh templates' `修订 …。` and `被 … 修订。` with `、` between citations — or one whose parsed link is not labeled `DR-<NNN>` or does not resolve to that DR's own decision file [[meta-36](../meta.md#meta-36)];
-- an error for a first Status line declaring the DR superseded — its opening state read with link destinations removed — since a wholly replaced DR is merged into its successor and deleted [[meta-35](../meta.md#meta-35)]; relation wording on later lines is a form finding only.
+- an error for a Status line after the first that is not `Amends` or `Amended by` followed by DR citations alone, comma-separated and ending in a period — or the zh templates' `修订 …。` and `被 … 修订。` with `、` between citations — or one with a citation the Markdown parser reads as no link, or a parsed link not labeled `DR-<NNN>` or not resolving to that DR's own decision file [[meta-36](../meta.md#meta-36)];
+- an error for a first Status line holding such a relation in place of the DR's state and date [[meta-36](../meta.md#meta-36)];
+- an error for a first Status line declaring the DR superseded — its opening state read as displayed, link destinations and emphasis marks removed, in English or the zh templates' `已被 … 取代` — since a wholly replaced DR is merged into its successor and deleted [[meta-35](../meta.md#meta-35)]; relation wording on later lines is a form finding only.
 
 #### lint-16
 
@@ -151,7 +152,7 @@ Where the linter is exercised, the test suite shall cover at least one fixture p
 - reference markers, records, and map listing for an unlisted package and an unlisted decision, and no finding for an unlisted package whose first line is a placed spec's marker ([[lint-9](#lint-9)]);
 - citation discipline — a section-prose peer citation, a detached `Verifies` sentence, peer External and Internal citations from Verification, and a same-package Internal citation from Verification ([[lint-13](#lint-13)]);
 - the multi-sentence advisory ([[lint-14](#lint-14)]);
-- DR Status rules — clean three-line Statuses in English and zh wording and under a setext heading, an over-long Status, scope prose, an unlisted relation word and a link to a file other than the labeled DR's on a relation line, a superseded DR, and a relation naming a superseded DR or a file name containing the word leaving its own record's state alone, each finding an error ([[lint-15](#lint-15)]);
+- DR Status rules — clean three-line Statuses in English and zh wording and under a setext heading, an over-long Status, scope prose, an unlisted relation word, a link to a file other than the labeled DR's and a citation parsed as no link, alone or after a valid one, on a relation line, a relation on the first line, a superseded DR in plain, emphasized and zh wording, and a relation naming a superseded DR or a file name containing the word leaving its own record's state alone, each finding an error ([[lint-15](#lint-15)]);
 - one-sided `Amends` and `Amended by` relations, each an error on the line naming the target — with two `Amends` lines and against a target without a Status ([[lint-16](#lint-16)]);
 - an item body spanning a nested subheading whose citations count for the item, a blockquote-wrapped package failing structure, and a literal triple-backtick line inside a longer fence staying undetected ([[lint-10](#lint-10)]);
 - finding format and summary ([[lint-3](#lint-3)]);
