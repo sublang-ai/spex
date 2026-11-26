@@ -648,12 +648,56 @@ test("release-33: the cache seed runs on main's lockfile and cache-tooling chang
   }
 });
 
+/** A package's real test runner in a scratch tree laid out as the repository's, with the exit guard both runners preload. */
+function runnerFixture(tree, pkg) {
+  for (const script of [`packages/${pkg}/scripts/run-tests.cjs`, "packages/cli/scripts/test-exit-guard.mjs"]) {
+    mkdirSync(join(tree, script, ".."), { recursive: true });
+    writeFileSync(join(tree, script), readFileSync(join(root, script)));
+  }
+  mkdirSync(join(tree, "packages", pkg, "dist"));
+  return join(tree, "packages", pkg);
+}
+
+test("release-33: a suite reports every result and fails by name a file that outlives its tests (release-51)", () => {
+  for (const pkg of ["cli", "core"]) {
+    const dir = runnerFixture(mkdtempSync(join(tmpdir(), "spex-runner-exit-")), pkg);
+    const many = (name, last) => `const { test } = require("node:test");\nfor (let at = 0; at < 300; at++) test("${name}-" + at, () => {});\n${last}\n`;
+    writeFileSync(join(dir, "dist", "clean.test.js"), many("clean", ""));
+    // Closes what it opened in its own hook, well inside the guard's wait: no leak.
+    writeFileSync(join(dir, "dist", "closes.test.js"), `const { test, after } = require("node:test");\nconst server = require("node:http").createServer();\ntest("closes-0", (_, done) => server.listen(0, "127.0.0.1", done));\nafter(() => new Promise((resolve) => setTimeout(() => server.close(resolve), 200)));\n`);
+    const { NODE_TEST_CONTEXT: _context, ...env } = process.env;
+    const run = () => {
+      const result = spawnSync(process.execPath, [join(dir, "scripts", "run-tests.cjs")], {
+        cwd: dir, encoding: "utf8", timeout: 120_000, env: { ...env, SPEX_TEST_EXIT_GRACE_MS: "2000" },
+      });
+      const output = result.stdout + result.stderr;
+      const reported = (name) => new Set([...output.matchAll(new RegExp(`^(?:(?:not )?ok \\d+ - |\\s*[✔✖] )${name}-(\\d+)\\b`, "gm"))].map((match) => match[1])).size;
+      return { status: result.status, output, reported };
+    };
+    const clean = run();
+    assert.equal(clean.status, 0, `${pkg}: ${clean.output.slice(-2000)}`);
+    assert.equal(clean.reported("clean"), 300, `${pkg}: every result of a clean file is reported`);
+    assert.equal(clean.reported("closes"), 1, pkg);
+    assert.doesNotMatch(clean.output, /test-exit-guard/, `${pkg}: a file that closes what it opened is left alone`);
+    // A failing test after many passing ones, and a file that leaves its server listening.
+    writeFileSync(join(dir, "dist", "failing.test.js"), many("failing", `test("failing-300", () => require("node:assert").strictEqual(1 + 1, 3, "the-assertion-shown"));`));
+    writeFileSync(join(dir, "dist", "leaks.test.js"), `const { test } = require("node:test");\ntest("leaks-0", (_, done) => require("node:http").createServer().listen(0, "127.0.0.1", done));\n`);
+    const failed = run();
+    assert.equal(failed.status, 1, `${pkg}: ${failed.output.slice(-2000)}`);
+    for (const [name, count] of [["clean", 300], ["failing", 301], ["closes", 1], ["leaks", 1]]) assert.equal(failed.reported(name), count, `${pkg}: ${name}`);
+    assert.match(failed.output, /the-assertion-shown/, `${pkg}: the failing test's assertion`);
+    assert.match(failed.output, /test-exit-guard: .*leaks\.test\.js was still running 2000 ms after its tests finished, holding: .*TCPServerWrap/, `${pkg}: the file and what it holds`);
+    assert.match(failed.output, /^(?:not ok \d+ - |\s*✖ ).*leaks\.test\.js/m, `${pkg}: the file fails by name`);
+    assert.doesNotMatch(failed.output, /test-exit-guard: .*(?:clean|closes|failing)\.test\.js/, `${pkg}: no other file is ended`);
+  }
+  // Neither runner forces a file's exit, which loses the results it has not reported.
+  for (const pkg of ["cli", "core"]) assert.doesNotMatch(readFileSync(join(root, `packages/${pkg}/scripts/run-tests.cjs`), "utf8"), /"--test-force-exit"/, pkg);
+});
+
 test("release-33: the core's parts deal its test files largest first, every file in exactly one part (release-34)", () => {
   // The real runner over a fixture suite: files whose sizes order them f1 (largest) to f8.
-  const dir = mkdtempSync(join(tmpdir(), "spex-core-parts-"));
-  mkdirSync(join(dir, "scripts"));
-  mkdirSync(join(dir, "dist", "nested"), { recursive: true });
-  writeFileSync(join(dir, "scripts", "run-tests.cjs"), readFileSync(join(root, "packages/core/scripts/run-tests.cjs")));
+  const dir = runnerFixture(mkdtempSync(join(tmpdir(), "spex-core-parts-")), "core");
+  mkdirSync(join(dir, "dist", "nested"));
   const names = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"];
   names.forEach((name, at) => {
     const file = at === 4 ? join(dir, "dist", "nested", `${name}.test.js`) : join(dir, "dist", `${name}.test.js`);

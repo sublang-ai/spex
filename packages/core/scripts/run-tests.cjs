@@ -10,6 +10,7 @@ const { readdirSync, statSync } = require("fs");
 const { join, relative } = require("path");
 const { execFileSync } = require("child_process");
 const { availableParallelism } = require("os");
+const { pathToFileURL } = require("url");
 
 const pattern = process.argv[2] || "\\.test\\.js$";
 const regex = new RegExp(pattern);
@@ -66,21 +67,23 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-// --test-timeout turns a hung test into a named failure; force-exit
-// keeps a leaked handle from zombifying the run (observed on the
-// Windows CI runners). Node 22 applies the timeout to each file as a
+// --test-timeout turns a hung test into a named failure, and the exit
+// guard, the CLI's, does the same for a file that outlives its tests; no
+// --test-force-exit, which loses the results a file has not yet reported
+// (DR-253). Node 22 applies the timeout to each file as a
 // whole as well as to each test (Node 24 to each test only), so the
 // budget must hold the longest file on the slowest runner: the core
 // integration file alone passed 180 s on the macOS runner, where this
 // suite takes about five times what it takes on Linux, and the space-host
 // file, whose creation cases hold 2 s re-reads by design, passed 600 s
 // there once the restarted core's case joined it.
+const guard = pathToFileURL(join(root, "..", "cli", "scripts", "test-exit-guard.mjs")).href;
 execFileSync(
   process.execPath,
   [
     "--test",
     "--test-timeout=1200000",
-    "--test-force-exit",
+    `--import=${guard}`,
     `--test-concurrency=${concurrency}`,
     ...files,
   ],
