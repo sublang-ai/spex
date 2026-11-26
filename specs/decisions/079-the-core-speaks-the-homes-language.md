@@ -5,12 +5,13 @@
 
 ## Status
 
-Accepted (2026-09-18) on the owner's rule: text a reader sees in normal operation, and any message that informs or instructs the reader, is translated; an exceptional internal error keeps English.
-Extends [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: the prose the core authors, and the Node 22 floor for every package, the scaffold CLI included; everything else in it stands.
-Amended by [DR-083](083-a-finished-operations-words-keep-their-language.md) in the re-derivation alone: what a finished operation composed keeps its language until it runs again, and the start speaks the stored choice before the store loads.
+Accepted (2026-09-18).
+Amends [DR-040](040-source-only-app-releases.md), [DR-078](078-the-interface-speaks-the-readers-language.md).
+Amended by [DR-083](083-a-finished-operations-words-keep-their-language.md).
 
 ## Context
 
+- The owner's rule: text a reader sees in normal operation, and any message that informs or instructs the reader, is translated; an exceptional internal error keeps English.
 - After [DR-078](078-the-interface-speaks-the-readers-language.md), about a hundred and forty messages the core authors still reach a Chinese page in English, across some thirty protocol fields: a refusal's message, a config error, a readiness requirement, a diagnostic's reason, the Space's messages and guidance, a unit's label and detail, a compile step's line and the toolchain's guidance, a draft's diagnostic, an authoring thread's status line, a specs notice.
 - DR-078 left two ways open. Codes the page phrases, the failure catalogue's way ([DR-075](075-a-failure-says-what-and-what-now.md)), would make the protocol carry every fact each of those phrases needs and rewrite every test that pins a message; the core phrasing in the home's language reuses the catalog tooling as it stands, in a package built like the desktop shell.
 - The core already holds the home's choice; for the reader's system it has what its host passes: the desktop shell's OS is the reader's device, while a served page may sit elsewhere.
@@ -22,10 +23,11 @@ Amended by [DR-083](083-a-finished-operations-words-keep-their-language.md) in t
 - **What speaks and what stays.** A refusal's message, a config error, a readiness requirement, a diagnostic's reason, the Space's messages and guidance, a unit's label and detail, a compile step's line and the toolchain's guidance, a draft's diagnostic, an authoring thread's status line and a specs notice are the reader's and translate.
   A message that names an internal failure for a developer, text relayed from a runtime, a tool, a file or a library, and a wire text the page matches to phrase itself stay as they are.
 - **The language the core speaks** is the home's choice; with none stored, the reader's system as the embedding shell passes it at start — the desktop shell passes the OS's preferred languages — and the process's own locale where a shell passes none.
-  The core changes language the moment the choice is set.
-- **A change re-reads live state.** The core re-derives and broadcasts the states it caches, and a page re-reads what it holds, so every phrase the core composed reads in the new language; a record already written keeps the language it was written in.
+  The core changes language the moment the choice is set, and a start reads the stored choice before its store loads ([DR-083](083-a-finished-operations-words-keep-their-language.md)).
+- **A change re-reads live state.** The core re-derives and broadcasts the states it caches, and a page re-reads what it holds, so every phrase of live state the core composed reads in the new language; a record already written keeps the language it was written in, and what a finished operation composed keeps its language until that operation runs again ([DR-083](083-a-finished-operations-words-keep-their-language.md)).
 - **Tests speak English**: the core's test harness starts the service with English system languages, so no host's locale colours a run.
-- **Node 22 everywhere.** Every package declares the floor, the scaffold CLI included; the CLI's next release is a major.
+- **Node 22 everywhere.** Every package declares the floor, the scaffold CLI included, raising [DR-040](040-source-only-app-releases.md)'s; the CLI's next release is a major.
+- This extends [DR-078](078-the-interface-speaks-the-readers-language.md) to the prose the core authors; everything else in it stands.
 
 Considered and declined:
 

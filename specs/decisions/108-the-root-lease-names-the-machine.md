@@ -6,10 +6,7 @@
 ## Status
 
 Accepted (2026-09-30).
-Extends [DR-036](036-file-state-store.md) in one scope: the root lease's owner names its machine by Playbook's machine identity rather than by the operating system's host name, and its retirement keeps a permanent record; one core per state root and the same-host design otherwise stand.
-Extends [DR-045](045-unified-session-storage.md) in one scope: the storage Git tool takes the same lease by the same rules and recovers a dead owner of this machine.
-Extends [DR-103](103-the-home-and-its-groups.md) in one scope: beside the home's `.lease/`, whose path stands, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`; a `.lock/` of the former layout is read by the same rule before the migration.
-Amended by [DR-111](111-the-core-coordinates-as-git-does.md) in its Playbook floor alone, now `^17.7.0`: the core requires Playbook 17.7.0, whose session store, opened with `createSessionsDir: false`, makes neither a missing sessions folder nor an ancestor; its leases stand whole.
+Amends [DR-036](036-file-state-store.md), [DR-045](045-unified-session-storage.md), [DR-103](103-the-home-and-its-groups.md).
 
 ## Context
 
@@ -39,6 +36,9 @@ Considered and declined:
 
 ## Decision
 
+- Amends [DR-036](036-file-state-store.md): the root lease's owner names its machine by Playbook's machine identity rather than by the operating system's host name, and its retirement keeps a permanent record; one core per state root and the same-host design otherwise stand.
+- Amends [DR-045](045-unified-session-storage.md): the storage Git tool takes the same lease by the same rules and recovers a dead owner of this machine.
+- Amends [DR-103](103-the-home-and-its-groups.md): beside the home's `.lease/`, whose path stands, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`; a `.lock/` of the former layout is read by the same rule before the migration.
 - **The core takes this machine's identity from Playbook's facade** once, at its asynchronous start, and hands it to the store; a storage Git command resolves it the same way before reserving the home.
   While the identity is unavailable — its file unreadable, malformed, or unsafe — the core refuses to serve and a mutating storage command refuses to run, each naming the file and the reason; neither publishes `os.hostname()` in its place.
 - **One root-lease rule for every home writer**, the core and the storage Git tool alike, in one shared implementation:
@@ -51,7 +51,6 @@ Considered and declined:
 - **The former layout's `.lock/`** is read by the same rule before [DR-103](103-the-home-and-its-groups.md)'s migration: a live owner, another machine's, or one the rule cannot verify keeps the core out; a dead owner of this machine is left for the migration.
 - **The desktop quits on `SIGINT` and `SIGTERM`** through its ordinary shutdown, without the active-turn confirmation, exiting 130 or 143 once the core has stopped or after a bounded wait; the source runner, having signalled the launch stage, waits a bounded time for it and then ends its process group, so the Node ABI restore is never held by a hung app.
 - **Coordinated upgrade**: every writer sharing the home — the CLI and every Spex shell — stops before the first new writer runs, after the home snapshot of [DR-050](050-shared-storage-cutover.md); an old binary reads a tagged owner as foreign and refuses takeover, and a legacy record whose host name has since changed still needs its lock directory moved aside by hand.
-- **The Playbook floor** rises to `^17.6.0`, 17.6.0 being the first release publishing the facade [[2]]; the lock is regenerated from the public registry as [DR-241](241-reviewable-builtin-gears.md) requires, holding one Playbook, 17.6.0, and the merge gate runs against that release, not a local checkout.
 
 ## Consequences
 
@@ -60,9 +59,7 @@ Considered and declined:
 - The core's refusal messages change wording, so the English and Chinese catalogs gain entries; the storage command's refusal keeps its `stop the Spex core` opening.
 - `Ctrl+C` in `npm start` releases the lease; a killed core still leaves `.lease/`, which the next start of this machine reclaims.
 - Two developer Spex homes on one machine share one identity and keep separate leases.
-- The build stages the built-in spec package at 17.6.0, the installed Playbook's version, so a new environment pins it there; an existing lock keeps the version it pins until its environment updates.
 
 ## References
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/decisions/087-leases-name-the-machine.md "Playbook DR-087: Leases name the machine"
-[2]: https://github.com/sublang-ai/playbook/blob/main/CHANGELOG.md "Playbook changelog: 17.6.0"

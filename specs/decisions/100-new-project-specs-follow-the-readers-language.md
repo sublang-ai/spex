@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-02).
-Amends [DR-006](006-projects-and-forge.md) in the create flow's scaffold language and extends [DR-096](096-the-app-supplies-the-scaffold.md) in the arguments passed to the supplied scaffold.
+Amends [DR-006](006-projects-and-forge.md), [DR-096](096-the-app-supplies-the-scaffold.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Amends [DR-006](006-projects-and-forge.md) in the create flow's scaffold languag
 
 ## Decision
 
+- Amends [DR-006](006-projects-and-forge.md) in the create flow's scaffold language and [DR-096](096-the-app-supplies-the-scaffold.md) in the arguments passed to the supplied scaffold.
 - New project scaffolding uses the creating page's resolved interface language at submission.
 - A protocol caller may name the scaffold language; with none named, the core uses its own resolved interface language.
 - The scaffold remains responsible for localized templates and existing-tree language conflicts.

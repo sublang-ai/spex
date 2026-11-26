@@ -5,17 +5,9 @@
 
 ## Status
 
-Amended by [DR-144](144-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.
-
 Accepted (2026-10-10).
-Amends [DR-045](045-unified-session-storage.md) §Git synchronization in one rule: the app's sync no longer stops local writers during commit, checkout and merge; every write is versioned or appended, and the sync refuses a replacement its pre-write check finds changed since Save; the command line's stopped writers stand.
-Amends [DR-057](057-space-surface.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, and no gate is set before its checks; a sync refuses no command and reports its progress.
-Amends [DR-103](103-the-home-and-its-groups.md) where it inherited that admission for the per-repository sync, and in one clause: no local claim stands for a host repository; the host's answer alone decides a race between two devices.
-Amends [DR-058](058-chat-assisted-playbook-authoring.md) in one activity per draft: a draft's compile may run beside its turn, and a duplicate compile is refused per artifact destination, where it was per playbook id.
-Amends [DR-010](010-interface-craft.md) §5 in its duplicates for Space operations and environment commands: a duplicate Space operation joins the one running and a Sync asked during its clone's Check follows it, and environment commands may start beside one another.
-Keeps [DR-036](036-file-state-store.md) whole, and [DR-108](108-the-root-lease-names-the-machine.md) whole in its leases: one process serves a home under the root lease, and Playbook's per-session lease names the one writer of a session's records, refusing a removal or a move of its clone while it names a live or unverifiable writer, the move's check adding no mechanism beyond that lease.
-Amends [DR-108](108-the-root-lease-names-the-machine.md) in its Playbook floor alone, now `^17.7.0`: the core requires Playbook 17.7.0 [[3]], whose session store, opened with `createSessionsDir: false`, makes neither a missing sessions folder nor an ancestor, which a removal, a moved clone and the apply's session writes rely on.
-Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "the version its Save step committed": each placement's apply writes against the clone's `spex` as the previous placement's merge left it.
+Amends [DR-010](010-interface-craft.md), [DR-045](045-unified-session-storage.md), [DR-057](057-space-surface.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-103](103-the-home-and-its-groups.md).
+Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-144](144-bounded-session-storage.md).
 
 ## Context
 
@@ -36,6 +28,12 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "th
 
 ## Decision
 
+- Amends [DR-045](045-unified-session-storage.md)'s Git synchronization in one rule: the app's sync no longer stops local writers during commit, checkout and merge; every write is versioned or appended, and the sync refuses a replacement its pre-write check finds changed since Save; the command line's stopped writers stand.
+- Amends [DR-057](057-space-surface.md) in its admission, and [DR-103](103-the-home-and-its-groups.md) where it inherited that admission for the per-repository sync: a sync is no longer admitted only between turns and while nothing runs, and no gate is set before its checks; a sync refuses no command and reports its progress.
+- Amends [DR-103](103-the-home-and-its-groups.md) in one clause: no local claim stands for a host repository; the host's answer alone decides a race between two devices.
+- Amends [DR-058](058-chat-assisted-playbook-authoring.md) in one activity per draft: a draft's compile may run beside its turn, and a duplicate compile is refused per artifact destination, where it was per playbook id.
+- Amends [DR-010](010-interface-craft.md) §5 in its duplicates for Space operations and environment commands: a duplicate Space operation joins the one running and a Sync asked during its clone's Check follows it, and environment commands may start beside one another.
+- Keeps [DR-036](036-file-state-store.md) whole, and [DR-108](108-the-root-lease-names-the-machine.md) whole in its leases: one process serves a home under the root lease, and Playbook's per-session lease names the one writer of a session's records, refusing a removal or a move of its clone while it names a live or unverifiable writer, the move's check adding no mechanism beyond that lease.
 - The core coordinates processes, not operations.
   The only exclusions between processes are the root lease, one process per home; Playbook's per-session lease, one writer of a session's records; and the instant of a write.
   Within its one process, the core runs one operation per clone at a time — a duplicate joining the one running, a Sync asked during a Check following it — holding off no other command and no other process.
@@ -49,10 +47,10 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "th
   An append — a session record under Playbook's per-session lease, an authoring record under the root lease — names no version, because one writer holds its file.
   Across devices, a file both sides appended is a unit changed on both sides, and the reader chooses, as Git conflicts on two additions at one place [[space-17](../packages/space.md#space-17)].
 - No operation refuses another but by the first bullet.
-  A sync, check, join, move, removal, compile, install or enabling reports its progress and admits every command the first bullet does not refuse; what the gate would have refused is admitted and either succeeds, its own write versioned or appended, or is refused at its write by the rule above or by a session's lease.
+  A sync, check, join, move, removal, compile or install reports its progress and admits every command the first bullet does not refuse; what the gate would have refused is admitted and either succeeds, its own write versioned or appended, or is refused at its write by the rule above or by a session's lease.
 - A sync commits what is on disk, merges, and refuses a replacement whose pre-write check finds the file changed since Save, honoring a session's lease.
   An independent process keeps ordinary filesystem behavior: the check is the core's own, made at the instant before its rename, and no lock holds another process off the file.
-  The apply step writes each unit under the version its Save step committed, taking a session's lease for that instant as any writer of its records does ([DR-108](108-the-root-lease-names-the-machine.md)).
+  The apply step writes each unit under the version its Save step committed — for each placement, against the clone's `spex` as the previous placement's merge left it ([DR-128](128-a-spex-repository-placed-at-several-instances.md)) — taking a session's lease for that instant as any writer of its records does ([DR-108](108-the-root-lease-names-the-machine.md)).
   Where any such write is refused, Apply records no merge commit and the Save commit stands.
   A unit changed since Save makes the selection obsolete: the units already written are local changes equal to the host's side, and the sync saves and merges again or stops for a retry.
   A session's lease held elsewhere interrupts the apply instead: its repair record stays, and the retry finishes the recorded selection once the lease is free, since units written apart can name one another.
@@ -68,8 +66,7 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "th
 | an agent appends records while a sync applies | the apply replaces a session's files only where they still read as Save committed them and the lease is free for that instant; where not, no merge commit is recorded and the Save commit stands: changed files make the sync save and merge again or stop for a retry, a choice where both sides changed, and a held lease leaves the recorded selection for the retry to finish |
 | a removal while a turn runs | the removal is one write at its instant, refused where a session's lease file names a live or unverifiable writer ([DR-108](108-the-root-lease-names-the-machine.md)); what a process does once its folder is gone is its own affair, as an editor's after `rm -rf` |
 | a clone moved by the host while work runs beneath it | the move is one rename at its instant, a versioned write of the clone's address, refused where a session's lease file names a live or unverifiable writer, as a removal is; the core's own writes resolve the address at their instant, and a process holding the old path is its own affair |
-| two devices create a group's repository at once | the host refuses the second creation of a taken name, and the refusal is the answer; no local claim stands ([DR-103](103-the-home-and-its-groups.md)) |
-| an enabling whose session left during its preparation | each write is versioned on the file it writes, and a session's departure is no version of those files; the enabling finishes or fails on its own, as a script does after its terminal closed |
+| two devices create one records repository at once | the host refuses the second creation of a taken name, and the refusal is the answer; no local claim stands ([DR-103](103-the-home-and-its-groups.md)) |
 | a second core on the same home | the root lease refuses it ([DR-108](108-the-root-lease-names-the-machine.md)) |
 
 ### Considered and declined
@@ -80,7 +77,7 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "th
 - Merging appended records inside a session unit by sequence, as the first draft of this record proposed: Git conflicts on two additions at one place, the whole-unit choice of [DR-045](045-unified-session-storage.md) already answers a session two devices ran, and a merge inside a unit would be a protocol of the core's own.
 - A persistent compile lease, a lock file in the artifact folder stale when its owner's PID is dead: an independent `slc` or editor ignores it, and it adds crash recovery for a file that outlives its holder, while both overlapping writers are this core's own.
 - Refusing the apply where a transcript records an unfinished turn of this device: a record cannot prove a live writer, a crashed or imported turn reads the same, and the command line's sync after a crash would be refused.
-- Staging compiler output for a swap, rolling back a failed job, or redesigning authoring identity: beyond the two admissions; `slc` writes its outputs in place, a failed or canceled job may leave them partial, and only a successful job is recorded compiled and enabled.
+- Staging compiler output for a swap, rolling back a failed job, or redesigning authoring identity: beyond the two admissions; `slc` writes its outputs in place, a failed or canceled job may leave them partial, and only a successful job is recorded compiled.
 
 ## Consequences
 
@@ -97,4 +94,3 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in "th
 
 [1]: https://git-scm.com/docs/git-update-ref "git-update-ref: refs are updated through a lock file held for the instant of the write"
 [2]: https://git-scm.com/docs/git-merge#_pre_merge_checks "git-merge, pre-merge checks: a merge refuses to overwrite local changes rather than stopping their writers"
-[3]: https://github.com/sublang-ai/playbook/blob/v17.7.0/CHANGELOG.md "Playbook changelog: 17.7.0"

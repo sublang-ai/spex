@@ -5,22 +5,18 @@
 
 ## Status
 
-Accepted (2026-09-17) on the owner's report that a failed `/code` run in spex-pub gave no usable reason and offered a Retry that could not work.
-Amends [DR-062](062-ending-a-failed-workflow.md) in scope: the notice carries one control per advertised action, each with its standing, instead of one Retry; Drop, its confirm, and the one-ruling gesture stand.
-Amends [DR-060](060-failed-workflow-control.md) in scope: the notice says why the run failed and what to do, from data, and fulfils that record's promise to draw each advertised action as its own control.
-Extends [DR-069](069-key-phrases-not-sentences.md): a failure's cause is a phrase where it applies, from a catalogue, never a sentence a model composed.
-Requires Playbook 14.1, whose [DR-063](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/063-failures-explain-themselves.md) attaches a closed `{ code, evidence }` cause to every parked failure and a standing to every advertised action.
-Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md) in the notice's layout alone: the actions resuming from an earlier step fold behind one secondary control; one control per advertised action, each with its standing, stands.
-Amended by [DR-155](155-players-named-delegated-and-recovered.md) in "what now": a failure naming its agent offers that agent's popover and its Settings row by cause.
-Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md) in wording alone: a failure the Boss's own stop caused reads aborted, not failed.
+Accepted (2026-09-17).
+Amends [DR-060](060-failed-workflow-control.md), [DR-062](062-ending-a-failed-workflow.md), [DR-069](069-key-phrases-not-sentences.md).
+Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md), [DR-155](155-players-named-delegated-and-recovered.md), [DR-160](160-the-captain-dispatches-in-plain-sight.md).
 
 ## Context
 
+- The owner reported that a failed `/code` run in spex-pub gave no usable reason and offered a Retry that could not work.
 - The Boss saw "workflow failed; awaiting Boss recovery", a notice naming no cause, and a hedged model reply carrying two commit hashes.
   The runtime's reason reached the client inside the status record's data, and no component rendered it.
 - Retry sent the first of two advertised actions, a reconciliation that can never resolve a complete receipt; the abandonment beside it was unreachable.
 - Every surface that mentions a failure — the notice, the Captain thread, the Dashboard's interrupted row, the session marker — says only that one happened.
-- Playbook now states the cause as data with a closed code list and bounded evidence, and states each action's standing.
+- Playbook now states the cause as data with a closed code list and bounded evidence, and states each action's standing ([DR-063 in Playbook](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/063-failures-explain-themselves.md)).
   The interface's job is to phrase, not to diagnose.
 
 ## Decision
@@ -29,15 +25,19 @@ Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md) in wording alo
   The interface holds one table mapping every failure code Playbook exports to a plain phrase, an optional Boss step naming what to do outside Spex, and the evidence it prints.
   A test imports Playbook's code list and fails when a code has no row, so no failure kind ships unexplained.
 - **The card.**
-  At the failure's place in the Captain thread, replacing the bare status line, a failure card says in three lines what failed (the workflow's command and the step's plain name), why (the catalogue phrase with its evidence, paths included), and what now (the Boss step where the catalogue has one, and each control's standing).
+  At the failure's place in the Captain thread, replacing the bare status line, a failure card says in three lines what failed (the workflow's command and the step's plain name, a failure the Boss's own stop caused reading aborted ([DR-160](160-the-captain-dispatches-in-plain-sight.md))), why (the catalogue phrase with its evidence, paths included), and what now (the Boss step where the catalogue has one, and each control's standing; a failure naming its agent offers that agent's popover and its Settings row by cause ([DR-155](155-players-named-delegated-and-recovered.md))).
   The runtime's own message stays in the tooltip.
 - **One control per advertised action.**
-  The parked-run notice carries the why and what-now lines and one control per action the session summary publishes, labelled with the action's own label, plus Drop.
+  The parked-run notice carries the why and what-now lines and one control per action the session summary publishes, labelled with the action's own label, plus Drop; the actions resuming from an earlier step fold behind one secondary control ([DR-117](117-the-earlier-steps-fold-behind-one-control.md)).
   A `no-op` or `blocked` action stays visible, disabled, its reason a phrase; no control is chosen for the Boss, and the first-advertised rule goes.
 - **A failure that parked no run** keeps its notice and gains the why line and the Boss step.
 - **Every mention phrases the cause**: the Dashboard's interrupted row and the session marker's tooltip use the catalogue phrase.
 - **The card survives a restart**: the cause lives in the stored stream and the published summary.
 - **A carried change is Playbook's to say**: the report a settled commit's absorbed or altered pre-existing changes earn reaches the Boss inside the Captain's reply, and the interface adds nothing of its own to it.
+- **What this amends.**
+  [DR-062](062-ending-a-failed-workflow.md): the notice carries one control per advertised action, each with its standing, instead of one Retry; Drop, its confirm and the one-ruling gesture stand.
+  [DR-060](060-failed-workflow-control.md): the notice says why the run failed and what to do, from data, and draws each advertised action as its own control.
+  [DR-069](069-key-phrases-not-sentences.md): a failure's cause is a phrase where it applies, from a catalogue, never a sentence a model composed.
 
 ## Consequences
 

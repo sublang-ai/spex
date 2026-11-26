@@ -5,14 +5,9 @@
 
 ## Status
 
-Accepted (2026-10-22) for the owner's P0-0 revision.
-Amends [DR-135](135-a-welcome-page-before-the-first-project.md) in the welcome copy and action order, and [DR-136](136-the-first-project-picker-leads-with-a-folder.md) in the first-project palette.
-The value explanation, Academy caption placement, and creation form's redundant link are amended by [DR-138](138-welcome-flow-copy-and-scoped-academy-note.md).
-The desktop manual existing-path alternative is removed by [DR-142](142-desktop-existing-projects-use-folder-picker.md).
-
-The explanation of specs and playbooks is amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md): start from a goal, let AI help refine specs for system behavior, and describe playbooks as workflows written in plain language.
-The welcome page's actions are amended by [DR-172](172-surfaces-a-fresh-user-reads.md): a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the welcome action that opens personal projects through Space.
+Accepted (2026-10-22).
+Amends [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-136](136-the-first-project-picker-leads-with-a-folder.md).
+Amended by [DR-139](139-quieter-welcome-flow-and-academy-choice.md), [DR-142](142-desktop-existing-projects-use-folder-picker.md), [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -23,10 +18,11 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for 
 
 ## Decision
 
-- The welcome headline names checkable specs first and playbook-driven delivery second. Supporting copy explains that specs set goals and acceptance criteria and that natural-language playbooks compile into workflows for implementation and review.
+- Amends [DR-135](135-a-welcome-page-before-the-first-project.md) in the welcome copy and action order, and [DR-136](136-the-first-project-picker-leads-with-a-folder.md) in the first-project palette.
+- The welcome headline names checkable specs first and playbook-driven delivery second; the supporting explanation follows [DR-139](139-quieter-welcome-flow-and-academy-choice.md) and [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md).
 - The generic zero-project page makes "Add a local project" its primary action and keeps the Academy specs example visible as a secondary learning route. The page does not infer first-time use from an empty project list.
 - In the first-project palette, the folder picker remains the first focused action where available but uses a neutral button treatment.
-- The manual existing-repository path stays behind an explicit alternative on desktop. The new-project path is shown only after choosing creation; switching between these choices does not leave both fields visible.
+- Where no native folder picker exists, the manual existing-repository path is the existing-project route ([DR-142](142-desktop-existing-projects-use-folder-picker.md)). The new-project path is shown only after choosing creation; switching between these choices does not leave both fields visible.
 - Existing-path copy says that the Git repository already exists; new-path copy says that Spex will create the folder and initialize Git. The specs-scaffold option remains on the creation route.
 
 ## Consequences

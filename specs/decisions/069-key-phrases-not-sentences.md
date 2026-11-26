@@ -5,24 +5,17 @@
 
 ## Status
 
-Extended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): a folder action states which saved conversations it affects and whether it selects an existing project before asking the reader to act.
-
-Accepted (2026-09-16) on the owner's review of the interface's copy: "I really don't like lengthy text here and there — if you put some key phrases at the right place, it is much easier to understand and saves the reader's burden."
-
-Amends [DR-010](010-interface-craft.md) with a tenth principle.
-Amends [DR-068](068-an-agents-settings-where-the-agent-is.md) in its §"One agent's control opens one agent's settings" alone: the editor's two sentences become one phrase.
-Extended by [DR-075](075-a-failure-says-what-and-what-now.md): a failure's cause is a catalogue phrase where it applies.
-Extended by [DR-172](172-surfaces-a-fresh-user-reads.md) with the principles of its surfaces.
-Extended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) with one principle: a page's acts match its scope.
-
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the retirement of invitation and group-destination controls.
+Accepted (2026-09-16).
+Amends [DR-010](010-interface-craft.md), [DR-068](068-an-agents-settings-where-the-agent-is.md).
+Amended by [DR-075](075-a-failure-says-what-and-what-now.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-- A walk through every surface found the same habit in five places: a sentence explaining what a control already shows, a sentence explaining what a surface does not offer, and a fact repeated in prose beside the control that carries it.
-  The session start told the reader three times on one screen to type `/`; the Space setup card wrapped one field and one button in five sentences; Settings explained each section under its heading; the per-conversation agent editor and the Library's binding editor each closed with two paragraphs about scope and about what lives elsewhere.
+- The owner's review of the interface's copy: "I really don't like lengthy text here and there — if you put some key phrases at the right place, it is much easier to understand and saves the reader's burden."
+- A walk through every surface found the same habit in four places: a sentence explaining what a control already shows, a sentence explaining what a surface does not offer, and a fact repeated in prose beside the control that carries it.
+  The session start told the reader three times on one screen to type `/`; Settings explained each section under its heading; the per-conversation agent editor and the Library's binding editor each closed with two paragraphs about scope and about what lives elsewhere.
 - [DR-010](010-interface-craft.md) governs status words, guardrails and labels, and [DR-041](041-chrome-that-fits.md) bounds a control's label, but nothing bounds the prose around a control.
-- The facts in those sentences are mostly required — [[space-3](../packages/space.md#space-3)] names what the setup guidance must say — so the question is form, not content.
+- The facts in those sentences are mostly required, so the question is form, not content.
 
 ## Decision
 
@@ -40,7 +33,11 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for 
 - The per-conversation agent editor reads the agent's name with "This conversation only" as its subtitle; the sentence about Settings not changing and the sentence about adapter, instruction and permissions go, and a role the agent's bindings tune of their own accord is named in one phrase.
 - The Library's binding editor keeps "Also answers ⟨roles⟩" and drops both the clause after it and the closing sentence about Settings.
 - Settings shows the config path alone under its title, with the sharing explained in the path's tooltip, and no section carries a sentence under its heading.
-- The Space setup card reads a title, the field, the control with one caption naming what an empty and an occupied remote each mean, and one caption naming what syncs, what stays, and that nothing is contacted before setup.
+
+### Amended decisions
+
+- [DR-010](010-interface-craft.md) gains §10 as a principle.
+- [DR-068](068-an-agents-settings-where-the-agent-is.md), in §"One agent's control opens one agent's settings" alone: the editor's two sentences become the phrase "This conversation only".
 
 ## Consequences
 

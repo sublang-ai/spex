@@ -5,14 +5,9 @@
 
 ## Status
 
-Accepted (2026-09-17) on the Boss's ruling that an ordinary settled Captain reply, including a turn that answered a question, advances queued work once the conversation is free, while failure, abort, or a run still waiting on him holds it with the reason shown.
-Amends [DR-035](035-intent-ledger.md) in scope: every Up next row is visibly queued work, only the first unblocked row is next, Start is its manual-kickoff doorway rather than a queued state, and capture offers one queueing gesture; the stored acts, lifecycle states, verdicts, rank, and after-links stand.
-Amends [DR-055](055-queue-advancement.md) in scope: a clean settled turn and a free conversation replace typed governed-root success as the advancement gate; verdict independence, settlement-only triggering, actual-start attribution, normal admission, explicit after-links, and the absence of a retained runner or automatic retry stand.
-Amends [DR-051](051-runtime-held-for-a-turn.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
-Applies [DR-069](069-key-phrases-not-sentences.md) to the next row's standing and [DR-075](075-a-failure-says-what-and-what-now.md) to any failure cause it carries.
-Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its advancement gate alone: a restore's report settles clean yet hands no queued intent on, being the account of a stop; the gate for every other settled turn stands.
-Amended by [DR-103](103-the-home-and-its-groups.md): intents have no rank and no link; the next to run is the oldest one waiting, and the queue reads in that order.
-Amended by [DR-134](134-execution-ownership.md) in which intent is next and in the project's lane: only the runtime's own records count.
+Accepted (2026-09-17).
+Amends [DR-035](035-intent-ledger.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-055](055-queue-advancement.md).
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-103](103-the-home-and-its-groups.md), [DR-134](134-execution-ownership.md).
 
 ## Context
 
@@ -27,13 +22,13 @@ Amended by [DR-134](134-execution-ownership.md) in which intent is next and in t
 ## Decision
 
 **Up next is one committed queue.**
-Every row in Up next is queued work in one manually ranked project queue and carries a neutral `Queued` mark.
+Every row in Up next is queued work in one project queue, oldest first ([DR-103](103-the-home-and-its-groups.md)), and carries a neutral `Queued` mark.
 There is no passive, saved, manual-only, or auto-enabled kind of intent.
-The project's next intent is the first queued row not blocked by an after-link; `Next` is position, not lifecycle state.
-The next row alone may carry Start, and every later row relies on rank rather than another Start.
+The project's next intent is the oldest queued intent assigned to this runtime ([DR-134](134-execution-ownership.md)); `Next` is position, not lifecycle state.
+The next row alone may carry Start, and every later row relies on its place in the queue rather than another Start.
 
 **The next row says what precedes it.**
-Its standing is derived from the current conversation and record stream, never stored:
+Its standing is derived from the current conversation and record stream, never stored, and reads as a key phrase ([DR-069](069-key-phrases-not-sentences.md)) with any cause from the failure catalogue ([DR-075](075-a-failure-says-what-and-what-now.md)):
 
 | Condition | Phrase on the next row | Start |
 | --- | --- | --- |
@@ -41,23 +36,22 @@ Its standing is derived from the current conversation and record stream, never s
 | A run remains parked on a failure | `waiting — current work failed`, followed by the catalogue cause when known | absent |
 | A run is waiting on a question | `waiting — your reply` | absent |
 | No run remains parked, and either the latest lane turn ended failed or an unparked failure condition still stands | `waiting — previous work failed`, followed by the catalogue cause when known | shown as the Boss's explicit decision to proceed |
-| The latest lane turn aborted or ran an ending control | `waiting — previous work stopped` | shown as the Boss's explicit restart or move-on |
+| The latest lane turn aborted, ran an ending control, or was a restore's report ([DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) | `waiting — previous work stopped` | shown as the Boss's explicit restart or move-on |
 | None of the preceding conditions holds, including first capture into an idle project or capture after settlement | none | shown |
 
 The table is ordered: the first matching condition is the standing, so active or settling work wins first, a surviving failure park wins over a question park, either park wins over the turn that left it, and an unparked failure wins over a stopped outcome.
 `Waiting` means automatic handoff is held; where Start is present it is the explicit way to proceed, and where Start is absent the named current prerequisite must resolve elsewhere.
-An intent whose after-link names an open predecessor is not next, carries `after ⟨title⟩` with the other project named when needed, and carries no Start.
 A standing phrase replaces an inert Start rather than explaining a disabled control.
 The same next, phrase, and Start availability appear in Up next, the attention all-clear, a resolved delivery card, and the Captain home.
 
 **Clean settlement advances.**
-After a locally owned intent-attributed turn completes full settlement and publishes its released conversation, the core submits the project's then-first queued, unblocked intent into that same conversation exactly once when all of these hold:
+After a locally owned intent-attributed turn completes full settlement and publishes its released conversation, the core submits the project's then-next intent into that same conversation exactly once when all of these hold:
 
 - the just-settled turn ended finished rather than failed or aborted;
 - the turn would have left its attributed owner Finished rather than Interrupted had no verdict closed it;
-- the turn did not run an ending control;
+- the turn did not run an ending control and was not a restore's report;
 - no run of the conversation remains parked on the Boss;
-- the turn, dispatch boundary, project lane, and conversation remain current and normal admission accepts the submission.
+- the turn, dispatch boundary, project lane — counting only this runtime's own sessions ([DR-134](134-execution-ownership.md)) — and conversation remain current and normal admission accepts the submission.
 
 A Done or Drop racing an eligible settlement neither authorizes nor cancels its handoff, and a verdict or later removal never initiates advancement.
 An ordinary Captain reply qualifies without playbook trace evidence.
@@ -65,7 +59,6 @@ A reply that merely sounds like a question also qualifies unless the runtime act
 A Boss answer qualifies after its own turn settles cleanly and the question park has left.
 A failure, a stopped turn — aborted or run by an ending control — or a question or failure park starts nothing automatically; a later clean attributed follow-up or recovery may advance.
 A permission record and absent, unsupported, child, or non-terminal trace evidence add no gate of their own.
-Explicit after-links remain eligibility blockers independent of the predecessor-outcome gate.
 Queue capture or edits, ledger reads, verdicts, adoption, and restart initiate no advancement, and a refused admission is not retried automatically.
 
 **Capture has one gesture.**
@@ -77,10 +70,16 @@ Capture during attributed queued work joins its next eligible handoff; capture d
 A finished intent continues to owe Confirm or Drop while later work runs.
 A verdict may reveal a different next standing, but it neither starts, cancels, nor attributes an otherwise eligible turn.
 
+**Amended decisions.**
+
+- [DR-035](035-intent-ledger.md): every Up next row is visibly queued work, only the next row is next, Start is its manual-kickoff doorway rather than a queued state, and capture offers one queueing gesture; the stored acts, lifecycle states and verdicts stand.
+- [DR-055](055-queue-advancement.md): a clean settled turn and a free conversation replace typed governed-root success as the advancement gate; verdict independence, settlement-only triggering, actual-start attribution, normal admission and the absence of a retained runner or automatic retry stand.
+- [DR-051](051-runtime-held-for-a-turn.md): the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
+
 **Considered and declined:**
 
 - a record-versus-queued or manual-versus-automatic flag: Up next would cease to be one ordered commitment and gain state to groom;
-- Start on every row: rank is the one gesture that chooses what is next;
+- Start on every row: the queue's order alone chooses what is next;
 - disabled Start as status: the standing phrase says what actually precedes the work without implying a click will later be required;
 - Start beside Queue or capture-and-start: it offers an impossible immediate act while a lane works and bypasses the queue when it does not;
 - a queue pause switch or retained runner: the conversation's derived standing already governs handoff;
@@ -91,5 +90,5 @@ A verdict may reveal a different next standing, but it neither starts, cancels, 
 - The core ledger read publishes each project's next intent and its derived standing so every surface uses one answer.
 - Dashboard rows gain the `Queued` mark, the next standing, conditional Start, and an explicit Queue action in the inline add row; Sources retain their single Queue action.
 - Delivery and Captain-home next cards use the same standing instead of manufacturing an unconditional Start.
-- The automatic-advancement integration matrix moves from trace shapes to ordinary finish, answered question, failure, stopped turn, parked run, verdict race, dependency, and admission-race cases.
+- The automatic-advancement integration matrix moves from trace shapes to ordinary finish, answered question, failure, stopped turn, parked run, verdict race, and admission-race cases.
 - Typed playbook traces remain available for machine presentation but no longer decide whether the ledger advances.

@@ -5,27 +5,28 @@
 
 ## Status
 
-Accepted (2026-10-01) on the owner's review of the field [DR-093](093-a-players-subagent-model.md) shipped: a player's effort silently governed its subagents, the subagent-model field had no way to say "the same as the agent", and each model and its effort sat on separate full-width rows.
-
-Amends [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
-Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices are "Same as agent" and the adapter's models, with "Same as agent" the default; a fifth tuning field, the subagent effort, joins it; the two pair on one row; and in its floors: Cligent `^0.30.0`, Playbook `^17.3.0`.
-Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-players.md) in their field count alone: five tuning fields.
-Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
-
-Amended by [DR-232](232-codex-subagent-selection.md) for Codex, where the subagent selection requests native spawn defaults.
+Accepted (2026-10-01).
+Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), [DR-067](067-tuning-for-one-conversation.md), [DR-093](093-a-players-subagent-model.md).
+Amended by [DR-232](232-codex-subagent-selection.md).
 
 ## Context
 
-Measured against Cligent 0.29 and Claude Code 2.1.284: a Claude session's effort is one setting, the Agent tool's call carries a model but no effort, and the only effort a subagent can own is its definition's.
+The owner reviewed the field [DR-093](093-a-players-subagent-model.md) shipped: a player's effort silently governed its subagents, the subagent-model field had no way to say "the same as the agent", and each model and its effort sat on separate full-width rows.
+
+A Claude session's effort is one setting, the Agent tool's call carries a model but no effort, and the only effort a subagent can own is its definition's.
 So a player on `ultracode` delegated at `ultracode` — the loophole the owner named — and nothing in the interface could say otherwise.
 
-Cligent 0.30 answers at the adapter: `subagentModel` admits `inherit`, the agent's own model; `subagentEffort` pins the effort of the delegate definitions the Agent tool lists and of the `general-purpose` definition that replaces the built-in or, omitted, leaves it to the agent per task through those definitions, with `general-purpose` — where a call names no type — at `medium`; the directive's first sentence follows the two.
+Cligent answers at the adapter: `subagentModel` admits `inherit`, the agent's own model; `subagentEffort` pins the effort of the delegate definitions the Agent tool lists and of the `general-purpose` definition that replaces the built-in or, omitted, leaves it to the agent per task through those definitions, with `general-purpose` — where a call names no type — at `medium`; the directive's first sentence follows the two.
 `Explore` and `Plan` are never replaced, so they keep the agent's own effort under either setting.
-Playbook 17.3 carries the effort as a fifth tuning field and resolves an unset subagent model to `inherit` where the adapter serves one, so delegation is on by default for every Claude agent, with `false` as the way off.
+Playbook carries the effort as a fifth tuning field and resolves an unset subagent model to `inherit` where the adapter serves one, so delegation is on by default for every Claude agent, with `false` as the way off.
 
 The editors also wasted their width: a model on one full-width row and its effort on the next, though the chip already reads them as one phrase, "model @ effort".
 
 ## Decision
+
+- Amends [DR-019](019-inline-agent-configuration.md)'s editor: the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
+- Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices are "Same as agent" and the adapter's models, with "Same as agent" the default, and the subagent effort joins it as a fifth tuning field.
+- Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-players.md) in their field count: five tuning fields.
 
 ### "Same as agent" is the default, and reads as such
 
@@ -54,6 +55,4 @@ The chip is unchanged.
 
 - The core's agent block, patch, resolved agent, binding, summary, session agent settings, projection application and `agent.options` each gain the effort field; `subagentModel` admits `inherit`; the protocol version rises and the shells move together.
 - The three editors gain one field and the paired-row layout; both catalogs gain the strings.
-- The floors rise to Cligent `^0.30.0`, Playbook `^17.3.0` and slc `^0.15.0`, installed from the public registry.
 - Every Claude player of an existing configuration now delegates by default, on its own model at efforts of the agent's choosing; the changelog says so, and the subagent-model field's "Off" is the way back.
-- This ships in the next beta of the 0.9.0 line.

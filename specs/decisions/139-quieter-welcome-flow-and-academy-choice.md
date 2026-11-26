@@ -5,21 +5,25 @@
 
 ## Status
 
-Accepted (2026-10-22) for the owner's P0-0 refinement.
-Amends [DR-138](138-welcome-flow-copy-and-scoped-academy-note.md) in the welcome value explanation and Academy caption, and aligns the sidebar's project-add action with the welcome add flow.
+Accepted (2026-10-22).
+Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md).
 
 ## Context
 
+- The welcome showed specs, compiled playbooks, and coordinated implementation and review as three stacked, arrow-linked stages, with the Academy explanation inside the Academy action's group.
 - The stacked arrows make the specs-to-delivery path clear but give the supporting copy the weight of another set of actions.
 - The two-line Academy caption hangs under the secondary action and makes the action row visually unbalanced.
 - The Academy action already names an example project and does not promise a recorded replay.
+- The creation form's bottom link back to adding an existing repository repeats the folder action that remains visible above the form.
 - The sidebar's Projects plus currently opens the older switch-and-add palette, even though its plus icon promises adding a project.
 
 ## Decision
 
+- Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome value explanation, the Academy caption and the creation form, and aligns the sidebar's project-add action with the welcome add flow.
 - The welcome keeps the specs-first headline and presents specs, playbooks, and delivery as three compact, connected steps with short labels and descriptions instead of large arrow-prefixed sentences.
 - The page keeps the local-project primary action and Academy example secondary action without an Academy caption beneath the buttons.
 - Academy remains an example project, and the action does not promise a recorded task replay.
+- The creation form has no bottom "add existing repository" link. The existing-folder action remains visible above it; where a native folder picker is unavailable, an alternative above the form reopens existing-path entry.
 - The sidebar's Projects plus opens the same local-project add form as the welcome action, even when projects are already registered; the project-switch shortcut keeps the searchable switcher.
 
 ## Consequences

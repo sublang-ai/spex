@@ -5,23 +5,23 @@
 
 ## Status
 
-Accepted (2026-09-24) on a review finding against [DR-081](081-the-app-supplies-the-compiler.md): a block naming only its adapter reached `slc` as `SLC_AGENT` alone, and `slc` filled the model, effort and fast mode from a configuration of its own — a Codex block ran a Claude model where the reader had once configured `slc` by hand.
-Amends [DR-081](081-the-app-supplies-the-compiler.md), which remains accepted, in the handoff alone: what the block leaves unset stays unset for `slc`.
-
-Amended by [DR-235](235-independent-ultracode.md) to include the compiler agent’s Ultracode setting.
-
-Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in passing the child model to the compiler.
+Accepted (2026-09-24).
+Amends [DR-081](081-the-app-supplies-the-compiler.md).
+Amended by [DR-235](235-independent-ultracode.md), [DR-236](236-primary-and-subagent-model-defaults.md).
 
 ## Context
 
+- A review finding against [DR-081](081-the-app-supplies-the-compiler.md): a block naming only its adapter reached `slc` as `SLC_AGENT` alone, and `slc` filled the model, effort and fast mode from a configuration of its own — a Codex block ran a Claude model where the reader had once configured `slc` by hand.
 - `slc` layers its environment over a configuration file it discovers — `slc.config.yaml` in the working directory, else the one under the user's config home, which it seeds on first run — field by field, so an unset `SLC_MODEL` takes the file's model whatever agent the environment named.
 - A block that names an adapter and no model means the adapter's own default; a model from another adapter's configuration is a contradiction `slc` cannot see.
 - `slc` accepts `--config` naming a file, in which case it discovers none; a file holding no setting leaves every field to the environment and the defaults.
 
 ## Decision
 
-- When the block drives the compile, the runner hands `slc` the block as today and names, with `--config`, an empty configuration the core ships, so nothing `slc` would discover fills what the block leaves unset: a model, an effort or fast mode the block does not set is the adapter's default.
-- When the environment configures `slc` with any of its four variables, the runner passes nothing — no variable and no `--config` — and `slc`'s own configuration stands, as [DR-081](081-the-app-supplies-the-compiler.md) decided.
+- When the block drives the compile, the runner hands `slc` the block — its adapter, model, effort and fast mode, with its Ultracode setting ([DR-235](235-independent-ultracode.md)) and its subagent model ([DR-236](236-primary-and-subagent-model-defaults.md)) — and names, with `--config`, an empty configuration the core ships, so nothing `slc` would discover fills what the block leaves unset: a model, an effort or fast mode the block does not set is the adapter's default.
+- When the environment configures `slc` with any of the agent variables the runner hands it, the runner passes nothing — no variable and no `--config` — and `slc`'s own configuration stands, as [DR-081](081-the-app-supplies-the-compiler.md) decided.
+
+This amends [DR-081](081-the-app-supplies-the-compiler.md) in the handoff alone: what the block leaves unset stays unset for `slc`.
 
 Considered and declined:
 

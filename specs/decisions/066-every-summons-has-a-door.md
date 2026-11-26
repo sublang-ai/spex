@@ -8,25 +8,8 @@ SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 ## Status
 
 Accepted.
-
-Amended by [DR-098](098-live-tool-approvals.md) only for actual live native requests: an ephemeral approval inbox now supplies explicit answer controls; historical permission telemetry remains unraised.
-
-Amends [DR-035](035-intent-ledger.md), which remains accepted: `permission` leaves the attention fold and the interrupted-intent states, the last-viewed marker's meaning is fixed with the act that produces it named, and a project whose stored state refuses writes raises no entry.
-The two bands, the fold's determinism, and every other contract of that record stand.
-DR-035 already decided that a glance clears the finished-turn summons — "cleared as today — viewing for the finished chat turn" — so marking on showing restores that decision rather than taking a liberty against it.
-
-Amends [DR-010](010-interface-craft.md), which remains accepted, with a tenth principle: every summons has a door.
-
-Amends [DR-062](062-ending-a-failed-workflow.md), which remains accepted: the verdict on an interrupted intent is takeable from its Dashboard row as well as from the conversation.
-Retry stays in the conversation, and the run's own ending stays with it.
-
-Amends [DR-029](029-session-history-home.md), which remains accepted: a session's status mark speaks its entry's own kind, in four word sets rather than two.
-
-Amends [DR-009](009-at-hand-interaction.md), which remains accepted: clearing a summons no longer requires switching surface, because the act that clears it is on its row.
-
-Amends [DR-061](061-run-state-from-frames.md), which remains accepted: the project palette reads the one published fold instead of deriving a count of its own; a run's frames still answer for its state, inside that fold.
-
-Cites [DR-065](065-repairs-the-reader-answers.md) for the boundary this record draws between a gesture taken on a conversation and a list drawing a row.
+Amends [DR-009](009-at-hand-interaction.md), [DR-010](010-interface-craft.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-061](061-run-state-from-frames.md), [DR-062](062-ending-a-failed-workflow.md).
+Amended by [DR-073](073-letting-go-ends-the-parked-run.md), [DR-098](098-live-tool-approvals.md).
 
 ## Context
 
@@ -63,9 +46,9 @@ A control is offered and its refusal reported, never withheld on a prediction of
 
 The fold raises a closed set of kinds, and raises none it cannot equip with a door:
 
-- `permission` is not raised: nothing in the product answers a permission request.
+- recorded `permission` telemetry is not raised: no control answers a recorded request.
   The request stays visible where it is true — as a line in the asking player's pane, saying that the agent's own default decided.
-  It returns the day a control answers it, with that control, never before.
+  A live native approval request, which a control does answer, summons through the approval inbox's own ephemeral attention ([DR-098](098-live-tool-approvals.md)), outside this fold.
 - a project whose stored state refuses writes raises nothing: its conditions stand as storage diagnostics, where the repair is — exactly as a session whose project holds no local binding already does.
 
 **The marker means the reader saw it.**
@@ -85,11 +68,21 @@ A list drawing a row is none of those, and still settles nothing.
 A spec item naming an entry's clearing condition names the act that produces it.
 That single sentence is the whole defect: the specs said the marker advances, and no item anywhere said who advances it.
 
+**Amended decisions.**
+
+- [DR-035](035-intent-ledger.md): `permission` leaves the attention fold and the interrupted-intent states, the last-viewed marker's meaning is fixed with the act that produces it named, and a project whose stored state refuses writes raises no entry; the two bands, the fold's determinism and every other contract stand.
+  DR-035 already decided that a glance clears the finished-turn summons — "cleared as today — viewing for the finished chat turn" — so marking on showing restores that decision.
+- [DR-010](010-interface-craft.md) gains a principle: every summons has a door.
+- [DR-062](062-ending-a-failed-workflow.md): the verdict on an interrupted intent is takeable from its Dashboard row as well as from the conversation; the run's recovery controls stay in the conversation.
+- [DR-029](029-session-history-home.md): a session's status mark speaks its entry's own kind, in four word sets rather than two.
+- [DR-009](009-at-hand-interaction.md): clearing a summons no longer requires switching surface, because the act that clears it is on its row.
+- [DR-061](061-run-state-from-frames.md): the project palette reads the one published fold instead of deriving a count of its own; a run's frames still answer for its state, inside that fold.
+
 ## Consequences
 
 - The protocol's attention-entry kinds narrow to question, failure, finish, and review, and a failure publishes whether it parked a run so its row can name the next step honestly; the protocol version rises.
-- Removing `permission` removes the only signal for a runtime blocked forever on a request nothing answers: such a session now reads as a long run in the Running band — honest, and quiet — and the case is revisited the day a permission control exists.
+- Recorded permission telemetry summons nobody; a live native approval request is answered from the approval inbox ([DR-098](098-live-tool-approvals.md)).
 - The marker lives in the shared Spex home, so one device clearing an unread turn clears it on every device. That is correct for a shared ledger, and worth stating because it is invisible.
 - A Space sync resets the markers of every session whose stored history changed, which can raise a burst of unread-turn rows. Each is one click, and a bulk control is deliberately declined: at most one such entry stands per project.
-- A Drop taken on a row whose run is still parked rules on the intent alone. The run keeps summoning, now in the session's own words, so the replacement row must be legible as a consequence rather than as a failed act.
+- A Drop taken on a row whose run is still parked ends that run and records the verdict together, or is refused with its cause ([DR-073](073-letting-go-ends-the-parked-run.md)).
 - A verdict stays takeable in a conversation this core cannot continue, in the session as well as on the row: the delivery card's controls no longer claim to be inert while the same act is offered elsewhere.

@@ -5,10 +5,8 @@
 
 ## Status
 
-Accepted (2026-09-17) on review of the finite-timestamp boundary in the active-time fold.
-
-Amends [DR-071](071-active-time-follows-held-calls.md) only for a matched call whose finish timestamp precedes its prompt.
-That record's attribution, pairing, overlap, completeness, publication, and presentation decisions stand unchanged.
+Accepted (2026-09-17).
+Amends [DR-071](071-active-time-follows-held-calls.md).
 
 ## Context
 
@@ -22,6 +20,7 @@ That record's attribution, pairing, overlap, completeness, publication, and pres
 - Every matched finite prompt/finish pair closes once, including when its finish timestamp precedes its prompt.
 - Its contribution is `max(0, finished timestamp − prompt timestamp)`.
   A backward pair therefore contributes measured zero and consumes its prompt rather than being ignored or left open.
+- This amends [DR-071](071-active-time-follows-held-calls.md) only for such a pair; its attribution, pairing, overlap, completeness, publication and presentation stand.
 
 ## Consequences
 

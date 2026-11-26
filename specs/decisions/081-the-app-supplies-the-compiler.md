@@ -6,11 +6,8 @@
 ## Status
 
 Accepted (2026-09-24).
-Amends [DR-005](005-compilation-integration.md): the compiler is the app's own copy of `@sublang/slc`, found in the module tree the shell declares it in and run on the app's own runtime when that meets the compiler's floor; the resolution order through a global install and `npx`, the premise that Electron's Node cannot run the compiler, and the missing-toolchain guidance that asks for a system Node give way, while the never-in-process rule, the compile flow, the registry generation and the library placement stand.
-Extends [DR-024](024-app-supplied-agent-runtimes.md): the compiler joins the runtimes both shells supply, for the reason the agent SDKs did.
-Amended by [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the handoff alone: `--config` names an empty configuration when the block drives the compile, so what the block leaves unset is the adapter's default.
-Extended by [DR-096](096-the-app-supplies-the-scaffold.md): the scaffold CLI joins what the shells supply, over the same module directories and executable.
-Extended by [DR-167](167-the-compiler-shares-the-apps-engine.md): both shells supply Playbook alongside the compiler, and the app's dependency gate verifies their shared engine; the runtime ABI/schema guard stands.
+Amends [DR-005](005-compilation-integration.md), [DR-024](024-app-supplied-agent-runtimes.md).
+Amended by [DR-084](084-the-block-is-the-whole-compiler-agent.md), [DR-096](096-the-app-supplies-the-scaffold.md), [DR-167](167-the-compiler-shares-the-apps-engine.md).
 
 ## Context
 
@@ -21,7 +18,7 @@ Extended by [DR-167](167-the-compiler-shares-the-apps-engine.md): both shells su
 - [DR-005](005-compilation-integration.md) resolved a system Node >= 23.6 because Electron's Node then lacked type stripping; Node strips types by default since 22.18 and 23.6 [[1]], Electron 44 bundles Node 24.18 [[2]], and `ELECTRON_RUN_AS_NODE=1` runs the app's own binary as that Node — cligent already spawns Node helpers this way under Electron.
   The variable is inherited by every descendant, so an Electron-based tool an agent launched would start as bare Node unless it is dropped again.
 - Spex parses the compiler's contract — its progress lines, exit code 2 with the clarification report, the `<id>.playbook/` layout, the `<id>.ts` entry, `SLC_STALL_TIMEOUT` — so unlike an SDK, whose usable versions cligent enforces at load, the compiler's version is Spex's to track; [DR-023](023-runtime-compatibility-from-cligent.md) recorded that a caret on a 0.x version pins the minor.
-- `slc` links artifacts against the playbook engine beside it and Spex bundles the artifact against the app's; both engines declare a runtime ABI and the artifact schemas they support (Playbook DR-022), which today agree across slc's playbook 14.1 and the app's 15.0.
+- `slc` links artifacts against the playbook engine beside it and Spex bundles the artifact against the app's; both engines declare a runtime ABI and the artifact schemas they support (Playbook DR-022).
 - `slc` chooses its agent from `SLC_AGENT`, `SLC_MODEL`, `SLC_EFFORT` and `SLC_FAST_MODE`, else from a config it seeds with `claude-code` on first run, so a Codex-only home compiled with Claude unless the person configured slc by hand; the draft's authoring agent already follows the draft's block, the Captain's by default ([DR-058](058-chat-assisted-playbook-authoring.md)).
 
 ## Decision
@@ -32,10 +29,13 @@ Extended by [DR-167](167-the-compiler-shares-the-apps-engine.md): both shells su
   A tree without the copy reports the compile unavailable with the restore command and spawns nothing.
 - The compiler runs on the runtime the app already runs on when it meets slc's floor — Electron's Node in the desktop, through `ELECTRON_RUN_AS_NODE=1`, the server's own Node otherwise — else on a `PATH` Node that does; `SPEX_NODE` stays the explicit override.
   On Electron the compiler starts behind a preload that drops the variable, so the compiler runs as Node while the agents it spawns inherit nothing of it.
-- The core reads the engine the compiler's own playbook declares and refuses the compiler, naming both engines, when its runtime ABI differs from the app's or it emits an artifact schema the app does not support; a shared copy is the app's engine and agrees by construction.
-- The compile's agent is the block the compile is resolved from — the draft's answering agent, or the Captain's for the registry form — handed to slc as `SLC_AGENT`, `SLC_MODEL`, `SLC_EFFORT` and `SLC_FAST_MODE`, unless the environment sets any of the four, in which case the environment configures slc wholesale.
+- The compiler shares the app's engine ([DR-167](167-the-compiler-shares-the-apps-engine.md)); the core still reads the engine the compiler resolves and refuses the compiler, naming both engines, when its runtime ABI differs from the app's or it emits an artifact schema the app does not support, which diagnoses a changed installation.
+- The compile's agent is the block the compile is resolved from — the authoring session's answering agent, or the Captain's for the registry form — handed to slc through its agent variables — `SLC_AGENT`, `SLC_MODEL`, `SLC_EFFORT`, `SLC_FAST_MODE` and the fields later records add ([DR-084](084-the-block-is-the-whole-compiler-agent.md)) — unless the environment sets any of those variables, in which case the environment configures slc wholesale.
   An adapter slc does not drive is refused before the compiler runs, naming the adapters it drives: left to slc's seeded default the compile would run on Claude and fail at sign-in with no cause named.
   The progress log names the agent and its source, so an environment that configured slc is visible; a compile is not a session, so no per-conversation tuning ([DR-067](067-tuning-for-one-conversation.md)) applies, and model ids pass through as written.
+
+This amends [DR-005](005-compilation-integration.md): the compiler is the app's own copy, so the resolution order through a global install and `npx`, the premise that Electron's Node cannot run the compiler, and the guidance asking for a system Node give way, while the never-in-process rule, the compile flow, the registry generation and the library placement stand.
+It amends [DR-024](024-app-supplied-agent-runtimes.md): the compiler joins the runtimes both shells supply, for the reason the agent SDKs did.
 
 Considered and declined:
 
@@ -49,11 +49,12 @@ Considered and declined:
 
 - A fresh checkout compiles with nothing installed beyond `npm ci` and a signed-in agent; the compiler, its cligent and the SDKs move together with the lockfile.
   Adding the compiler pulled the hoisted `xstate` and `yaml` forward within their ranges and adds about 35 MB, a second TypeScript included.
-- The desktop asks for no separately installed Node for the compiler itself; a Codex compile's wrapper still finds `node` on `PATH`, as sessions already do.
+- The desktop asks for no separately installed Node for the compiler itself.
   The server shell compiles only when its own Node, or a `PATH` Node, meets slc's floor; the root's Node 22 floor runs it but does not compile, which the README states, and `npm ci` on Node 22 warns about slc's engines without failing.
-- The compiler's nested cligent and playbook are its own versions beside the core's; an effort, model or fast mode the compiler's cligent rejects fails the compile before the compiler ran, as the toolchain failure the workspace already shows, and the two cligent copies may drift until the next bump.
-- slc seeds its own user config on the first compile that finds none, and Spex's variables override it per key; the compiler's `@sublang/spex` dependency is met by the workspace's CLI link until the CLI's next major nests a registry copy under it, harmless since the compiler never imports it.
-- A packaged build keeps the compiler inside the archive — Electron as Node reads an ESM entry and its imports from an asar, and slc spawns no executable of its own — while the SDK binaries the agents spawn stay unpacked [[app-shell-13](../packages/app-shell.md#app-shell-13)]; packaging remains a local option ([DR-040](040-source-only-app-releases.md)), and its acceptance does not yet compile.
+- The compiler runs on the app's own Cligent and Playbook ([DR-167](167-the-compiler-shares-the-apps-engine.md)); an effort, model or fast mode Cligent rejects fails the compile before the compiler ran, as the toolchain failure the workspace already shows.
+- Where the environment configures slc, slc's own configuration stands; where the block drives the compile, no configuration slc would discover fills what the block leaves unset ([DR-084](084-the-block-is-the-whole-compiler-agent.md)).
+  The compiler's own `@sublang/spex` grammar dependency is an ordinary one and may differ from the app's scaffold CLI ([DR-167](167-the-compiler-shares-the-apps-engine.md)).
+- A packaged build keeps the compiler inside the archive — Electron as Node reads an ESM entry and its imports from an asar, and slc spawns no executable of its own — while the SDK binaries the agents spawn stay unpacked [[app-shell-13](../packages/app-shell.md#app-shell-13)].
 - The core stays private to the workspace, so nothing resolves the compiler outside a shell; the catalogs lose the `npx` guidance and gain the restore and engine guidance; the README no longer asks for `slc`.
 
 ## References

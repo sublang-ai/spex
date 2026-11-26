@@ -5,12 +5,13 @@
 
 ## Status
 
-Accepted (2026-09-13) on evidence captured against a real core in the hermetic browser harness, where a workflow parked in its failure state read a neutral "idle" the moment the turn settled.
-Extends [DR-060](060-failed-workflow-control.md) from the failed-workflow notice to the state chip and the interface's own attention derivation; the notice, which already reads the frames, is unchanged.
-Failure attention amended by [DR-062](062-ending-a-failed-workflow.md): the divergence scoped as a consequence here closes, the core's ledger holding a parked failure on the same terms the frames do; reading a leaf's state from its own frames stands.
+Accepted (2026-09-13).
+Amends [DR-060](060-failed-workflow-control.md).
+Amended by [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md).
 
 ## Context
 
+- Evidence captured against a real core in the hermetic browser harness showed a workflow parked in its failure state reading a neutral "idle" the moment the turn settled.
 - One telemetry topic carries more than one machine.
   The leaf run's park and the Captain shell's own controller states arrive on `playbook.fsm.state` alike, in this order:
 
@@ -37,11 +38,13 @@ Failure attention amended by [DR-062](062-ending-a-failed-workflow.md): the dive
   Every other label stands, the during-turn "working" and "deciding" voices included, and the tooltip carries a raw id and never a phrase.
 - The interface's own attention derivation reads those same frames, so a parked failure keeps summoning until the run leaves that state — the answer the notice already gives.
   The last turn's error keeps covering failures that parked no machine, and the quieter historical mark for a failure that no longer summons is untouched.
+- The project palette reads the core's one published attention fold rather than deriving a count of its own; a run's frames still answer for its state inside that fold ([DR-066](066-every-summons-has-a-door.md)).
+- Amends [DR-060](060-failed-workflow-control.md): the frames its notice reads also drive the state chip and the interface's attention derivation; the notice is unchanged.
 
 ## Consequences
 
 - The chip, the notice and the run view's own attention derivation answer from one source, so those surfaces cannot disagree about a parked workflow.
-- The ledger's published count keeps its own acknowledgment rule ([DR-035](035-intent-ledger.md)), under which the Boss's next turn settles a failure: the Dashboard badge, the sidebar mark and the tab dot therefore still stand down on a workflow the notice, the chip and the palette's count go on reporting as parked.
+- The core's ledger holds a parked failure on the terms the frames do ([DR-062](062-ending-a-failed-workflow.md)), so the Dashboard badge, the sidebar mark and the tab dot agree with the notice and the chip.
 - In the interface's own derivation a failure that parks summons until it is recovered rather than until the next turn succeeds, so asking the Captain a question in between costs neither that summons nor the way back.
 - Whatever else the interface wants to know about a leaf run has one place to ask, and the scalar's remaining duty is the chip's during-turn voice.
-- The rule costs one derivation over frames the fold already keeps; no record, protocol, or core behavior changes.
+- The rule costs one derivation over frames the fold already keeps; no record or protocol changes.

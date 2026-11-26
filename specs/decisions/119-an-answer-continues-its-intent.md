@@ -5,18 +5,20 @@
 
 ## Status
 
-Accepted (2026-10-11) on the 2026-10-11 workshop's finding that a finished row read "Yes." for a `/release` run.
-Amends [DR-035](035-intent-ledger.md) in what a Boss turn sent while a question waits belongs to: it continues the work that asked, a conversation serving no intent keeps the turn that opened that work as its rows' title, and a dispatch waits for the answer; the intent's fields, turn ranges, derived states, bands and verdicts stand.
+Accepted (2026-10-11).
+Amends [DR-035](035-intent-ledger.md).
 
 ## Context
 
-- In the workshop, runs of `/release` and `/incident` asked the Boss a question ([DR-085](085-boss-talks-through-captain.md)) and were answered; each finished row on the Dashboard then read the answer — "Yes.", a waiver's text, a reply about a checker — and the command and its request were not on it.
+- In the 2026-10-11 workshop, runs of `/release` and `/incident` asked the Boss a question ([DR-085](085-boss-talks-through-captain.md)) and were answered; each finished row on the Dashboard then read the answer — "Yes.", a waiver's text, a reply about a checker — and the command and its request were not on it.
 - Those turns went to the project's current conversation with no intent bound, so each row was a session entry standing in for an intent, and the fold titled such an entry with the conversation's latest Boss turn: after a question, the answer.
 - A bound intent did not show this: a turn carrying no intent belongs to the newest open intent's turns, so an answer already folds under the intent that asked, whose title stays its own text.
 - One path still let an answer open work of its own: a queued intent dispatched while the question waited, its text reaching the Captain, which routes Boss messages to the waiting question ([DR-085](085-boss-talks-through-captain.md)), while the dispatch stamped a new intent over the asking run's turns.
 - [DR-085](085-boss-talks-through-captain.md) names that hazard — queued text answering a question by accident — and the queue already withholds Start while a run waits on the Boss's reply ([DR-077](077-up-next-is-a-committed-queue.md)), but a row menu's Start and a staged chip still reach the core.
 
 ## Decision
+
+Amends [DR-035](035-intent-ledger.md) in what a Boss turn sent while a question waits belongs to: it continues the work that asked, a conversation serving no intent keeps the turn that opened that work as its rows' title, and a dispatch waits for the answer; the intent's fields, turn ranges, derived states, bands and verdicts stand.
 
 **An answer is a turn of the work that asked.**
 A Boss turn that starts while a run of the conversation stands parked on a Boss question — raised, and not yet reported gone, the fact the fold reads for an interrupted question — answers that run or asks it back, and opens no work of its own.

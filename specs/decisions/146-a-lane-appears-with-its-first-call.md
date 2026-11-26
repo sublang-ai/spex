@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-10-24) for the owner's P0-1 refinement.
-Amends [DR-032](032-session-players.md) in the run view's pane roster: a pane stands for each player a call has reached, not for each player the bindings reference.
+Accepted (2026-10-24).
+Amends [DR-032](032-session-players.md).
 
 ## Context
 
@@ -17,6 +17,7 @@ Amends [DR-032](032-session-players.md) in the run view's pane roster: a pane st
 
 ## Decision
 
+- Amends [DR-032](032-session-players.md) in the run view's pane roster: a pane stands for each player a call has reached, not for each player the bindings reference.
 - A bound player's pane appears when the session holds that player's first call record — its prompt, an event, or its finish — and stays for the rest of the session; a player no call has reached takes no place, and a roster with no players still renders no pane.
 - Panes stand in the order of their players' first call records and never reorder by which one is working, so simultaneous calls appear side by side in that order with no limit on their number.
 - DR-032's guarantee that a lane the reader follows never leaves under them is kept, narrowed to the lanes a call has reached.

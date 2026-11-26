@@ -6,16 +6,19 @@
 ## Status
 
 Accepted (2026-10-01).
-Amends the session-bundle boundary in [DR-045](045-unified-session-storage.md), the text-only submission boundary in [DR-085](085-boss-talks-through-captain.md), the execution settings in [DR-019](019-inline-agent-configuration.md), and the authoring content and runtime options in [DR-058](058-chat-assisted-playbook-authoring.md).
+Amends [DR-019](019-inline-agent-configuration.md), [DR-045](045-unified-session-storage.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-085](085-boss-talks-through-captain.md).
+Amended by [DR-161](161-an-applet-is-a-page-the-ide-serves.md).
 
 ## Context
 
-Cligent 0.31 supplies local attachment inputs, caller-selected MCP servers, a managed browser, and native media events.
+Cligent supplies local attachment inputs, caller-selected MCP servers, a managed browser, and native media events.
 Those transports alone do not provide a Spex experience: the composers, durable Boss input, queue, configuration projections, and transcript presentation currently discard or cannot express this content.
 Captain is a tool-free controller, so a fresh request to inspect an application also needs a worker route that does not require changing or committing the repository.
 Desktop runs the core inside Electron, while a browser can connect to a Linux server from a different computer; neither a client file path nor a successful Node-only browser test proves those hosts work.
 
 ## Decision
+
+Amends [DR-045](045-unified-session-storage.md)'s session-bundle boundary, [DR-085](085-boss-talks-through-captain.md)'s text-only submission boundary, [DR-019](019-inline-agent-configuration.md)'s execution settings, and [DR-058](058-chat-assisted-playbook-authoring.md)'s authoring content and runtime options, as below.
 
 ### Experience and ownership
 
@@ -90,4 +93,4 @@ Acceptance proves native setup from a packaged app in a path containing spaces.
 Rollout proceeds from the agreed shared contracts through Cligent, Playbook, dependency adoption in SLC, and Spex, with one compatible dependency closure in the installed app.
 An adapter's inability to emit image bytes remains visible as a capability limitation rather than being hidden by speculative file reads or claimed screenshot support.
 Verification must exercise fresh installed Desktop and headless Linux server flows, real agent screenshot transport, persistence and recovery, shared CLI history, content portability, cancellation, unsupported cases, and the complete application submission paths.
-Native Windows app hosting remains outside the supported app-host contract of [DR-049](049-supported-app-hosts.md); a Windows browser connecting to a supported server uses the same upload and media protocol.
+A browser on any platform connecting to a supported server uses the same upload and media protocol.
