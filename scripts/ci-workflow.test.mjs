@@ -135,8 +135,14 @@ test("release-33: fast gates precede selected suites, once per row; Windows reta
   assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
   assert.equal(steps[gateAt].run.trim(), "node packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
   assert.equal(steps[gateAt].if, "${{ !startsWith(matrix.part, 'core') }}", "the rest's runner or the whole row's runs the gates; no core part repeats them");
+  // The guards run right after the spec gates, once per change (DR-251).
+  const guardsAt = steps.findIndex((step) => step.name === "Guards");
+  assert.equal(guardsAt, gateAt + 1);
+  assert.equal(steps[guardsAt].run, "node packages/cli/dist/cli.js verify");
+  assert.equal(steps[guardsAt].if, "${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}", "once per change, on Linux, is enough, and verify has not been run on Windows or macOS; no core part repeats the check");
+  assert.equal(steps.filter((step) => /cli\.js verify/.test(step.run ?? "")).length, 1, "one step runs the guards");
   const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
-  assert.ok(reachAt > gateAt);
+  assert.ok(reachAt > guardsAt);
   assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}" --part "\${{ matrix.part }}"`);
   assert.equal(steps[reachAt].if, "runner.os != 'Windows'");
   const lfs = steps.find((step) => step.run === "git lfs version");
@@ -227,6 +233,16 @@ test("release-33: the pre-push check refuses a conflict marker (release-35)", ()
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /conflict markers left in the tree/);
   assert.match(run.stderr, /left\.ts/);
+});
+
+test("release-33: the pre-push check runs the guards on the CLI its build made (release-35, DR-251)", () => {
+  const lines = readFileSync(join(root, "scripts/prepush.sh"), "utf8").split("\n");
+  const buildAt = lines.indexOf("npm run -s build > /dev/null");
+  const guardsAt = lines.indexOf("node packages/cli/dist/cli.js verify");
+  assert.ok(buildAt > lines.indexOf("npx @sublang/spex lint"), "the build follows the spec lint");
+  assert.ok(guardsAt > buildAt, "the guards run after the build");
+  assert.ok(lines.indexOf('echo "prepush: clean"') > guardsAt);
+  assert.ok(lines.includes("set -euo pipefail"), "a guard that does not pass ends the check");
 });
 
 test("release-33: the Linux parity script names the runners' Node and Git (release-32)", () => {

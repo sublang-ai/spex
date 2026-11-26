@@ -3,9 +3,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The suites a change reaches (release-34, release-43, DR-199): changed
-// workspaces, known root tools and skill folders select their owners and transitive
-// dependents. Unknown root paths reach everything; documentation --
-// docs/, specs/ and Markdown outside workspaces and skills/ -- reaches nothing.
+// workspaces, known root tools, skill folders and guards/ select their owners
+// and transitive dependents. Unknown root paths reach everything; documentation --
+// docs/, specs/ and Markdown outside workspaces, skills/ and guards/ -- reaches nothing.
 //
 //   node scripts/affected-tests.mjs [--base <ref>] [--paths <file>] [--root <dir>]
 //       prints {"docsOnly":bool,"all":bool,"workspaces":[...]}
@@ -13,7 +13,8 @@
 //       prints docs-only=true|false and affected=all|<folders>
 //   ... --run [all|"<folders>"] [--part all|rest|"core <i>/<n>"]
 //       runs the script tests, then the tests of everything or of each folder
-//       with no explicit selection, documentation alone runs CLI tests and lint;
+//       with no explicit selection, documentation alone runs CLI tests, lint
+//       and `spex verify` (DR-251);
 //       a part runs a share of that on a runner of its own (DR-229)
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -64,10 +65,14 @@ const ROOT_OWNERS = new Map([
 ]);
 // Folders of the agent skills shipped from the repository, owned whole: the
 // script tests check every skill, and the atlas's page has a browser journey.
+// A guard's files (DR-251) are owned whole too: the Guards step of CI and
+// the documentation-alone run check them with `spex verify`, so they select
+// no workspace.
 // The longest listed folder holding a path owns it.
 const ROOT_FOLDER_OWNERS = new Map([
   ["skills/skill-atlas/", ["e2e"]],
   ["skills/", []],
+  ["guards/", []],
 ]);
 
 /** The owners of a root path: its exact entry, else its longest listed folder's, else undefined. */
@@ -140,11 +145,12 @@ export function readWorkspaces(root) {
   });
 }
 
-/** Documentation: under docs/ or specs/, or a Markdown file outside every workspace -- a workspace's own Markdown is a fixture or a package readme and reaches the workspace. */
+/** Documentation: under docs/ or specs/, or a Markdown file outside every workspace, skills/ and guards/ -- a workspace's own Markdown is a fixture or a package readme and reaches the workspace. */
 export function isDocumentation(path, workspaces = []) {
   if (path.startsWith("docs/") || path.startsWith("specs/")) return true;
-  // A shipped skill's Markdown is the skill itself, checked by the script tests.
-  if (path.startsWith("skills/")) return false;
+  // A shipped skill's Markdown is the skill itself, checked by the script tests;
+  // a guard's is one of its files, checked by `spex verify`.
+  if (path.startsWith("skills/") || path.startsWith("guards/")) return false;
   return path.endsWith(".md") && !workspaces.some((workspace) => path.startsWith(`${workspace.folder}/`));
 }
 
@@ -285,9 +291,11 @@ function main(argv) {
     if (affected === undefined) {
       const result = compute();
       if (result.docsOnly) {
-        console.log("affected-tests: documentation alone runs the CLI tests and spec lint");
+        console.log("affected-tests: documentation alone runs the CLI tests, spec lint and guards");
+        // A guard reads its items from specs/, so a change there runs the guards too (DR-251).
         return run(options.root, [["test", "-w", "packages/cli"]])
-          || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "lint"]);
+          || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "lint"])
+          || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "verify"]);
       }
       affected = affectedValue(result);
       console.log(`affected-tests: the change reaches ${affected === "" ? "no workspace" : affected}`);

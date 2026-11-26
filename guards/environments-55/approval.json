@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "inputs": {
+    "file guards/bindings/exports/binding.mjs": "cccb0537bed7a3a5b3422cf79087266297bb5878454390f283c7a3fd10239b13",
+    "file guards/bindings/exports/binding.yaml": "984e9a4636a138c9966db35777fff2ce17ee93e3b9cd31218e930dc3ac068fd5",
+    "file guards/environments-55/faults/first-by-org.patch": "b7535d3e15c34667983e150e668fe59b613fd130f6650e16ced31ea3133cc4d6",
+    "file guards/environments-55/guard.yaml": "d62bcb6b2490d24b973689cfff9b321025a2b46841301caabf0636cab27f2a45",
+    "file guards/environments-55/readings/a.yaml": "ceedffa13b7d925594b3fb9cfdb786f017a3744c81431f69fd60d0cad5bb4f2c",
+    "item environments-26": "bbc82f7a15aa2e7a1baeb2d16cea6139c93990b265cb956ead304962561990dd",
+    "item environments-41": "6c6e513351795f246f62b3f3afa5d76cee5bc884b1aa23d79c57faf2e134fce0",
+    "item environments-42": "9c0c012238fe5f5df19d22f38a5e620081fbdd5967ee176487a4401d80dda45a",
+    "item environments-55": "fcf827db686db3270299adfa98295cc2f320b47f5d8a0dff6476002d4c35b2cd",
+    "item environments-56": "16a4c543764a297f11f17a9586b57059274e7ebdd3d401b837acf8588efa48a0",
+    "item environments-57": "8a5bc987a977810145352bc710a0b30bb77035d7f2caf6015e0c796afd77b787",
+    "item environments-58": "912b925167f7d98a88feaff62d7c54467f5aab3ec647fd8be31f252fb320e4dc",
+    "item environments-59": "4c5b33ecd81b0038400a3012d98d5c47a66e910635089ec3991ce8a9c52bcd61"
+  }
+}
