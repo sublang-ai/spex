@@ -6,17 +6,17 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends [DR-093](093-a-players-subagent-model.md) and [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in the meaning of the subagent selection on Codex.
-
-Amended by [DR-237](237-published-agent-runtime-floors.md) in native fork behavior, the meaning of an omitted subagent model, and tool-free controls.
+Amends [DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md).
+Amended by [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 
-Cligent 0.38.0 advertises subagent tuning only for Claude.
+An earlier Cligent advertised subagent tuning only for Claude.
 Codex accepts native per-run defaults for a spawned agent's model and reasoning effort [[1]].
 
 ## Decision
 
+- Amends [DR-093](093-a-players-subagent-model.md) and [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in the meaning of the subagent selection on Codex.
 - Offer the existing subagent fields when the installed adapter advertises them.
 - On Codex the fields request spawn defaults. Fresh spawns can supply explicit values and a role may set its own model and effort [[1]].
   Full-history and fresh spawns both honor native model and effort overrides.
@@ -26,7 +26,6 @@ Codex accepts native per-run defaults for a spawned agent's model and reasoning 
 ## Consequences
 
 The same editor and saved settings work across adapters, with the runtime determining how it applies a selection.
-Adopting the capability in a released app requires published, mutually compatible dependencies under [DR-167](167-the-compiler-shares-the-apps-engine.md).
 
 ## References
 

@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-09) to shorten pull requests whose change reaches the core, running every test they ran before.
-Extends [DR-185](185-the-suites-a-change-reaches.md) and [DR-199](199-release-gated-full-validation.md): the selected suites and gates are unchanged, a Linux or macOS row reaching the core spreads them over five runners.
+Accepted (2026-11-09).
+Amends [DR-185](185-the-suites-a-change-reaches.md), [DR-199](199-release-gated-full-validation.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Extends [DR-185](185-the-suites-a-change-reaches.md) and [DR-199](199-release-ga
 
 ## Decision
 
+- Amends [DR-185](185-the-suites-a-change-reaches.md) and [DR-199](199-release-gated-full-validation.md) to shorten pull requests whose change reaches the core: the selected suites and gates are unchanged, and a Linux or macOS row reaching the core spreads them over five runners, running every test it ran before.
 - A Linux or macOS row whose selection reaches the core runs as five jobs, each building: four run a part of the core's suite, and the fifth runs the script tests, every other selected suite and the type and spec gates.
 - A part's files are the core's test files sorted by compiled size, largest first, dealt to the parts in turn.
   Size stands in for duration, so no recorded timing needs keeping current, and each file falls in exactly one part by construction.

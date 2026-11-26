@@ -5,10 +5,11 @@
 
 ## Status
 
-Accepted (2026-11-26) on the owner's request that the CLI's and the core's test runners stop dropping results, after measurements on Node 22.23.5 and 24.22.3.
+Accepted (2026-11-26) on the owner's request.
 
 ## Context
 
+- The owner asked that the CLI's and the core's test runners stop dropping results, after measurements on Node 22.23.5 and 24.22.3.
 - Both runners passed `--test-force-exit` beside a per-test timeout, so that a test file holding a server, a timer or a child process open could not keep a run alive.
 - With the flag a file's process exits while results are still queued for the parent, which then never reports them:
   - the CLI's suite reported between 163 and 221 of its 222 tests on Linux, and the core's unit files between 313 and 330 of their 330;

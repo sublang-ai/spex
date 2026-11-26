@@ -5,17 +5,19 @@
 
 ## Status
 
-Accepted (2026-11-03) under the owner's request to fix the creation layout and remove premature org selection.
-Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the creation form's fields and words, [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in creation identity timing, [DR-200](200-publishing-names-need-registry-authority.md) in moving publishing-name guidance to publication, and [DR-202](202-registry-guidance-keeps-account-scope.md) in where the IDE's claim link appears; amends [DR-216](216-registry-and-space-accounts-stay-apart.md) in deferring registry-only namespace selection until publication and permitting local authoring and one-shot compilation without a namespace grant.
+Accepted (2026-11-03) on the owner's request.
+Amends [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-200](200-publishing-names-need-registry-authority.md), [DR-202](202-registry-guidance-keeps-account-scope.md), [DR-216](216-registry-and-space-accounts-stay-apart.md).
 
 ## Context
 
+The owner asked to fix the creation layout and remove premature org selection.
 Creating a local playbook asked for a registry org and license before there was a workflow to write or try.
 Publishing-rights guidance made an optional future action feel like setup debt, and its multiline text raised the Org input above its neighbours.
-An implicit group-derived publishing identity would recreate the authoring trap DR-200 addressed.
+An implicit Space-derived publishing identity would recreate the authoring trap [DR-200](200-publishing-names-need-registry-authority.md) addressed.
 
 ## Decision
 
+- Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the creation form's fields and words, [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in when a created package takes its identity, [DR-200](200-publishing-names-need-registry-authority.md) in moving publishing-name guidance to publication, [DR-202](202-registry-guidance-keeps-account-scope.md) in where the IDE's claim link appears, and [DR-216](216-registry-and-space-accounts-stay-apart.md) in deferring registry-only namespace selection until publication.
 - Creation asks only for Command and offers Start writing, with the command preview and a brief explanation that publication comes later.
   It creates a local package without inventing a license or consulting registry authority.
 - Authoring, compilation and Add remain available without publication or registry sign-in.

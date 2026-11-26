@@ -6,12 +6,11 @@
 ## Status
 
 Accepted (2026-11-24).
-Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the name of the ordered lists of phases the reader arranges skills into.
-Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) and [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md) in that name alone.
+Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md).
 
 ## Context
 
-- The atlas lets a reader arrange skills into ordered lists of named phases, which [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) calls workflows, "工作流" in Chinese.
+- The atlas lets a reader arrange skills into ordered lists of named phases, which [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) called workflows, "工作流" in Chinese.
 - "Workflow" already names other things a reader meets beside the atlas: a skill's own procedure, often under a `## Workflow` heading the scan reads steps from, the three workflow skills `code`, `review` and `decide`, Spex's playbook workflows and CI workflows.
   A reader could not tell an arrangement of skills from the procedure inside one.
 - An arrangement is a sequence of phases that work passes through in order, which "pipeline", "流水线" in Chinese, names.
@@ -22,6 +21,7 @@ Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) and [DR-248
 
 ## Decision
 
+- Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) and [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md) in the name of the ordered lists of phases the reader arranges skills into, and in that name alone.
 - The atlas calls the reader's arrangement a pipeline, "流水线" in Chinese, which keeps its phases, "阶段", in order.
 - The name holds throughout the atlas: its page and catalogs, its skill text and references, the grouping, the state file `pipelines.json`, its document's key `pipelines`, the `pipelines` command, the page's `/api/pipelines` and the presets file `pipeline-presets.json`.
 - With no `pipelines.json`, the atlas reads the pipelines of a `workflows.json` an earlier atlas wrote as the stored document of no file, so the first save writes them to `pipelines.json`; it never writes `workflows.json`.

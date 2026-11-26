@@ -5,10 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-14) on the owner's direction; native selection boundary clarified 2026-11-15.
-Amends [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in Claude model selection on resume and the packaging acceptance contract.
-Amends [DR-032](032-session-players.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-067](067-tuning-for-one-conversation.md) and [DR-068](068-an-agents-settings-where-the-agent-is.md) in the meaning of an omitted Claude primary model.
-Amends [DR-091](091-models-named-by-the-runtime.md) in how Claude's unpinned primary reads in conversation and binding editors.
+Accepted (2026-11-14) on the owner's direction; revised (2026-11-15).
+Amends [DR-032](032-session-players.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-067](067-tuning-for-one-conversation.md), [DR-068](068-an-agents-settings-where-the-agent-is.md), [DR-091](091-models-named-by-the-runtime.md), [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md).
 
 ## Context
 
@@ -18,6 +16,9 @@ Claude Code already owns resumed selection, with documented launch-override and 
 
 ## Decision
 
+- Amends [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in Claude model selection on resume and the packaging acceptance contract.
+- Amends [DR-032](032-session-players.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-067](067-tuning-for-one-conversation.md) and [DR-068](068-an-agents-settings-where-the-agent-is.md) in the meaning of an omitted Claude primary model.
+- Amends [DR-091](091-models-named-by-the-runtime.md) in how Claude's unpinned primary reads in conversation and binding editors.
 - An omitted Claude primary is forwarded without a model override, on fresh and resumed calls; no transcript lookup reconstructs a selection from service response names.
 - Under ordinary API routing with no launch override, native resume normally continues the saved model despite a changed user `settings.model`; a fresh call reads that settings default.
 - An explicit model requests a switch; `ANTHROPIC_MODEL` also outranks native restoration at launch.

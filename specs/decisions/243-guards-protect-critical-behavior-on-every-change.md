@@ -5,9 +5,9 @@
 
 ## Status
 
-Accepted (2026-11-25) with [DR-252](252-a-guard-is-kept-beside-the-code.md), as an extension to the CLI in [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex verify`.
-[DR-244](244-a-guard-is-checked-on-the-implementation.md) describes how Spex checks a guard.
-[DR-252](252-a-guard-is-kept-beside-the-code.md) sets the first stage: where a guard is kept, how approval is recorded and what fast-check alone establishes.
+Accepted (2026-11-25).
+Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md).
+Amended by [DR-252](252-a-guard-is-kept-beside-the-code.md).
 
 ## Context
 
@@ -17,6 +17,9 @@ A weak property can survive every test, especially when the agent writing it has
 Tools such as Kiro already use a solver and concrete examples to help people settle requirements before coding [[4]].
 
 ## Decision
+
+Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md): the CLI gains `spex verify`.
+[DR-244](244-a-guard-is-checked-on-the-implementation.md) decides how Spex checks a guard, and [DR-252](252-a-guard-is-kept-beside-the-code.md) sets the first stage: where a guard is kept, how approval is recorded and what fast-check alone establishes.
 
 ### What a person approves
 

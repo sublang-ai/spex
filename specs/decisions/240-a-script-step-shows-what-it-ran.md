@@ -5,11 +5,12 @@
 
 ## Status
 
-Accepted (2026-11-15) on packaged-app sessions in which one check step exited 1 in three runs for two different causes, and nothing in the app showed its command or what it printed [[1]].
-Extends [DR-031](031-machine-call-tree.md): a run's card additionally lists the script steps the run ran; the card's drawing, strip and settlement stand.
+Accepted (2026-11-15).
+Amends [DR-031](031-machine-call-tree.md).
 
 ## Context
 
+- In packaged-app sessions one check step exited 1 in three runs for two different causes, and nothing in the app showed its command or what it printed [[1]].
 - A workflow may hold script steps: commands the runtime runs itself, whose exit status alone picks the next state.
   A nonzero exit often ends the run in a failure terminal, whose reason ([DR-231](231-a-failure-terminal-reads-failed.md)) was authored before the run and names one assumed cause.
 - The runtime records each completed script step in the session's records: its state and exit status and, from Playbook 19.0.0 on [[2]] [[3]], the command as run, how long it took, and a bounded tail of what it printed.
@@ -26,6 +27,7 @@ Extends [DR-031](031-machine-call-tree.md): a run's card additionally lists the 
 
 ## Decision
 
+- Amends [DR-031](031-machine-call-tree.md): a run's card additionally lists the script steps the run ran; the card's drawing, strip and settlement stand.
 - A run's card lists each script step the run has run: the step's name, its exit status and how long it took, read from the step's latest record.
 - A record belongs to the open run standing in the record's state when it arrives, the innermost where several do.
 - A step's row unfolds to the command as run and to what it printed, each as inert preformatted text: nothing in it becomes Markdown, a link or media.

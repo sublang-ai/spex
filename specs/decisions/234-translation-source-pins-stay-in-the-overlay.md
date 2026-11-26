@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends the placement of translation source pins from [DR-001](001-scaffold-localization.md) and [DR-101](101-chinese-scaffolds-for-chinese-only-teams.md).
+Amends [DR-001](001-scaffold-localization.md), [DR-101](101-chinese-scaffolds-for-chinese-only-teams.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Projects have no use for them.
 
 ## Decision
 
+- Amends [DR-001](001-scaffold-localization.md) and [DR-101](101-chinese-scaffolds-for-chinese-only-teams.md) in the placement of translation source pins.
 - Each language keeps its file and item source pins in a manifest beside its `specs/` directory for translation review.
 - The localized Markdown is the project template. Scaffolding and updating write the translated specs without copying the manifest.
 

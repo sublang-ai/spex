@@ -6,8 +6,7 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends [DR-019](019-inline-agent-configuration.md), [DR-052](052-runtime-model-options.md) and [DR-067](067-tuning-for-one-conversation.md) in the treatment of Claude's workflow setting in agent, role and conversation tuning.
-Amends [DR-084](084-the-block-is-the-whole-compiler-agent.md) to compiler agent selection.
+Amends [DR-019](019-inline-agent-configuration.md), [DR-052](052-runtime-model-options.md), [DR-067](067-tuning-for-one-conversation.md), [DR-084](084-the-block-is-the-whole-compiler-agent.md).
 
 ## Context
 
@@ -17,6 +16,7 @@ Codex has a separate reasoning effort named `ultra`.
 
 ## Decision
 
+- Amends [DR-019](019-inline-agent-configuration.md), [DR-052](052-runtime-model-options.md) and [DR-067](067-tuning-for-one-conversation.md) in the treatment of Claude's workflow setting in agent, role and conversation tuning, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in compiler agent selection.
 - An explicit boolean `ultracode` selects the workflow setting independently of effort at the Captain, player, role and conversation scopes, under the existing tuning precedence.
 - Omission inherits the lower scope and ultimately the SDK default. The existing Claude shorthand still requests xhigh with workflows on, with an explicit boolean taking precedence for workflows.
 - Offer the independent control on Claude, with a standing incompatible enabled choice available for correction. A catalog identifying a model without xhigh precludes enabling it there. Missing model metadata leaves the SDK to decide availability.
@@ -24,8 +24,6 @@ Codex has a separate reasoning effort named `ultra`.
 - The compiler receives the resolved setting when the app supplies its agent.
 
 ## Consequences
-
-App adoption uses the published compatible compiler, launcher and adapter under [DR-167](167-the-compiler-shares-the-apps-engine.md).
 
 Existing configurations run without conversion.
 A reader can change the workflow setting without pinning reasoning effort, including when resuming a conversation.

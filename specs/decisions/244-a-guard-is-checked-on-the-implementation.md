@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-25) with [DR-252](252-a-guard-is-kept-beside-the-code.md), together with [DR-243](243-guards-protect-critical-behavior-on-every-change.md), which defines a guard and its pass rule.
-[DR-252](252-a-guard-is-kept-beside-the-code.md) sets the first stage, in which the `guard` skill's agents draft the readings.
+Accepted (2026-11-25).
+Amended by [DR-252](252-a-guard-is-kept-beside-the-code.md).
 
 ## Context
 
@@ -17,6 +17,9 @@ A counterexample gives reviewers a trace to inspect, while a clean search asks t
 Spex relies on established engines with an independent track record and checks the translations it owns.
 
 ## Decision
+
+[DR-243](243-guards-protect-critical-behavior-on-every-change.md) defines a guard and its pass rule; this record decides how Spex checks one.
+[DR-252](252-a-guard-is-kept-beside-the-code.md) sets the first stage, in which the `guard` skill's agents draft the readings.
 
 ### From GEARS to a check
 

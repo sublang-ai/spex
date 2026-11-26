@@ -6,11 +6,7 @@
 ## Status
 
 Accepted (2026-11-21).
-Extended in the atlas's scan, page and state folder and in the form of a shipped skill by [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), which adds translations and the page's language.
-Amended in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls by [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md).
-Amended in the form of a shipped skill, adding its version, by [DR-249](249-a-skills-version-rises-with-its-content.md).
-Amended in the name of the ordered lists of phases, workflows here and pipelines since, by [DR-250](250-the-atlas-arranges-pipelines.md).
-Amended in what a shipped skill may need by [DR-252](252-a-guard-is-kept-beside-the-code.md): the `guard` skill needs the `spex` command.
+Amended by [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md), [DR-249](249-a-skills-version-rises-with-its-content.md), [DR-250](250-the-atlas-arranges-pipelines.md), [DR-252](252-a-guard-is-kept-beside-the-code.md).
 
 ## Context
 
@@ -24,18 +20,18 @@ Amended in what a shipped skill may need by [DR-252](252-a-guard-is-kept-beside-
 - Considered and declined:
   - reading every skill with a model on each scan: slow and costly for a hundred skills, and different on each run; a pattern scan is instant and repeatable, and a reader's corrections are kept in a file beside it;
   - a graph library and a build step: a skill is installed by copying its folder and must run with nothing fetched;
-  - a force-directed graph alone: most skills link to nothing, and a hundred unlinked dots say nothing; columns the reader chooses — workflow phases, call depth, source — give every skill a place;
-  - storing phases inside each skill: an installed skill is replaced on update, and one skill may sit in several workflows.
+  - a force-directed graph alone: most skills link to nothing, and a hundred unlinked dots say nothing; columns the reader chooses — pipeline phases, call depth, source — give every skill a place;
+  - storing phases inside each skill: an installed skill is replaced on update, and one skill may sit in several pipelines.
 
 ## Decision
 
-- The repository ships Agent Skills from `skills/`, one folder per skill, each installable on its own with the `skills` CLI.
+- The repository ships Agent Skills from `skills/`, one folder per skill, each installable on its own with the `skills` CLI, each declaring its version ([DR-249](249-a-skills-version-rises-with-its-content.md)) and carrying its translations ([DR-245](245-skills-and-the-atlas-in-the-readers-language.md)).
 - `skill-atlas` is the facility skill.
   - A scan with no dependency beyond Node reads the skill folders the agents on the machine are known to load, and others named with `--root`, and reports skills, their steps, the links among them, and tags of four categories — data in, data out, tools, human — each with the line it was read from.
   - What the scan detects is pattern matching by rules kept in an editable file; a file of annotations, written by an agent that read a skill or by the user, corrects it.
-  - A page served on the loopback interface shows one hierarchy — group, skill, step — opened one click at a time, with links drawn between whatever is visible; groups are the phases of a workflow, call depth, or source.
-  - A workflow is an ordered list of named phases holding skill names, kept in one file in a state folder outside every skill, edited on the page.
-  - The same page, with its data written into it, is a file that opens with no server.
+  - A page served on the loopback interface shows one hierarchy — group, skill, step — opened one click at a time, with the dependencies between skills drawn between whatever is visible ([DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md)); groups are the phases of a pipeline, call depth, or source.
+  - A pipeline ([DR-250](250-the-atlas-arranges-pipelines.md)) is an ordered list of named phases holding skill names, kept in one file in a state folder outside every skill, edited on the page.
+  - The same page, with its data written into it, is a read-only file that opens with no server.
 - `code`, `review` and `decide` are skills carrying their playbooks' behavior: the agent that loads one acts as the Captain, the Coder and the Reviewer are subagents, the prompts each role receives are the playbooks' own, and every commit's identity is read from the repository.
   `code` and `decide` invoke `review`.
   They keep the playbooks' names, for agent folders Spex places nothing into; where Spex places its launcher of a name, that folder holds the launcher and the skill is not installed beside it.
@@ -43,11 +39,11 @@ Amended in what a shipped skill may need by [DR-252](252-a-guard-is-kept-beside-
 
 ## Consequences
 
-- A skill installed from here runs with no Spex, no engine and no package install; the three workflow skills lose what the engine gave — a compiled state machine, players on different vendors' models, parked runs — and keep the procedure.
+- A skill installed from here runs with no Spex, no engine and no package install, except `guard`, which runs the `spex` command ([DR-252](252-a-guard-is-kept-beside-the-code.md)); the three workflow skills lose what the engine gave — a compiled state machine, players on different vendors' models, parked runs — and keep the procedure.
 - The atlas reads skill text as data and shows it escaped; a skill's text reaches an agent only when the user asks for a deeper read, whose prompt says to follow none of it.
 - A link or tag the patterns miss is absent until annotated; one they invent is shown with its line, so a reader can see why.
 - The three workflow skills' behavior under an agent is verified by what the atlas reads from them — their steps and their links — not by a live run.
-- A person with both Spex's launchers and these skills on one machine has two skills of one name, which the atlas reports; `code` and `decide` then reach whichever `review` their agent loads.
+- A person with both Spex's launchers and these skills on one machine has two skills of one name, which the atlas notes; `code` and `decide` then reach whichever `review` their agent loads.
 - The published CLI package and both apps are unchanged: `skills/` is read by the `skills` CLI from the repository.
 
 ## References

@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's direction.
-Amends [DR-216](216-registry-and-space-accounts-stay-apart.md) for CLI publication destination selection.
+Amends [DR-216](216-registry-and-space-accounts-stay-apart.md).
 
 ## Context
 
@@ -15,6 +15,7 @@ A legacy project's Space address must not implicitly select a publishing registr
 
 ## Decision
 
+- Amends [DR-216](216-registry-and-space-accounts-stay-apart.md) in how a CLI publication selects its destination.
 - CLI publication and its preview select the invocation's `--registry <url>`, else the project's `registry`, else `https://spex.sublang.ai`.
 - Publishing and authorization checks use the selected origin's registry account, and sign-in guidance gives that same origin.
 - Export remains offline and points to the registry the printed publish commands will use.

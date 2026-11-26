@@ -5,11 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-25) as the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE.
-It reads those two records narrowly in the places its Decision lists.
-Extends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`.
-Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need: the `guard` skill needs the `spex` command.
-Extends [DR-145](145-merge-on-green.md) and [DR-199](199-release-gated-full-validation.md) with `spex verify` in this repository's checks.
+Accepted (2026-11-25).
+Amends [DR-145](145-merge-on-green.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-199](199-release-gated-full-validation.md), [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), [DR-243](243-guards-protect-critical-behavior-on-every-change.md), [DR-244](244-a-guard-is-checked-on-the-implementation.md).
 
 ## Context
 
@@ -31,6 +28,9 @@ Considered and declined:
 - tool versions in the approval: a tool is installed with the command line and not kept in the repository, so a record would hold on one machine and fail on another with nothing to review.
 
 ## Decision
+
+- This is the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE; it reads those two records narrowly where "Where this stage is narrower" lists.
+- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`, [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need — the `guard` skill needs the `spex` command — and [DR-145](145-merge-on-green.md) and [DR-199](199-release-gated-full-validation.md) with `spex verify` in this repository's checks.
 
 ### Where a guard is kept
 
