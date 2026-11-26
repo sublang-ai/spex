@@ -89,14 +89,12 @@ const runtimeRecords = async (sessionsDir: string, sessionId: string) =>
   (await createSessionStore({ sessionsDir }).readHistory(sessionId)).entries
     .filter(({ record }) => (record as { topic?: unknown }).topic === "spex.session.runtime");
 
-/** Pin the real roots before copying their immutable dependencies. The
- * held turn may still append; newer chunks cannot invalidate this prefix. */
+/** Pin the real root before copying the files it binds. The held turn
+ * may still append; lines past the root's bound are a readable tail, so
+ * newer segments cannot invalidate this prefix (DR-254). */
 function copySessionSnapshot(source: string, destination: string, id: string): void {
-  const roots = new Map<string, Buffer>();
-  for (const name of [`${id}.json`, `${id}.replay.json`, `${id}.records.jsonl`]) {
-    if (existsSync(join(source, name))) roots.set(name, readFileSync(join(source, name)));
-  }
-  assert.ok(roots.has(`${id}.json`), "the running session has a root");
+  assert.ok(existsSync(join(source, `${id}.json`)), "the running session has a root");
+  const root = readFileSync(join(source, `${id}.json`));
   const privateDirectory = (path: string) => {
     mkdirSync(path, { recursive: true, mode: 0o700 });
     chmodSync(path, 0o700);
@@ -108,8 +106,8 @@ function copySessionSnapshot(source: string, destination: string, id: string): v
   const copyDirectory = (relative: string) => {
     privateDirectory(join(destination, relative));
     for (const entry of readdirSync(join(source, relative), { withFileTypes: true })) {
-      // A chunk publication's temporary alias is not persisted evidence.
-      if (relative === `${id}.chunks` && /^\.write-[0-9a-f]{64}-[0-9a-f-]{36}\.tmp$/.test(entry.name)) continue;
+      // A write's temporary file is not persisted evidence.
+      if (/^\.[0-9a-f-]{36}\.tmp$/.test(entry.name)) continue;
       const child = join(relative, entry.name);
       if (entry.isDirectory()) copyDirectory(child);
       else {
@@ -119,13 +117,10 @@ function copySessionSnapshot(source: string, destination: string, id: string): v
     }
   };
   privateDirectory(destination);
-  for (const name of [`${id}.chunks`, `${id}.assets`]) {
+  for (const name of [`${id}.replay`, `${id}.blobs`, `${id}.assets`]) {
     if (existsSync(join(source, name))) copyDirectory(name);
   }
-  for (const name of [`${id}.records.jsonl`, `${id}.replay.json`, `${id}.json`]) {
-    const bytes = roots.get(name);
-    if (bytes) privateFile(join(destination, name), bytes);
-  }
+  privateFile(join(destination, `${id}.json`), root);
 }
 
 /** A format 1 intent, as a Spex that recorded no runtime wrote it
@@ -176,13 +171,13 @@ test("core-service-124: what the first home creates or captures runs there alone
   // Continuation, a control, Restore and Discard are refused
   // `invalid_request` with the phrase, writing nothing (core-service-124,
   // core-service-73, core-service-82, core-service-83).
-  const streamFile = join(bClone, "sessions", `${session}.records.jsonl`);
-  const streamBefore = await readSessionReplay(streamFile);
+  const rootFile = join(bClone, "sessions", `${session}.json`);
+  const streamBefore = [readFileSync(rootFile), await readSessionReplay(rootFile)];
   refusedAs(await b.client.command("turn.submit", { sessionId: session, text: "Keep going" }), "invalid_request", label, "a continuation");
   refusedAs(await b.client.command("session.control", { sessionId: session, kind: "recovery" }), "invalid_request", label, "session.control");
   refusedAs(await b.client.command("session.restore", { sessionId: session }), "invalid_request", label, "session.restore");
   refusedAs(await b.client.command("session.discard", { sessionId: session }), "invalid_request", label, "session.discard");
-  assert.deepEqual(await readSessionReplay(streamFile), streamBefore);
+  assert.deepEqual([readFileSync(rootFile), await readSessionReplay(rootFile)], streamBefore);
   // Never the second's lane (core-service-124, core-service-93), and
   // its work summons nothing there (core-service-124, core-service-49).
   assert.deepEqual(b.service["sessions"].listLanes().filter((lane) => lane.projectId === key), []);

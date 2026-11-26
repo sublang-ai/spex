@@ -1,24 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A new import stage (storage-50), around the released groups migration:
-// retain bounded CLI families before that migration sees root session files,
-// then publish them into the home it established, without changing its code.
+// An import stage (storage-50), around the released groups migration:
+// retain the CLI's session families before that migration sees root session
+// files, then publish them into the home it established, without changing
+// its code. A family is every file named for its session (DR-254).
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { migrationsDir, prepareMigrationsDir } from "./app-storage.js";
 import { Home, isRepositoryKey } from "./home.js";
-import { isObject, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
+// The CLI writes Playbook's current storage version; an earlier one waits
+// in place for its conversion (DR-254).
+import { SESSION_STORAGE_VERSION } from "./storage-git.js";
+import { isObject, portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 
 interface InputFile { path: string; sha256: string }
 interface ImportedSession { id: string; cwd: string; files: InputFile[]; retained: boolean; staged: boolean; repository?: string; complete: boolean }
 interface ImportReceipt { format: 1; id: string; kind: "bounded-sessions"; sessions: ImportedSession[]; complete: boolean }
 interface Pending { receipt: ImportReceipt; dir: string }
 function fail(file: string, reason: string): never { throw new StorageFormatError(file, reason); }
+/** A family member: a path named for the session, its local hints among
+ * them, never a lease or temporary file. */
 const belongs = (path: string, id: string): boolean => !path.split("/").some((part) => !part || part === "." || part === "..") &&
-  (new Set([`${id}.json`, `${id}.replay.json`, `${id}.records.jsonl`, `${id}.hints.json`]).has(path) || path.startsWith(`${id}.chunks/`) || path.startsWith(`${id}.assets/`));
+  path.split("/")[0].startsWith(`${id}.`) && (path === `${id}.hints.json` || portable(`sessions/${path}`));
 
 /** Check every parent at the actual read/write boundary, never following a
  * link; callers create only missing tails after checking the clone itself. */
@@ -78,12 +84,17 @@ function sourceIds(root: string): string[] {
     if (!name.endsWith(".json") || !UUID.test(id)) return [];
     inspect(source, name, false);
     const value = readJsonFile(join(source, name));
-    return isObject(value) && value.schemaVersion === 8 ? [id] : [];
+    return isObject(value) && value.schemaVersion === SESSION_STORAGE_VERSION ? [id] : [];
   });
 }
 
-/** A source family includes every owned regular file, not just today's
- * reachable chunks, so an unseen member cannot be silently discarded. */
+/** The folders and files named for a session in a directory. */
+function members(directory: string, id: string): string[] {
+  return readdirSync(directory).filter((name) => belongs(name, id)).sort();
+}
+
+/** A source family includes every owned regular file, not just what its
+ * root binds today, so an unseen member cannot be silently discarded. */
 function family(directory: string, id: string): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
   if (!inspect(directory)) return files;
@@ -92,13 +103,13 @@ function family(directory: string, id: string): Map<string, Buffer> {
     if (!stat) return;
     if (stat.isDirectory() && !stat.isSymbolicLink()) {
       inspect(directory, path);
-      for (const name of readdirSync(join(directory, path))) walk(`${path}/${name}`);
+      for (const name of readdirSync(join(directory, path))) if (belongs(`${path}/${name}`, id)) walk(`${path}/${name}`);
     } else {
       inspect(directory, path, false);
       files.set(path, readFileSync(join(directory, path)));
     }
   };
-  for (const suffix of [".json", ".replay.json", ".records.jsonl", ".hints.json", ".chunks", ".assets"]) walk(`${id}${suffix}`);
+  for (const name of members(directory, id)) walk(name);
   return files;
 }
 
@@ -126,7 +137,7 @@ function privateDirectory(root: string, path: string): void {
   chmodSync(join(root, path), 0o700);
 }
 function copy(directory: string, files: ReadonlyMap<string, Buffer>, id: string): void {
-  const order = (path: string): number => path === `${id}.json` ? 2 : path === `${id}.replay.json` ? 1 : 0;
+  const order = (path: string): number => path === `${id}.json` ? 1 : 0;
   for (const [path, bytes] of [...files].sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))) {
     inspect(directory, path, false);
     const parent = dirname(path);
@@ -157,7 +168,7 @@ function retire(directory: string, entry: ImportedSession, expected: ReadonlyMap
     }
     rmdirSync(join(directory, path));
   };
-  for (const suffix of [".assets", ".chunks"]) removeEmpty(`${entry.id}${suffix}`);
+  for (const name of members(directory, entry.id)) if (lstatSync(join(directory, name)).isDirectory()) removeEmpty(name);
 }
 
 export function needsBoundedSessionImport(root: string): boolean { return pending(root).length > 0 || sourceIds(root).length > 0; }

@@ -204,7 +204,7 @@ When a client sends `session.delete` for a stored session, the core service shal
 
 When a client requests deletion of any stored session, the core service shall obtain Playbook's exclusive session lease through the shared deletion operation [[1]] and refuse `busy` on active ownership or a diagnostic refusal on unprovable ownership before changing files:
 
-- deletion removes replay, hints, active legacy sidecar and derived state, then the manifest last; incomplete cleanup is retryable;
+- deletion removes replay, blobs, hints and derived state, then the manifest last; incomplete cleanup is retryable;
 - retired lease guards remain; the core never recursively clears a session lock directory to force admission.
 
 #### core-service-32
@@ -264,7 +264,7 @@ When a rescan replaces an indexed session's history, the core shall publish `ses
 When a client sends `project.rebind` with `projectId`, local `path`, optional recorded `aliases` and optional Git `revision`, the core shall apply the existing-identity binding rules [[storage-6](storage.md#storage-6)] after verifying that the path is a repository root and the project has no live session — no turn in flight ([DR-051](../decisions/051-runtime-held-for-a-turn.md)):
 
 - an invalid folder refusal names the exact candidate and explains that an existing Git project folder is required and none is created;
-- after pairing, older-session imports are retried for that repository alone before the serialized session rescan publishes their results [[core-service-60](#core-service-60)], successful imports losing their old diagnostics and unresolved failures preserving their source files [[storage-12](storage.md#storage-12)] ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)).
+- after pairing, the serialized session rescan publishes that repository's sessions [[core-service-60](#core-service-60)], an earlier-format session's notice standing with its source files [[storage-12](storage.md#storage-12)] ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md), [DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md)).
 
 #### core-service-86
 
@@ -273,16 +273,15 @@ When a client sends `storage.diagnostics`, the core shall report each unresolved
 - after verified migration, damaged application or session files do not refuse startup; affected commands return `invalid_request` with the failing file and reason, while unrelated operations remain available;
 - a diagnostic a local folder would repair carries that repair's own facts — the project it names with that project's registered name, the working directories recorded for it, how many sessions record them, what the core found about each folder it names, and the one folder it proposes where exactly one qualifies [[space-53](space.md#space-53)] — so a client offers the repair, and its proposal, from the data rather than from the reason's wording;
 - a diagnostic no local folder repairs carries none, and a project is named by its registered name rather than by its identifier wherever a repair names it.
-- failed former-store imports carry optional code `session-import`, and failed older desktop-session imports carry `session-folder-required` when no normalized project folder is available, otherwise `session-upgrade`, assigned at the reporting operation without classifying the reason's prose; these codes change neither preservation nor blocking ([DR-189](../decisions/189-repairs-explain-the-next-step.md)).
+- a session whose root Playbook refuses in an earlier storage format [[core-service-10](#core-service-10)] carries optional code `session-upgrade`, assigned at the reporting operation from the root's storage version without classifying the reason's prose; the code changes neither preservation nor blocking ([DR-189](../decisions/189-repairs-explain-the-next-step.md), [DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md)).
 - a folder repair carries a project name only from valid project metadata and previews of at most three most-recent saved conversations, titled by a single-line excerpt of at most 120 characters from the session listing’s title [[core-service-32](#core-service-32)] and carrying its real session identity for opening history [[core-service-10](#core-service-10)] and a known saved timestamp where one exists, without fabricating dates or project names ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md));
-- a `session-folder-required` diagnostic carries its repository explicitly, so the folder diagnostic's fold can keep it in the same task [[space-46](space.md#space-46)] without matching reason text.
 - an eligible older-conversation notice carries `notice: {key, dismissed?}`, the opaque identity and optional dismissal timestamp of its acknowledgement [[core-service-148](#core-service-148)]; all other diagnostics carry no dismissal capability.
 
 #### core-service-148
 
 When a client sends `space.notice.dismiss` with a notice key and a boolean `dismissed`, the core shall update only that home's preference for the currently reported eligible notice and return and broadcast the updated Space state [[space-1](space.md#space-1)] ([DR-197](../decisions/197-dismiss-reminders-without-losing-history.md)):
 
-- eligibility requires a standalone, nonblocking `session-import` or `session-upgrade` diagnostic with no folder repair and a verified regular source file; eligibility never follows reason-text matching;
+- eligibility requires a standalone, nonblocking `session-upgrade` diagnostic with no folder repair and a verified regular source file; eligibility never follows reason-text matching;
 - the opaque key binds the reported file, code and reason to its verified file identity and version, stable across restart while those facts remain the same; changed facts produce a new undismissed notice, and an unverifiable source supplies no dismissal capability;
 - true records a dismissal timestamp in the home's local preferences [[storage-5](storage.md#storage-5)], false removes it, and only an undismissed notice contributes to the pending count;
 - a published state reflects the latest acknowledgements at publication, so overlapping commands or delayed reads cannot restore an older dismissal or count;
@@ -607,7 +606,7 @@ The core service shall persist and replay sessions through Playbook's hydrated m
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
 - a reader serves the valid complete prefix with the damaged boundary reported, without altering files during a read;
-- a monolithic schema-7 session remains readable without implicit conversion; continuation follows Playbook's explicit migration requirement ([DR-144](../decisions/144-bounded-session-storage.md));
+- a session whose root Playbook refuses in an earlier storage format — schema 7 or 8, or a schema 2–6 record — is neither listed nor read: it stands as a nonblocking diagnostic [[core-service-86](#core-service-86)] with its files unchanged until Playbook's conversion command converts it [[1]] ([DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md));
 - token-free presentation includes synthesized visible failures [[core-service-30](#core-service-30)]; provider hints never enter the portable stream or manifest;
 - historical participants, settings, bindings and graphs come from stored context [[core-service-80](#core-service-80)], not today's installed modules.
 
@@ -616,10 +615,9 @@ The core service shall persist and replay sessions through Playbook's hydrated m
 The core service shall serve every session present in the `sessions/` directory of every spex repository's clone [[storage-1](storage.md#storage-1)], one shared session store per clone, whether found there at startup or written by another host while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - a session's project is the clone holding it [[storage-6](storage.md#storage-6)]; it lists with shared continuation eligibility [[core-service-73](#core-service-73)], and a clone no folder pairs lists its sessions as history only;
-- a record beside no replay stream lists from its Boss journal: each Boss entry opens a turn with its prompt, each Captain reply follows it, and the record's own timestamps bound them ([DR-037](../decisions/037-playbook-12-adoption.md));
 - an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)]; a record's disappearance is forgotten [[core-service-76](#core-service-76)];
-- a replay append, including one published through a replay descriptor while another host holds the writer lease, also reaches that session's subscribers through the record visibility filter [[core-service-8](#core-service-8)], once per appended record, without waiting for directory activity to stop; a replacement history is served on the next history request;
-- each session is read independently from its complete newline-terminated stream prefix, so an unfinished final line waits for its newline and an unreadable manifest preserves its previous served history without hiding healthy neighbors;
+- a replay append, including one another host's writer lease appends to the session's replay log, also reaches that session's subscribers through the record visibility filter [[core-service-8](#core-service-8)], once per appended record, without waiting for directory activity to stop; a replacement history is served on the next history request;
+- each session is read independently from its complete newline-terminated replay prefix, so an unfinished final line waits for its newline, never marking the replay incomplete ([DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md)) and an unreadable manifest preserves its previous served history without hiding healthy neighbors;
 - preserve opaque records [[core-service-10](#core-service-10)]; summary times use first/last finite record timestamps, otherwise manifest creation/update times or zero;
 - pairing a folder with a spex repository re-reads that clone's sessions [[storage-6](storage.md#storage-6)], without waiting for a new record.
 
@@ -647,7 +645,7 @@ When the core service starts against a state root, the core service shall take t
 
 #### core-service-64
 
-Where the host shell names a legacy SQLite store that neither the state root's own record nor a `<store>.imported` marker beside the file shows imported, when the core service starts, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], the legacy file left in place, and the marker written beside it on success so that no state root created later imports it again ([DR-036](../decisions/036-file-state-store.md)):
+Where the host shell names a legacy SQLite store that neither the state root's own record nor a `<store>.imported` marker beside the file shows imported, when the core service starts, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], save its sessions, which it stages as desktop sidecars that only an earlier release imports ([DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md)), the legacy file left in place, and the marker written beside it on success so that no state root created later imports it again ([DR-036](../decisions/036-file-state-store.md)):
 
 - The same import relocates a legacy library directory into the state root, rewriting the shared config's `from` paths that point into it with the comment-preserving targeted edit ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
 - A marker that cannot be written is reported and the root's own record alone stands; a root whose record lists a store the file does not yet mark writes the marker at its next start.
@@ -752,20 +750,21 @@ While the core service runs, when a file changes in a clone's `sessions/`, the c
 
 | Changed file | Read again |
 | --- | --- |
-| the record, replay descriptor, provider hints, former stream or lease of a session whose runtime this core is opening or holds [[core-service-91](#core-service-91)] | nothing |
-| the same files of any other session | that session alone, forgotten where its record left [[core-service-76](#core-service-76)] |
-| a Spex sidecar, or a file that is no record and no stream | nothing |
-| any other record or stream, or a change naming no file | every session of every clone |
+| the root, replay folder, blob folder, provider hints or lease of a session whose runtime this core is opening or holds [[core-service-91](#core-service-91)] | nothing |
+| the same files of any other session | that session alone, forgotten where its root left [[core-service-76](#core-service-76)] |
+| a Spex sidecar, or a file that is no root | nothing |
+| any other root, or a change naming no file | every session of every clone |
 
 - a change waits at most 150 ms for others to join it, and no later change postpones its read;
+- while another host's writer holds a session, the core looks at its newest replay segment's name, size and modification time every 250 ms, without opening it, and reads that session alone when they change: no watch of `sessions/` reports an append inside the session's replay folder ([DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md));
 - one read runs at a time and at most one waits behind it: a change, or a read of all sessions asked for, while one waits joins it at once, and changes still on their wait when it starts are read with it.
 
 #### core-service-159
 
 When the core package reads a session whose runtime it does not hold [[core-service-60](#core-service-60)], it shall have Playbook validate the session [[1]] only where the session's files changed since Playbook last validated them for this core without failing:
 
-- the files stand unchanged while the session's record and replay descriptor are the same files holding the same bytes, its former stream keeps its size and modification time, and its chunk and asset folders keep their modification times;
-- a record or replay descriptor that is no regular file, such as a link or a pipe, or that holds over 16 MiB never stands unchanged, and the core package itself reads no session file through a link or from a pipe or device;
+- the files stand unchanged while the session's root is the same file holding the same bytes, its replay, blob and asset folders keep their modification times, and its newest replay segment keeps its size and modification time ([DR-254](../decisions/254-sessions-are-a-manifest-and-a-replay-log.md));
+- a root that is no regular file, such as a link or a pipe, or that holds over 16 MiB, or a replay, blob or asset folder that is no folder, never stands unchanged, and the core package itself reads no session file through a link or from a pipe or device;
 - an unchanged session's lease is still read, a changed writer reported as a change of the session [[core-service-32](#core-service-32)];
 - a validation of the same files in flight is awaited, never repeated beside it;
 - the continuation check [[core-service-73](#core-service-73)] keeps its last answer while the session's files, the project's folder and the execution it would continue with stand as then checked, and a check of the same three in flight is awaited, never repeated beside it.
@@ -1022,26 +1021,25 @@ Where a session has completed a Boss turn, the test suite shall stop the core se
 - Where the stream file becomes unappendable mid-session, the suite shall assert the fail-soft contract of [[core-service-10](#core-service-10)]: the record is still served from memory, the listing marks the stream incomplete after the last durable sequence and carries no `agentActiveMs`, and both facts survive a restart [[core-service-102](#core-service-102)].
 - Where a native stream is damaged before restart, the suite shall assert its valid history remains readable, its persisted incomplete marker keeps any earlier boundary [[core-service-10](#core-service-10)], and a Boss submission refuses continuation without appending to the damaged stream [[core-service-73](#core-service-73)].
 - With opaque v1 objects interspersed, restart preserves records, sequences, later turn, usage, and active-time folds and stream bytes without marking incompleteness [[core-service-10](#core-service-10)] [[core-service-102](#core-service-102)].
-- Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched but marked `<store>.imported` beside itself, a second startup imports nothing twice, a state root created later against the marked store imports nothing, an unreadable store stays unmarked for a later retry, and a store whose directory refuses the mark imports once per root all the same.
+- Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state but for the sessions, staged as desktop sidecars and not served, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched but marked `<store>.imported` beside itself, a second startup imports nothing twice, a state root created later against the marked store imports nothing, an unreadable store stays unmarked for a later retry, and a store whose directory refuses the mark imports once per root all the same.
 
 #### core-service-62
 
-Where a fixture session — manifest naming a registered project's directory as its working directory, record-stream file, and no Spex sidecar — sits in the sessions directory before the core service starts, and the test suite writes a second such fixture session while the service runs, the test suite shall assert the foreign-session contract of [[core-service-60](#core-service-60)]:
+Where a fixture session — a manifest naming a registered project's directory as its working directory, and its replay log — sits in the sessions directory before the core service starts, and the test suite writes a second such fixture session while the service runs, the test suite shall assert the foreign-session contract of [[core-service-60](#core-service-60)]:
 
 - both sessions appear in the listing bound to that project, non-live, with titles and turn counts folded from their streams [[core-service-32](#core-service-32)];
 - their records are served with hidden records filtered from the session subscription [[core-service-10](#core-service-10)];
 - a session-state report announcing the second session reaches a subscribed client [[core-service-60](#core-service-60)];
-- after the terminal appends to an already listed session's stream without replacing its manifest, the listing and history reflect the new title and turns, and the session subscriber receives each appended visible record once even during continuous directory activity, with the complete but unterminated final record withheld until its newline arrives [[core-service-60](#core-service-60)];
-- an external host appending through a bounded replay descriptor, with the session root unchanged, streams each new visible record once and updates the title and turn count [[core-service-60](#core-service-60)]; a missing recovery chunk retains the session's association and readable history with execution refused, a blocking diagnostic and lease-bound deletion still available [[core-service-10](#core-service-10)] [[core-service-65](#core-service-65)];
+- after the terminal appends to an already listed session's replay log without replacing its manifest, the listing and history reflect the new title and turns, and the session subscriber receives each appended visible record once even during continuous directory activity, with the complete but unterminated final record withheld until its newline arrives [[core-service-60](#core-service-60)];
+- an external host appending through its writer lease, with the session root unchanged, streams each new visible record once and updates the title and turn count [[core-service-60](#core-service-60)]; a missing blob part the root names retains the session's association and readable history with execution refused, a blocking diagnostic and lease-bound deletion still available [[core-service-10](#core-service-10)] [[core-service-65](#core-service-65)];
 - rescanning the same streams leaves their turn, usage, and active-time folds unchanged, replacing a stream refreshes its title, history, and active-time fold, and a malformed neighboring manifest hides no healthy session [[core-service-60](#core-service-60)] [[core-service-102](#core-service-102)];
 - leading, interspersed and trailing opaque v1 objects preserve history without inventing players, turns or failures; summary times stay finite even for wholly opaque streams [[core-service-60](#core-service-60)];
 - a fixture session whose working directory matches no registered project is absent from the listing [[core-service-60](#core-service-60)];
-- a fixture record with a Boss journal and no stream lists with the first Boss entry as its title, its Boss turns counted, and a history of turn starts, Captain replies, and turn finishes [[core-service-60](#core-service-60)];
-- every fixture file is byte-identical once the service stops, and no sidecar joins them while only reads are requested [[core-service-65](#core-service-65)].
+- every fixture file is byte-identical once the service stops, and no file joins them while only reads are requested [[core-service-65](#core-service-65)].
 
 #### core-service-160
 
-Where a session this core ran stands saved and continuable in a project's clone, with the clones watched, the test suite shall count Playbook's validations of each session, each step waiting for the watch to report the changes it made, and assert:
+Where a session this core ran stands saved and continuable in a project's clone, with the clones watched, the test suite shall count Playbook's validations of each session, each step waiting for the watch, or the look at a held session's replay, to report the changes it made, and assert:
 
 - while a second session of the project runs a turn, publishing its record more than once, the saved session is not validated [[core-service-158](#core-service-158)];
 - two reads of every session afterwards validate neither session, and both still list as continuable [[core-service-159](#core-service-159)];
@@ -1051,7 +1049,7 @@ Where a session this core ran stands saved and continuable in a project's clone,
 
 #### core-service-161
 
-Where the platform holds pipes as files in a folder and three sessions this core ran stand saved, the test suite shall replace one session's replay descriptor with a pipe and another's record with a link to that pipe, a writer marking each time the pipe is opened to be read, and assert that a read of every session and then a listing return with the pipe never opened [[core-service-159](#core-service-159)], the third session listed as continuable and the other two still listed but not continuable [[core-service-60](#core-service-60)] [[core-service-159](#core-service-159)].
+Where the platform holds pipes as files in a folder and three sessions this core ran stand saved, the test suite shall replace one session's newest replay segment with a pipe and another's root with a link to that pipe, a writer marking each time the pipe is opened to be read, and assert that a read of every session and then a listing return with the pipe never opened [[core-service-159](#core-service-159)], the third session listed as continuable and the other two still listed but not continuable [[core-service-60](#core-service-60)] [[core-service-159](#core-service-159)].
 
 #### core-service-71
 
@@ -1063,11 +1061,11 @@ Where fixture sessions another host wrote [[core-service-60](#core-service-60)] 
 
 #### core-service-88
 
-When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias and immediate repository-scoped older-session import retries after a folder is saved, without restarting, with a remaining import failure preserved [[core-service-85](#core-service-85)], diagnostics preserving unresolved files, exposing bounded recognizable conversation previews with session identities and distinguishing skipped former-store imports, older desktop-session failures and a missing project folder through their codes [[core-service-86](#core-service-86)], history readable by a preview's session identity before any folder pairing [[core-service-10](#core-service-10)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias and the repository's sessions published after a folder is saved, without restarting [[core-service-85](#core-service-85)], diagnostics preserving unresolved files, exposing bounded recognizable conversation previews with session identities and distinguishing an earlier-format session by its code from a missing project folder's repair [[core-service-86](#core-service-86)], history readable by a preview's session identity before any folder pairing [[core-service-10](#core-service-10)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
 
 #### core-service-149
 
-When an integration suite dismisses an unsupported former-store session through a real core, it shall assert that the notice leaves the pending count while its original bytes and unrelated diagnostics remain, dismissal survives a core restart, showing it again restores its count, a source-file change receives a new undismissed key, stale, unknown or ineligible requests write no preference, and overlapping delayed state reads publish the latest acknowledgements without restoring an older count [[core-service-148](#core-service-148)], with the capability and stored dismissal reported through the diagnostics protocol [[core-service-86](#core-service-86)].
+When an integration suite dismisses an earlier-format session's notice through a real core, it shall assert that the notice leaves the pending count while its original bytes and unrelated diagnostics remain, dismissal survives a core restart, showing it again restores its count, a source-file change receives a new undismissed key, stale, unknown or ineligible requests write no preference, and overlapping delayed state reads publish the latest acknowledgements without restoring an older count [[core-service-148](#core-service-148)], with the capability and stored dismissal reported through the diagnostics protocol [[core-service-86](#core-service-86)].
 
 #### core-service-77
 

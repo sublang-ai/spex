@@ -25,6 +25,7 @@ import { CoreService } from "./service.js";
 import { Store } from "./store.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { seedHistorySession } from "./testing/demo.js";
+import { FIRST_SEGMENT } from "./testing/session-storage.js";
 import { scratchDir } from "./testing/scratch.js";
 import type { Command, CommandResults, MediaAsset, ServerMessage } from "./protocol.js";
 
@@ -122,7 +123,10 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   writeFormerRegistry(home, [projectA, projectB]);
 
   // Sessions in the one former folder: one ran in A, one ran in B's
-  // former folder, one in a folder no project holds.
+  // former folder, one in a folder no project holds. They stand in
+  // Playbook's current format, as its conversion command leaves a former
+  // home's sessions, so the import stage moves them around the released
+  // groups migration (storage-50, DR-254).
   const sessions = join(home, "sessions");
   mkdirSync(sessions, { recursive: true, mode: 0o700 });
   const t = 1_700_000_000_000;
@@ -188,14 +192,18 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   await assert.rejects(Store.open({ machineIdentity, dir: home }), /destination diverged/);
   assert.equal(readFileSync(join(home, "local", "prefs.json"), "utf8"), '{"format":1,"prefs":{"stray":true}}');
   const receipts = readdirSync(join(home, "local", "migrations"));
-  assert.equal(receipts.length, 1);
-  assert.equal(JSON.parse(readFileSync(join(home, "local", "migrations", receipts[0], "receipt.json"), "utf8")).complete, false);
+  const receiptOf = (id: string) => JSON.parse(readFileSync(join(home, "local", "migrations", id, "receipt.json"), "utf8")) as { kind: string; complete: boolean };
+  assert.deepEqual(receipts.map((id) => receiptOf(id).kind).sort(), ["bounded-sessions", "groups"]);
+  const groups = receipts.find((id) => receiptOf(id).kind === "groups")!;
+  const imported = receipts.find((id) => receiptOf(id).kind === "bounded-sessions")!;
+  assert.equal(receiptOf(groups).complete, false);
   rmSync(join(home, "local", "prefs.json"));
   const store = await Store.open({ machineIdentity, dir: home });
   store.close();
+  assert.equal(receiptOf(imported).complete, true, "the import stage completes once the groups migration does");
 
   // 1 — the receipt kept every rewritten input's bytes and records the steps.
-  const receipt = JSON.parse(readFileSync(join(home, "local", "migrations", receipts[0], "receipt.json"), "utf8")) as {
+  const receipt = JSON.parse(readFileSync(join(home, "local", "migrations", groups, "receipt.json"), "utf8")) as {
     format: number; id: string; kind: string; inputs: { path: string; sha256: string }[]; steps: Record<string, unknown>[]; complete: boolean;
   };
   assert.deepEqual(Object.keys(receipt), ["format", "id", "kind", "inputs", "steps", "complete"]);
@@ -204,7 +212,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   const kept = receipt.inputs.map((entry) => entry.path).sort();
   for (const path of ["projects.json", "local/project-paths.json", "prefs.json", "config/playbook.config.yaml", `intents/${projectA.id}.jsonl`, `intents/${projectB.id}.jsonl`]) assert.ok(kept.includes(path), path);
   const configIndex = receipt.inputs.findIndex((entry) => entry.path === "config/playbook.config.yaml");
-  assert.equal(readFileSync(join(home, "local", "migrations", receipts[0], "inputs", String(configIndex)), "utf8"), FORMER_CONFIG);
+  assert.equal(readFileSync(join(home, "local", "migrations", groups, "inputs", String(configIndex)), "utf8"), FORMER_CONFIG);
   assert.deepEqual(receipt.steps.find((entry) => entry.step === "config")?.dropped, [{ id: "code", from: "@sublang/playbook/code/registry" }]);
 
   // 2 — home.yaml: this device's user name, both folders, B's alias.
@@ -224,7 +232,9 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   for (const clone of [cloneA, cloneB]) {
     assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
     assert.equal(git(clone, "rev-list", "--count", "HEAD"), "1");
-    assert.equal(git(clone, "status", "--porcelain"), "", "everything the migration wrote is committed or ignored");
+    // The imported sessions are new local files for the next Save; the
+    // import stage commits nothing (storage-50).
+    assert.equal(git(clone, "status", "--porcelain"), "?? sessions/", "everything else the migration wrote is committed or ignored");
     assert.ok(!git(clone, "log", "-p", "--all").includes("sk-never-in-git"), "no provider token in any history");
     assert.match(readFileSync(join(clone, ".gitignore"), "utf8"), /# BEGIN Spex managed storage rules/);
   }
@@ -240,8 +250,9 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   });
   const attached = createAssetStore({ directory: join(cloneA, "intents", `${open}.assets`) });
   assert.equal(Buffer.from(await attached.readAsset(asset)).toString("utf8"), "attached bytes");
-  assert.ok(existsSync(join(cloneA, "sessions", `${sA}.json`)) && existsSync(join(cloneA, "sessions", `${sA}.records.jsonl`)));
-  assert.ok(existsSync(join(cloneA, "sessions", `${sA}.hints.json`)), "hints travel with their session, ignored");
+  assert.ok(existsSync(join(cloneA, "sessions", `${sA}.json`)) && existsSync(join(cloneA, "sessions", `${sA}.replay`, FIRST_SEGMENT)));
+  assert.ok(existsSync(join(cloneA, "sessions", `${sA}.hints.json`)), "hints travel with their session");
+  assert.equal(git(cloneA, "check-ignore", `sessions/${sA}.hints.json`), `sessions/${sA}.hints.json`, "and stay out of Git");
   assert.ok(existsSync(join(cloneB, "sessions", `${sB}.json`)), "a session in a recorded alias is the project's");
 
   // 4 — the global records clone: the config with every from dropped, the
@@ -270,7 +281,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
 
   // A restart migrates nothing again.
   (await Store.open({ machineIdentity, dir: home })).close();
-  assert.equal(readdirSync(join(home, "local", "migrations")).length, 1);
+  assert.deepEqual(readdirSync(join(home, "local", "migrations")), receipts);
 
   // Opened through the core (the desktop and server shells' path)...
   const { imports } = fakeAdapterImports({ fallback: { result: "ok" } });

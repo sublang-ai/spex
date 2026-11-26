@@ -50,15 +50,15 @@ function scans(t: TestContext): {
 
 test("a file of a session this core holds reads nothing; one naming another session reads that session alone", async (t) => {
   const { scans: s, reads } = scans(t);
-  for (const name of [`${HELD}.json`, `${HELD}.replay.json`, `${HELD}.hints.json`, `${HELD}.records.jsonl`, `.${HELD}.lock`]) s.changed(name);
-  // Sidecars, temporary files, retired leases and chunk folders are no
-  // session's record.
-  for (const name of [`${OTHER}.spex.json`, `.${OTHER}.123.abc.tmp`, `.${OTHER}.lock.retired.${THIRD}`, `${OTHER}.chunks`]) s.changed(name);
+  for (const name of [`${HELD}.json`, `${HELD}.replay`, `${HELD}.blobs`, `${HELD}.hints.json`, `.${HELD}.lock`]) s.changed(name);
+  // Sidecars, temporary files, retired leases and attachment folders are
+  // no session's own file.
+  for (const name of [`${OTHER}.spex.json`, `.${OTHER}.123.abc.tmp`, `.${OTHER}.lock.retired.${THIRD}`, `${OTHER}.assets`]) s.changed(name);
   t.mock.timers.tick(DELAY);
   await s.settled();
   assert.deepEqual(reads, []);
 
-  for (const name of [`${OTHER}.json`, `${OTHER}.replay.json`, `.${THIRD}.lock`, `${HELD}.json`]) s.changed(name);
+  for (const name of [`${OTHER}.json`, `${OTHER}.replay`, `.${THIRD}.lock`, `${HELD}.json`]) s.changed(name);
   t.mock.timers.tick(DELAY - 1);
   assert.deepEqual(reads, [], "a change waits for others to join it");
   t.mock.timers.tick(1);
@@ -87,7 +87,7 @@ test("a change while a read waits joins it, though the read in flight ends befor
   s.changed(`${THIRD}.json`);
   t.mock.timers.tick(DELAY);
   // A read of THIRD now waits behind the held one; FOURTH arrives late.
-  s.changed(`${FOURTH}.replay.json`);
+  s.changed(`${FOURTH}.replay`);
   release();
   await s.settled();
   t.mock.timers.tick(10 * DELAY);

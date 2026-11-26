@@ -16,6 +16,7 @@ import { finishBoundedHomeSessions, stageBoundedHomeSessions } from "./migrate-b
 import { reserveStorageHome } from "./storage-git.js";
 import { sha256 } from "@sublang/spex/files";
 import { seedHistorySession } from "./testing/demo.js";
+import { readSessionManifest, readSessionReplay, writeSessionManifest } from "./testing/session-storage.js";
 import { scratchDir } from "./testing/scratch.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -25,23 +26,30 @@ function fixture() {
   mkdirSync(home); mkdirSync(cwd); execFileSync("git", ["init", "-q", cwd], { env });
   return { root, home, cwd };
 }
-async function source(home: string, cwd: string) {
+/** A CLI session in the home's root `sessions/`; `large`, it holds a
+ * record past the per-file bound, which Playbook keeps in blob parts. */
+async function source(home: string, cwd: string, options: { large?: boolean } = {}) {
   const sessionsDir = join(home, "sessions");
   const id = await seedHistorySession(sessionsDir, cwd, [
     { type: "turn_started", turnId: 1, timestamp: 1000, turn: { id: 1, prompt: "Bounded CLI history" } },
+    ...(options.large ? [{ type: "captain_status", turnId: 1, timestamp: 1000, message: `large ${"x".repeat(9 * 1024 * 1024)}` }] : []),
     { type: "turn_finished", turnId: 1, timestamp: 1001 },
   ]);
   const assets = createAssetStore({ directory: join(sessionsDir, `${id}.assets`) }); await assets.prepare();
   const bytes = Buffer.from("synthetic session-owned asset\n");
   const asset = await assets.importAsset({ bytes, name: "fixture.bin", mimeType: "application/octet-stream" });
-  const path = join(sessionsDir, `${id}.json`); const manifest = JSON.parse(readFileSync(path, "utf8"));
-  manifest.assets = { version: 1, entries: [asset] }; writeFileSync(path, JSON.stringify(manifest), { mode: 0o600 });
-  const shared = createSessionStore({ sessionsDir }); await shared.prepare(); await shared.migrate(id);
+  const path = join(sessionsDir, `${id}.json`); const manifest = await readSessionManifest(path);
+  manifest.assets = { version: 1, entries: [asset] }; await writeSessionManifest(path, manifest);
+  const shared = createSessionStore({ sessionsDir }); await shared.prepare();
   const hints = "synthetic local continuation hint\n";
   writeFileSync(join(sessionsDir, `${id}.hints.json`), hints, { mode: 0o600 });
   const semantic = await shared.readManifest(id); const physical = readFileSync(path);
-  assert.equal(JSON.parse(physical.toString()).schemaVersion, 8);
-  return { id, sessionsDir, shared, semantic, physical, asset, bytes, hints };
+  assert.equal(JSON.parse(physical.toString()).schemaVersion, 9);
+  const replay = await readSessionReplay(path);
+  const blobsDir = join(sessionsDir, `${id}.blobs`);
+  const blobs = new Map(existsSync(blobsDir) ? readdirSync(blobsDir).map((name) => [name, readFileSync(join(blobsDir, name))]) : []);
+  assert.equal(blobs.size > 0, options.large === true);
+  return { id, sessionsDir, shared, semantic, physical, replay, blobs, asset, bytes, hints };
 }
 function receipt(home: string) {
   const migrations = join(home, "local", "migrations");
@@ -64,7 +72,7 @@ test("storage-47: a bounded family is retained before the released former-home m
   mkdirSync(join(f.home, "local"), { mode: 0o700 });
   writeFileSync(join(f.home, "projects.json"), JSON.stringify({ v: 2, projects: [{ id: project, name: "Project", registeredAt: 1 }] }));
   writeFileSync(join(f.home, "local", "project-paths.json"), JSON.stringify({ v: 1, bindings: [{ id: project, path: f.cwd, aliases: [alias] }] }));
-  const seeded = await source(f.home, alias);
+  const seeded = await source(f.home, alias, { large: true });
   const store = await Store.open({ dir: f.home, own: "tester", machineIdentity, env });
   t.after(() => store.close()); await store.initializeSessions();
   const key = store.home.keyForFolder(f.cwd)!;
@@ -72,10 +80,14 @@ test("storage-47: a bounded family is retained before the released former-home m
   const destination = store.sessionStore(key);
   assert.deepEqual(await destination.readManifest(seeded.id), seeded.semantic);
   assert.deepEqual(readFileSync(join(destination.sessionsDir, `${seeded.id}.json`)), seeded.physical);
+  assert.deepEqual(await readSessionReplay(join(destination.sessionsDir, `${seeded.id}.json`)), seeded.replay);
+  for (const [name, bytes] of seeded.blobs) assert.deepEqual(readFileSync(join(destination.sessionsDir, `${seeded.id}.blobs`, name)), bytes);
+  assert.equal((await destination.validate(seeded.id)).integrityValid, true);
   assert.deepEqual(Buffer.from(await destination.readAsset(seeded.id, seeded.asset)), seeded.bytes);
   assert.equal(readFileSync(join(destination.sessionsDir, `${seeded.id}.hints.json`), "utf8"), seeded.hints);
   assert.equal(existsSync(join(seeded.sessionsDir, `${seeded.id}.json`)), false);
-  assert.equal(existsSync(join(seeded.sessionsDir, `${seeded.id}.chunks`)), false);
+  assert.equal(existsSync(join(seeded.sessionsDir, `${seeded.id}.replay`)), false);
+  assert.equal(existsSync(join(seeded.sessionsDir, `${seeded.id}.blobs`)), false);
   const imported = receipt(f.home);
   assert.equal(imported.value.complete, true);
   assert.ok(readdirSync(join(f.home, "local", "migrations")).some((id) => {
@@ -97,11 +109,11 @@ test("storage-47: a later default-location bounded session respects a held sourc
   try {
     await stageBoundedHomeSessions(f.home);
     const imported = receipt(f.home); const entry = imported.value.sessions[0];
-    const chunk = entry.files.find((file: { path: string }) => file.path.startsWith(`${seeded.id}.chunks/`));
-    assert.ok(chunk);
+    const segment = entry.files.find((file: { path: string }) => file.path.startsWith(`${seeded.id}.replay/`));
+    assert.ok(segment);
     const sessions = join(Home.load(f.home).clonePath(key), "sessions");
-    mkdirSync(dirname(join(sessions, chunk.path)), { recursive: true, mode: 0o700 });
-    writeFileSync(join(sessions, chunk.path), readFileSync(join(imported.dir, "inputs", seeded.id, chunk.path)), { mode: 0o600 });
+    mkdirSync(dirname(join(sessions, segment.path)), { recursive: true, mode: 0o700 });
+    writeFileSync(join(sessions, segment.path), readFileSync(join(imported.dir, "inputs", seeded.id, segment.path)), { mode: 0o600 });
   } finally { release(); }
   const store = await Store.open({ dir: f.home, own: "tester", machineIdentity, env });
   t.after(() => store.close()); await store.initializeSessions();
@@ -135,7 +147,7 @@ test("storage-47: divergent destination bytes and an unsafe destination parent s
       const outside = join(f.root, "outside"); mkdirSync(outside); writeFileSync(join(outside, "canary"), "synthetic unchanged\n");
       const target = join(sessions, `${seeded.id}.json`);
       if (defect === "diverged") writeFileSync(target, "synthetic divergent root\n", { mode: 0o600 });
-      else symlinkSync(outside, join(sessions, `${seeded.id}.chunks`), "dir");
+      else symlinkSync(outside, join(sessions, `${seeded.id}.replay`), "dir");
       await assert.rejects(() => finishBoundedHomeSessions(f.home, home), /changed|unsafe|link/i);
       if (defect === "diverged") assert.equal(readFileSync(target, "utf8"), "synthetic divergent root\n");
       assert.equal(readFileSync(join(outside, "canary"), "utf8"), "synthetic unchanged\n");
@@ -185,4 +197,24 @@ test("storage-47: a held destination lease refuses publication and a later open 
     assert.deepEqual(await shared.readManifest(seeded.id), seeded.semantic);
     assert.equal(receipt(f.home).value.complete, true);
   } finally { release(); }
+});
+
+test("storage-47: an earlier-format session in the root sessions folder waits in place for its conversion", async (t) => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  established(f.home, f.cwd);
+  const sessionsDir = join(f.home, "sessions"); mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+  const id = randomUUID();
+  const stream = `${JSON.stringify({ v: 1, seq: 1, record: { type: "turn_started", turnId: 1, timestamp: 1000, turn: { id: 1, prompt: "Earlier" } } })}\n`;
+  const root = JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId: id, cwd: f.cwd, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: "earlier", contextSeq: null, replay: { seq: 1, sha256: sha256(Buffer.from(stream)), incomplete: false } });
+  writeFileSync(join(sessionsDir, `${id}.json`), root, { mode: 0o600 });
+  writeFileSync(join(sessionsDir, `${id}.records.jsonl`), stream, { mode: 0o600 });
+  const store = await Store.open({ dir: f.home, own: "tester", machineIdentity, env });
+  t.after(() => store.close()); await store.initializeSessions();
+  assert.equal(store.sessionRepository(id), undefined, "the earlier session is imported nowhere");
+  assert.equal(readFileSync(join(sessionsDir, `${id}.json`), "utf8"), root);
+  assert.equal(readFileSync(join(sessionsDir, `${id}.records.jsonl`), "utf8"), stream);
+  assert.equal(existsSync(join(f.home, "local", "migrations")) && readdirSync(join(f.home, "local", "migrations")).some((entry) => {
+    const file = join(f.home, "local", "migrations", entry, "receipt.json");
+    return existsSync(file) && JSON.parse(readFileSync(file, "utf8")).kind === "bounded-sessions";
+  }), false, "no import receipt is written for it");
 });

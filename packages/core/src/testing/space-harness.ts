@@ -797,13 +797,17 @@ playbooks:
 
   /** A session another host wrote into a clone, as the playbook CLI
    * writes one (core-service-60): written through Playbook's own session
-   * store apart from the clone, then its records and its manifest copied
-   * in, so no lease of it stands in the clone while the core reads it.
-   * Its id. */
+   * store apart from the clone, then its replay and its manifest copied
+   * in, the manifest last, so no lease of it stands in the clone while the
+   * core reads it. Its id. */
   async function writeForeignSession(clone: string, cwd: string, prompt: string): Promise<string> {
     const apart = mkdtempSync(join(scratch, "foreign-session-"));
     const id = await seedHistorySession(apart, cwd, turnRecords(prompt, 1));
-    for (const name of [`${id}.records.jsonl`, `${id}.json`]) copyFileSync(join(apart, name), join(clone, "sessions", name));
+    // A writer's folders are private, as Playbook makes them; a copy
+    // keeps each file's mode but makes its folder under the umask.
+    mkdirSync(join(clone, "sessions", `${id}.replay`), { recursive: true, mode: 0o700 });
+    for (const name of readdirSync(join(apart, `${id}.replay`))) copyFileSync(join(apart, `${id}.replay`, name), join(clone, "sessions", `${id}.replay`, name));
+    copyFileSync(join(apart, `${id}.json`), join(clone, "sessions", `${id}.json`));
     return id;
   }
 

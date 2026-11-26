@@ -30,9 +30,8 @@ export interface SessionScansOptions {
 }
 
 /** The files that are a session's own, by the session they name: its
- * record, replay descriptor, provider hints and former stream, and its
- * lease. */
-const SESSION_FILE = /^(?:([0-9a-f-]{36})\.(?:json|replay\.json|hints\.json|records\.jsonl)|\.([0-9a-f-]{36})\.lock)$/;
+ * root, replay and blob folders, provider hints, and its lease (DR-254). */
+const SESSION_FILE = /^(?:([0-9a-f-]{36})\.(?:json|replay|blobs|hints\.json)|\.([0-9a-f-]{36})\.lock)$/;
 
 /** What a changed file asks to be read: one session, every session, or
  * nothing — a Spex sidecar, a temporary file, a retired lease. */
@@ -40,9 +39,9 @@ function named(filename: string): { id: string } | "all" | undefined {
   if (filename.endsWith(".spex.json")) return undefined;
   const match = SESSION_FILE.exec(filename);
   if (match) return { id: match[1] ?? match[2] };
-  // A record or stream under a name no session has is read as before:
-  // with everything.
-  return filename.endsWith(".json") || filename.endsWith(".records.jsonl") ? "all" : undefined;
+  // A root under a name no session has is read as before: with
+  // everything.
+  return filename.endsWith(".json") ? "all" : undefined;
 }
 
 interface Waiting {

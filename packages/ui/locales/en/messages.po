@@ -844,11 +844,6 @@ msgstr "A player per role, a command and an intent"
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "A reply is needed. Answer or ask Captain to explain."
 
-#. a folder requirement not associated with an actionable recovery card
-#: src/components/SpaceRepairs.tsx
-msgid "A saved conversation needs a project folder"
-msgstr "A saved conversation needs a project folder"
-
 #: src/state/dashboard.ts
 msgid "A session failed"
 msgstr "A session failed"

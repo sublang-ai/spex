@@ -90,6 +90,7 @@ import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { CloneWatches } from "./clone-watches.js";
 import { SessionScans, type SessionScan } from "./session-scans.js";
+import { ReplayTails } from "./replay-tails.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { fileVersion, IN_USE_RETRIES, listed, readVersioned, retryWhileInUse, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
@@ -531,6 +532,8 @@ export class CoreService {
   /** Which sessions are read again as the clones' `sessions/` change,
    * and when (core-service-158). */
   private readonly sessionScans: SessionScans;
+  /** Another host's appends to a session it runs (core-service-158). */
+  private readonly replayTails: ReplayTails;
   private reloadTimer?: NodeJS.Timeout;
 
   private configState: ConfigState;
@@ -556,7 +559,6 @@ export class CoreService {
   private reloadGeneration = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
-  private readonly migrationDiagnostics: StorageDiagnostic[] = [];
   private stopping = false;
   /** The endpoint file this process wrote under the home
    * (core-service-143), removed at stop; unset while none stands. */
@@ -609,6 +611,15 @@ export class CoreService {
     this.sessionScans = new SessionScans({
       holds: (sessionId) => this.store.holdsSession(sessionId),
       scan: (scan) => this.scanSessions(scan),
+    });
+    this.replayTails = new ReplayTails({
+      held: () => this.options.watchConfig === false || this.stopping ? [] : this.store.listSessions()
+        .filter((session) => session.externalWriter)
+        .flatMap((session) => {
+          try { return [{ id: session.id, sessionsDir: this.store.sessionStoreFor(session.id).sessionsDir }]; }
+          catch { return []; }
+        }),
+      changed: (filename) => this.sessionScans.changed(filename),
     });
     this.watches = new CloneWatches({
       active: () => this.options.watchConfig !== false && !this.stopping,
@@ -754,7 +765,7 @@ export class CoreService {
       env: this.env,
       store: this.store,
       libraryDir: this.libraryDir(),
-      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
+      diagnostics: () => foldDiagnostics([...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
       checkRepairs: (diagnostics) => checkRepairs(
         diagnostics,
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
@@ -1329,7 +1340,6 @@ export class CoreService {
     // environments-9).
     await service.environments.startup();
     await service.reloadConfig();
-    await service.migrateLegacySessionDefault();
     await service.store.initializeSessions();
     await service.syncForeignSessions();
     // A restore a stopped core left without its recorded position is
@@ -1358,12 +1368,11 @@ export class CoreService {
    * store (core-service-60), and forget the ones whose record left it
    * (core-service-76): every session of every clone, read once before
    * serving and again when a folder pairs, a sync applies or a watch
-   * resumes, `beforeScan` run first. Done once a read begun after this
-   * call has finished; reads asked for meanwhile share it
-   * (core-service-158).
+   * resumes. Done once a read begun after this call has finished; reads
+   * asked for meanwhile share it (core-service-158).
    */
-  private syncForeignSessions(beforeScan?: () => Promise<void>): Promise<void> {
-    return this.sessionScans.all(beforeScan);
+  private syncForeignSessions(): Promise<void> {
+    return this.sessionScans.all();
   }
 
   /** One read of the sessions `scan` covers — those a changed file named
@@ -1410,26 +1419,14 @@ export class CoreService {
       projectIds.add(projectId);
     }
     if (projectIds.size > 0) this.queueLedgerChange([...projectIds]);
+    // A read tells which sessions another host's writer now holds, whose
+    // appends no watch reports (core-service-158).
+    this.replayTails.update();
     // A session that joins the listing — its project registered, or
     // another host's writes read — may hold a restore a stopped core
     // left unrecorded (core-service-82).
     const joined = changed.filter((entry) => !entry.unlistedProjectId).map((entry) => entry.id);
     if (joined.length > 0) await this.sessions.completeRestores(joined);
-  }
-
-  /** The playbook CLI's former XDG sessions import once into the global records repository (storage-18). */
-  private async migrateLegacySessionDefault(): Promise<void> {
-    if (!this.options.dataDir || this.env.SPEX_HOME?.trim() ||
-      resolve(this.options.dataDir) !== resolve(this.home,".spex")) return;
-    let config: unknown;
-    try { config = parseYaml(readFileSync(this.configPath,"utf8")); }
-    catch { return; }
-    if (!config || typeof config !== "object" || Object.hasOwn(config,"sessions")) return;
-    const result = await this.store.sessionStore().migrateLegacyDefault({env:this.env,homeDir:this.home});
-    for (const entry of result.skipped) this.migrationDiagnostics.push({
-      file:join(result.sourceDir,`${entry.sessionId}.json`), reason:entry.reason, blocking:false,
-      code: "session-import",
-    });
   }
 
   /** Let go of what this core holds open within the clones at `keys` —
@@ -1569,6 +1566,7 @@ export class CoreService {
       this.watches.close();
       if (this.reloadTimer) clearTimeout(this.reloadTimer);
       this.sessionScans.stop();
+      this.replayTails.stop();
       // A Space transport in flight is stopped; a local step finishes.
       await bound.within(this.space.stop());
       // An environment's resolve or install finishes; nothing new starts.
@@ -2512,7 +2510,7 @@ export class CoreService {
         // (environments-31); a session started meanwhile does not wait
         // for it.
         void this.environments.paired(project.id).catch(() => {});
-        await this.syncForeignSessions(() => this.store.retryLegacySessions(project.id));
+        await this.syncForeignSessions();
         for (const session of this.sessions.listSessions()) {
           if (session.projectId !== project.id) continue;
           this.broadcast({type: "session.state", session});
@@ -2522,7 +2520,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return this.space.markDiagnostics(foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]));
+        return this.space.markDiagnostics(foldDiagnostics([...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]));
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);

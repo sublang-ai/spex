@@ -9,7 +9,7 @@
 import { discardTree, makePrivateDirectory } from "@sublang/spex/files";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
@@ -43,11 +43,54 @@ export const UPLOAD_STAGING = ".spex-uploads";
 
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
 const SESSION_UNIT = /^sessions\/[0-9a-f-]{36}$/;
+/** A session's own path in a clone: every name in `sessions/` that begins
+ * with its id and a dot — its root, replay and blob folders and
+ * attachments, whatever Playbook's format (storage-11, DR-254). */
+const SESSION_MEMBER = /^sessions\/([^/.]+)\./;
+/** A session member other than its root: a dependency the root binds. */
+const sessionDependency = (path: string): boolean => {
+  const match = SESSION_MEMBER.exec(path);
+  return match !== null && UUID.test(match[1]) && path !== `sessions/${match[1]}.json`;
+};
 const AUTHORING_UNIT = /^authoring\/[a-z0-9][a-z0-9_-]*$/;
 const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: string | Buffer): Buffer =>
   execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env } : {}), ...(input === undefined ? {} : { input }) });
 const revision = (dir: string, ref: string): string => git(dir, ["rev-parse", "--verify", `${ref}^{commit}`]).toString().trim();
 
+
+/** The session storage version of Playbook this release reads: Spex
+ * knows Playbook's formats by number alone (Playbook DR-111, DR-254). */
+export const SESSION_STORAGE_VERSION = 9;
+
+/** The most of a root read for its storage version: Playbook keeps every
+ * file of a session within 8 MiB. */
+const ROOT_LIMIT = 8 * 1024 * 1024;
+
+/** The storage version a session's root names, where it names one: read
+ * only from a regular file of at most 8 MiB, never through a link or from
+ * a pipe or device (core-service-159). */
+export function sessionStorageVersion(sessionsDir: string, id: string): number | undefined {
+  const path = join(sessionsDir, `${id}.json`);
+  let version: unknown;
+  try {
+    if (!lstatSync(path).isFile()) return undefined;
+    const fd = openSync(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.size > ROOT_LIMIT) return undefined;
+      version = (JSON.parse(readFileSync(fd, "utf8")) as { schemaVersion?: unknown } | null)?.schemaVersion;
+    } finally { closeSync(fd); }
+  } catch { return undefined; }
+  return typeof version === "number" && Number.isSafeInteger(version) ? version : undefined;
+}
+
+/** The earlier storage format a session's root names — schema 7 or 8, or
+ * a schema 2–6 record — which Playbook no longer reads and which its
+ * conversion command, or an earlier release, converts (DR-254). */
+export function earlierSessionFormat(sessionsDir: string, id: string): number | undefined {
+  const version = sessionStorageVersion(sessionsDir, id);
+  return version !== undefined && version >= 2 && version <= 8 ? version : undefined;
+}
 
 /** No spec package folder: what a caller naming none passes. */
 const NO_PACKAGES: ReadonlySet<string> = new Set();
@@ -73,7 +116,7 @@ export function specPackageFolders(paths: Iterable<string>): Set<string> {
  * a file under one of `packages`, the spec package folders of the trees
  * compared, is the outermost one's, named with a trailing `/`. */
 export function storageUnitName(file: string, packages: ReadonlySet<string> = NO_PACKAGES): string {
-  const session = /^sessions\/([^/]+?)(?:\.records\.jsonl$|\.replay\.json$|\.json$|\.(?:assets|chunks)\/)/.exec(file);
+  const session = SESSION_MEMBER.exec(file);
   if (session && UUID.test(session[1])) return `sessions/${session[1]}`;
   const intent = /^intents\/([^/]+?)(?:\.json$|\.assets\/)/.exec(file);
   if (intent && UUID.test(intent[1])) return `intents/${intent[1]}`;
@@ -95,8 +138,8 @@ const isPackageUnit = (name: string): boolean => name.endsWith("/");
 
 /** The files a bundle unit always names, present or not. */
 function bundleFiles(name: string): string[] {
-  if (/^sessions\//.test(name) || /^authoring\//.test(name)) return [`${name}.json`, `${name}.records.jsonl`];
-  if (/^intents\//.test(name)) return [`${name}.json`];
+  if (/^authoring\//.test(name)) return [`${name}.json`, `${name}.records.jsonl`];
+  if (/^(sessions|intents)\//.test(name)) return [`${name}.json`];
   if (name === "environment") return ["spex.yaml", "spex.lock"];
   if (isPackageUnit(name)) return [`${name}meta.yaml`];
   return [];
@@ -307,11 +350,16 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
     const store = createSessionStore({ sessionsDir }); await store.prepare();
     validationPath(dir, "sessions", "directory");
     const names = readdirSync(sessionsDir);
-    const bounded = names.flatMap((name) => {
-      const match = /^([0-9a-f-]{36})\.(?:replay\.json|chunks)$/.exec(name);
-      return match && UUID.test(match[1]) ? [match[1]] : [];
+    // A folder named for a session — its replay or blob parts — names
+    // its root; attachments, an empty folder and an earlier release's
+    // loose files, such as a staged legacy stream, name none (DR-254).
+    const dependent = names.flatMap((name) => {
+      const match = SESSION_MEMBER.exec(`sessions/${name}`);
+      if (!match || !UUID.test(match[1]) || !sessionDependency(`sessions/${name}`) || name === `${match[1]}.assets` || !portable(`sessions/${name}`)) return [];
+      const stat = lstatSync(join(sessionsDir, name), { throwIfNoEntry: false });
+      return stat?.isDirectory() && readdirSync(join(sessionsDir, name)).some((child) => portable(`sessions/${name}/${child}`)) ? [match[1]] : [];
     });
-    for (const id of new Set([...bounded, ...(options.selectedSessionIds ?? [])])) {
+    for (const id of new Set([...dependent, ...(options.selectedSessionIds ?? [])])) {
       if (!names.includes(`${id}.json`) && names.some((name) => storageUnitName(`sessions/${name}/`) === `sessions/${id}` || storageUnitName(`sessions/${name}`) === `sessions/${id}`)) {
         throw new StorageFormatError(`sessions/${id}.json`, "selected session bundle root is missing");
       }
@@ -321,17 +369,30 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
       const id = file.slice(0, -5);
       const checkBundle = () => {
         validationPath(dir, `sessions/${id}.json`, "file");
-        validationPath(dir, `sessions/${id}.records.jsonl`, "file");
-        validationPath(dir, `sessions/${id}.replay.json`, "file");
-        validationPath(dir, `sessions/${id}.chunks`, "directory");
+        validationPath(dir, `sessions/${id}.replay`, "directory");
+        validationPath(dir, `sessions/${id}.blobs`, "directory");
         validationPath(dir, `sessions/${id}.assets`, "directory");
       };
       checkBundle();
-      const result = await store.validate(id);
-      if (result.manifest.schemaVersion !== 7) {
+      // An unsupported session stays where it is: a tracked one cannot be
+      // selected, an untracked one is retained locally (DR-254).
+      const unsupported = (version: unknown): void => {
         const tracked = options.selectedSessionIds?.has(id) ?? (existsSync(join(dir, ".git")) && git(dir, ["ls-files", "--", `sessions/${file}`]).length > 0);
         if (tracked) throw new StorageFormatError(file, "unsupported session version cannot be selected as portable data");
-        diagnostics.push({ file: `sessions/${file}`, reason: `unsupported session version ${result.manifest.schemaVersion}; retained locally`, blocking: false });
+        diagnostics.push({ file: `sessions/${file}`, reason: `unsupported session version ${version}; retained locally`, blocking: false });
+      };
+      let result: Awaited<ReturnType<typeof store.validate>>;
+      try { result = await store.validate(id); }
+      catch (error) {
+        // A root of another storage version — earlier, or a later
+        // Playbook's — is unsupported here; any other failure is damage.
+        const version = sessionStorageVersion(sessionsDir, id);
+        if (version === undefined || version === SESSION_STORAGE_VERSION) throw error;
+        unsupported(version);
+        continue;
+      }
+      if (result.manifest.schemaVersion !== 7) {
+        unsupported(result.manifest.schemaVersion);
         continue;
       }
       validateSessionManifest(result.manifest);
@@ -449,8 +510,8 @@ type TreeEntries = Map<string, { mode: string; oid: string }>;
 const publicationOrder = (path: string, retained: boolean, replacingRoot: boolean): number => {
   // Keep an old root's dependencies until the new root stands. A
   // deletion keeps the shared lifecycle's manifest-last order.
-  if (replacingRoot && !retained && (/\.(assets|chunks)\//.test(path) || /\.(records\.jsonl|replay\.json)$/.test(path))) return 4;
-  return /\.(assets|chunks)\//.test(path) ? 0 : path.endsWith(".records.jsonl") ? 1 : path.endsWith(".replay.json") ? 2 : 3;
+  if (replacingRoot && !retained && (/\.assets\//.test(path) || sessionDependency(path) || path.endsWith(".records.jsonl"))) return 4;
+  return /\.assets\//.test(path) || sessionDependency(path) ? 0 : path.endsWith(".records.jsonl") ? 1 : 3;
 };
 
 /** Inspect each existing parent without following it, including when the
@@ -478,7 +539,6 @@ function assertDestinationParents(dir: string, file: string): void {
  * since the plan's trees among them (space-19). */
 function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<string, string> {
   const paths = new Set([...unit.paths, ...bundleFiles(unit.name)]);
-  if (SESSION_UNIT.test(unit.name)) paths.add(`${unit.name}.replay.json`);
   const walk = (rel: string): void => {
     assertDestinationParents(dir, `${rel}/.member`);
     const full = join(dir, rel);
@@ -492,9 +552,22 @@ function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<
     }
   };
   if (members && /^(sessions|intents|authoring)\//.test(unit.name)) walk(`${unit.name}.assets`);
-  // Even select's merge-output version must include chunks published
-  // while acquisition waits; a session's immutable namespace is owned.
-  if (SESSION_UNIT.test(unit.name)) walk(`${unit.name}.chunks`);
+  // Even select's merge-output version must include the replay segments
+  // and blob parts written while acquisition waits: every folder named
+  // for the session but its attachments is its own (DR-254).
+  if (SESSION_UNIT.test(unit.name)) {
+    const id = unit.name.slice("sessions/".length);
+    assertDestinationParents(dir, `${unit.name}.member`);
+    let names: string[] = [];
+    try { names = readdirSync(join(dir, "sessions")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    for (const name of names.sort()) {
+      if (name.startsWith(`${id}.`) && name !== `${id}.assets` && portable(`sessions/${name}`)) {
+        const stat = lstatSync(join(dir, "sessions", name), { throwIfNoEntry: false });
+        if (stat?.isDirectory() && !stat.isSymbolicLink()) walk(`sessions/${name}`);
+      }
+    }
+  }
   // A spec package folder's members are every file under it Git would
   // carry, one added since the plan's trees among them.
   if (members && isPackageUnit(unit.name)) {
@@ -610,10 +683,10 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
     const present = (path: string): boolean => sideOf(unit).has(path);
     const assets = unit.paths.some((path) => path.startsWith(`${unit.name}.assets/`) && present(path));
     if (SESSION_UNIT.test(unit.name)) {
-      const manifest = present(`${unit.name}.json`);
-      const replay = present(`${unit.name}.records.jsonl`) || present(`${unit.name}.replay.json`);
-      const chunks = unit.paths.some((path) => path.startsWith(`${unit.name}.chunks/`) && present(path));
-      if (manifest !== replay || ((assets || chunks) && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete root, replay, chunks and asset bundle");
+      // Every other file names its root; Playbook's validation of the
+      // candidate decides the rest (storage-12).
+      const dependencies = unit.paths.some((path) => path !== `${unit.name}.json` && present(path));
+      if (dependencies && !present(`${unit.name}.json`)) throw new StorageFormatError(unit.name, "selected session requires its root with its replay, blobs and attachments");
     } else if (/^(intents|authoring)\//.test(unit.name)) {
       const record = present(`${unit.name}.json`);
       const replay = present(`${unit.name}.records.jsonl`);
@@ -728,10 +801,20 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
               renameSync(temporary, target);
             } else if (disk.has(file)) rmSync(target, { force: true });
           }
+          // A session's folders this write emptied leave with it, so no
+          // folder names a session whose root no longer stands (DR-254).
+          if (SESSION_UNIT.test(unit.name)) {
+            for (const folder of new Set(paths.filter((path) => sessionDependency(path) && path.split("/").length > 2).map((path) => path.split("/").slice(0, 2).join("/")))) {
+              assertDestinationParents(dir, `${folder}/.member`);
+              try { rmdirSync(join(dir, folder)); }
+              catch (error) { if (!["ENOTEMPTY", "EEXIST", "ENOENT"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
+            }
+          }
           // Attachments stay owner-only whoever made their folder — Git's
           // merge makes it under the process umask; only a differing mode
           // changes, since a mode change moves the ctime readers pin.
-          for (const [file, mode] of [[`${unit.name}.assets`, 0o700], ...(SESSION_UNIT.test(unit.name) ? [[`${unit.name}.chunks`, 0o700] as const] : []), ...[...wanted.keys()].filter((path) => /\.(assets|chunks)\//.test(path)).map((path) => [path, 0o600] as const)] as const) {
+          const folders = new Set([`${unit.name}.assets`, ...[...wanted.keys()].filter((path) => SESSION_UNIT.test(unit.name) && sessionDependency(path)).map((path) => path.split("/").slice(0, 2).join("/")).filter((folder) => folder !== `${unit.name}.json`)]);
+          for (const [file, mode] of [...[...folders].filter((folder) => !wanted.has(folder)).map((folder) => [folder, 0o700] as const), ...[...wanted.keys()].filter((path) => /\.assets\//.test(path) || (SESSION_UNIT.test(unit.name) && sessionDependency(path))).map((path) => [path, 0o600] as const)] as const) {
             assertDestinationParents(dir, file);
             const stat = lstatSync(join(dir, file), { throwIfNoEntry: false });
             if (stat && !stat.isSymbolicLink() && (stat.mode & 0o777) !== mode) chmodSync(join(dir, file), mode);
@@ -807,7 +890,7 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
     // `.spex/` holds the environment's installed files and
     // generated skills (environments-26), and the former `packages/` and
     // `skills/` stay ignored until an install removes them (DR-165).
-    "/.spex/", "/packages/", "/skills/", "/local/", `/${UPLOAD_STAGING}/`, `/${APPLY_MARKER}`, "/.lock*",
+    "/.spex/", "/packages/", "/skills/", "/local/", `/${UPLOAD_STAGING}/`, `/${APPLY_MARKER}`, "/.lock*", "/.legacy-sessions/",
     "*.hints.json", "*.spex.json", "*.lock", "*.lock.*", "*.tmp", "*.bak", "*.bak.*", "*.backup", "*.backup.*",
     "!/spex.lock",
   ];
@@ -815,7 +898,7 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
     if (file.startsWith("/") || file.split("/").includes("..") || /[\r\n\0*?\[\]\\]/.test(file)) throw new Error(`unsafe ignore path ${file}`);
     return `/${file}`;
   });
-  const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/*.assets/** -text", "/sessions/*.chunks/** -text", "/authoring/*.assets/** -text"];
+  const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/** -text", "/authoring/*.assets/** -text"];
   const begin = "# BEGIN Spex managed storage rules";
   const end = "# END Spex managed storage rules";
   for (const [name, generated] of [[".gitignore", ignores], [".gitattributes", attributes]] as const) {

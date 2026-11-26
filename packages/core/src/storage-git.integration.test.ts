@@ -24,6 +24,7 @@ import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
 import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageSnapshot, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
+import { FIRST_SEGMENT, readSessionManifest, readSessionReplay, writeSession, writeSessionManifest, writeSessionReplay } from "./testing/session-storage.js";
 import { StorageFormatError } from "@sublang/spex/files";
 
 /** One fixed machine identity for the in-process writers and the
@@ -97,7 +98,7 @@ function snapshot(dir: string): Map<string, Buffer> {
 
 /** A home with one project whose clone holds one session committed on
  * its `spex` branch; optionally a second project beside it. */
-function setup(options: { second?: boolean } = {}) {
+async function setup(options: { second?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "spex-git-store-"));
   const home = join(root, "home");
   const folder = join(root, "project");
@@ -115,19 +116,20 @@ function setup(options: { second?: boolean } = {}) {
   const clone = Home.load(home).clonePath(key);
   mkdirSync(join(clone, "intents"), { recursive: true });
   const sessionId = randomUUID();
-  const bundle = (label: string, id = sessionId, dir = clone, cwd = project.path) => {
+  const bundle = async (label: string, id = sessionId, dir = clone, cwd = project.path) => {
     const records = `${JSON.stringify({ v: 1, seq: 1, record: { futureKind: label } })}\n`;
-    writeFileSync(join(dir, "sessions", `${id}.records.jsonl`), records, { mode: 0o600 });
-    writeFileSync(join(dir, "sessions", `${id}.json`), JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId: id, cwd, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: label, replay: { seq: 1, sha256: sha256(records), incomplete: false }, contextSeq: null }, null, 2), { mode: 0o600 });
+    mkdirSync(join(dir, "sessions"), { recursive: true, mode: 0o700 });
+    for (const folder of ["replay", "blobs"]) rmSync(join(dir, "sessions", `${id}.${folder}`), { recursive: true, force: true });
+    await writeSession(join(dir, "sessions", `${id}.json`), { schemaVersion: 7, kind: "captain-session", sessionId: id, cwd, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: label, replay: { seq: 1, sha256: sha256(records), incomplete: false }, contextSeq: null }, records);
   };
   const commit = (message: string) => { git(clone, "add", "-A", "--", "."); git(clone, "commit", "-q", "-m", message); };
-  bundle("base"); commit("base");
+  await bundle("base"); commit("base");
   return { root, home, folder, key, clone, project, other, sessionId, bundle, commit, dispose: () => rmSync(root, { recursive: true, force: true }) };
 }
 function merge(clone: string, ref = "other") { try { git(clone, "merge", "--no-commit", "--no-ff", ref); } catch { /* conflicts are the subject */ } }
 
 test("storage-16: the documented entry point plans, selects, validates and rebinds one spex repository", async () => {
-  const s = setup({ second: true });
+  const s = await setup({ second: true });
   const { root, home, folder, key, clone, sessionId, bundle, commit } = s;
   try {
     assert.equal(key, "tester/project-spex");
@@ -136,26 +138,26 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     // changed there, an intent both sides edit, an authoring session,
     // the environment, and a text file both sides change on different
     // lines — which Git alone would merge cleanly.
-    const doomed = randomUUID(); bundle("doomed", doomed);
+    const doomed = randomUUID(); await bundle("doomed", doomed);
     const edited = randomUUID(); writeIntent(clone, edited, "base");
     writeAuthoring(clone, "base"); writeEnvironment(clone, "base", "base");
     writeFileSync(join(clone, "notes.md"), "one\ntwo\nthree\n");
     commit("base units");
     git(clone, "branch", "other");
-    bundle("ours"); rmSync(join(clone, "sessions", `${doomed}.json`)); rmSync(join(clone, "sessions", `${doomed}.records.jsonl`));
+    await bundle("ours"); rmSync(join(clone, "sessions", `${doomed}.json`)); rmSync(join(clone, "sessions", `${doomed}.replay`), { recursive: true });
     writeIntent(clone, edited, "ours");
     const mine = randomUUID(); writeIntent(clone, mine, "added here", { createdAt: 2 });
     writeAuthoring(clone, "ours"); writeEnvironment(clone, "ours", "base");
     writeFileSync(join(clone, "notes.md"), "ONE\ntwo\nthree\n");
     commit("ours");
     git(clone, "checkout", "-q", "other");
-    bundle("theirs"); bundle("doomed changed", doomed);
+    await bundle("theirs"); await bundle("doomed changed", doomed);
     writeIntent(clone, edited, "theirs");
     const theirs = randomUUID(); writeIntent(clone, theirs, "added there", { createdAt: 3 });
     writeAuthoring(clone, "theirs"); writeEnvironment(clone, "base", "theirs");
     writeFileSync(join(clone, "notes.md"), "one\ntwo\nTHREE\n");
     commit("theirs");
-    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`));
+    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`));
     const theirsAuthoring = readFileSync(join(clone, "authoring", "demo.json"));
     git(clone, "checkout", "-q", "spex");
 
@@ -220,9 +222,9 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     try { cliFails(home, key, ["select", ...complete], new RegExp(`sessions/${sessionId}: .*(held|owner|active|lease)`, "i")); }
     finally { await held.release(); }
     assert.equal(git(clone, "ls-files", "-s"), mergeIndex, "a held session lease: index unchanged");
-    for (const file of [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`]) assert.deepEqual(readFileSync(join(clone, file)), mergeFiles.get(file), `a held session lease: ${file} unchanged`);
+    for (const file of [`sessions/${sessionId}.json`, `sessions/${sessionId}.replay/${FIRST_SEGMENT}`]) assert.deepEqual(readFileSync(join(clone, file)), mergeFiles.get(file), `a held session lease: ${file} unchanged`);
     const otherClone = Home.load(home).clonePath(s.other!.id);
-    const otherSession = randomUUID(); bundle("elsewhere", otherSession, otherClone, s.other!.path);
+    const otherSession = randomUUID(); await bundle("elsewhere", otherSession, otherClone, s.other!.path);
     const otherStore = createSessionStore({ sessionsDir: join(otherClone, "sessions") }); await otherStore.prepare();
     const elsewhere = await otherStore.acquireManagement(otherSession);
     // The retry completes what the refused selection began (storage-21).
@@ -233,9 +235,9 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     // Every unit taken whole from its chosen side (storage-11).
     assert.deepEqual(result.diagnostics, []);
     assert.equal(result.plan.base, plan.base);
-    assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), theirsRecords);
+    assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), theirsRecords);
     assert.equal(existsSync(join(clone, "sessions", `${doomed}.json`)), false, "the deleting side deletes the whole bundle");
-    assert.equal(existsSync(join(clone, "sessions", `${doomed}.records.jsonl`)), false);
+    assert.equal(existsSync(join(clone, "sessions", `${doomed}.replay`)), false);
     assert.equal(intentText(clone, edited), "ours");
     assert.equal(intentText(clone, mine), "added here");
     assert.equal(intentText(clone, theirs), "added there");
@@ -246,7 +248,7 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     assert.equal(readFileSync(join(clone, "notes.md"), "utf8"), "ONE\ntwo\nthree\n", "the chosen side, not Git's clean merge");
     assert.equal(git(clone, "diff", "--name-only", "--diff-filter=U"), "");
     const staged = git(clone, "diff", "--cached", "--name-only").split("\n");
-    for (const path of [`sessions/${sessionId}.records.jsonl`, `sessions/${sessionId}.json`, `intents/${theirs}.json`, "authoring/demo.json", "authoring/demo.records.jsonl"]) {
+    for (const path of [`sessions/${sessionId}.replay/${FIRST_SEGMENT}`, `sessions/${sessionId}.json`, `intents/${theirs}.json`, "authoring/demo.json", "authoring/demo.records.jsonl"]) {
       assert.ok(staged.includes(path), `${path} staged in ${staged.join(", ")}`);
     }
     git(clone, "commit", "-q", "-m", "merge the other branch");
@@ -268,9 +270,9 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     writeIntent(clone, dispatched, "Work", { dispatched: { sessionId, turnId: 1, at: 1 } });
     cliFails(home, key, ["validate"], /invalid dispatch/);
     rmSync(join(clone, "intents", `${dispatched}.json`));
-    writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), `${JSON.stringify({ v: 1, seq: 1, record: { futureKind: "tampered" } })}\n`);
+    writeFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`), `${JSON.stringify({ v: 1, seq: 1, record: { futureKind: "tampered" } })}\n`);
     cliFails(home, key, ["validate"], /digest|checkpoint|replay|damaged/i);
-    git(clone, "checkout", "--", `sessions/${sessionId}.records.jsonl`);
+    git(clone, "checkout", "--", `sessions/${sessionId}.replay/${FIRST_SEGMENT}`);
     assert.deepEqual(cli(home, key, "validate"), []);
 
     // Two open intents from one issue, each added on one side, merge
@@ -305,16 +307,16 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
 });
 
 test("storage-16: real Git branches select session bundles and intents as complete units", async () => {
-  const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  const { home, key, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
     const shared = randomUUID(); writeIntent(clone, shared, "base");
     const untouched = randomUUID(); writeIntent(clone, untouched, "neither side changes it"); commit("intent");
-    git(clone, "branch", "other"); bundle("ours");
+    git(clone, "branch", "other"); await bundle("ours");
     writeIntent(clone, shared, "ours"); const mine = randomUUID(); writeIntent(clone, mine, "added here", { createdAt: 2 });
     commit("ours"); const oursManifest = readFileSync(join(clone, "sessions", `${sessionId}.json`));
-    git(clone, "checkout", "-q", "other"); bundle("theirs");
+    git(clone, "checkout", "-q", "other"); await bundle("theirs");
     writeIntent(clone, shared, "theirs"); const theirs = randomUUID(); writeIntent(clone, theirs, "added there", { createdAt: 3 });
-    commit("theirs"); const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`));
+    commit("theirs"); const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`));
     git(clone, "checkout", "-q", "spex"); const plan = planStorageMerge(clone, "HEAD", "other");
     // An attachment never committed, in a unit neither side changed, is Git's untracked file and stays (storage-21).
     const local = join(clone, "intents", `${untouched}.assets`, "local.bin");
@@ -327,7 +329,7 @@ test("storage-16: real Git branches select session bundles and intents as comple
     const result = await selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs", [`intents/${shared}`]: "ours" });
     assert.equal(result.diagnostics.length, 0);
     assert.notDeepEqual(readFileSync(join(clone, "sessions", `${sessionId}.json`)), oursManifest);
-    assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), theirsRecords);
+    assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), theirsRecords);
     assert.equal(intentText(clone, shared), "ours");
     assert.equal(intentText(clone, mine), "added here");
     assert.equal(intentText(clone, theirs), "added there");
@@ -339,21 +341,21 @@ test("storage-16: real Git branches select session bundles and intents as comple
 });
 
 test("storage-16: delete versus modify needs explicit bundle choice; active core or CLI lease blocks selection", async () => {
-  const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  const { home, key, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
     git(clone, "branch", "other");
-    rmSync(join(clone, "sessions", `${sessionId}.json`)); rmSync(join(clone, "sessions", `${sessionId}.records.jsonl`)); commit("delete");
-    git(clone, "checkout", "-q", "other"); bundle("changed"); commit("modify"); git(clone, "checkout", "-q", "spex"); merge(clone);
+    rmSync(join(clone, "sessions", `${sessionId}.json`)); rmSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)); commit("delete");
+    git(clone, "checkout", "-q", "other"); await bundle("changed"); commit("modify"); git(clone, "checkout", "-q", "spex"); merge(clone);
     const release = reserveStorageHome(home, machineIdentity); await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/); release();
     const shared = createSessionStore({ sessionsDir: join(clone, "sessions") }); await shared.prepare(); const lease = await shared.acquireManagement(sessionId);
     await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "ours" }), /held|owner|active|lease/i); await lease.release();
     await selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "ours" });
-    assert.equal(existsSync(join(clone, "sessions", `${sessionId}.json`)), false); assert.equal(existsSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), false);
+    assert.equal(existsSync(join(clone, "sessions", `${sessionId}.json`)), false); assert.equal(existsSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), false);
   } finally { dispose(); }
 });
 
 test("storage-16: an authoring session and the environment are each one unit chosen whole, and the plan names the ancestor", async () => {
-  const { home, key, clone, commit, dispose } = setup();
+  const { home, key, clone, commit, dispose } = await setup();
   try {
     writeAuthoring(clone, "base"); writeEnvironment(clone, "base", "base"); commit("base");
     git(clone, "branch", "other");
@@ -383,7 +385,7 @@ test("storage-16: an authoring session and the environment are each one unit cho
 });
 
 test("storage-16: a spec package folder is one unit chosen whole, a folder nested in it and a file added on one side within it, a folder made one on one side, and a file beside it its own", async () => {
-  const { home, key, clone, commit, dispose } = setup();
+  const { home, key, clone, commit, dispose } = await setup();
   const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
   try {
     for (const path of ["mine/notes/meta.yaml", "mine/notes/skills/en/notes/SKILL.md", "mine/notes/inner/meta.yaml", "mine/README.md", "mine/drafts/b.md"]) write(path, "base");
@@ -420,7 +422,7 @@ test("storage-16: a spec package folder is one unit chosen whole, a folder neste
 });
 
 test("storage-16: real Git branches forced to track a meta.yaml under packages/, a folder the catalog ignores, plan each file there as its own unit", async () => {
-  const { clone, commit, dispose } = setup();
+  const { clone, commit, dispose } = await setup();
   const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
   // The clone's Git rules ignore `packages/`: each side forces its files in.
   const forced = (message: string): void => { git(clone, "add", "-f", "--", "packages/acme/kit"); commit(message); };
@@ -440,7 +442,7 @@ test("storage-16: real Git branches forced to track a meta.yaml under packages/,
 });
 
 test("storage-11, storage-12, storage-41: a placement file is one unit chosen whole and a meta.yaml under placements/ forms no unit; the validator reports a placement file not of its encoding, one named for another instance and a placements that is no folder, each blocking nothing", async () => {
-  const { home, key, clone, commit, dispose } = setup();
+  const { home, key, clone, commit, dispose } = await setup();
   const write = (path: string, text: string): void => { mkdirSync(dirname(join(clone, path)), { recursive: true }); writeFileSync(join(clone, path), text); };
   const placed = (origin: string, id: string): string => `format: 1\ninstance: "${origin}"\nid: "${id}"\n`;
   const file = "placements/@a.example.yaml";
@@ -478,7 +480,7 @@ test("storage-11, storage-12, storage-41: a placement file is one unit chosen wh
 });
 
 test("storage-16: through the documented entry point, a clone placed at two instances is planned and selected against each placement's remote in turn, the second against the first's merge, each placement file its own unit and one that does not read reported without blocking, and the push to the first again a fast-forward", async () => {
-  const { root, home, key, clone, commit, dispose } = setup();
+  const { root, home, key, clone, commit, dispose } = await setup();
   const write = (dir: string, path: string, text: string): void => { mkdirSync(dirname(join(dir, path)), { recursive: true }); writeFileSync(join(dir, path), text); };
   const placed = (origin: string, id: string): string => `format: 1\ninstance: "${origin}"\nid: "${id}"\n`;
   const unitsOf = (plan: { units: { name: string; choice: string; paths: string[] }[] }, names: string[]) =>
@@ -590,7 +592,7 @@ test("storage-16: through the documented entry point, a clone placed at two inst
 });
 
 test("storage-16: through the apply seam, a file added under a spec package folder since the Save refuses the folder's replacement, that file kept", async () => {
-  const { clone, commit, dispose } = setup();
+  const { clone, commit, dispose } = await setup();
   const skill = join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md");
   try {
     mkdirSync(dirname(skill), { recursive: true });
@@ -614,7 +616,7 @@ test("storage-16: through the apply seam, a file added under a spec package fold
 
 test("storage-16: Apply refuses unsafe destination parents before overwrites, creations and deletions", async (t) => {
   for (const kind of ["overwrite", "create", "delete", "non-directory"] as const) await t.test(kind, async () => {
-    const { root, clone, commit, dispose } = setup();
+    const { root, clone, commit, dispose } = await setup();
     try {
       const file = kind === "create" ? "docs/missing/new.txt" : "docs/notes.txt";
       mkdirSync(join(clone, "docs"));
@@ -647,7 +649,7 @@ test("storage-16: Apply refuses unsafe destination parents before overwrites, cr
 });
 
 test("storage-16: a safe missing destination tail is created without following a parent", async () => {
-  const { clone, commit, dispose } = setup();
+  const { clone, commit, dispose } = await setup();
   try {
     git(clone, "checkout", "-q", "-b", "other");
     mkdirSync(join(clone, "new", "nested"), { recursive: true });
@@ -660,17 +662,17 @@ test("storage-16: a safe missing destination tail is created without following a
 
 test("storage-16: a session parent is checked before lease acquisition and again after its await", async (t) => {
   for (const at of ["before lease", "after lease"] as const) await t.test(at, async () => {
-    const { root, clone, sessionId, bundle, commit, dispose } = setup();
+    const { root, clone, sessionId, bundle, commit, dispose } = await setup();
     try {
       const assets = createAssetStore({ directory: join(clone, "sessions", `${sessionId}.assets`) });
       const media = async (label: string) => {
         await assets.prepare();
         const asset = await assets.importAsset({ bytes: Buffer.from(label), mimeType: "image/png", name: `${label}.png` });
-        const file = join(clone, "sessions", `${sessionId}.json`); const manifest = JSON.parse(readFileSync(file, "utf8"));
-        manifest.assets = { version: 1, entries: [asset] }; writeFileSync(file, JSON.stringify(manifest));
+        const file = join(clone, "sessions", `${sessionId}.json`); const manifest = await readSessionManifest(file);
+        manifest.assets = { version: 1, entries: [asset] }; await writeSessionManifest(file, manifest);
       };
       await media("base"); commit("base session media");
-      git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); await media("incoming"); commit("incoming session");
+      git(clone, "checkout", "-q", "-b", "other"); await bundle("incoming"); await media("incoming"); commit("incoming session");
       git(clone, "checkout", "-q", "spex");
       const plan = planStorageMerge(clone, "HEAD", "other"); const index = git(clone, "ls-files", "-s");
       const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") }); await sessions.prepare();
@@ -695,14 +697,14 @@ test("storage-16: a session parent is checked before lease acquisition and again
 });
 
 test("storage-16: completed session selection cannot clear hints through a replaced parent", async () => {
-  const { root, clone, sessionId, bundle, commit, dispose } = setup();
+  const { root, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
-    git(clone, "checkout", "-q", "-b", "other"); bundle("incoming"); commit("incoming session");
+    git(clone, "checkout", "-q", "-b", "other"); await bundle("incoming"); commit("incoming session");
     const incoming = git(clone, "rev-parse", "HEAD"); git(clone, "checkout", "-q", "spex");
     const plan = planStorageMerge(clone, "HEAD", incoming); const index = git(clone, "ls-files", "-s");
     // An interrupted selection already wrote all selected bytes. There
     // is no pending unit/lease, but completion still clears its hint.
-    for (const ext of ["json", "records.jsonl"]) writeFileSync(join(clone, "sessions", `${sessionId}.${ext}`), execFileSync("git", ["-C", clone, "show", `${incoming}:sessions/${sessionId}.${ext}`], { env: gitEnv }));
+    for (const path of [`${sessionId}.json`, `${sessionId}.replay/${FIRST_SEGMENT}`]) writeFileSync(join(clone, "sessions", path), execFileSync("git", ["-C", clone, "show", `${incoming}:sessions/${path}`], { env: gitEnv }));
     writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "synthetic local hint\n");
     const outside = join(root, "outside-hints");
     await assert.rejects(() => applyStorageSelection(clone, plan, {}, { beforeWrite: () => {
@@ -714,13 +716,12 @@ test("storage-16: completed session selection cannot clear hints through a repla
 });
 
 test("storage-16: unrelated histories refuse selection until joined, whereupon the empty tree is the ancestor", async () => {
-  const { root, home, key, clone, sessionId, dispose } = setup();
+  const { root, home, key, clone, sessionId, dispose } = await setup();
   try {
     const foreign = join(root, "foreign"); mkdirSync(foreign); git(foreign, "init", "-q", "-b", "spex");
     mkdirSync(join(foreign, "sessions"), { mode: 0o700 }); prepareStorageGitFiles(foreign);
-    const otherId = randomUUID(); const records = `${JSON.stringify({ v: 1, seq: 1, record: { futureKind: "foreign" } })}\n`;
-    writeFileSync(join(foreign, "sessions", `${otherId}.records.jsonl`), records, { mode: 0o600 });
-    writeFileSync(join(foreign, "sessions", `${otherId}.json`), JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId: otherId, cwd: join(foreign, "project"), createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: "foreign", replay: { seq: 1, sha256: sha256(records), incomplete: false }, contextSeq: null }, null, 2), { mode: 0o600 });
+    const otherId = randomUUID();
+    await rewriteSession(join(foreign, "sessions"), otherId, join(foreign, "project"), "foreign");
     writeFileSync(join(foreign, "project.json"), JSON.stringify({ format: 1, name: "Foreign", remote: null }));
     git(foreign, "add", "."); git(foreign, "commit", "-q", "-m", "foreign base");
     git(clone, "fetch", "-q", foreign, "spex:refs/remotes/origin/spex");
@@ -748,14 +749,14 @@ test("storage-16: unrelated histories refuse selection until joined, whereupon t
 });
 
 test("storage-16: the apply seam writes each changed unit under the version it read, a session's lease for that write alone, and stages the validated tree", async () => {
-  const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  const { home, key, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
     git(clone, "branch", "other");
-    bundle("ours"); commit("ours"); const ours = git(clone, "rev-parse", "HEAD");
-    git(clone, "checkout", "-q", "other"); bundle("theirs"); writeFileSync(join(clone, "notes.md"), "theirs\n"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
-    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8");
+    await bundle("ours"); commit("ours"); const ours = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "other"); await bundle("theirs"); writeFileSync(join(clone, "notes.md"), "theirs\n"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
+    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`), "utf8");
     git(clone, "checkout", "-q", "spex");
-    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const records = join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`);
     const oursRecords = readFileSync(records, "utf8");
     const plan = planStorageMerge(clone, ours, theirs);
     const choices = { [`sessions/${sessionId}`]: "theirs" as const };
@@ -798,23 +799,23 @@ test("storage-16: the apply seam writes each changed unit under the version it r
 });
 
 test("storage-16: through the apply seam, against an earlier placement's merge commit as a later placement's base, a file changed while its session's lease is awaited is refused with the change kept and the index unchanged, and the apply then stages the validated tree with the lease free", async () => {
-  const { home, clone, sessionId, bundle, commit, dispose } = setup();
+  const { home, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
     git(clone, "branch", "first");
     git(clone, "branch", "second");
     // Each placement's `spex`: the first's adds a note, the second's
     // changes the session this device changed too.
     git(clone, "checkout", "-q", "first"); writeFileSync(join(clone, "first.md"), "the first's\n"); commit("first's");
-    git(clone, "checkout", "-q", "second"); bundle("second's"); commit("second's");
+    git(clone, "checkout", "-q", "second"); await bundle("second's"); commit("second's");
     const second = git(clone, "rev-parse", "HEAD");
-    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8");
-    git(clone, "checkout", "-q", "spex"); bundle("ours"); commit("saved");
+    const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`), "utf8");
+    git(clone, "checkout", "-q", "spex"); await bundle("ours"); commit("saved");
     // The first placement's merge, as a sync's Apply records it: `spex`
     // and the first's `spex` as parents.
     git(clone, "merge", "-q", "--no-ff", "--no-edit", "first");
     const firstMerge = git(clone, "rev-parse", "HEAD");
     assert.equal(git(clone, "log", "-1", "--format=%P", firstMerge).split(" ").length, 2);
-    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const records = join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`);
     const oursRecords = readFileSync(records, "utf8");
     const plan = planStorageMerge(clone, "HEAD", "second");
     assert.equal(plan.ours, firstMerge);
@@ -839,7 +840,7 @@ test("storage-16: through the apply seam, against an earlier placement's merge c
       assert.equal(readFileSync(records, "utf8"), theirsRecords);
       assert.equal(git(clone, "write-tree"), applied.tree, "the index holds the validated tree");
       assert.equal(git(clone, "rev-parse", `${applied.tree}:first.md`), git(clone, "rev-parse", `${firstMerge}:first.md`));
-      assert.equal(git(clone, "rev-parse", `${applied.tree}:sessions/${sessionId}.records.jsonl`), git(clone, "rev-parse", `${second}:sessions/${sessionId}.records.jsonl`));
+      assert.equal(git(clone, "rev-parse", `${applied.tree}:sessions/${sessionId}.replay/${FIRST_SEGMENT}`), git(clone, "rev-parse", `${second}:sessions/${sessionId}.replay/${FIRST_SEGMENT}`));
       await (await store.acquireManagement(sessionId)).release();
     } finally { release(); }
     assert.equal(git(clone, "rev-parse", "HEAD"), firstMerge, "the seam commits nothing itself");
@@ -847,13 +848,13 @@ test("storage-16: through the apply seam, against an earlier placement's merge c
 });
 
 test("storage-16: under select, a unit changed after the apply read Git's merge output is refused and kept, and a clone moved or removed during a lease's await is never made anew", async () => {
-  const { root, home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  const { root, home, key, clone, sessionId, bundle, commit, dispose } = await setup();
   try {
     git(clone, "branch", "other");
-    bundle("ours"); commit("ours");
-    git(clone, "checkout", "-q", "other"); bundle("theirs"); const fresh = randomUUID(); bundle("fresh", fresh); commit("theirs");
+    await bundle("ours"); commit("ours");
+    git(clone, "checkout", "-q", "other"); await bundle("theirs"); const fresh = randomUUID(); await bundle("fresh", fresh); commit("theirs");
     git(clone, "checkout", "-q", "spex"); merge(clone);
-    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const records = join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`);
     const merged = readFileSync(records);
     assert.match(merged.toString(), /^<<<<<<< /m, "Git's merge output is the version select reads");
     const plan = planStorageMerge(clone, "HEAD", "MERGE_HEAD");
@@ -883,7 +884,7 @@ test("storage-16: under select, a unit changed after the apply read Git's merge 
         await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: away(gone) }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "moved");
         assert.equal(existsSync(clone), false, "the clone's old path stays absent");
         const kept = existsSync(moved) ? moved : backup;
-        assert.deepEqual(readFileSync(join(kept, "sessions", `${sessionId}.records.jsonl`)), merged, "the clone elsewhere is untouched");
+        assert.deepEqual(readFileSync(join(kept, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), merged, "the clone elsewhere is untouched");
         renameSync(kept, clone);
       }
       // A successor standing at the same path with the same bytes, the
@@ -900,7 +901,7 @@ test("storage-16: under select, a unit changed after the apply read Git's merge 
       assert.deepEqual(snapshot(clone), before, "the successor's records and units are unchanged");
       assert.equal(git(clone, "log", "--format=%H", "--all"), history, "the successor's history is unchanged");
       assert.equal(git(clone, "ls-files", "-s"), staged, "the successor's index is unchanged");
-      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.records.jsonl`)), merged, "the former clone is untouched");
+      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), merged, "the former clone is untouched");
       await (await real.acquireManagement(sessionId)).release();
       rmSync(clone, { recursive: true, force: true });
       renameSync(moved, clone);
@@ -910,13 +911,13 @@ test("storage-16: under select, a unit changed after the apply read Git's merge 
       const published = { acquireManagement: async (id: string) => { const lease = await real.acquireManagement(id); renameSync(clone, moved); return lease; } };
       await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: published }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "moved");
       assert.equal(existsSync(clone), false, "the release made nothing at the former path");
-      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.records.jsonl`)), merged);
+      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`)), merged);
     } finally { release(); }
   } finally { dispose(); }
 });
 
 test("storage-16: a unit's version is read as Git reads its path, so a clean CRLF checkout under core.autocrlf is no change", async () => {
-  const { home, clone, commit, dispose } = setup();
+  const { home, clone, commit, dispose } = await setup();
   try {
     git(clone, "config", "core.autocrlf", "true");
     writeFileSync(join(clone, "notes.txt"), "base\n"); commit("notes");
@@ -936,20 +937,21 @@ test("storage-16: a unit's version is read as Git reads its path, so a clean CRL
 });
 
 test("storage-16: reopening a real ordinary-umask checkout tightens permissions and refuses altered replay bytes", async () => {
-  const { root, clone, sessionId, dispose } = setup();
+  const { root, clone, sessionId, dispose } = await setup();
   try {
     const copy = join(root, "checkout"); const previous = process.umask(0o022);
     try { execFileSync("git", ["clone", "-q", "--branch", "spex", clone, copy], { env: gitEnv, stdio: "pipe" }); } finally { process.umask(previous); }
     const manifest = join(copy, "sessions", `${sessionId}.json`); assert.equal(statSync(manifest).mode & 0o777, 0o644);
     assert.deepEqual(await validateStorageTree(copy), []);
     assert.equal(statSync(manifest).mode & 0o777, 0o600); assert.equal(statSync(join(copy, "sessions")).mode & 0o777, 0o700);
-    writeFileSync(join(copy, "sessions", `${sessionId}.records.jsonl`), '{"v":1,"seq":1,"record":{"futureKind":"tampered"}}\n');
+    assert.equal(statSync(join(copy, "sessions", `${sessionId}.replay`)).mode & 0o777, 0o700);
+    writeFileSync(join(copy, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`), '{"v":1,"seq":1,"record":{"futureKind":"tampered"}}\n');
     await assert.rejects(() => validateStorageTree(copy), /digest|checkpoint|replay/i);
   } finally { dispose(); }
 });
 
-test("storage-17: a clone's Git rules exclude hints, leases, staging, installed packages and every other device-local family", () => {
-  const { clone, sessionId, dispose } = setup();
+test("storage-17: a clone's Git rules exclude hints, leases, staging, installed packages and every other device-local family", async () => {
+  const { clone, sessionId, dispose } = await setup();
   try {
     const intent = randomUUID();
     for (const file of [
@@ -957,20 +959,21 @@ test("storage-17: a clone's Git rules exclude hints, leases, staging, installed 
       ".lock/owner.json", ".spex-apply.json", ".spex-uploads/x/y.png", "packages/demo/spex.yaml", "skills/demo/SKILL.md",
       ".spex/packages/acme/kit/meta.yaml", ".spex/skills/kit/SKILL.md", ".spex/.spex-install.json",
       "config/playbook.config.yaml.bak.2", "sessions/value.json.x.tmp", `sessions/${sessionId}.spex.json`,
+      ".legacy-sessions/sessions/former.json",
     ]) {
       assert.equal(git(clone, "check-ignore", "--no-index", file), file);
     }
     for (const file of ["spex.lock", "spex.yaml", "project.json", "config/playbook.config.yaml", `intents/${intent}.json`, `intents/${intent}.assets/a`, "authoring/demo.json", `sessions/${sessionId}.json`]) {
       assert.throws(() => git(clone, "check-ignore", "--no-index", file), `${file} is shared`);
     }
-    for (const line of git(clone, "check-attr", "text", "--", `sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`, `intents/${intent}.assets/a`, "authoring/demo.assets/a").split("\n")) {
+    for (const line of git(clone, "check-attr", "text", "--", `sessions/${sessionId}.json`, `sessions/${sessionId}.replay/${FIRST_SEGMENT}`, `sessions/${sessionId}.blobs/part`, `intents/${intent}.assets/a`, "authoring/demo.assets/a").split("\n")) {
       assert.match(line, /: text: unset$/, line);
     }
   } finally { dispose(); }
 });
 
 test("storage-17: the documented entry point operates on the chosen clone and protective Git rules override earlier exceptions", async () => {
-  const { home, key, clone, sessionId, dispose } = setup();
+  const { home, key, clone, sessionId, dispose } = await setup();
   try {
     writeFileSync(join(clone, ".gitignore"), readFileSync(join(clone, ".gitignore"), "utf8") + "!*.hints.json\n!/packages/\n");
     writeFileSync(join(clone, ".gitattributes"), readFileSync(join(clone, ".gitattributes"), "utf8") + "sessions/*.json text\n");
@@ -989,14 +992,15 @@ test("storage-17: the documented entry point operates on the chosen clone and pr
 });
 
 test("storage-16: unknown session versions stay local and cannot enter a selected portable tree", async () => {
-  const { clone, project, dispose } = setup();
+  const { clone, project, dispose } = await setup();
   try {
     const id = randomUUID();
     const file = `sessions/${id}.json`;
     const bytes = JSON.stringify({ schemaVersion: 99, sessionId: id, cwd: project.path, future: "opaque" });
     writeFileSync(join(clone, file), bytes, { mode: 0o600 });
-    writeFileSync(join(clone, "sessions", `${id}.records.jsonl`), '{"v":1,"seq":1,"record":{}}\n', { mode: 0o600 });
-    prepareStorageGitFiles(clone, [file, `sessions/${id}.records.jsonl`]);
+    mkdirSync(join(clone, "sessions", `${id}.replay`), { mode: 0o700 });
+    writeFileSync(join(clone, "sessions", `${id}.replay/${FIRST_SEGMENT}`), '{"v":1,"seq":1,"record":{}}\n', { mode: 0o600 });
+    prepareStorageGitFiles(clone, [file, `sessions/${id}.replay/${FIRST_SEGMENT}`]);
     assert.ok((await validateStorageTree(clone)).some((entry) => entry.reason.includes("retained locally")));
     assert.equal(readFileSync(join(clone, file), "utf8"), bytes);
     await assert.rejects(() => validateStorageTree(clone, { selectedSessionIds: new Set([id]) }), /unsupported session version/);
@@ -1006,16 +1010,16 @@ test("storage-16: unknown session versions stay local and cannot enter a selecte
 });
 
 test("storage-16: Git validation refuses a dispatch outside its session's turns, and reopening leaves the file and its project as they are", async () => {
-  const { home, key, clone, project, sessionId, dispose } = setup({ second: true });
+  const { home, key, clone, project, sessionId, dispose } = await setup({ second: true });
   const intentId = randomUUID();
   const manifestPath = join(clone, "sessions", `${sessionId}.json`);
-  const streamPath = join(clone, "sessions", `${sessionId}.records.jsonl`);
+  const streamPath = join(clone, "sessions", `${sessionId}.replay/${FIRST_SEGMENT}`);
   const intentPath = join(clone, "intents", `${intentId}.json`);
-  const bundle = () => {
+  const bundle = async () => {
     const records = JSON.stringify({ v: 1, seq: 1, record: { type: "turn_started", timestamp: 1, turnId: 1, turn: { id: 1, prompt: "Work" } } }) + "\n";
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    writeFileSync(streamPath, records);
-    writeFileSync(manifestPath, JSON.stringify({ ...manifest, cwd: project.path, replay: { seq: 1, sha256: sha256(records), incomplete: false } }));
+    const manifest = await readSessionManifest(manifestPath);
+    rmSync(join(clone, "sessions", `${sessionId}.replay`), { recursive: true, force: true });
+    await writeSession(manifestPath, { ...manifest, cwd: project.path, replay: { seq: 1, sha256: sha256(records), incomplete: false } }, records);
   };
   const dispatch = (turnId: number) => writeIntent(clone, intentId, "Work", { dispatched: { sessionId, turnId, at: 1 } });
   const verify = async (valid: boolean) => {
@@ -1031,14 +1035,14 @@ test("storage-16: Git validation refuses a dispatch outside its session's turns,
     assert.deepEqual(readFileSync(intentPath), before);
   };
   try {
-    bundle(); dispatch(1); await verify(true);
+    await bundle(); dispatch(1); await verify(true);
     dispatch(2); await verify(false);
-    rmSync(manifestPath); rmSync(streamPath); await verify(true);
+    rmSync(manifestPath); rmSync(dirname(streamPath), { recursive: true }); await verify(true);
   } finally { dispose(); }
 });
 
 test("storage-22: the rebind command pairs a clone while preserving its readable saved history", async () => {
-  const { root, home, key, clone, folder, sessionId, dispose } = setup();
+  const { root, home, key, clone, folder, sessionId, dispose } = await setup();
   try {
     const unpaired = Home.load(home); unpaired.unpair(key); unpaired.save();
     let store = new Store({ machineIdentity, dir: home, env: gitEnv });
@@ -1076,7 +1080,7 @@ test("storage-22: the rebind command pairs a clone while preserving its readable
 });
 
 test("storage-17: a clone's Git rules ignore a session Playbook has yet to accept, and drop the ignore once it validates", async () => {
-  const { home, key, clone, sessionId, dispose } = setup();
+  const { home, key, clone, sessionId, dispose } = await setup();
   const file = join(clone, ".gitignore");
   const authorId = randomUUID(); const authored = `# Authored rule\n/sessions/${authorId}.json\n`;
   writeFileSync(file, authored + readFileSync(file, "utf8"));
@@ -1085,23 +1089,24 @@ test("storage-17: a clone's Git rules ignore a session Playbook has yet to accep
   const store = new Store({ machineIdentity, dir: home, env: gitEnv });
   try {
     await store.initializeSessions(); prepareStorageGitFiles(clone, store.untrackedSessionPaths(key));
-    assert.deepEqual(store.untrackedSessionPaths(key).sort(), [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`]);
+    assert.deepEqual(store.untrackedSessionPaths(key).sort(), [`sessions/${sessionId}.json`, `sessions/${sessionId}.replay`]);
+    assert.equal(git(clone, "check-ignore", "--no-index", `sessions/${sessionId}.replay/${FIRST_SEGMENT}`), `sessions/${sessionId}.replay/${FIRST_SEGMENT}`);
     assert.equal(git(clone, "check-ignore", "--no-index", `sessions/${sessionId}.json`), `sessions/${sessionId}.json`);
     writeFileSync(manifestFile, valid); await store.initializeSessions();
     prepareStorageGitFiles(clone, store.untrackedSessionPaths(key));
     assert.deepEqual(store.untrackedSessionPaths(key), []);
     assert.throws(() => git(clone, "check-ignore", "--no-index", `sessions/${sessionId}.json`));
-    assert.throws(() => git(clone, "check-ignore", "--no-index", `sessions/${sessionId}.records.jsonl`));
+    assert.throws(() => git(clone, "check-ignore", "--no-index", `sessions/${sessionId}.replay/${FIRST_SEGMENT}`));
     assert.equal(git(clone, "check-ignore", "--no-index", `sessions/${authorId}.json`), `sessions/${authorId}.json`);
     const after = readFileSync(file, "utf8"); assert.ok(after.startsWith(authored));
     assert.equal(after.split("# BEGIN Spex managed storage rules").length, 2, "one managed block, never accumulated");
     prepareStorageGitFiles(clone, []); assert.equal(readFileSync(file, "utf8"), after, "preparation is idempotent");
-    git(clone, "add", "--", `sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`);
+    git(clone, "add", "--", `sessions/${sessionId}.json`, `sessions/${sessionId}.replay/${FIRST_SEGMENT}`);
   } finally { store.close(); dispose(); }
 });
 
 test("storage-16: a config naming a playbook the environment lacks stays a nonblocking diagnostic whatever language the core speaks", async () => {
-  const { home, dispose } = setup();
+  const { home, dispose } = await setup();
   const own = Home.load(home);
   const ownClone = own.clonePath(own.own());
   const config = join(ownClone, "config", "playbook.config.yaml");
@@ -1130,21 +1135,21 @@ test("storage-16: a config naming a playbook the environment lacks stays a nonbl
 });
 
 test("storage-16: Git selects intent and session media as complete independently owned bundles", async () => {
-  const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  const { home, key, clone, sessionId, bundle, commit, dispose } = await setup();
   const intentId = randomUUID();
   const intentFile = join(clone, "intents", `${intentId}.json`);
   const sessionAssets = createAssetStore({ directory: join(clone, "sessions", `${sessionId}.assets`) });
   const intentAssets = createAssetStore({ directory: join(clone, "intents", `${intentId}.assets`) });
   const write = async (label: string) => {
-    bundle(label);
+    await bundle(label);
     await sessionAssets.prepare(); await intentAssets.prepare();
     const bytes = Buffer.from(`${label}: selected binary content\r\n`);
     const sessionAsset = await sessionAssets.importAsset({ bytes, mimeType: "image/png", name: `${label}.png` });
     const intentAsset = await intentAssets.importAsset({ bytes, mimeType: "image/png", name: `${label}.png` });
     const manifestPath = join(clone, "sessions", `${sessionId}.json`);
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const manifest = await readSessionManifest(manifestPath);
     manifest.assets = { version: 1, entries: [sessionAsset] };
-    writeFileSync(manifestPath, JSON.stringify(manifest));
+    await writeSessionManifest(manifestPath, manifest);
     writeIntent(clone, intentId, "", { attachments: [intentAsset] });
     return intentAsset;
   };
@@ -1186,7 +1191,7 @@ test("storage-16: validation refuses unsafe read boundaries without changing the
     ["config/playbook.config.yaml", "leaf-link"],
   ] as const;
   for (const [pattern, kind] of cases) await t.test(`${pattern}: ${kind}`, async () => {
-    const s = setup();
+    const s = await setup();
     try {
       const path = pattern.replace("ID", randomUUID());
       const target = join(s.clone, path);
@@ -1219,8 +1224,8 @@ test("storage-16: validation refuses unsafe read boundaries without changing the
       assert.deepEqual(readFileSync(join(s.clone, ".git", "index")), index);
     } finally { s.dispose(); }
   });
-  if (process.platform !== "win32") await t.test("a special-file leaf refuses without opening it", () => {
-    const s = setup();
+  if (process.platform !== "win32") await t.test("a special-file leaf refuses without opening it", async () => {
+    const s = await setup();
     try {
       rmSync(join(s.clone, "project.json"));
       execFileSync("mkfifo", [join(s.clone, "project.json")]);
@@ -1234,7 +1239,7 @@ test("storage-16: validation refuses unsafe read boundaries without changing the
 });
 
 test("storage-16: validation rechecks an intent parent after its awaited import", async () => {
-  const s = setup();
+  const s = await setup();
   try {
     const outside = join(s.root, "outside"); mkdirSync(outside);
     const id = randomUUID();
@@ -1276,82 +1281,56 @@ test("storage-16: validation keeps optional absence and malformed-file diagnosti
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-/** Convert a deliberately legacy synthetic bundle through the public
- * migrator; no test duplicates the bounded format's encoder. */
-async function boundedFixture(sessionsDir: string, sessionId: string): Promise<ReturnType<typeof createSessionStore>> {
-  // Each branch is a separate fixture import. The migrator correctly
-  // refuses replacing a prior migration's retained original input.
-  const temporary = mkdtempSync(join(tmpdir(), "spex-bounded-fixture-"));
-  const stage = join(temporary, "sessions"); mkdirSync(stage, { mode: 0o700 });
-  try {
-    for (const suffix of [".json", ".records.jsonl"]) writeFileSync(join(stage, `${sessionId}${suffix}`), readFileSync(join(sessionsDir, `${sessionId}${suffix}`)), { mode: 0o600 });
-    const imported = createSessionStore({ sessionsDir: stage }); await imported.prepare();
-    await imported.migrate(sessionId);
-    const exported = await imported.exportBundle(sessionId);
-    const files = (exported as typeof exported & { files: readonly { path: string; byteLength: number }[] }).files;
-    for (const file of [...files].sort((a, b) => Number(a.path === `${sessionId}.json`) - Number(b.path === `${sessionId}.json`))) {
-      mkdirSync(dirname(join(sessionsDir, file.path)), { recursive: true, mode: 0o700 });
-      writeFileSync(join(sessionsDir, file.path), readFileSync(join(stage, file.path)), { mode: 0o600 });
-    }
-    rmSync(join(sessionsDir, `${sessionId}.records.jsonl`));
-  } finally { rmSync(temporary, { recursive: true, force: true }); }
-  const shared = createSessionStore({ sessionsDir }); await shared.prepare();
-  const physical = JSON.parse(readFileSync(join(sessionsDir, `${sessionId}.json`), "utf8"));
-  assert.equal(physical.schemaVersion, 8);
-  assert.equal(physical.kind, "captain-session-storage");
-  assert.equal((await shared.readManifest(sessionId)).schemaVersion, 7, "the semantic host API stays hydrated");
-  return shared;
+/** A session's whole replay and manifest, written fresh through
+ * Playbook's own file layer: a history-only fixture whose first record
+ * carries `label` and whose manifest gives it as its reason. */
+async function rewriteSession(sessionsDir: string, sessionId: string, cwd: string, label: string, records: Record<string, unknown>[] = []): Promise<void> {
+  const replay = [{ futureKind: label }, ...records].map((record, index) => `${JSON.stringify({ v: 1, seq: index + 1, record })}\n`).join("");
+  for (const folder of ["replay", "blobs"]) rmSync(join(sessionsDir, `${sessionId}.${folder}`), { recursive: true, force: true });
+  await writeSession(join(sessionsDir, `${sessionId}.json`), { schemaVersion: 7, kind: "captain-session", sessionId, cwd, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: label, replay: { seq: 1 + records.length, sha256: sha256(replay), incomplete: false }, contextSeq: null }, replay);
 }
 
-test("storage-16: bounded session roots, replay and immutable chunks are selected whole through the shared store", async () => {
-  const { home, clone, sessionId, bundle, commit, dispose } = setup();
+test("storage-16: a session's root, replay segments and blob parts are selected whole through the shared store", async () => {
+  const { home, clone, project, sessionId, commit, dispose } = await setup();
   const sessionsDir = join(clone, "sessions");
   const intentId = randomUUID();
   const runtime = { device: Home.load(home).device, label: "Captured runtime" };
   const intentPath = join(clone, "intents", `${intentId}.json`);
-  const dispatchedBundle = (label: string, text: string): void => {
-    bundle(label);
-    const replayPath = join(sessionsDir, `${sessionId}.records.jsonl`);
-    const replay = readFileSync(replayPath, "utf8") + [
-      { v: 1, seq: 2, record: { type: "turn_started", turnId: 1, timestamp: 1, turn: { id: 1, prompt: text } } },
-      { v: 1, seq: 3, record: { type: "turn_finished", turnId: 1, timestamp: 2 } },
-    ].map((entry) => `${JSON.stringify(entry)}\n`).join("");
-    writeFileSync(replayPath, replay, { mode: 0o600 });
-    const manifestPath = join(sessionsDir, `${sessionId}.json`);
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    writeFileSync(manifestPath, JSON.stringify({ ...manifest, replay: { seq: 3, sha256: sha256(replay), incomplete: false } }), { mode: 0o600 });
+  const dispatchedBundle = async (label: string, text: string): Promise<void> => {
+    await rewriteSession(sessionsDir, sessionId, project.path, label, [
+      { type: "turn_started", turnId: 1, timestamp: 1, turn: { id: 1, prompt: text } },
+      { type: "turn_finished", turnId: 1, timestamp: 2 },
+    ]);
     writeIntent(clone, intentId, text, { format: 2, runtime, dispatched: { sessionId, turnId: 1, at: 1 } });
   };
   try {
-    writeIntent(clone, intentId, "Captured intent", { format: 2, runtime });
-    await boundedFixture(sessionsDir, sessionId); commit("bounded base");
-    git(clone, "branch", "bounded-peer");
-    dispatchedBundle("ours", "Our dispatched intent"); await boundedFixture(sessionsDir, sessionId); commit("ours");
+    writeIntent(clone, intentId, "Captured intent", { format: 2, runtime }); commit("base");
+    git(clone, "branch", "peer");
+    await dispatchedBundle("ours", "Our dispatched intent"); commit("ours");
     const ours = git(clone, "rev-parse", "HEAD");
-    git(clone, "checkout", "-q", "bounded-peer");
-    // Both recovery data and one replay record cross the physical-file
-    // bound; the real migrator must preserve their complete values.
+    git(clone, "checkout", "-q", "peer");
+    // Both the manifest and one replay record cross the per-file bound;
+    // Playbook keeps their complete values in blob parts.
     const large = `incoming:${"x".repeat(9 * 1024 * 1024)}`;
-    dispatchedBundle(large, "Peer's dispatched intent");
-    const peer = await boundedFixture(sessionsDir, sessionId);
-    commit("bounded peer");
+    await dispatchedBundle(large, "Peer's dispatched intent");
+    commit("peer");
+    const peer = createSessionStore({ sessionsDir }); await peer.prepare();
     const incoming = git(clone, "rev-parse", "HEAD");
     const incomingIntent = readFileSync(intentPath);
     const exported = await peer.exportBundle(sessionId);
     const files = (exported as typeof exported & { files: readonly { path: string; byteLength: number }[] }).files;
-    assert.ok(files.some((file) => file.path === `${sessionId}.replay.json`));
-    assert.ok(files.some((file) => file.path.startsWith(`${sessionId}.chunks/`)));
+    assert.ok(files.some((file) => file.path === `${sessionId}.replay/${FIRST_SEGMENT}`));
+    assert.ok(files.some((file) => file.path.startsWith(`${sessionId}.blobs/`)));
     for (const file of files) assert.ok(file.byteLength <= 8 * 1024 * 1024, `${file.path} stays bounded`);
-    assert.equal(existsSync(join(sessionsDir, `${sessionId}.records.jsonl`)), false);
     const incomingFiles = new Map(files.map((file) => [file.path, readFileSync(join(sessionsDir, file.path))]));
     git(clone, "checkout", "-q", "spex");
     const plan = planStorageMerge(clone, ours, incoming);
     const unit = plan.units.find((unit) => unit.name === `sessions/${sessionId}`)!;
     assert.equal(unit.choice, "conflict");
     assert.equal(plan.units.find((unit) => unit.name === `intents/${intentId}`)?.choice, "conflict");
-    assert.ok(unit.paths.includes(`sessions/${sessionId}.replay.json`));
-    assert.ok(unit.paths.some((path) => path.startsWith(`sessions/${sessionId}.chunks/`)));
-    assert.equal(plan.units.some((unit) => unit.name.includes(".chunks/")), false, "a chunk is never a choice of its own");
+    assert.ok(unit.paths.includes(`sessions/${sessionId}.replay/${FIRST_SEGMENT}`));
+    assert.ok(unit.paths.some((path) => path.startsWith(`sessions/${sessionId}.blobs/`)));
+    assert.equal(plan.units.some((unit) => unit.name.includes(".replay/") || unit.name.includes(".blobs/")), false, "a segment or blob part is never a choice of its own");
     writeFileSync(join(sessionsDir, `${sessionId}.hints.json`), "synthetic stale hint\n", { mode: 0o600 });
     const release = reserveStorageHome(home, machineIdentity);
     try { await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs", [`intents/${intentId}`]: "theirs" }); }
@@ -1364,7 +1343,7 @@ test("storage-16: bounded session roots, replay and immutable chunks are selecte
     assert.equal((await selected.readManifest(sessionId) as { reason?: string }).reason, large);
     assert.equal((await selected.readHistory(sessionId)).entries[0].record.futureKind, large);
     assert.equal((await selected.validate(sessionId)).integrityValid, true);
-    assert.equal(statSync(join(sessionsDir, `${sessionId}.chunks`)).mode & 0o777, 0o700);
+    for (const folder of ["replay", "blobs"]) assert.equal(statSync(join(sessionsDir, `${sessionId}.${folder}`)).mode & 0o777, 0o700);
     for (const file of files) assert.equal(statSync(join(sessionsDir, file.path)).mode & 0o777, 0o600);
     assert.equal(git(clone, "write-tree"), git(clone, "rev-parse", `${incoming}^{tree}`));
     const reopened = new Store({ machineIdentity, dir: home, own: "tester", env: gitEnv });
@@ -1380,60 +1359,53 @@ test("storage-16: bounded session roots, replay and immutable chunks are selecte
   } finally { dispose(); }
 });
 
-test("storage-16: a selected bounded session with a missing or corrupt chunk refuses before any live write", async (t) => {
+test("storage-16: a selected session with a missing or corrupt replay segment refuses before any live write", async (t) => {
   for (const damage of ["missing", "corrupt"] as const) await t.test(damage, async () => {
-    const { clone, sessionId, bundle, commit, dispose } = setup();
+    const { clone, sessionId, bundle, commit, dispose } = await setup();
     const sessionsDir = join(clone, "sessions");
     try {
-      await boundedFixture(sessionsDir, sessionId); commit("bounded base");
-      git(clone, "branch", "bounded-bad");
-      bundle("ours"); await boundedFixture(sessionsDir, sessionId); commit("ours");
-      git(clone, "checkout", "-q", "bounded-bad");
-      bundle("incoming"); await boundedFixture(sessionsDir, sessionId);
-      const root = JSON.parse(readFileSync(join(sessionsDir, `${sessionId}.json`), "utf8"));
-      const chunk = join(sessionsDir, `${sessionId}.chunks`, root.root.sha256);
-      if (damage === "missing") rmSync(chunk);
-      else writeFileSync(chunk, "synthetic corrupt chunk\n", { mode: 0o600 });
-      commit(`bounded ${damage}`);
+      git(clone, "branch", "bad");
+      await bundle("ours"); commit("ours");
+      git(clone, "checkout", "-q", "bad");
+      await bundle("incoming");
+      const segment = join(sessionsDir, `${sessionId}.replay`, FIRST_SEGMENT);
+      if (damage === "missing") rmSync(segment);
+      else writeFileSync(segment, "synthetic corrupt segment\n", { mode: 0o600 });
+      commit(`bad ${damage}`);
       git(clone, "checkout", "-q", "spex");
-      const plan = planStorageMerge(clone, "HEAD", "bounded-bad");
+      const plan = planStorageMerge(clone, "HEAD", "bad");
       const before = snapshot(clone);
       const index = git(clone, "write-tree");
-      await assert.rejects(() => applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }), /chunk|digest|missing|ENOENT|content|hash/i);
+      await assert.rejects(() => applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }), /segment|digest|missing|ENOENT|replay|hash|bind/i);
       assert.deepEqual(snapshot(clone), before, "the live unit is unchanged");
       assert.equal(git(clone, "write-tree"), index, "the index is unchanged");
     } finally { dispose(); }
   });
 });
 
-test("storage-16: a chunk added while a bounded session's lease is awaited refuses replacement and stays local", async (t) => {
+test("storage-16: a segment added while a session's lease is awaited refuses replacement and stays local", async (t) => {
   for (const workingTree of ["ours", "merge"] as const) await t.test(workingTree, async () => {
-  const { clone, sessionId, bundle, commit, dispose } = setup();
+  const { clone, sessionId, bundle, commit, dispose } = await setup();
   const sessionsDir = join(clone, "sessions");
   try {
-    await boundedFixture(sessionsDir, sessionId); commit("bounded base");
-    git(clone, "branch", "bounded-peer");
-    bundle("ours"); await boundedFixture(sessionsDir, sessionId); commit("ours");
-    git(clone, "checkout", "-q", "bounded-peer");
-    bundle("incoming"); await boundedFixture(sessionsDir, sessionId); commit("incoming");
+    git(clone, "branch", "peer");
+    await bundle("ours"); commit("ours");
+    git(clone, "checkout", "-q", "peer");
+    await bundle("incoming"); commit("incoming");
     git(clone, "checkout", "-q", "spex");
     const shared = createSessionStore({ sessionsDir }); await shared.prepare();
-    const plan = planStorageMerge(clone, "HEAD", "bounded-peer");
+    const plan = planStorageMerge(clone, "HEAD", "peer");
     const root = readFileSync(join(sessionsDir, `${sessionId}.json`));
     const index = git(clone, "write-tree");
-    const bytes = Buffer.from("synthetic newly published immutable chunk\n");
-    const { createSessionChunks } = await import(new URL("./bin/session-chunks.js", import.meta.resolve("@sublang/playbook/session-host")).href);
-    const chunks = createSessionChunks({ directory: join(sessionsDir, `${sessionId}.chunks`) });
-    let late = ""; let published: Buffer | undefined;
-    const preexisting = workingTree === "merge" ? await chunks.writeBytes(Buffer.from("synthetic preexisting untracked chunk\n")) : undefined;
-    const preexistingPath = preexisting ? join(sessionsDir, `${sessionId}.chunks`, preexisting.sha256) : undefined;
-    const preexistingBytes = preexistingPath ? readFileSync(preexistingPath) : undefined;
+    const late = join(sessionsDir, `${sessionId}.replay`, "000000000002.jsonl");
+    const published = Buffer.from(`${JSON.stringify({ v: 1, seq: 2, record: { futureKind: "late" } })}\n`);
+    const preexistingPath = workingTree === "merge" ? join(sessionsDir, `${sessionId}.replay`, "000000000009.jsonl") : undefined;
+    const preexistingBytes = Buffer.from("synthetic preexisting untracked segment\n");
+    if (preexistingPath) writeFileSync(preexistingPath, preexistingBytes, { mode: 0o600 });
     await assert.rejects(() => applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }, {
       workingTree,
       sessions: { acquireManagement: async (id) => {
-        const ref = await chunks.writeBytes(bytes);
-        late = join(sessionsDir, `${sessionId}.chunks`, ref.sha256);
-        published = readFileSync(late);
+        writeFileSync(late, published, { mode: 0o600 });
         return shared.acquireManagement(id);
       } },
     }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === `sessions/${sessionId}` && error.written.length === 0);
@@ -1445,21 +1417,21 @@ test("storage-16: a chunk added while a bounded session's lease is awaited refus
     if (workingTree === "merge") {
       rmSync(late);
       await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }, { workingTree });
-      assert.deepEqual(readFileSync(preexistingPath!), preexistingBytes, "preexisting untracked chunks remain local");
+      assert.deepEqual(readFileSync(preexistingPath!), preexistingBytes, "a preexisting untracked segment remains local");
     }
   } finally { dispose(); }
   });
 });
 
-test("storage-16: snapshot validation refuses orphan bounded replay and chunks without changing live files or index", async (t) => {
-  for (const orphan of ["replay", "chunks", "both"] as const) await t.test(orphan, async () => {
-    const { clone, sessionId, commit, dispose } = setup();
+test("storage-16: snapshot validation refuses an orphan replay or blob folder without changing live files or index", async (t) => {
+  for (const orphan of ["replay", "blobs", "both"] as const) await t.test(orphan, async () => {
+    const { clone, project, sessionId, commit, dispose } = await setup();
     const sessionsDir = join(clone, "sessions");
     try {
-      await boundedFixture(sessionsDir, sessionId);
+      await rewriteSession(sessionsDir, sessionId, project.path, `large:${"x".repeat(9 * 1024 * 1024)}`);
       rmSync(join(sessionsDir, `${sessionId}.json`));
-      if (orphan === "replay") rmSync(join(sessionsDir, `${sessionId}.chunks`), { recursive: true });
-      if (orphan === "chunks") rmSync(join(sessionsDir, `${sessionId}.replay.json`));
+      if (orphan === "replay") rmSync(join(sessionsDir, `${sessionId}.blobs`), { recursive: true });
+      if (orphan === "blobs") rmSync(join(sessionsDir, `${sessionId}.replay`), { recursive: true });
       commit(`orphan ${orphan}`);
       const tree = git(clone, "write-tree"); const before = snapshot(clone);
       await assert.rejects(() => validateStorageSnapshot(clone, tree), /session bundle root is missing/);

@@ -297,9 +297,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
     activateLanguage(language);
     const words = {
-      heading: `⚠${i18n._("Files & history ({count})", { count: 5 })}`,
+      heading: `⚠${i18n._("Files & history ({count})", { count: 4 })}`,
       older: i18n._("An older conversation can’t be opened"),
-      folder: i18n._("A saved conversation needs a project folder"),
       generic: i18n._("Saved data needs attention"),
       preserved: i18n._("Spex could not read this saved conversation. The original file is still saved."),
       repair: i18n._("Spex could not use this saved file."),
@@ -307,9 +306,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       details: i18n._("Technical details"),
     };
     const diagnostics: SpaceState["diagnostics"] = [
-      { code: "session-import", file: "/old/sessions/one.json", reason: "unsupported legacy schema 1", blocking: false },
-      { code: "session-upgrade", file: "/records/sessions/two.spex.json", reason: "旧版会话无法转换", blocking: false },
-      { code: "session-folder-required", file: "/records/sessions/three.spex.json", reason: "invalid sidecar or missing cwd", blocking: false },
+      { code: "session-upgrade", file: "/records/sessions/one.json", reason: "session storage schema 8 is unsupported", blocking: false },
+      { code: "session-upgrade", file: "/records/sessions/two.json", reason: "旧版会话无法转换", blocking: false },
       // The same technical text must not choose a session repair when
       // the producer supplied no known classification.
       { file: "/records/home.yaml", reason: "unsupported legacy schema 1", blocking: true },
@@ -323,12 +321,10 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const summaries = [
       words.older,
       words.older,
-      words.folder,
       words.generic,
       words.generic,
     ];
     const guidance = [
-      words.preserved,
       words.preserved,
       words.preserved,
       words.repair,
@@ -408,7 +404,6 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
         { updatedAt: NOW - 86_400_000 },
         {},
       ],
-      details: [{ file: "/records/older.spex.json", reason: "legacy session needs a cwd" }],
     });
     await renderSpace(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
     const review = screen.getByRole("button", { name: "Files & history — 1 notice" });
@@ -436,7 +431,6 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const details = row.querySelector("details")!;
     expect(details.open).toBe(false);
     expect(within(row).getByText("This is not the main folder of a Git project.").closest("details")).toBe(details);
-    expect(within(row).getByText("legacy session needs a cwd").closest("details")).toBe(details);
     fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
     const field = within(row).getByLabelText("Project folder on this computer") as HTMLInputElement;
     expect(field.value).toBe("");
@@ -729,7 +723,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const report = (): SpaceState => repoState({}, { diagnostics: [
       { file: "/records/infra", reason: "no working folder", blocking: false,
         repair: unpaired({ ...(folderDismissed ? { declined: NOW } : {}) }) },
-      { file: "/older/session.json", reason: "unsupported legacy schema 1", code: "session-import", blocking: false,
+      { file: "/older/session.json", reason: "session storage schema 8 is unsupported", code: "session-upgrade", blocking: false,
         notice: { key: "old-file", ...(noticeDismissed ? { dismissed: NOW } : {}) } },
     ] });
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
@@ -820,9 +814,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
 
   test("unknown, unsupported and blocking diagnostics have no dismissal control, including an old declined blocker", async () => {
     const diagnostics: SpaceState["diagnostics"] = [
-      { file: "/old/no-capability.json", reason: "unsupported format", code: "session-import", blocking: false },
+      { file: "/old/no-capability.json", reason: "unsupported format", code: "session-upgrade", blocking: false },
       { file: "/unknown.json", reason: "unsupported legacy schema 1", blocking: false, notice: { key: "unknown", dismissed: NOW } },
-      { file: "/folder.json", reason: "missing folder", code: "session-folder-required", blocking: false, notice: { key: "folder" } },
+      { file: "/folder.json", reason: "missing folder", blocking: false, notice: { key: "folder" } },
       { file: "/blocked.json", reason: "blocked import", code: "session-upgrade", blocking: true, notice: { key: "blocked", dismissed: NOW } },
       { file: "/blocked-repair", reason: "blocked folder", blocking: true, repair: unpaired({ declined: NOW }) },
     ];

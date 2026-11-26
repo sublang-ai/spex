@@ -108,9 +108,8 @@ test("run-view-109: a session the terminal wrote deletes from the sidebar, its h
   await expect
     .poll(() => existsSync(join(app.sharedSessionsDir, `${id}.json`)))
     .toBe(false);
-  expect(existsSync(join(app.sharedSessionsDir, `${id}.records.jsonl`))).toBe(false);
-  expect(existsSync(join(app.sharedSessionsDir, `${id}.replay.json`))).toBe(false);
-  expect(existsSync(join(app.sharedSessionsDir, `${id}.chunks`))).toBe(false);
+  expect(existsSync(join(app.sharedSessionsDir, `${id}.replay`))).toBe(false);
+  expect(existsSync(join(app.sharedSessionsDir, `${id}.blobs`))).toBe(false);
 });
 
 

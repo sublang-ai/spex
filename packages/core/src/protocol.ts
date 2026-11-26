@@ -2060,9 +2060,9 @@ export interface StorageDiagnostic {
   /** A nonblocking older-conversation notice the reader can dismiss on
    * this device. Its opaque identity changes with its source or cause. */
   notice?: { key: string; dismissed?: number };
-  code?: "session-import" | "session-upgrade" | "session-folder-required";
-  /** The repository whose folder selection can resolve this diagnostic. */
-  repository?: string;
+  /** A session in an earlier storage format, waiting for Playbook's
+   * conversion (DR-254). */
+  code?: "session-upgrade";
 }
 
 /** What a folder on this device would repair (space-46): a spex
@@ -2080,8 +2080,6 @@ export interface DiagnosticRepair {
   /** At most three recent conversations, recognizable without displaying
    * internal ids; an id permits reading existing history without a folder. */
   conversations?: { id?: string; title?: string; updatedAt?: number }[];
-  /** Related import failures resolved by this same folder-selection task. */
-  details?: { file: string; reason: string }[];
   /** The working directories its sessions record, or the folder. */
   directories: string[];
   sessions: number;
