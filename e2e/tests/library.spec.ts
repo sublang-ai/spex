@@ -217,7 +217,7 @@ test("playbook-library-41: the tabs' and the surface's words, an override under 
   // The Packages tab: the project's packages alone under one heading,
   // "Packages", with one "Add…", naming no spex repository; the built-in
   // spec package the project requests is one row among the rest
-  // (playbook-library-92, DR-159).
+  // (playbook-library-92, DR-172).
   const packages = packagesSection(page, "project");
   await expect(page.getByTestId("packages-tab").getByRole("heading")).toHaveText(["Packages"]);
   await expect(packages.getByRole("button", { name: "Add…", exact: true })).toHaveCount(1);

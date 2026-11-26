@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-02) on the owner's request to dismiss the remaining format-incompatibility notice and distinguish active reminders from dismissed ones with consistent actions.
-Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in optional-reminder acknowledgement and [DR-196](196-a-review-count-and-a-way-back.md) in dismissal wording, list grouping and the sidebar return path.
+Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in optional-reminder acknowledgement.
 
 Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the named return path: dismissal names Space → Files & history → Dismissed, and the saved reader reveals dismissed folder tasks directly instead of a sidebar shortcut.
 
@@ -23,7 +23,7 @@ Keeping dismissed rows among active warnings makes the remaining count hard to u
 - Active items remain visible, with standalone notices separated from Locate project files and its explanation.
 - Move dismissed folder reminders and notices into one collapsed Dismissed section with its own item count, excluded from the header warning count.
 - A dismissed folder reminder retains its conversations and folder actions; Show again restores either kind of item to the active list and warning count.
-- The sidebar's Locate project files action reveals dismissed folder reminders as well as active ones, while an ordinary Review visit starts with Dismissed collapsed.
+- An ordinary visit to the saved-file review starts with Dismissed collapsed.
 - Dismissal is a preference of the core's own home, surviving restart without modifying source files, recovering a conversation or changing execution restrictions.
 - Only a verified, nonblocking standalone older-conversation import or upgrade failure can offer notice dismissal; blocking and unclassified diagnostics remain visible.
 - A dismissal names the exact reported failure and source-file identity/version; a changed source or failure counts afresh, and an unknown or stale request is refused.

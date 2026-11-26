@@ -352,8 +352,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
   appears once a call finishes, reads the same after a restart, and is
   the first header detail to yield in a narrow pane. The player header's
   token count is gone; each call's usage stays on its result line.
-- Space repairs a project in place ([DR-063](specs/decisions/063-space-setup-and-repair.md),
-  [DR-065](specs/decisions/065-repairs-the-reader-answers.md)). Where
+- Space repairs a project in place
+  ([DR-065](specs/decisions/065-repairs-the-reader-answers.md)). Where
   synced sessions ran in a folder that is not a project on this device,
   the issues list holds one repair per project, named by the project and
   resolving all its sessions, rather than a row per diagnostic. The app
@@ -721,7 +721,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   unrelated-history and first-meeting cards, the terminal pane theme
   and the config path in Settings, the agent editors' scope ("This
   conversation only"), and the session start, which drops its tip.
-- Space sets up by naming its remote ([DR-063](specs/decisions/063-space-setup-and-repair.md)).
+- Space sets up by naming its remote.
   **Set up space** takes a required remote URL, makes the home a
   repository, sets the remote and runs the first sync: an empty remote
   is filled from this device, and a space already there is joined, any

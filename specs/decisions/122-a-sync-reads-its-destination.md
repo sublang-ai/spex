@@ -6,25 +6,25 @@
 ## Status
 
 Accepted (2026-10-17).
-Amends [DR-103](103-the-home-and-its-groups.md)'s read before sync: selected destination authority no longer requires every repository's detail.
-Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in the read before a sync and at admission: each placement's destination is read at that placement's turn, and admission reads only the placements owing the notice, a failed read stopping that placement alone.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: which destinations count for sync.
+Amends [DR-103](103-the-home-and-its-groups.md).
+Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
 A sync operates on one records repository, but its Check previously enriched the whole account's catalog.
 An unrelated repository's detail timing out could stop a valid destination before Git ran.
-The complete catalog is still needed to discover immutable identities, moves and colliding user namespaces.
+The complete catalog is still needed to discover immutable identities and moves.
 
 ## Decision
 
+- Amends [DR-103](103-the-home-and-its-groups.md)'s read before a sync: authority over the selected destination no longer requires every repository's detail.
 - Full reads at sign-in, Refresh and signed-in startup retain their whole-view contract.
-- Sync and its first-sharing notice read a fresh complete catalog, then enrich only the selected destination.
-  Catalog and destination failures remain authoritative; unreadable members remain unknown and require the conservative notice.
-  A failed notice read refuses admission before Save; Check rechecks current membership before any branch or transport effect without inventing an acknowledgement.
+- Each placement's sync reads a fresh complete catalog of its Space, then enriches only its destination, at that placement's turn ([DR-128](128-a-spex-repository-placed-at-several-instances.md)).
+  Catalog and destination failures remain authoritative; a failed read stops that placement before any branch or transport effect.
+- The destination counts only while the Space identifies it as a repository in the signed-in account's own namespace ([DR-246](246-remove-groups-and-team-servers-from-the-clients.md)).
 - A destination answer refreshes only its row, never the whole-view time.
   Reads are ordered by when they began: an older full read's success or failure cannot overwrite newer destination authority, and a later full read supersedes it.
-- Host changes made by this core invalidate in-flight catalog answers just as they invalidate full reads.
+- Changes this core makes at the Space invalidate in-flight catalog answers just as they invalidate full reads.
   Authentication, unchanged-remote and clone-move guards stand.
 
 ## Consequences

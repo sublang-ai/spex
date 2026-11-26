@@ -5,40 +5,24 @@
 
 ## Status
 
-Amended by [DR-227](227-remove-the-storage-footer-from-space.md) in removing the home-directory footer from Space.
-
-Amended by [DR-226](226-project-names-align-with-their-actions.md) in code-location presentation on Space rows, replacing the glyph with a visible secondary caption.
-
-Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
-
-Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in repairs: a neutral Saved work review, recognizable conversations, existing-folder selection and Not now replace the issue-first presentation.
-
-Amended by [DR-189](189-repairs-explain-the-next-step.md) in repair wording and storage-failure presentation: unconnected folders are not called missing, and technical evidence stays behind Details with a plain next step above it.
-
 Accepted (2026-10-31) on the owner's direction to make every package and Space operation easy to understand for a person who installed Spex today, favoring simple and reliable over complete.
-Amends [DR-011](011-project-workspace.md) in the rail and the workspace's tabs, [DR-057](057-space-surface.md) and [DR-063](063-space-setup-and-repair.md) in the sign-in card, [DR-104](104-spec-package-format-and-client-environments.md) and [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where packages are managed and in the two verbs, [DR-114](114-groups-and-sharing-from-spex.md), [DR-120](120-the-instance-is-the-space.md) and [DR-159](159-projects-in-groups-opened-where-you-work.md) in the headings, the rows and the acts offered, [DR-128](128-a-spex-repository-placed-at-several-instances.md) in the acts offered, [DR-151](151-publish-local-spec-packages.md) in where Publish stands, [DR-168](168-independent-package-registry.md) in how a site's two faces show, [DR-058](058-chat-assisted-playbook-authoring.md) in the Enable tab's words, and [DR-078](078-the-interface-speaks-the-readers-language.md) in the glossary; extends [DR-069](069-key-phrases-not-sentences.md); builds on [DR-171](171-personal-names-are-space-logins.md), whose logins name people on every surface here.
-Amended by [DR-173](173-the-registry-is-no-face-of-a-space.md): the registry stands nowhere on the Space surface, and the Packages tab's chooser reads no directory for registries.
-Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`, a row's spec line says where the spec stands, and the command line's `export` closes the "New package…" loss.
-Amended by [DR-175](175-projects-shown-where-they-are-open.md) in its vocabulary: the code glyph's phrase for code on no Git host.
-Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours, "Personal" staying the name of your own group on Space; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
-
-
-Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row vocabulary and actions: explicit record counts, neutral missing-code-remote status, and one overflow for all secondary acts.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
+Amends [DR-010](010-interface-craft.md), [DR-011](011-project-workspace.md), [DR-041](041-chrome-that-fits.md), [DR-057](057-space-surface.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-069](069-key-phrases-not-sentences.md), [DR-078](078-the-interface-speaks-the-readers-language.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-120](120-the-instance-is-the-space.md), [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-151](151-publish-local-spec-packages.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-168](168-independent-package-registry.md).
+Amended by [DR-173](173-the-registry-is-no-face-of-a-space.md), [DR-174](174-what-a-package-provides-is-placed.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-189](189-repairs-explain-the-next-step.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-209](209-a-project-row-with-one-menu.md), [DR-218](218-write-a-playbook-before-publishing.md), [DR-225](225-bounded-surfaces-and-attached-records.md), [DR-226](226-project-names-align-with-their-actions.md), [DR-227](227-remove-the-storage-footer-from-space.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
 A fresh-user audit of every phrase and flow of the package and Space operations, in the code, the catalogs, the journeys and the English catalog read with no other context, found the same roots behind the owner's examples.
 The thing a person signs in to had four names on one screen: Space, instance, host and site; this computer had three; "records" meant a project's synced history, a decision record and a transcript line.
-The package manager's own nouns stood on surfaces as if they were the user's: environment, request, resolve, lock, placement, seat, ticket, namespace, manifest.
-The sign-in card held two controls for one choice and three sentences around one button; a project row assembled its standing from a dot, two phrases, a badge and a count; the built-in playbooks read as a registry package offered for removal; the IDE said "Resolve again" where the command line said update.
-"Add a spec package" stood under Playbooks because [DR-104](104-spec-package-format-and-client-environments.md) grew the package manager inside the playbook library when a package was how a playbook arrived, and the library's items pinned the package list above the playbooks.
-A Spex Space site offers groups and a registry together, while [DR-168](168-independent-package-registry.md) keeps the two grants separate.
+The package manager's own nouns stood on surfaces as if they were the user's: environment, request, resolve, lock, placement, namespace, manifest.
+The Space surface listed spex repositories named `<name>-spex`; "Join" named two acts — cloning records here, and merging two unrelated histories — under one phrase; a repair named a spex repository and a path where the reader knows the project by its name.
+The sign-in card held two controls for one choice and three sentences around one button; a project row assembled its standing from a dot, two phrases, a badge and a count; the IDE said "Resolve again" where the command line said update.
+A sync's conflict read "Needs your choice" on the row, its picker in a tab the row opened; and after the reader chose where a project's records sync, a separate sharing confirmation asked the same question again before anything was sent.
 
 ## Decision
 
-### Principles, extending DR-010 and DR-069
+### Principles
 
+- Extends [DR-010](010-interface-craft.md) and [DR-069](069-key-phrases-not-sentences.md) with these principles.
 - One name per thing, the user's, identical in the IDE, the command line, the core's phrases and the documentation.
 - A surface shows the exception, not the norm: a row states only what deviates from a healthy, synced, installed state.
 - A choice stands before a field: a list to pick from, and a field only behind "Other…" or where no list can be read.
@@ -47,65 +31,79 @@ A Spex Space site offers groups and a registry together, while [DR-168](168-inde
 - The IDE keeps the acts daily work needs; an act the Space site provides, or that few need, is not offered in the IDE.
 - A failure says what happened and what to do, as a phrase in the user's words; internals stay behind Details.
 
+### One model
+
+- A person's projects are on this computer; each project's records — its sessions, intents and history — can sync to their own namespace at a Space, and its code stays in its own Git working folder.
+- The person meets no spex repository, placement, unit or namespace by name: the records and their Git are means, reached from a project's row where needed and shown nowhere else.
+
 ### Vocabulary
 
 | The user's word | Replaces on every surface |
 | --- | --- |
 | Space, by its display name | instance, host, site, origin |
-| group | subgroup as a word; nesting shows a group inside a group |
-| Personal | your own group, your namespace, Only you |
 | project; project folder | working folder, bound, registered, paired |
 | records | spex repository, clone, `-spex`, unit; "decision record" and "intent record" in full |
-| this computer; "Here" as a row mark | device, machine |
-| server, by name | seat, ticket, place |
+| this computer | device, machine |
 | package; "spec package" where its nature is explained | artifact; the user's own spec files are "specs" |
 | registry, by its display name | package destination, namespace; "org" is a package name's first half |
 | `spex.yaml`, `spex.lock`, `meta.yaml` | environment, manifest, request, lock as nouns |
 | Update; Install | resolve, resolve again |
 | Add; Remove | request, stop requesting |
 | Publish | upload |
-| Sync; "2 to send"; "Synced 3 min ago" | push, apply, units, local changes |
-| Started separately at ⟨Space⟩ — Combine… | unrelated history, merge histories |
+| Sync; "2 records to sync"; "Synced 3 min ago" | push, apply, units, local changes |
+| Started separately at ⟨Space⟩ — Combine… | unrelated history, merge histories, Join |
 | Changed here and at ⟨Space⟩ — Resolve | — |
-| Code: ⟨where⟩, a glyph with a tooltip | on a remote, on this instance |
-| To fix (2) · 1 set aside | issues, not added |
+| Code: ⟨where⟩ | on a remote, on this instance |
 
-The Chinese catalog follows one glossary: Space (as a product name), 群组, 个人, 项目, 记录, 本机, 服务器, 规约包, 注册中心, 更新, 安装, 添加, 移除, 发布, 同步, 解决, 合并; 实例, 托管平台, 注册表, 软件包, 放置 and 此设备 retire.
+- Amends [DR-078](078-the-interface-speaks-the-readers-language.md) and [DR-120](120-the-instance-is-the-space.md): the Chinese catalog follows one glossary — Space as a product name, 项目, 记录, 本机, 规约包, 注册中心, 更新, 安装, 添加, 移除, 发布, 同步, 解决, 合并 — and 实例, 托管平台, 注册表, 软件包, 放置 and 此设备 retire.
 
 ### The map
 
-- The rail holds Dashboard, Projects, Space and Settings; the Playbooks entry retires, its playbook half becoming the project's Playbooks tab and its package half the project's Packages tab.
-- A project's workspace holds the tabs Specs, Playbooks, Packages and Overview, then one per installed applet; the Playbooks and Packages tabs are at the project's place by construction, so the place selector serves Settings and Space alone.
-- The Packages tab holds the project's packages with add, update, remove and publish, the registry the project's `spex.yaml` names with the person's sign-in there, and beneath them the person's Personal packages, available in every project of theirs.
-- The Playbooks tab holds what a session in the project can run: enabled playbooks with a player per role and where each is enabled, available ones with the package each came from or "built in", authoring and compile, the example; nothing of packages or the registry.
-- The Space surface holds each Space the person signed in to with its two faces: its groups with their projects and servers, and one line for its registry with the person's sign-in there; the "This computer" section of what is not yet shared; the sign-in to a Space; what needs fixing. Package management never stands on Space; the registry sign-in and the Space sign-in stay separate grants as DR-168 decided.
+- Amends [DR-011](011-project-workspace.md): a project's workspace holds the tabs Specs, Playbooks, Packages and Overview, then one per installed applet.
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) and [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md): the Packages tab holds the project's packages with add, update, remove and publish, and the registry the project's `spex.yaml` names with the person's sign-in there.
+- Amends [DR-058](058-chat-assisted-playbook-authoring.md): the Playbooks tab holds what a session in the project can run, with authoring and compile; nothing of packages or the registry.
+- The Space surface holds the sign-in to each Space, each Space's flat list of the person's projects, the projects on this computer whose records sync nowhere, and Files & history; package management never stands on Space, and the registry sign-in and the Space sign-in stay separate grants ([DR-168](168-independent-package-registry.md)).
 - Settings holds agents, the language and the config; no accounts page and no registries page.
 - The command line is the Packages tab without an app, verb for verb, with the same words.
 
-### The surfaces
+### The Space surface
 
-- Sign-in: one card titled by its act, one chooser of Spaces by display name with providers as icons, a last entry "Other Space…" revealing a field "Space address", the field alone where no directory can be read, one primary "Sign in", and no sentence.
-- A Space's heading: its display name and the person's login, "New group" disabled with the reason as its tooltip where the Space says the person may not create one, Sign out, and an overflow holding "Remove from this list"; beneath it one registry line.
-- A project row: its name, a code glyph whose tooltip names where the code is, place marks, one standing phrase in a fixed precedence, one primary "Open here", "Open on ⟨server⟩" or "Show", and one overflow holding Sync now, Members, Explore records and "Add to a group…" where it applies.
-- What needs fixing: a control "⚠ 2 to fix", a list "To fix (2) · 1 set aside", a repair row naming the project and its group with "Use ⟨folder⟩", "Choose folder…" and "Not on this computer".
-- The Sync tab, the sharing confirm and the group picker name the Space by its display name, the steps as Saving, Checking, Comparing, Merging, Reloading and Sending, and offer "Join the records already in" and "Share into" with Personal first.
-- The Packages tab: a header with the registry chooser and the sign-in, chips "spex.yaml, spex.lock not committed" and "spex.yaml changed" with Update, one row per package with its version, a source glyph, what it provides and its standing, Remove in the overflow with its consequence as the tooltip, the built-in playbooks as one quiet line with Update when the app ships a newer release and never a removable row, one "Add…" opening the registry search, a folder and a Git source, with a known name the registry does not list addable where it was typed.
-- A package row expands to what it provides, one line each with its one act, "Enable" on a playbook in place, so installing is never mistaken for enabling.
-- Publish shows the registry's display name, the package's name and version, the file count and the org, and reads "Sign in to publish" while signed out.
+- Amends [DR-057](057-space-surface.md) in the sign-in card: one card titled by its act, one chooser of Spaces by display name with providers as icons, a last entry "Other Space…" revealing a field "Space address", the field alone where no directory can be read, one primary "Sign in", and no sentence.
+- A Space's heading carries its display name and the person's login, Sign in or Sign out, and "Remove from this list" while signed out.
+- Amends [DR-057](057-space-surface.md) and [DR-103](103-the-home-and-its-groups.md) in the rows: a row is a project, named as its code is, never a spex repository named `<name>-spex`; it carries one standing phrase in a fixed precedence, one primary act and one overflow.
+- Amends [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its presentation alone: a placement's lines stand in the row's Sync tab, and its acts behind the row's overflow, their meanings standing.
+- A unit changed on both sides reads "Changed here and at ⟨Space⟩" on its row with Resolve, which opens the picker in place beneath the row, the choices reading "Keep this computer's" and "Take ⟨Space⟩'s"; histories that started apart read "Started separately at ⟨Space⟩" with "Combine…", never Join.
+- The Sync tab names the Space by its display name and the steps as Saving, Checking, Comparing, Merging, Reloading and Sending.
+- Amends [DR-041](041-chrome-that-fits.md) in its label budget: a menu's entry, and a row's act a decision fixes as a whole phrase, may exceed fourteen characters and wraps within its row.
 
-### What the IDE no longer offers
+### Opening and syncing a project
 
-Renaming and deleting a group, subgroups, moving a project between groups, placing a project at a second Space, leaving a Space, attaching a copy another computer added, and the records' Git acts beyond those a row's standing offers; each stays in the protocol and the command line where it exists.
+- Amends [DR-135](135-a-welcome-page-before-the-first-project.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md): a signed-in home's welcome page also offers "Open a project from Space", opening the Space surface, and one not signed in offers "Sign in to your Space".
+- Opening a project from Space that this computer lacks clones its records and its code into a folder the reader picks, the picker opened by the act itself, or takes a working folder the reader already has; a project created at the Space since its last read opens without a Refresh.
+- A project whose records sync nowhere offers "Sync to a Space…", choosing a signed-in Space and either a new copy there or matching records the Space already holds, committed by one "Sync records".
+- Amends [DR-103](103-the-home-and-its-groups.md) and [DR-128](128-a-spex-repository-placed-at-several-instances.md) in first-send acknowledgement: choosing a destination, Attach and Sync authorize sending the records they name without a separate sharing acknowledgement, first and later sends taking the same permission and transport checks.
+  A destination a former acknowledgement gate left unpublished resumes its ordinary sync while idle; legacy acknowledgement parameters and stored preferences are inert, and no operation writes an acceptance preference.
+
+### The Packages tab
+
+- A header with the registry chooser and the sign-in; chips "spex.yaml, spex.lock not committed" and "spex.yaml changed" with Update.
+- One row per package with its version, a source glyph, what it provides and its standing, Remove in the overflow with its consequence as the tooltip; a row expands to what it provides, one line each.
+- Amends [DR-151](151-publish-local-spec-packages.md): one "Add…" opens the registry search, a folder and a Git source, with a known name the registry does not list addable where it was typed; Publish shows the registry's display name, the package's name and version, the file count and the org, and reads "Sign in to publish" while signed out.
+
+### What the IDE does not offer
+
+Placing a project at a second Space, leaving a Space, attaching a copy another computer added, and the records' Git acts beyond those a row's standing offers; each stays in the protocol and the command line where it exists.
+
+### Considered and declined
+
+- A sync on a timer: the host is read on events alone ([DR-103](103-the-home-and-its-groups.md)).
 
 ### Accepted losses
 
-- With no project open there is no package or playbook surface.
 - An uncommitted `spex.yaml` and `spex.lock` are guarded by one chip.
-- An IDE "New package…" waits for a core command; the command line's `new` serves until then.
+- A person who wants the records' Git acts takes one more click, into the overflow.
 
 ## Consequences
 
-- The Space, Playbooks, environments, command line, projects, run view, settings, applets, localization and core service items are amended to these words and this map in the same change; retired item ids are never reused.
-- Three implementation changes follow, each merged on green and staged so the move lands before the words: the Space surface with the core's Space phrases; the Packages and Playbooks tabs; the command line, the core's package phrases and the documentation.
-- The English and Chinese catalogs, the interface tests and the browser journeys change with each surface; the fit journey measures four pinned tabs at the narrowest width.
-- A remembered Playbooks surface opens the project's Playbooks tab; Cmd/Ctrl+3 lands on Space.
+- The Space, Playbooks, environments, command line, projects, run view, settings, applets, localization and core service items use these words and this map; retired item ids are never reused.
+- The English and Chinese catalogs, the interface tests and the browser journeys follow each surface; the fit journey measures four pinned tabs at the narrowest width.

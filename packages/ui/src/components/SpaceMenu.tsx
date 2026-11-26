@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's menus (space-1, space-111, DR-159,
+// The Space surface's menus (space-1, space-111,
 // DR-172): a row's and a Space heading's one overflow control, "More",
 // with a project's other opening destinations grouped in that menu.
 // One trigger opens a menu of acts anchored beneath it through the

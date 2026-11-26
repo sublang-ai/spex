@@ -11,7 +11,7 @@ The value explanation, Academy caption placement, and creation form's redundant 
 The desktop manual existing-path alternative is removed by [DR-142](142-desktop-existing-projects-use-folder-picker.md).
 
 The explanation of specs and playbooks is amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md): start from a goal, let AI help refine specs for system behavior, and describe playbooks as workflows written in plain language.
-The welcome page's actions are amended by [DR-159](159-projects-in-groups-opened-where-you-work.md): a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
+The welcome page's actions are amended by [DR-172](172-surfaces-a-fresh-user-reads.md): a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the welcome action that opens personal projects through Space.
 
 ## Context

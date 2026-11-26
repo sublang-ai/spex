@@ -5,86 +5,65 @@
 
 ## Status
 
-Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): Not now postpones optional recovery without asserting where a project belongs; recognizable conversations replace storage names, and nonblocking work uses a neutral review.
-
 Accepted (2026-09-15) on the owner's report of an issue count reading zero over three repairs he had not handled.
-Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in a repair's naming: a repair names the project and its group, the folder it remembers secondary.
-Amends ([DR-046](046-decision-record-evolution.md)) [DR-057](057-space-surface.md) through [DR-063](063-space-setup-and-repair.md), whose repair rules this record replaces in part.
-
-Supersedes in [DR-063](063-space-setup-and-repair.md):
-
-- §"Considered and declined", the Dismiss control: being shown was never a gesture — it carried no content, was taken on nothing, and could not be undone.
-- §"Attention a device can act on", the rule that a repair counts until it has been shown.
-
-Amends in [DR-063](063-space-setup-and-repair.md), its ground upheld rather than reversed:
-
-- §"Considered and declined", the disk-scanning bullet: the app may check a folder it can already name and shall render what it found before any gesture accepts it, and it shall never search the disk for one.
-
-Amends [DR-011](011-project-workspace.md)'s rule that the project palette is the one place a project is added: a repair adds one too, from the folder it already names and the reader's own answer.
-The palette remains where projects are browsed, chosen and created.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the naming of folder repairs by project.
+Amends [DR-011](011-project-workspace.md), [DR-057](057-space-surface.md).
+Amended by [DR-189](189-repairs-explain-the-next-step.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-A repair was marked answered by being drawn.
-The count then read zero over rows the reader had never touched, which is the opposite of what a count is for — and the rows he most needed to act on were the ones the interface had quietly excused him from.
+Synced records can name a project whose folder is not on this computer.
+The project palette could not repair that: registering mints a fresh identity, while rebinding preserves one and no interface path reached it.
+So the palette's remedy created a second identity for a project the records already carried, left the synced identity unbound, and sent the duplicate to every other computer on the next sync.
 
+One synced project with five sessions raised six diagnostics [[core-service-86](../packages/core-service.md#core-service-86)], each standing as its own row with its own control.
+Whether a project belongs on a computer is a fact about that computer, like where a project lives [[storage-6](../packages/storage.md#storage-6)].
+
+A repair was then marked answered by being drawn.
+The count read zero over rows the reader had never touched, which is the opposite of what a count is for — and the rows he most needed to act on were the ones the interface had quietly excused him from.
 The reader's own words settle what an answer is: a repair counts until he has acted on it, and what he has answered stands quietly rather than vanishing.
-Three conditions follow, and they are genuinely different: unanswered, set aside by him, and resolved — the last needing no record at all, because a resolved repair stops being reported.
-
-Its words also contradicted themselves.
-Adding a project is picking a folder, so a row saying a folder has no project cannot be read: the folder is plainly there.
-The sentence came from an internal distinction — whether a synced project identity exists — that the reader cannot see and does not need.
-What is true in his terms is one sentence either way: sessions ran somewhere that is not a project on this device.
 
 The interface also asked for typing where it already knew the answer.
-Most repairs name a working directory that still exists on this device, is a Git work tree, and is claimed by no project — the reader's own repository, where those sessions ran.
+Most repairs name a working directory that still exists on this computer, is a Git work tree, and is claimed by no project — the reader's own repository, where those sessions ran.
 Asking him to type a path the app could verify is work the app should have done.
-
-Where no project identity exists, the row sent him to the palette, discarded the folder he had typed, and left the surface when the palette completed.
-Creating an identity does belong to the palette; carrying him away from a list he is working through does not.
 
 ## Decision
 
+### A folder repaired in place
+
+- Amends [DR-057](057-space-surface.md): Space repairs a project's folder in place, pointing a project whose records are on this computer at its folder here, never creating an identity and never editing one.
+- The repair preserves the project's identity, so its synced sessions, queue and history resolve to the project the records carry rather than to a new one.
+- Every diagnostic a folder would repair folds into one task per project's records, and the task that resolves a project resolves every session recorded under it; a fault no folder repairs is not folded.
+- A pairing is never silent: it is shown in the repair and can be changed before it is saved.
+- Amends [DR-011](011-project-workspace.md): the palette remains where projects are browsed, chosen and created, and a repair also pairs the project it names with the folder it has checked.
+- Resolving a repair leaves the reader in Space with the outcome shown in place, holding its place until his own re-read; opening the repaired project is offered, never performed ([DR-009](009-at-hand-interaction.md)).
+- An outcome reports what was saved: a folder saved while some older conversation still cannot be opened keeps that conversation's own report.
+
 ### An answer, not a form
 
-- A repair stands in one of three conditions: unanswered, set aside, or resolved.
+- A repair stands in one of three conditions: unanswered, dismissed, or resolved.
 - Only the reader's act moves a repair between them; drawing a row, opening the list, and re-reading the state move nothing.
-- A repair counts as an issue until he has answered it; a declined repair stands in the list and counts no more; a resolved one leaves the list because the core stops reporting it.
-- Declining says this is not a project on this device, is this device's alone, and strips nothing from the row: it keeps offering what it offered, so changing one's mind needs no separate control.
+- A repair counts until he has answered it; a dismissed repair keeps its saved conversations and counts no more; a resolved one leaves the list because the core stops reporting it.
+- Dismissal is this computer's alone and never syncs, because whether a project belongs here is a fact about here.
 - An answer lapses only when the repair's own recorded facts change, never because a folder appeared or vanished under it: an app-side event shall not retract the reader's decision.
 
 ### Checked, never searched
 
-- The core may check a path a repair already names, or one named by joining the folder this device's projects most share to that repair's own last segment; it shall check nothing else, list no directory, and descend none.
+- The core may check a path a repair already names, or one named by joining the parent this computer's working folders most share to the project's records repository name without `-spex`; it shall check nothing else, list no directory, and descend none.
 - Every path checked is a path reported, and what was found is rendered before any gesture can accept it.
-- Where exactly one checked folder is present, a Git work tree, and claimed by no project, the core proposes it; where two qualify, the repair proposes nothing and the row asks instead.
+- Where exactly one checked folder is present, a Git work tree, and claimed by no project, the core proposes it, and accepting it takes one gesture; where two qualify, the repair proposes nothing and the reader chooses.
 - A check is bounded, and one that cannot complete reports as unknown and proposes nothing, so an unreachable folder never delays the surface.
-
-### One question, in one vocabulary
-
-- A repair states that sessions ran in a folder that is not a project on this device, and asks whether to add it as one; it never says that a folder has or lacks a project.
-- Whether the space already carries the project is the app's to know: the reader is offered the same answer either way, and the app sets that project's folder or adds a new one accordingly.
-- Adding a project from a repair takes one gesture on the folder the app proposes, and one more only where the reader names a different folder himself.
-- An add that succeeds while its recorded folders cannot be attached is reported as what it is; a half-done repair never shows an outcome.
-
-### Told apart
-
-- A standing repair, a declined one, and a resolved one differ by mark, by word and by weight, and each condition is named in the row's accessible description, so the distinction never rests on colour.
-- A row that changes condition holds its place until the reader's own re-read.
 
 ### Considered and declined
 
-- letting a folder's appearance or disappearance clear an answer: an app-side event standing in for the reader's retraction, which is the fault of this record's own predecessor with its sign reversed;
-- routing a repair's add through the palette: the folder is already named and already checked, so a second surface asks the reader to confirm what he has just answered — and its completion is what carried him off this one;
-- declining every repair at once: one answer taken over several decisions the reader has not seen;
-- a control that undoes a declining: the row keeps its own actions, so the undo is simply doing the thing.
+- resolving every repair from one chosen parent folder: several identity decisions taken on one guess, failing plural and silently;
+- searching the disk for a matching folder: a silent identity decision, on evidence the user never sees;
+- an acknowledgement that syncs: it would teach one computer's intent to every other;
+- letting a folder's appearance or disappearance clear an answer: an app-side event standing in for the reader's retraction;
+- routing a repair's folder choice through the palette: the folder is already named and already checked, and the palette's completion would carry him off the list he is working through.
 
 ## Consequences
 
-- `space.md` gains the proposal, the record and the three appearances, and rewrites the repair's editor, outcome and attention rules around them.
-- `core-service.md`: a repair carries what the core checked about each folder it names and the one it proposes.
-- `storage.md`: the preference holds one record per repair, written only by the reader's act.
-- `projects.md`: adding a project is no longer the palette's alone, the palette keeping its own flow unchanged.
-- The protocol's repair shape and its command for answering a repair change, so its version rises.
-- A device whose count had gone quiet under the superseded rule speaks again once, because those marks were written by drawing and are dropped rather than converted.
+- `space.md` holds the folded task, its proposal, its dismissal and its outcome.
+- `core-service.md`: a storage diagnostic carries an optional structured repair with what the core checked about each folder it names and the one it proposes, so a control attaches to data rather than to a prose match.
+- `storage.md`: the preferences hold one record per dismissed repair, written only by the reader's act.
+- `projects.md`: adding a project is not the palette's alone, the palette keeping its own flow unchanged.

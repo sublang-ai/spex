@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's Sync tab (DR-057, DR-103, DR-128, DR-159,
+// A spex repository's Sync tab (DR-057, DR-103, DR-128,
 // DR-172): its placements' lines (space-87), "To send (<n>)" and each
 // placement's "From <display name> (<n>)" by kind in human words
 // (space-7, space-8), the running rail with its step line, the placement
@@ -894,7 +894,7 @@ export function SyncTab({
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
       {/* The records' places, one line per placement, stand here and on
-          no row (space-87, DR-159). */}
+          no row (space-87, DR-172). */}
       <PlacementLines
         groups={groups}
         repo={repo}
