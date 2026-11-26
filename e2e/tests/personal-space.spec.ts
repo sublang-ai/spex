@@ -388,15 +388,16 @@ test.describe("exploring", () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(clone);
     await expect(page.getByTestId("space-repository-header")).not.toContainText("Copied");
 
-    // Opening the conversation navigates without rewriting its immutable
-    // evidence or replacing either bounded root (space-23).
+    // Opening the conversation navigates without rewriting its manifest
+    // file or its replay (space-23).
     if ((await sessionsDir.getAttribute("aria-expanded")) !== "true") await sessionsDir.click();
     if ((await sessionNode.getAttribute("aria-expanded")) !== "true") await sessionNode.click();
-    await records.click();
+    if ((await records.getAttribute("aria-expanded")) !== "true") await records.click();
+    await segment.click();
     await preview.getByRole("button", { name: "Open session" }).click();
     await expect(page.getByRole("tab", { name: new RegExp(SESSION_TITLE, "i") })).toHaveAttribute("aria-selected", "true");
     for (const file of savedFiles) expect(readFileSync(join(clone, file.path))).toEqual(file.bytes);
-    expect(readdirSync(join(clone, chunkDirectory)).sort()).toEqual(chunkNames);
+    expect(readdirSync(join(clone, replayDirectory)).sort()).toEqual(segmentNames);
   });
 });
 
