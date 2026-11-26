@@ -27,12 +27,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The scaffold's `meta.md` keeps each decision record to the decisions
-  in force. A change rewrites or removes the text it replaces, a record
-  left with little in force merges into its successor and is deleted
-  with its citations repointed, a record's Status holds at most three
-  lines, and its `map.md` summary one (meta-35, meta-36, meta-37). Git
-  history keeps the earlier text. `spex scaffold --update` brings the
-  new rules into an existing project.
+  in force, rewritten in the change that amends it. A change within one
+  record's concern, a version floor or a default included, revises that
+  record in place instead of adding one; a change beyond it rewrites the
+  earlier record without what it replaced; a record whose remainder
+  would fit as a few bullets of its successor, or whose subject is
+  retired, merges into the successor and is deleted with its citations
+  repointed. A record's Status holds at most three lines, `Amends` and
+  `Amended by` are stated on both sides, and its `map.md` summary is one
+  line (meta-35 to meta-38). Git history keeps the earlier text.
+  `spex scaffold --update` brings the new rules into an existing project.
+
+- **Breaking:** `spex lint` fails a decision record whose Status holds
+  more than three lines, whose `Amends` or `Amended by` line carries
+  anything but DR citations, that is kept as superseded, or that states
+  an amendment its counterpart does not (`record/status-length`,
+  `record/status-form`, `record/superseded`, `record/reciprocity`).
+  A project whose records predate meta-35 to meta-38 fails until they
+  are brought to that form.
 
 - `spex add`, `install`, `update` and `remove` copy a package's files out
   of the store under the Spex home into `.spex/packages/` instead of

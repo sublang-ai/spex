@@ -102,6 +102,18 @@ Where an item is linted, prose outside fenced blocks, lists, tables, blockquotes
 - Sentence count neither defines nor decides conformance: an item's cases and outcomes may run to several sentences, while a second requirement can hide inside one.
 - The rule stays a warning.
 
+#### lint-15
+
+Where a DR's `## Status` section is linted, the linter shall report:
+
+- an error for a Status holding more than three non-empty lines [[meta-36](../meta.md#meta-36)];
+- an error for a Status line after the first that is not `Amends` or `Amended by` followed by DR citations alone, comma-separated and ending in a period — or the zh templates' `修订 …。` and `被 … 修订。` with `、` between citations [[meta-36](../meta.md#meta-36)];
+- an error for a Status naming the DR superseded, since a wholly replaced DR is merged into its successor and deleted [[meta-35](../meta.md#meta-35)].
+
+#### lint-16
+
+Where DR relations are linted, the linter shall report an error at a DR's `Amends` line naming a DR whose Status does not list it under `Amended by`, and at a DR's `Amended by` line naming a DR whose Status does not list it under `Amends` [[meta-38](../meta.md#meta-38)].
+
 #### lint-13
 
 Where citation discipline is linted, the linter shall report:
@@ -139,6 +151,8 @@ Where the linter is exercised, the test suite shall cover at least one fixture p
 - reference markers, records, and map listing for an unlisted package and an unlisted decision, and no finding for an unlisted package whose first line is a placed spec's marker ([[lint-9](#lint-9)]);
 - citation discipline — a section-prose peer citation, a detached `Verifies` sentence, peer External and Internal citations from Verification, and a same-package Internal citation from Verification ([[lint-13](#lint-13)]);
 - the multi-sentence advisory ([[lint-14](#lint-14)]);
+- DR Status rules — a clean three-line Status in English and zh wording, an over-long Status, scope prose and an unlisted relation word on a relation line, and a superseded DR, each an error ([[lint-15](#lint-15)]);
+- one-sided `Amends` and `Amended by` relations, each an error at the side stating it ([[lint-16](#lint-16)]);
 - an item body spanning a nested subheading whose citations count for the item, a blockquote-wrapped package failing structure, and a literal triple-backtick line inside a longer fence staying undetected ([[lint-10](#lint-10)]);
 - finding format and summary ([[lint-3](#lint-3)]);
 - plus a clean fixture asserting zero findings.
