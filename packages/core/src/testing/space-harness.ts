@@ -305,7 +305,7 @@ export function assertGroupsState(state: SpaceState): void {
   for (const instance of state.instances) {
     assert.deepEqual(Object.keys(instance).sort(), INSTANCE_KEYS);
     assert.ok(typeof instance.origin === "string" && typeof instance.host === "string" && (instance.displayName === null || typeof instance.displayName === "string"), JSON.stringify(instance));
-    // What its last read said the person may do there (DR-114).
+    // The account its sign-in stored (DR-127).
     assert.deepEqual(Object.keys(instance.account).sort(), ["displayName", "id", "login"]);
     assert.ok(typeof instance.signedIn === "boolean" && typeof instance.hostSignedOut === "boolean", JSON.stringify(instance));
     if (instance.hostSignedOut) assert.equal(instance.signedIn, false, "an instance's sign-out of this device is said only while signed out");

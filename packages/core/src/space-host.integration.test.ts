@@ -198,8 +198,8 @@ test("space-37: the browser sign-in names the personal records folder after the 
   const readsBefore = reads();
   const fromStart = again.client.mark();
   const [reread] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
-  // What the host lets the person do waits for a read held since the
-  // start, as do its roles (DR-114).
+  // The account stands as the sign-in stored it while the read a
+  // signed-in start owes runs (DR-127).
   assert.deepEqual(instanceOf(reread, host.url)?.account, { ...signedAt?.account });
   assert.equal(reread.defaultInstance, host.url);
   assert.deepEqual(placementOf(repositoryOf(reread, HOST_OWN), host.url).lastSync, placementOf(own, host.url).lastSync);
