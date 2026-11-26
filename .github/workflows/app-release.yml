@@ -71,9 +71,6 @@ jobs:
           --repository="$GITHUB_REPOSITORY"
           --out=release-notes.md
       - name: Require published runtime dependencies
-        # Trial only (session-log-adoption): a build-only package, which
-        # cannot publish, of Playbook main vendored under trial/.
-        if: github.event_name != 'workflow_dispatch' || !inputs.build-only
         run: node scripts/dependency-closure.mjs --registry-only
       - uses: actions/upload-artifact@v4
         with:
