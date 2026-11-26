@@ -115,6 +115,8 @@ type HeadingInfo = {
   text: string;
   plain: string;
   line: number;
+  /** Last line of the heading, its setext underline included. */
+  endLine: number;
   slug: string;
   /**
    * A direct child of the document root. Only root-level headings
@@ -216,6 +218,7 @@ function loadFile(basePath: string, relPath: string): SpecFile {
         text: headingText(text, heading),
         plain: plainHeadingText(text, heading),
         line: heading.position?.start.line ?? 1,
+        endLine: heading.position?.end.line ?? heading.position?.start.line ?? 1,
       });
       return;
     }
@@ -1337,10 +1340,10 @@ function lintRecords(ctx: LintContext): void {
 // DR status rules (lint-15, lint-16)
 // ---------------------------------------------------------------
 
-// A DR link as it appears in a Status line: `[DR-<NNN>](<path>)`.
-const STATUS_LINK = String.raw`\[DR-\d+\]\([^)\s]+\)`;
 // The two relation lines of meta-36, in English and in the bundled
-// zh templates' wording: DR links alone, no scope prose.
+// zh templates' wording: DR links alone, no scope prose. The shape is
+// matched on the raw line; each link is then checked as parsed.
+const STATUS_LINK = String.raw`\[DR-\d+\]\([^)\s]+\)`;
 const STATUS_RELATION_FORMS: { kind: "amends" | "amendedBy"; re: RegExp }[] = [
   {
     kind: "amends",
@@ -1359,16 +1362,18 @@ const STATUS_RELATION_FORMS: { kind: "amends" | "amendedBy"; re: RegExp }[] = [
     re: new RegExp(`^被 ${STATUS_LINK}(?:、${STATUS_LINK})* 修订。$`),
   },
 ];
-const STATUS_SUPERSEDED_RE = /supersed|取代/i;
-const STATUS_LINK_ID_RE = /\[DR-(\d+)\]\(/g;
+// The declared state opening a Status's first line (meta-36), read
+// with link destinations removed so a file name cannot match.
+const STATUS_SUPERSEDED_RE = /^(?:superseded\b|已被取代|被.*取代)/i;
+const DECISION_PATH_RE = /^specs\/decisions\/(\d+)-[^/]+\.md$/;
+
+type DrRelation = { target: string; line: number };
 
 type DrRelations = {
   id: string;
   relPath: string;
-  amends: Set<string>;
-  amendedBy: Set<string>;
-  amendsLine: number;
-  amendedByLine: number;
+  amends: DrRelation[];
+  amendedBy: DrRelation[];
 };
 
 function statusLines(file: SpecFile): { line: number; text: string }[] | null {
@@ -1377,7 +1382,9 @@ function statusLines(file: SpecFile): { line: number; text: string }[] | null {
     (heading) => heading.depth === 2 && DR_SECTIONS.Status.includes(heading.plain.trim()),
   );
   if (index < 0) return null;
-  const start = roots[index].line;
+  // The body starts after the heading's last line, so a setext
+  // underline is not read as Status content.
+  const start = roots[index].endLine;
   const next = roots.slice(index + 1).find((heading) => heading.depth <= 2);
   const end = next === undefined ? file.lines.length + 1 : next.line;
   const lines: { line: number; text: string }[] = [];
@@ -1388,19 +1395,50 @@ function statusLines(file: SpecFile): { line: number; text: string }[] | null {
   return lines;
 }
 
+/**
+ * The DR ids a relation line names, from its parsed links, or null
+ * when a link's label is not `DR-<NNN>` or its destination is not
+ * that DR's own decision file.
+ */
+function statusRelationTargets(file: SpecFile, line: number): string[] | null {
+  const targets: string[] = [];
+  for (const link of file.links) {
+    if (link.line !== line || link.kind !== "link") continue;
+    const label = /^DR-(\d+)$/.exec(link.text.trim())?.[1];
+    const [path, fragment] = link.url.split("#");
+    if (label === undefined || fragment !== undefined || SCHEME_RE.test(path) || path.startsWith("/")) {
+      return null;
+    }
+    const resolved = posix.normalize(posix.join(posix.dirname(file.relPath), path));
+    if (DECISION_PATH_RE.exec(resolved)?.[1] !== label) return null;
+    targets.push(label);
+  }
+  return targets;
+}
+
 function lintDrStatus(ctx: LintContext): void {
+  // Every decision takes part: one without a Status lists no relation.
   const relations = new Map<string, DrRelations>();
+  const statuses = new Map<string, { line: number; text: string }[]>();
   for (const file of ctx.files.values()) {
     if (!isUnder(file.relPath, "decisions")) continue;
     const digits = /^(\d+)/.exec(posix.basename(file.relPath))?.[1];
+    if (digits === undefined || relations.has(digits)) continue;
+    relations.set(digits, { id: digits, relPath: file.relPath, amends: [], amendedBy: [] });
     const lines = statusLines(file);
-    if (digits === undefined || lines === null) continue;
+    if (lines !== null) statuses.set(digits, lines);
+  }
+
+  for (const entry of relations.values()) {
+    const lines = statuses.get(entry.id);
+    if (lines === undefined || lines.length === 0) continue;
+    const file = ctx.files.get(entry.relPath)!;
 
     // meta-36: state and date, then at most the two relation lines.
     if (lines.length > 3) {
       report(
         ctx,
-        file.relPath,
+        entry.relPath,
         lines[3].line,
         "error",
         "record/status-length",
@@ -1409,76 +1447,62 @@ function lintDrStatus(ctx: LintContext): void {
     }
 
     // meta-35: a wholly replaced DR is merged into its successor and
-    // deleted, never kept as superseded.
-    const superseded = lines.find((entry) => STATUS_SUPERSEDED_RE.test(entry.text));
-    if (superseded !== undefined) {
+    // deleted, never kept with a superseded state.
+    if (STATUS_SUPERSEDED_RE.test(lines[0].text.replace(/\]\([^)]*\)/g, "]"))) {
       report(
         ctx,
-        file.relPath,
-        superseded.line,
+        entry.relPath,
+        lines[0].line,
         "error",
         "record/superseded",
         `a superseded DR is deleted: merge what remains in force into its successor and repoint every citation of it (meta-35)`,
       );
     }
 
-    const entry: DrRelations = {
-      id: digits,
-      relPath: file.relPath,
-      amends: new Set(),
-      amendedBy: new Set(),
-      amendsLine: 0,
-      amendedByLine: 0,
-    };
     for (const { line, text } of lines.slice(1)) {
       const form = STATUS_RELATION_FORMS.find((candidate) => candidate.re.test(text));
-      if (form === undefined) {
+      const targets = form === undefined ? null : statusRelationTargets(file, line);
+      if (form === undefined || targets === null) {
         report(
           ctx,
-          file.relPath,
+          entry.relPath,
           line,
           "error",
           "record/status-form",
-          `a DR Status line after the first is "Amends <DR links>." or "Amended by <DR links>." alone; move scope and reasons into the DR's body (meta-36)`,
+          `a DR Status line after the first is "Amends <DR links>." or "Amended by <DR links>." alone, each link labeled DR-<NNN> and pointing to that DR's file; move scope and reasons into the DR's body (meta-36)`,
         );
         continue;
       }
-      const ids = new Set([...text.matchAll(STATUS_LINK_ID_RE)].map((match) => match[1]));
-      if (form.kind === "amends") {
-        ids.forEach((id) => entry.amends.add(id));
-        entry.amendsLine = line;
-      } else {
-        ids.forEach((id) => entry.amendedBy.add(id));
-        entry.amendedByLine = line;
-      }
+      const list = form.kind === "amends" ? entry.amends : entry.amendedBy;
+      for (const target of targets) list.push({ target, line });
     }
-    relations.set(digits, entry);
   }
 
-  // meta-38: each relation is stated on both sides.
+  // meta-38: each relation is stated on both sides; the finding sits on
+  // the line stating the side that exists.
   for (const entry of relations.values()) {
-    for (const other of entry.amends) {
-      const target = relations.get(other);
-      if (target === undefined || target.amendedBy.has(entry.id)) continue;
+    for (const { target, line } of entry.amends) {
+      const other = relations.get(target);
+      if (other === undefined || other.amendedBy.some((relation) => relation.target === entry.id)) continue;
       report(
         ctx,
         entry.relPath,
-        entry.amendsLine,
+        line,
         "error",
         "record/reciprocity",
-        `DR-${entry.id} amends DR-${other}, which does not list DR-${entry.id} under "Amended by" (meta-38)`,
+        `DR-${entry.id} amends DR-${target}, which does not list DR-${entry.id} under "Amended by" (meta-38)`,
       );
     }
-    for (const other of entry.amendedBy) {
-      const source = relations.get(other);
-      if (source === undefined || source.amends.has(entry.id)) continue;
+    for (const { target, line } of entry.amendedBy) {
+      const other = relations.get(target);
+      if (other === undefined || other.amends.some((relation) => relation.target === entry.id)) continue;
       report(
         ctx,
         entry.relPath,
-        entry.amendedByLine,
+        line,
         "error",
         "record/reciprocity",
-        `DR-${entry.id} lists DR-${other} under "Amended by", which does not list DR-${entry.id} under "Amends" (meta-38)`,
+        `DR-${entry.id} lists DR-${target} under "Amended by", which does not list DR-${entry.id} under "Amends" (meta-38)`,
       );
     }
   }

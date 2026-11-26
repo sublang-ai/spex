@@ -690,75 +690,90 @@ describe("lintSpecs", () => {
 
   // lint-15: a DR Status holds its state and date and at most the
   // two relation lines of DR links; a superseded DR is deleted.
-  it("checks DR Status length, relation lines and superseded records", () => {
-    const status = (lines: string) =>
-      `# DR-00X: X\n\n## Status\n\n${lines}\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n`;
-    const clean = findingsFor({
-      "specs/decisions/001-a.md": status(
-        "Accepted (2026-09-05); revised (2026-11-26).\nAmends [DR-002](002-b.md).",
-      ),
-      "specs/decisions/002-b.md": status(
-        "Accepted (2026-09-01).\nAmended by [DR-001](001-a.md).",
-      ),
-      // The zh templates' wording of the same relation.
-      "specs/decisions/003-c.md": status(
-        "已接受（2026-09-05）。\n修订 [DR-004](004-d.md)。",
-      ),
-      "specs/decisions/004-d.md": status(
-        "已接受（2026-09-01）。\n被 [DR-003](003-c.md) 修订。",
-      ),
-    });
-    assert.deepEqual(
-      clean.filter((f) => f.rule.startsWith("record/status") || f.rule === "record/superseded" || f.rule === "record/reciprocity"),
-      [],
+  const statusDr = (lines: string, heading = "## Status") =>
+    `# DR-00X: X\n\n${heading}\n\n${lines}\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n`;
+  const statusRules = (findings: LintFinding[]) =>
+    findings.filter((f) =>
+      ["record/status-length", "record/status-form", "record/superseded", "record/reciprocity"].includes(f.rule),
     );
 
+  it("accepts full three-line Statuses in English and zh wording", () => {
     const findings = findingsFor({
-      "specs/decisions/001-a.md": status(
+      "specs/decisions/001-a.md": statusDr(
+        "Accepted (2026-09-05); revised (2026-11-26).\nAmends [DR-002](002-b.md).\nAmended by [DR-003](003-c.md).",
+      ),
+      "specs/decisions/002-b.md": statusDr(
+        "Accepted (2026-09-01).\nAmended by [DR-001](001-a.md).",
+      ),
+      "specs/decisions/003-c.md": statusDr(
+        "Accepted (2026-09-09).\nAmends [DR-001](001-a.md), [DR-004](004-superseded-wording.md).",
+      ),
+      "specs/decisions/004-superseded-wording.md": statusDr(
+        "已接受（2026-09-01）；已修订（2026-11-26）。\n修订 [DR-005](005-e.md)。\n被 [DR-003](003-c.md) 修订。",
+      ),
+      "specs/decisions/005-e.md": statusDr(
+        "已接受（2026-08-01）。\n被 [DR-004](004-superseded-wording.md) 修订。",
+      ),
+      // A setext heading's underline is not Status content.
+      "specs/decisions/006-f.md": statusDr("Accepted (2026-09-05).", "Status\n------"),
+    });
+    assert.deepEqual(statusRules(findings), [], JSON.stringify(findings));
+  });
+
+  it("checks DR Status length, relation lines and superseded records", () => {
+    const findings = findingsFor({
+      "specs/decisions/001-a.md": statusDr(
         "Accepted (2026-09-05).\nAmends [DR-002](002-b.md) in its floor alone, now `^1.2.0`.\nExtended by [DR-002](002-b.md).\nAmended by [DR-002](002-b.md).",
       ),
-      "specs/decisions/002-b.md": status(
-        "Superseded by [DR-001](001-a.md).",
+      "specs/decisions/002-b.md": statusDr("Superseded by [DR-001](001-a.md)."),
+      // A relation naming a superseded record leaves this record's
+      // own state alone; only its wording is a form finding.
+      "specs/decisions/003-c.md": statusDr(
+        "Accepted (2026-09-12).\nSupersedes [DR-002](002-b.md): the Boss no longer merges.",
       ),
+      // A label pointing anywhere but that DR's own file.
+      "specs/decisions/004-d.md": statusDr("Accepted.\nAmends [DR-005](../map.md)."),
+      "specs/decisions/005-e.md": statusDr("Accepted.\nAmended by [DR-004](004-d.md)."),
     });
-    const by = (rule: string) => findings.filter((f) => f.rule === rule);
-    assert.equal(by("record/status-length").length, 1, JSON.stringify(findings));
-    assert.equal(by("record/status-length")[0].path, "specs/decisions/001-a.md");
-    // Scope prose and a relation word outside the two forms.
+    const by = (rule: string) => findings.filter((f) => f.rule === rule).map((f) => [f.path, f.line]);
+    assert.deepEqual(by("record/status-length"), [["specs/decisions/001-a.md", 8]], JSON.stringify(findings));
     assert.deepEqual(
-      by("record/status-form").map((f) => f.line),
-      [6, 7],
+      by("record/status-form"),
+      [
+        ["specs/decisions/001-a.md", 6],
+        ["specs/decisions/001-a.md", 7],
+        ["specs/decisions/003-c.md", 6],
+        ["specs/decisions/004-d.md", 6],
+      ],
       JSON.stringify(findings),
     );
-    assert.equal(by("record/superseded").length, 1, JSON.stringify(findings));
-    assert.equal(by("record/superseded")[0].path, "specs/decisions/002-b.md");
-    assert.ok(
-      [...by("record/status-length"), ...by("record/status-form"), ...by("record/superseded")].every(
-        (f) => f.severity === "error",
-      ),
-    );
+    assert.deepEqual(by("record/superseded"), [["specs/decisions/002-b.md", 5]], JSON.stringify(findings));
+    assert.ok(statusRules(findings).every((f) => f.severity === "error"));
   });
 
   // lint-16: Amends and Amended by are stated on both sides.
   it("reports amendment relations stated on one side only", () => {
-    const status = (lines: string) =>
-      `# DR-00X: X\n\n## Status\n\n${lines}\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n`;
     const findings = findingsFor({
-      "specs/decisions/001-a.md": status(
-        "Accepted.\nAmends [DR-002](002-b.md).",
+      // Two Amends lines: the finding sits on the line naming the target.
+      "specs/decisions/001-a.md": statusDr(
+        "Accepted.\nAmends [DR-002](002-b.md).\nAmends [DR-007](007-g.md).",
       ),
-      "specs/decisions/002-b.md": status("Accepted."),
-      "specs/decisions/003-c.md": status(
-        "Accepted.\nAmended by [DR-004](004-d.md).",
-      ),
-      "specs/decisions/004-d.md": status("Accepted."),
+      "specs/decisions/002-b.md": statusDr("Accepted."),
+      "specs/decisions/007-g.md": statusDr("Accepted.\nAmended by [DR-001](001-a.md)."),
+      "specs/decisions/003-c.md": statusDr("Accepted.\nAmended by [DR-004](004-d.md)."),
+      "specs/decisions/004-d.md": statusDr("Accepted."),
+      // A target with no Status at all lists no relation.
+      "specs/decisions/005-e.md": statusDr("Accepted.\nAmends [DR-006](006-f.md)."),
+      "specs/decisions/006-f.md": "# DR-006: F\n\n## Context\n\nC.\n",
     });
-    const one = findings.filter((f) => f.rule === "record/reciprocity");
     assert.deepEqual(
-      one.map((f) => [f.path, f.line, f.severity]),
+      findings
+        .filter((f) => f.rule === "record/reciprocity")
+        .map((f) => [f.path, f.line, f.severity]),
       [
         ["specs/decisions/001-a.md", 6, "error"],
         ["specs/decisions/003-c.md", 6, "error"],
+        ["specs/decisions/005-e.md", 6, "error"],
       ],
       JSON.stringify(findings),
     );

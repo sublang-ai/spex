@@ -5,7 +5,7 @@ Migrate every legacy Spex specs tree in this repository to the current spec gene
 
 - Read current `@specs/meta.md` and `@specs/decisions/000-spec-structure-format.md` fully before editing; they are the target law, and `spex scaffold --update` refreshed them while leaving legacy content untouched.
 Synchronize each additional spec tree's framework law to that target while preserving tree-specific context; do not revise the target law itself without explicit human approval.
-- Preserve every stated behavior, local extension, record state, checkbox, and item's concern; invent or drop nothing.
+- Preserve every stated behavior, local extension, record state, checkbox, and item's concern; invent or drop nothing, except a superseded DR as stated below.
 If an item ID appeared in a public release, obtain owner approval for the generation-wide spelling change before editing.
 - Inventory the whole tree and build a complete rename map before moving content.
 Each old short-form ID becomes `<destination-file-basename>-<N>`, lowercase, with `<N>` unchanged; resolve basename clashes first, then retarget headings, prose names, links, paths, anchors, and inbound citations tree-wide.
@@ -20,6 +20,7 @@ Classify guarantees its human or component users rely on as External Behavior an
 - Restate each item as one GEARS requirement and place its cases or steps after the statement's final colon.
 Use current item and DR citation forms, put every peer binding citation at the behavior phrase it makes specific, confine Verification citations to the containing package, and remove relationship-metadata lines or detached `Verifies` sentences.
 - Give every DR and IR the current sections and truthful status.
+Bring each DR's Status to the record rules of the target law by its state: a proposed DR keeps its proposal, an accepted DR keeps only its decisions in force, and a superseded DR merges what remains in force into its successor and is deleted, every citation of it repointed.
 For a legacy IR missing commit-sized Tasks, recover minimal truthful tasks from history or flag the gap rather than inventing them; no other spec may cite or name an IR.
 - Update `map.md` and any project guidance describing the old layout.
 Preserve SPDX headers byte-for-byte, keep one sentence per line, and remove legacy files or directories only after their content and citations survive in the new tree.

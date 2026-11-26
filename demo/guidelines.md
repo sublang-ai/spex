@@ -60,7 +60,7 @@ Four of Academy's packages — [github-login](specs/packages/identity/github-log
   Add, change, or delete spec items in its file; this customizes that copy and creates no package relationship.
 - **Packages state behavior without selecting platforms; decisions choose, the platform package realizes.**
   [DR-002](specs/decisions/002-platform-and-devops.md) chooses Supabase, Vercel, and GitHub, and [platform-services.md](specs/packages/platform-services.md) realizes the required behaviors through them, citing the package behaviors involved — never package state.
-  Swapping a vendor is a new decision record plus rewritten platform-services items; every other package's items stay unchanged.
+  Swapping a vendor revises DR-002 in place, since the choice is within its concern, plus rewritten platform-services items; every other package's items stay unchanged.
   The exception proves the rule: GitHub appears in [github-login](specs/packages/identity/github-login.md) items because the user sees GitHub; the technology is the behavior there.
 - **Reuse within a project is citation.**
   [[access-control-4](specs/packages/identity/access-control.md#access-control-4)] is defined once and cited by [[course-catalog-6](specs/packages/catalog/course-catalog.md#course-catalog-6)], [[video-library-1](specs/packages/catalog/video-library.md#video-library-1)], and the admin-bootstrap and protected-content packages — one denial grammar, four consumers.
@@ -108,6 +108,6 @@ The split moves the External/Internal placement and the verification kind, and n
   [[video-library-11](specs/packages/catalog/video-library.md#video-library-11)] states everything the library asks of its embedding host — authorize this asset for this requester — plus what happens when the answer is no.
   [[protected-content-3](specs/packages/protected-content.md#protected-content-3)] answers it with a deployment-owned rule — published-course eligibility — citing [[video-library-11](specs/packages/catalog/video-library.md#video-library-11)] at the host's question and [[course-catalog-2](specs/packages/catalog/course-catalog.md#course-catalog-2)] and [[course-catalog-4](specs/packages/catalog/course-catalog.md#course-catalog-4)] as the rule's inputs; the library's own items still name only the embedding host, a general phrase being sufficient for a replaceable counterparty ([[meta-14](specs/meta.md#meta-14)]).
 - **The litmus is the swap.**
-  Rebind a supplier and every other package's items read unchanged: swapping Supabase is a new DR plus rewritten platform-services items, nothing else.
+  Rebind a supplier and every other package's items read unchanged: swapping Supabase revises DR-002 in place plus rewritten platform-services items, nothing else.
   Rebind a composition and the product changes: serve the catalog's media delegations from a different library and [[course-publishing-4](specs/packages/course-publishing.md#course-publishing-4)] walks a different journey.
   GitHub in [[github-login-2](specs/packages/identity/github-login.md#github-login-2)] stays the exception: a user-visible counterparty with no package of its own is named in items (guideline 3), not supplied silently.

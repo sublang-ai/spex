@@ -54,9 +54,10 @@ A DR shall record design decisions and constraints, not implementation details, 
 
 When a change to an accepted decision is accepted, that same change shall leave each DR stating only decisions in force, leaving earlier text to Git history [[meta-24](#meta-24)]:
 
-- Change within one DR's concern, including a value it decides such as a version floor, a default or a limit: that DR is revised in place, its status noting the revision date, and no new DR is added.
+- Change within one DR's concern, including a value it decides such as a version floor, a default or a limit, other than retiring its subject: that DR is revised in place, its status noting the revision date, and no new DR is added.
 - Partial replacement of a DR by a change beyond its concern: the new DR records the change, and the earlier DR is rewritten without what was replaced.
-- Little of the earlier DR left in force — what remains would fit as a few bullets of the new DR — or its subject retired: its remaining decisions merge into the new DR, the earlier DR is deleted with every citation of it repointed, and its ID is never reused.
+- Little of the earlier DR left in force — what remains would fit as a few bullets of the new DR: its remaining decisions merge into the new DR, the earlier DR is deleted with every citation of it repointed to the new DR, and its ID is never reused.
+- Subject retired with no decision surviving: the retiring change deletes the DR, removes or rewords every citation of it so the citing text stays true, and states its reason in the commit message; its ID is never reused.
 
 ### meta-36
 
@@ -64,8 +65,8 @@ A DR's Status section shall hold at most three lines — its state with its date
 
 ```text
 Accepted (2026-09-05); revised (2026-11-26).
-Amends DR-036.
-Amended by DR-103, DR-111.
+Amends [DR-036](036-storage.md).
+Amended by [DR-103](103-sync.md), [DR-111](111-coordination.md).
 ```
 
 ### meta-37
