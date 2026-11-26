@@ -24,7 +24,7 @@ Amended by [DR-032](032-session-players.md), [DR-048](048-failed-session-cleanup
 
 - The core opens one headless runtime for a project session, with `cwd` set to the project root, and holds it only for a Boss turn ([DR-051](051-runtime-held-for-a-turn.md)).
 - The captain is the Playbook Captain shell, composed from the shared config exactly as the playbook launcher composes it (see [DR-004](004-config-and-persistence.md)); Spex introduces no alternate composition path.
-- The core injects `deps.loadModule` so bundled environments (Electron packaging) resolve compiled registry modules (see [DR-005](005-compilation-integration.md)) without relying on ambient module resolution.
+- The core injects `deps.loadModule` so bundled environments (Electron packaging) resolve compiled registry modules (see [DR-081](081-the-app-supplies-the-compiler.md)) without relying on ambient module resolution.
 - Core's contract with the shell stays wiring-only: registry loading, session construction, and the reply round-trip; behavior the shell owns — replies, engagement, pane switching — is Playbook's to verify.
 
 ### Record stream as the single source

@@ -9,7 +9,7 @@ Done.
 
 ## Intent
 
-A playbook's Gears stage is a GEARS package file, so the Playbooks card renders it with the Specs outline's own item rows — chip, group, first line, an expandable body, in-file citation jumps — instead of a wall of markdown, and the State machine stage keeps its derived state list pinned above the scrolling code rather than scrolled away with it ([DR-011](../decisions/011-project-workspace.md), [DR-005](../decisions/005-compilation-integration.md)).
+A playbook's Gears stage is a GEARS package file, so the Playbooks card renders it with the Specs outline's own item rows — chip, group, first line, an expandable body, in-file citation jumps — instead of a wall of markdown, and the State machine stage keeps its derived state list pinned above the scrolling code rather than scrolled away with it ([DR-011](../decisions/011-project-workspace.md), [DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
 
 ## Deliverables
 

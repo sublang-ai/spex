@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Playbook compilation via the external slc toolchain (DR-005,
-// DR-081): run the app-supplied compiler on the app's own runtime —
+// Playbook compilation via the external slc toolchain (DR-081):
+// run the app-supplied compiler on the app's own runtime —
 // Electron's Node in the desktop, the server's Node — or a Node
 // meeting slc's floor, in a managed library directory, then package
 // the TypeScript artifacts with esbuild — types stripped, the artifact
@@ -1161,7 +1161,7 @@ async function compileAdmitted(
     // @sublang/playbook runtime contract by default.
     // slc aborts an agent call after its ten-minute default silence; the
     // agent-driven phases routinely stay quieter, so the runner grants the
-    // 2400s budget IR-053 settled on, unless the env already sets it (DR-005).
+    // 2400s budget IR-053 settled on, unless the env already sets it (DR-081).
     // The block is the whole agent: no slc configuration file adds to it.
     const configArgs = agentEnv.SLC_AGENT ? ["--config", SLC_EMPTY_CONFIG] : [];
     const code = await spawner(

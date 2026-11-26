@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-03).
-Amends [DR-032](032-session-players.md).
+Amends [DR-029](029-session-history-home.md), [DR-032](032-session-players.md).
 
 ## Context
 
@@ -16,7 +16,7 @@ The runtime still reports it, and the core still records it: the question is onl
 
 ## Decision
 
-The interface shows no monetary amount anywhere, withdrawing [DR-032](032-session-players.md)'s cost figure.
+The interface shows no monetary amount anywhere, withdrawing [DR-032](032-session-players.md)'s cost figure and amending [DR-029](029-session-history-home.md)'s session rows, whose accessible description carries no cost.
 
 - The player pane's usage line reports token totals only, and stays silent where the turn reported none.
 - A cost the runtime reports stays in the session record and the protocol as recorded data; no surface renders it, whatever its provenance.

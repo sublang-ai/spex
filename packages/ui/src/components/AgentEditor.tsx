@@ -7,7 +7,7 @@
 // (DR-093, DR-095), a fast-mode switch where the
 // runtime declares it (DR-038), permission mode and writable paths.
 // It edits a local draft and emits a merge patch on save;
-// AgentEditorPopover wraps it for the at-hand flows (DR-007/009).
+// AgentEditorPopover wraps it for the at-hand flows (DR-141/009).
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
@@ -543,7 +543,7 @@ export interface AgentEditorPopoverProps extends AgentEditorProps {
   onClose: () => void;
 }
 
-/** The at-hand agent editor (DR-007/009): an anchored popover
+/** The at-hand agent editor (DR-141/009): an anchored popover
  * carrying the full editor, so tuning an agent never forces a
  * surface switch. Focus discipline per DR-010 §6: focus moves into
  * the dialog on mount and returns to the opener on unmount; Escape

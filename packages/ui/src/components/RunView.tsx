@@ -756,7 +756,7 @@ export function RunView({
   // history the core cannot continue is named, with when it last spoke.
   const history = !externalWriter && readOnly && !uncertain;
   const loadError = view.loadError ?? (readOnly && !uncertain ? error : undefined);
-  // The parked-run notice (run-view-128, DR-060, DR-073): the run the
+  // The parked-run notice (run-view-128, DR-075, DR-073): the run the
   // stream still reports underway, standing parked on the Boss — in
   // its recoverable failure state, or waiting for a reply. The way
   // back stands until that run leaves the park, mid-turn included.

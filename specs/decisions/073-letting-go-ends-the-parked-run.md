@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-17).
-Amends [DR-060](060-failed-workflow-control.md), [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md).
+Amends [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md), [DR-075](075-a-failure-says-what-and-what-now.md).
 
 ## Context
 
@@ -44,7 +44,7 @@ The ending disposes the run inside a turn, which is already how the fold stops a
 This applies the law of [DR-066](066-every-summons-has-a-door.md) — every summons has a door, and a control is offered and its refusal reported — and amends:
 
 - [DR-062](062-ending-a-failed-workflow.md): dropping interrupted work is the whole ruling rather than a verdict alone, and the run's own control extends from a failed run to any run parked on the Boss; its model-free give-up, the one-ruling gesture and the History tag stand.
-- [DR-060](060-failed-workflow-control.md): the notice stands for a run parked on a question as it does for a run parked in its recoverable failure state.
+- [DR-075](075-a-failure-says-what-and-what-now.md): the parked-run notice stands for a run parked on a question as it does for a run parked in its recoverable failure state.
 - [DR-066](066-every-summons-has-a-door.md): a Drop taken on a row whose run is parked no longer rules on the intent alone.
 
 ## Consequences

@@ -7,7 +7,7 @@
 
 Accepted (2026-09-24).
 Amends [DR-081](081-the-app-supplies-the-compiler.md).
-Amended by [DR-235](235-independent-ultracode.md), [DR-236](236-primary-and-subagent-model-defaults.md).
+Amended by [DR-235](235-independent-ultracode.md), [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 
@@ -18,7 +18,7 @@ Amended by [DR-235](235-independent-ultracode.md), [DR-236](236-primary-and-suba
 
 ## Decision
 
-- When the block drives the compile, the runner hands `slc` the block — its adapter, model, effort and fast mode, with its Ultracode setting ([DR-235](235-independent-ultracode.md)) and its subagent model ([DR-236](236-primary-and-subagent-model-defaults.md)) — and names, with `--config`, an empty configuration the core ships, so nothing `slc` would discover fills what the block leaves unset: a model, an effort or fast mode the block does not set is the adapter's default.
+- When the block drives the compile, the runner hands `slc` the block — its adapter, model, effort and fast mode, with its Ultracode setting ([DR-235](235-independent-ultracode.md)) and its subagent model ([DR-237](237-published-agent-runtime-floors.md)) — and names, with `--config`, an empty configuration the core ships, so nothing `slc` would discover fills what the block leaves unset: a model, an effort or fast mode the block does not set is the adapter's default.
 - When the environment configures `slc` with any of the agent variables the runner hands it, the runner passes nothing — no variable and no `--config` — and `slc`'s own configuration stands, as [DR-081](081-the-app-supplies-the-compiler.md) decided.
 
 This amends [DR-081](081-the-app-supplies-the-compiler.md) in the handoff alone: what the block leaves unset stays unset for `slc`.

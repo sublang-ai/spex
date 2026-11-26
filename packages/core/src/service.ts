@@ -220,7 +220,7 @@ export interface CoreServiceOptions {
   scaffoldCommand?: string[];
   /** Variables that command runs under: Electron's run-as-Node one. */
   scaffoldEnv?: Record<string, string>;
-  /** Compiled-playbook library directory (DR-005). */
+  /** Compiled-playbook library directory (DR-036). */
   libraryDir?: string;
   /**
    * Handshake token required on the WS URL (?token=). Unset or empty
@@ -1456,7 +1456,7 @@ export class CoreService {
     }, 150);
   }
 
-  /** The compiled-playbook library home (DR-005, DR-036): under the
+  /** The compiled-playbook library home (DR-036): under the
    * state root when one is set, the pre-DR-036 XDG default otherwise. */
   private libraryDir(): string {
     return (

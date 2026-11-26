@@ -151,7 +151,7 @@ When a solution stands, the core shall select, within it, in this order ([DR-104
 1. artifacts: those a request selects, or all of them by default, plus everything any requiring spec package needs, together with everything they `requires`;
 2. languages: for each selected artifact, the language its `select` entry names; else the environment's `language` when the artifact has it; else its original text, recorded as a fallback when another language was wanted;
 3. files: the root files and every file of each selected artifact in its chosen language;
-4. placements: each provided playbook [[environments-1](#environments-1)] under its id, one skill for each provided skill and each provided playbook under the artifact's id, and for a provided spec the name its generated skill takes where it is placed as one [[environments-8](#environments-8)], `<org>-<pkg>`, or `<pkg>` where that is longer than an Agent Skills name may be [[1]] — each skill under its alias where the request names one ([DR-115](../decisions/115-a-spec-reaches-the-agents.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
+4. placements: each provided playbook [[environments-1](#environments-1)] under its id, one skill for each provided skill and each provided playbook under the artifact's id, and for a provided spec the name its generated skill takes where it is placed as one [[environments-8](#environments-8)], `<org>-<pkg>`, or `<pkg>` where that is longer than an Agent Skills name may be [[1]] — each skill under its alias where the request names one ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 - two playbooks with one id, or two placed skill names alike, in one environment are refused naming both, until one is aliased;
 - a selected artifact its release does not provide [[environments-1](#environments-1)] is installed with the rest and placed nowhere.
@@ -188,7 +188,7 @@ When the core starts, once it has installed every environment, it shall collect 
 
 #### environments-8
 
-When an environment is installed or the global lock applied by a sync, the core shall place the skills, playbooks and specs its releases provide [[environments-6](#environments-6)], so that each installation of the same project lock provides the same tools ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-115](../decisions/115-a-spec-reaches-the-agents.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
+When an environment is installed or the global lock applied by a sync, the core shall place the skills, playbooks and specs its releases provide [[environments-6](#environments-6)], so that each installation of the same project lock provides the same tools ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
 
 | Placed | Where |
 | --- | --- |

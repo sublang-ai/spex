@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-22).
-Amends [DR-007](007-conversational-session-start.md), [DR-010](010-interface-craft.md).
+Amends [DR-010](010-interface-craft.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md).
 Amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -18,7 +18,7 @@ Amended by [DR-136](136-the-first-project-picker-leads-with-a-folder.md), [DR-13
 
 ## Decision
 
-- Amends [DR-007](007-conversational-session-start.md) and [DR-010](010-interface-craft.md) only while no project is registered.
+- Amends [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) and [DR-010](010-interface-craft.md) only while no project is registered.
 - With no registered project, the workspace shows a welcome page explaining Spex's specs-to-delivery workflow ([DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-139](139-quieter-welcome-flow-and-academy-choice.md)).
 - The page offers a primary local-project action, a secondary Academy action naming the specs example it actually creates ([DR-137](137-specs-first-welcome-and-distinct-project-paths.md)), and an action opening Space to sign in or to discover and open personal projects ([DR-172](172-surfaces-a-fresh-user-reads.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md)).
 - The local-project action opens the local-project add form ([DR-136](136-the-first-project-picker-leads-with-a-folder.md)), without a duplicate Academy row.

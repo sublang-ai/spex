@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-26).
-Amends [DR-019](019-inline-agent-configuration.md), [DR-037](037-playbook-12-adoption.md).
+Amends [DR-004](004-config-and-persistence.md), [DR-019](019-inline-agent-configuration.md), [DR-037](037-playbook-12-adoption.md).
 Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md), [DR-205](205-agent-cards-read-alike.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -24,7 +24,7 @@ Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md), [DR-205](
 - The seed is chosen from credentials alone — which ones count is [DR-205](205-agent-cards-read-alike.md)'s — read before the file is written; no model call or quota check takes part.
 - Seeding is one exclusive create of an absent file, never touching an existing config; an untouched seed is reseeded under [DR-156](156-an-untouched-seed-follows-the-credentials.md).
 - The promise is that the Captain's and each player's agent settings (`adapter`, `model`, `effort`, `writablePaths`) match what the CLI seeds under the same credentials and home, but where [DR-205](205-agent-cards-read-alike.md) departs from Playbook's rule; the two files are not promised equal, since they sit at different paths and Spex removes `from`.
-- Amends [DR-019](019-inline-agent-configuration.md) in §"Spex writes only blocks": the seed keeps no single-vendor lineup of its own; its agents are the ones Playbook's seeding rule selects from this machine's credentials.
+- Amends [DR-004](004-config-and-persistence.md) in seeding an absent config, and [DR-019](019-inline-agent-configuration.md) in §"Spex writes only blocks": the seed keeps no single-vendor lineup of its own; its agents are the ones Playbook's seeding rule selects from this machine's credentials.
 - Amends [DR-037](037-playbook-12-adoption.md) in its seeding: the first-run config is not the installed template copied as written, and the two hosts' files are not identical by construction; only their agent settings are.
 - Unifying the two hosts' config locations and the `from` convention is out of scope.
 

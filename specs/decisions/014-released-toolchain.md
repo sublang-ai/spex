@@ -10,7 +10,7 @@ Amended by [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-pla
 
 ## Context
 
-- slc emits thin artifacts: `<id>.playbook/<id>.playbook.ts` delegates to `@sublang/playbook/xstate-runtime`'s shared engine, and a registry-entry module `<id>.ts` is emitted beside the artifact directory — the manifest gap [DR-005](005-compilation-integration.md) worked around no longer exists.
+- slc emits thin artifacts: `<id>.playbook/<id>.playbook.ts` delegates to `@sublang/playbook/xstate-runtime`'s shared engine, and a registry-entry module `<id>.ts` is emitted beside the artifact directory — the manifest gap the first compile integration worked around no longer exists.
 - The playbook registry contract has no state-id fields; its runtime contract has session-identity `init`, structured run results, and a Captain failure that resolves as a `failed` outcome instead of rejecting.
 - cligent renamed the agent option `reasoningEffort` to `effort`.
   cligent's own legacy-key migration lives only in its tmux-play YAML loader, which Spex does not use: Spex validates the shared config itself ([DR-004](004-config-and-persistence.md)) and passes composed agents straight to `createTmuxPlayRuntime`.
@@ -22,7 +22,7 @@ Amended by [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-pla
 
 ### The compiler stays external
 
-- slc stays an external, never-imported toolchain per [DR-005](005-compilation-integration.md).
+- slc stays an external, never-imported toolchain per [DR-081](081-the-app-supplies-the-compiler.md).
 
 ### Canonical `effort` key
 
@@ -63,4 +63,4 @@ Amended by [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-pla
 - Playbooks compiled for an earlier contract degrade to an actionable invalid state instead of failing mid-session; recompiling re-admits them.
 - The wrapper is Spex-owned glue over slc's emitted entry.
 - User configs written before the rename keep composing via the legacy alias; the next effort edit of a block canonicalizes it.
-- Registry generation now tracks slc's emitted entry instead of the Captain shell's contract; the fail-closed validation gate from [DR-005](005-compilation-integration.md) stays as the last line of defense.
+- Registry generation now tracks slc's emitted entry instead of the Captain shell's contract; the fail-closed validation gate from [DR-081](081-the-app-supplies-the-compiler.md) stays as the last line of defense.

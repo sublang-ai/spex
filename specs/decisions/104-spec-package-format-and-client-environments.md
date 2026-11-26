@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-10-04); revised (2026-10-06).
-Amends [DR-005](005-compilation-integration.md), [DR-015](015-reference-content.md), [DR-036](036-file-state-store.md), [DR-037](037-playbook-12-adoption.md), [DR-045](045-unified-session-storage.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-059](059-issue-delivery-through-dev.md).
-Amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-115](115-a-spec-reaches-the-agents.md), [DR-124](124-skills-reach-every-agent.md), [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md), [DR-151](151-publish-local-spec-packages.md), [DR-152](152-install-a-known-package.md), [DR-161](161-an-applet-is-a-page-the-ide-serves.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-174](174-what-a-package-provides-is-placed.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-241](241-reviewable-builtin-gears.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md), [DR-251](251-installs-copy-from-the-store.md).
+Amends [DR-015](015-reference-content.md), [DR-036](036-file-state-store.md), [DR-037](037-playbook-12-adoption.md), [DR-045](045-unified-session-storage.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-059](059-issue-delivery-through-dev.md), [DR-081](081-the-app-supplies-the-compiler.md).
+Amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-124](124-skills-reach-every-agent.md), [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md), [DR-151](151-publish-local-spec-packages.md), [DR-152](152-install-a-known-package.md), [DR-161](161-an-applet-is-a-page-the-ide-serves.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-174](174-what-a-package-provides-is-placed.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-241](241-reviewable-builtin-gears.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md), [DR-251](251-installs-copy-from-the-store.md).
 
 ## Context
 
@@ -20,7 +20,7 @@ Amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), 
 
 ## Decision
 
-- Amends [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role; the launcher gets the module's location from Spex at launch instead of from the launcher config. The compile flow stands.
+- Amends [DR-081](081-the-app-supplies-the-compiler.md) and [DR-058](058-chat-assisted-playbook-authoring.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role; the launcher gets the module's location from Spex at launch instead of from the launcher config. The compile flow stands.
 - Amends [DR-036](036-file-state-store.md) and [DR-045](045-unified-session-storage.md): the playbook library folder `playbooks/<id>/` gives way to installed spec packages.
 - Amends [DR-015](015-reference-content.md), [DR-037](037-playbook-12-adoption.md) and [DR-059](059-issue-delivery-through-dev.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
 

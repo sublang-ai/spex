@@ -9,7 +9,7 @@ Done
 
 ## Intent
 
-Implement the Library surface per the playbook-library spec package: browsing and mapping configured playbooks, and compiling new ones from prose via the external slc toolchain ([DR-005](../decisions/005-compilation-integration.md)), packaged so compiled playbooks load in the app's runtime.
+Implement the Library surface per the playbook-library spec package: browsing and mapping configured playbooks, and compiling new ones from prose via the external slc toolchain ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), packaged so compiled playbooks load in the app's runtime.
 
 ## Deliverables
 

@@ -7,7 +7,7 @@
 
 Accepted (2026-09-30).
 Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), [DR-067](067-tuning-for-one-conversation.md).
-Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-167](167-the-compiler-shares-the-apps-engine.md), [DR-232](232-codex-subagent-selection.md), [DR-236](236-primary-and-subagent-model-defaults.md).
+Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-167](167-the-compiler-shares-the-apps-engine.md), [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 
@@ -44,7 +44,7 @@ A fourth field that behaved otherwise in any of those homes would be the irregul
 - in the shared config, on the Captain's block and each player's block, as a merge-patched key like `model`, and in a role binding as a pin, `false` switching delegation off ([DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), or omission to inherit the player's value;
 - in a session, as a fourth key of the session's own agent settings, applied at the Captain's block, each tuned player's block, and every role binding naming a tuned player — the three sites of [DR-067](067-tuning-for-one-conversation.md) — because a role's provider call is built from its binding.
 
-Its choices are "Same as agent", the default ([DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), then the adapter's own models from discovery and a custom entry, as the model field offers them ([DR-052](052-runtime-model-options.md)); on Codex a choice requests the runtime's native spawn defaults ([DR-232](232-codex-subagent-selection.md)).
+Its choices are "Same as agent", the default ([DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), then the adapter's own models from discovery and a custom entry, as the model field offers them ([DR-052](052-runtime-model-options.md)); on Codex a choice requests the runtime's native spawn defaults ([DR-237](237-published-agent-runtime-floors.md)).
 Validation is launcher parity: the shared validator delegates support to Cligent's capability, so a subagent model on an adapter Cligent does not serve is refused with Cligent's own wording, and discovery gates no save.
 
 ### Where it is shown
@@ -59,7 +59,7 @@ The editor the chip opens shows the field, and a session's own choice of it coun
 
 ### Carried to the compiler
 
-The compile's agent receives the block's subagent model beside its model ([DR-236](236-primary-and-subagent-model-defaults.md)).
+The compile's agent receives the block's subagent model beside its model ([DR-237](237-published-agent-runtime-floors.md)).
 The authoring conversation's Captain, run through Cligent directly, carries the block's subagent model like its model, so a Captain tuned to delegate delegates while authoring too.
 
 ### Verification by layer

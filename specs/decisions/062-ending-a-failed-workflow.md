@@ -6,12 +6,12 @@
 ## Status
 
 Accepted.
-Amends [DR-035](035-intent-ledger.md), [DR-060](060-failed-workflow-control.md), [DR-061](061-run-state-from-frames.md).
+Amends [DR-035](035-intent-ledger.md), [DR-061](061-run-state-from-frames.md).
 Amended by [DR-066](066-every-summons-has-a-door.md), [DR-073](073-letting-go-ends-the-parked-run.md), [DR-074](074-a-parked-run-survives.md), [DR-075](075-a-failure-says-what-and-what-now.md), [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md).
 
 ## Context
 
-[DR-060](060-failed-workflow-control.md) gave a parked workflow a Retry and said it would stop being a request and start being a call once Playbook advertised its runtime actions to hosts.
+The first failed-workflow notice gave a parked workflow a Retry and said it would stop being a request and start being a call once Playbook advertised its runtime actions to hosts.
 Playbook advertises them, and advertises one control of its own besides: a give-up that spends no model call.
 
 Retry answers "make it work".
@@ -39,7 +39,6 @@ Without an exit, holding the summons would have meant holding it forever, which 
 - A failure that parked no run keeps the rule it has: nothing is stuck, so moving on is acknowledgment.
 - Dropping records nothing of its own. Ending the run is what clears the attention, on every surface, because every surface already asks the same question — is that run still parked.
 - The run's machine card keeps its failure emphasis and its History row keeps the dropped tag it already has ([DR-038](038-history-is-done-work.md)): the work did fail, and the record says so after the summons stops.
-- Amends [DR-060](060-failed-workflow-control.md): Drop stands beside the recovery controls, which become the deterministic selection that record deferred; the notice's placement, its plain wording, and its busy and disabled forms stand.
 - Amends [DR-061](061-run-state-from-frames.md): the ledger holds a parked failure on the terms the frames do, closing the divergence that record left; reading a leaf's state from its own frames stands.
 - Amends [DR-035](035-intent-ledger.md): a later Boss turn no longer clears a failure that parked a run; the verdict acts, the two-band queue, and every other fold contract stand.
 

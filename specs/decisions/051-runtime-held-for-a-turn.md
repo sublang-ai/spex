@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-07) on the owner's two questions.
-Amends [DR-002](002-desktop-app-architecture.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-038](038-history-is-done-work.md).
+Amends [DR-002](002-desktop-app-architecture.md), [DR-003](003-runtime-reuse.md), [DR-006](006-projects-and-forge.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-038](038-history-is-done-work.md).
 Amended by [DR-067](067-tuning-for-one-conversation.md), [DR-074](074-a-parked-run-survives.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-134](134-execution-ownership.md), [DR-238](238-claude-resumes-keep-the-session-model.md).
 
 ## Context
@@ -28,7 +28,8 @@ Amended by [DR-067](067-tuning-for-one-conversation.md), [DR-074](074-a-parked-r
 - Amends [DR-029](029-session-history-home.md): the ending control and the "ended" vocabulary retire.
 - Amends [DR-035](035-intent-ledger.md): the lane Start reuses is the project's current conversation, not a live session.
 - Amends [DR-038](038-history-is-done-work.md): the delete control waits only on a turn in flight.
-- Amends [DR-002](002-desktop-app-architecture.md): one working turn per project replaces one live session per project.
+- Amends [DR-002](002-desktop-app-architecture.md) and [DR-006](006-projects-and-forge.md): one working turn per project replaces one live session per project.
+- Amends [DR-003](003-runtime-reuse.md): the core holds a project session's headless runtime only for a Boss turn.
 
 ### The runtime is held for a turn
 

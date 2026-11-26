@@ -5,12 +5,15 @@
 
 ## Status
 
-Accepted (2026-09-17).
-Amends [DR-060](060-failed-workflow-control.md), [DR-062](062-ending-a-failed-workflow.md), [DR-069](069-key-phrases-not-sentences.md).
-Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md), [DR-155](155-players-named-delegated-and-recovered.md), [DR-160](160-the-captain-dispatches-in-plain-sight.md).
+Accepted (2026-09-17); revised (2026-11-26).
+Amends [DR-047](047-explicit-session-recovery.md), [DR-062](062-ending-a-failed-workflow.md), [DR-069](069-key-phrases-not-sentences.md).
+Amended by [DR-073](073-letting-go-ends-the-parked-run.md), [DR-117](117-the-earlier-steps-fold-behind-one-control.md), [DR-155](155-players-named-delegated-and-recovered.md), [DR-160](160-the-captain-dispatches-in-plain-sight.md).
 
 ## Context
 
+- The owner reported that a `/dev` turn parked in its recoverable failure state offered no way back but prose in the composer, whose reading is the session Captain's judgment.
+- Playbook owns the correct recovery: the parked leaf advertises its own runtime actions, and the shell executes one only while the leaf's current control view still advertises it.
+- The failure such a control recovers from was a refused model call, and a recovery that itself depends on a model call shares that failure mode.
 - The owner reported that a failed `/code` run in spex-pub gave no usable reason and offered a Retry that could not work.
 - The Boss saw "workflow failed; awaiting Boss recovery", a notice naming no cause, and a hedged model reply carrying two commit hashes.
   The runtime's reason reached the client inside the status record's data, and no component rendered it.
@@ -24,6 +27,11 @@ Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md), [DR-155](
 - **One catalogue.**
   The interface holds one table mapping every failure code Playbook exports to a plain phrase, an optional Boss step naming what to do outside Spex, and the evidence it prints.
   A test imports Playbook's code list and fails when a code has no row, so no failure kind ships unexplained.
+- **The notice.**
+  The run view stands a notice between the Captain pane and the composer while a continuable session's leaf run is parked in its recoverable failure state or on a Boss question ([DR-073](073-letting-go-ends-the-parked-run.md)), read from the run's own frames ([DR-061](061-run-state-from-frames.md)); in a narrow pane its controls wrap under its words.
+  Each control executes its action as a host-submitted selection with no model call on the recovery path; where the run advertises no recovery, none is offered.
+  An uncertain session shows the interrupted-turn controls of [DR-047](047-explicit-session-recovery.md) instead, never both; the two conditions never stand together.
+  Spex requests what it needs from Playbook rather than working around it: no prompt is parsed, no internal record is scraped, and no reconstructed request text is delivered in a retry's name.
 - **The card.**
   At the failure's place in the Captain thread, replacing the bare status line, a failure card says in three lines what failed (the workflow's command and the step's plain name, a failure the Boss's own stop caused reading aborted ([DR-160](160-the-captain-dispatches-in-plain-sight.md))), why (the catalogue phrase with its evidence, paths included), and what now (the Boss step where the catalogue has one, and each control's standing; a failure naming its agent offers that agent's popover and its Settings row by cause ([DR-155](155-players-named-delegated-and-recovered.md))).
   The runtime's own message stays in the tooltip.
@@ -36,11 +44,12 @@ Amended by [DR-117](117-the-earlier-steps-fold-behind-one-control.md), [DR-155](
 - **A carried change is Playbook's to say**: the report a settled commit's absorbed or altered pre-existing changes earn reaches the Boss inside the Captain's reply, and the interface adds nothing of its own to it.
 - **What this amends.**
   [DR-062](062-ending-a-failed-workflow.md): the notice carries one control per advertised action, each with its standing, instead of one Retry; Drop, its confirm and the one-ruling gesture stand.
-  [DR-060](060-failed-workflow-control.md): the notice says why the run failed and what to do, from data, and draws each advertised action as its own control.
+  [DR-047](047-explicit-session-recovery.md): explicit recovery extends from the uncertain turn to the settled-but-parked workflow.
   [DR-069](069-key-phrases-not-sentences.md): a failure's cause is a phrase where it applies, from a catalogue, never a sentence a model composed.
 
 ## Consequences
 
+- A provider refusal cannot block recovery the way it blocked the turn, since recovery makes no model call.
 - The Boss reads what happened and what each control will do without a model between the facts and the words.
 - The catalogue is a product surface: its phrases follow [DR-069](069-key-phrases-not-sentences.md), and a new Playbook code is a failing test until it is phrased.
 - A run's own advertised actions replace the interface's notion of "a retry", so abandonment and reconciliation become distinct, honestly labelled controls.

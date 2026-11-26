@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-08-29).
-Amends [DR-004](004-config-and-persistence.md), [DR-005](005-compilation-integration.md), [DR-033](033-remote-gui-serving.md), [DR-035](035-intent-ledger.md).
+Amends [DR-004](004-config-and-persistence.md), [DR-006](006-projects-and-forge.md), [DR-020](020-desktop-live-smoke.md), [DR-033](033-remote-gui-serving.md), [DR-035](035-intent-ledger.md).
 Amended by [DR-037](037-playbook-12-adoption.md), [DR-045](045-unified-session-storage.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-108](108-the-root-lease-names-the-machine.md), [DR-134](134-execution-ownership.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -23,6 +23,8 @@ Amended by [DR-037](037-playbook-12-adoption.md), [DR-045](045-unified-session-s
 
 - Amends [DR-004](004-config-and-persistence.md): the app-local SQLite store retires in favor of plain files.
 - Amends [DR-033](033-remote-gui-serving.md): the per-shell store gives way to one shared state root.
+- Amends [DR-006](006-projects-and-forge.md): the project registry lives in the state root's registry file, not the app-local SQLite store.
+- Amends [DR-020](020-desktop-live-smoke.md): the smoke redirect covers the state root as well as the user-data directory.
 - Amends [DR-035](035-intent-ledger.md)'s storage form: the intents table becomes an act log; every fold contract stands.
 
 ### Sessions live in the shared playbook session store
@@ -35,7 +37,7 @@ Amended by [DR-037](037-playbook-12-adoption.md), [DR-045](045-unified-session-s
 
 - The Spex state root is `${SPEX_HOME:-~/.spex}`; its records live in spex repositories under `workspace/` ([DR-103](103-the-home-and-its-groups.md)), with intents kept as appended acts — [DR-035](035-intent-ledger.md)'s no-state-column law kept, every state folded at read.
 - Every shell shares this one root; a root lease admits one core at a time, a second core refused fail-closed ([DR-108](108-the-root-lease-names-the-machine.md)).
-- Writes are atomic whole-file replaces or line appends; each file kind carries a version; forward migration at startup stands, including a one-time import of an existing SQLite store, the old file left in place, which also relocates a legacy library directory into the state root and rewrites the config's `from` paths into it ([DR-005](005-compilation-integration.md)).
+- Writes are atomic whole-file replaces or line appends; each file kind carries a version; forward migration at startup stands, including a one-time import of an existing SQLite store, the old file left in place, which also relocates a legacy library directory into the state root and rewrites the config's `from` paths into it.
 - No secrets: agent credentials and forge auth stay with their own tools; provider resume tokens stay out of the record stream, so syncing streams shares content, never continuation credentials.
 
 ### Files are the truth; any index is disposable

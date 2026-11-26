@@ -433,7 +433,7 @@ export function demoScript(options: { delayMs?: number } = {}): FakeScript {
         response: { result: '{"decision":"dispatch"}' },
       },
       {
-        // The hidden decision a recovery request costs (DR-060): the
+        // The hidden decision a recovery request costs (DR-075): the
         // Captain reads the parked leaf's control view before it
         // applies anything, so the machine stays in `failed` for as
         // long as that call takes.
@@ -492,7 +492,7 @@ export function demoScript(options: { delayMs?: number } = {}): FakeScript {
 const parkedSessions = new Set<string>();
 
 /** Which demo sessions stand parked in their recoverable failure
- * state, by session id and by the run that parked there (DR-060): the
+ * state, by session id and by the run that parked there (DR-075): the
  * recovery turn walks the same machine out of `failed`, so the run's
  * identity has to outlive the runtime that emitted it. */
 const failedSessions = new Map<string, string>();
@@ -636,7 +636,7 @@ export function demoCaptain(
 
     // The parked failure is left the way the runtime leaves it: one
     // transition out of `failed`, so the way back stops being owed
-    // (run-view-130, DR-060).
+    // (run-view-130, DR-075).
     if (parked) {
       setFailedRun(undefined);
       // The decision precedes the action, so the run is still parked
@@ -667,7 +667,7 @@ export function demoCaptain(
     await context.callPlayer("dev.coder", `Implement: ${turn.prompt}`);
     // A prompt starting with "fail" parks the run in its recoverable
     // failure state: `failed` is a parked state and not a final one,
-    // so the machine stands there waiting for the Boss (DR-060).
+    // so the machine stands there waiting for the Boss (DR-075).
     if (turn.prompt.toLowerCase().startsWith("fail")) {
       await trace("player.call.finished", {
         stateId: "firstPhase",

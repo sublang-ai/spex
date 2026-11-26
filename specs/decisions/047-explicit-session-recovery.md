@@ -7,7 +7,7 @@
 
 Accepted (2026-09-05).
 Amends [DR-045](045-unified-session-storage.md).
-Amended by [DR-060](060-failed-workflow-control.md), [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-134](134-execution-ownership.md).
+Amended by [DR-075](075-a-failure-says-what-and-what-now.md), [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-134](134-execution-ownership.md).
 
 ## Context
 
@@ -23,7 +23,7 @@ Shared storage must make the same recovery available in desktop without making n
 - Both operations use Playbook's exclusive session lease and recovery lifecycle. Discard loads no agents or configuration.
 - Show the saved input, and Discard's consequences before its confirmation; preserve history and the refusal reason when recovery is unsafe.
 - Block normal submissions and queued sends until uncertainty is resolved.
-- A workflow parked in its recoverable failure state, which never stands with uncertainty, has its own control ([DR-060](060-failed-workflow-control.md)).
+- A workflow parked in its recoverable failure state, which never stands with uncertainty, has its own control ([DR-075](075-a-failure-says-what-and-what-now.md)).
 
 ## Consequences
 

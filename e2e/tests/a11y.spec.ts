@@ -61,7 +61,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.press("Escape");
 
     // A run parked in its recoverable failure state, where the notice
-    // and its one control stand (run-view-128, DR-060).
+    // and its one control stand (run-view-128, DR-075).
     await page.getByTestId("boss-composer").fill("Fail the follow-up patch");
     await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(page.getByTestId("failed-workflow")).toBeVisible();

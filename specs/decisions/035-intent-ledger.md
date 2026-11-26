@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-08-28); revised (2026-09-02).
-Amends [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md), [DR-029](029-session-history-home.md).
-Amended by [DR-036](036-file-state-store.md), [DR-038](038-history-is-done-work.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-055](055-queue-advancement.md), [DR-059](059-issue-delivery-through-dev.md), [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-085](085-boss-talks-through-captain.md), [DR-103](103-the-home-and-its-groups.md), [DR-119](119-an-answer-continues-its-intent.md), [DR-134](134-execution-ownership.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amends [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md).
+Amended by [DR-036](036-file-state-store.md), [DR-038](038-history-is-done-work.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-059](059-issue-delivery-through-dev.md), [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-085](085-boss-talks-through-captain.md), [DR-103](103-the-home-and-its-groups.md), [DR-119](119-an-answer-continues-its-intent.md), [DR-134](134-execution-ownership.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -29,7 +29,7 @@ Amended by [DR-036](036-file-state-store.md), [DR-038](038-history-is-done-work.
 
 ## Decision
 
-- Extends [DR-009](009-at-hand-interaction.md) and [DR-029](029-session-history-home.md); amends [DR-011](011-project-workspace.md)'s Dashboard content row and the attention queue's kind table; evolves the Dashboard's work lists, [DR-027](027-linked-views-contract.md)'s routing of work to work surfaces standing.
+- Amends [DR-009](009-at-hand-interaction.md) in what its Dashboard badge counts, the attention queue; extends [DR-029](029-session-history-home.md); amends [DR-011](011-project-workspace.md)'s Dashboard content row and the attention queue's kind table; evolves the Dashboard's work lists, [DR-027](027-linked-views-contract.md)'s routing of work to work surfaces standing.
 
 **An intent is a staged Boss turn.**
 The one new entity is the intent: the text of a Boss turn not yet sent, plus where it came from.
@@ -74,7 +74,7 @@ The Boss reads, appends context, and presses Enter: the submission carries the i
 The staged text wears the intent's chip; emptying the composer or dismissing the chip detaches the id, and sending then stamps nothing — the intent simply stays queued.
 The dispatch binds when the turn starts, not when Enter falls: a submission waiting in the composer queue [[run-view-8](../packages/run-view.md#run-view-8)] leaves the intent queued with its chip on the pending bubble, so a discarded queue discards no intent.
 Text is editable while queued; from binding on it is history.
-Settled work advances the queue on its own ([DR-055](055-queue-advancement.md)).
+Settled work advances the queue on its own ([DR-077](077-up-next-is-a-committed-queue.md)).
 
 **Execution has three outcomes, and attention lists two of them.**
 A dispatched intent works, then either stands interrupted on the Boss or finishes; only a verdict — Confirm or Drop — closes it, because a finish is a claim and the Boss rules on claims.

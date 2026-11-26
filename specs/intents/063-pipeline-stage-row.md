@@ -9,7 +9,7 @@ Done.
 
 ## Intent
 
-A playbook card in Playbooks shows its compilation pipeline as the row it is — Source → Gears → State machine — instead of hiding it behind a "Pipeline" / "Hide pipeline" button; each stage in the row opens its artifact beneath, so a reader sees at a glance what a playbook is made of and expands any stage in one click ([DR-010](../decisions/010-interface-craft.md) §8, [DR-005](../decisions/005-compilation-integration.md)).
+A playbook card in Playbooks shows its compilation pipeline as the row it is — Source → Gears → State machine — instead of hiding it behind a "Pipeline" / "Hide pipeline" button; each stage in the row opens its artifact beneath, so a reader sees at a glance what a playbook is made of and expands any stage in one click ([DR-010](../decisions/010-interface-craft.md) §8, [DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
 
 ## Deliverables
 

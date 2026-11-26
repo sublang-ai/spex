@@ -9,7 +9,7 @@ Done
 
 ## Intent
 
-Rework the first-contact and daily-driver experience per the owner's review: conversational session start ([DR-007](../decisions/007-conversational-session-start.md)), native folder picking ([DR-008](../decisions/008-native-shell-bridge.md)), playbook pipeline visibility, and organized work lists — plus the friction findings from the scenario review.
+Rework the first-contact and daily-driver experience per the owner's review: conversational session start ([DR-141](../decisions/141-project-start-explains-the-task-and-slash-discovery.md)), native folder picking ([DR-008](../decisions/008-native-shell-bridge.md)), playbook pipeline visibility, and organized work lists — plus the friction findings from the scenario review.
 
 ## Deliverables
 

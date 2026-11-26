@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-20).
-Amends [DR-037](037-playbook-12-adoption.md).
+Amends [DR-004](004-config-and-persistence.md), [DR-037](037-playbook-12-adoption.md).
 Amended by [DR-103](103-the-home-and-its-groups.md).
 
 ## Context
@@ -26,7 +26,7 @@ Amended by [DR-103](103-the-home-and-its-groups.md).
   The XDG file is left in place as before.
 - The Space names `config/playbook.config.yaml` the Settings unit and family; a `playbook/` path that still appears — a lingering directory, or an older device's edit arriving through sync — is what any other path is: a tracked path listed by name, or not a Spex folder.
 
-This amends [DR-037](037-playbook-12-adoption.md)'s relocation: it serves the home's former `playbook/` location ahead of the XDG one, and removes a former file inside the home once the canonical file is published.
+This amends [DR-004](004-config-and-persistence.md) in the shared config's location, and [DR-037](037-playbook-12-adoption.md)'s relocation: it serves the home's former `playbook/` location ahead of the XDG one, and removes a former file inside the home once the canonical file is published.
 
 Considered and declined:
 
