@@ -5,8 +5,8 @@
 
 ## Status
 
-Proposed (2026-11-21), together with [DR-243](243-guards-protect-critical-behavior-on-every-change.md), which defines a guard and its pass rule.
-[DR-251](251-a-guard-is-kept-beside-the-code.md) proposes the first stage, in which the `guard` skill's agents draft the readings.
+Accepted (2026-11-25) with [DR-251](251-a-guard-is-kept-beside-the-code.md), together with [DR-243](243-guards-protect-critical-behavior-on-every-change.md), which defines a guard and its pass rule.
+[DR-251](251-a-guard-is-kept-beside-the-code.md) sets the first stage, in which the `guard` skill's agents draft the readings.
 
 ## Context
 

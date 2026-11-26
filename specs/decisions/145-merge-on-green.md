@@ -13,6 +13,7 @@ Amended by [DR-185](185-the-suites-a-change-reaches.md) in the pull request's ma
 
 Amended by [DR-199](199-release-gated-full-validation.md) in the merge gate and validation timing: one required `checks` result covers selected pull-request work; full validation runs for publication or explicit requests, with no automatic main or nightly run.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the retirement of the privileged hub validation lane.
+Extended by [DR-251](251-a-guard-is-kept-beside-the-code.md) with `spex verify` in this repository's checks.
 
 ## Context
 

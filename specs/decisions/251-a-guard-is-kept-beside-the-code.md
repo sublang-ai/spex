@@ -5,7 +5,7 @@
 
 ## Status
 
-Proposed (2026-11-25) as the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE.
+Accepted (2026-11-25) as the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE.
 It reads those two records narrowly in the places its Decision lists.
 Extends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`.
 Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need: the `guard` skill needs the `spex` command.
@@ -64,9 +64,11 @@ In this stage a binding controls every condition a check uses.
 Each sequence starts from a fresh state, and a clock or a restart, where a behavior depends on one, is an event the binding causes.
 
 Every run uses a copy outside the project.
-Spex copies the declared files and the binding, applies a kept fault's patch where there is one, runs the commands, and runs the module in a process of its own, stopped at the time limit.
+Spex copies the declared files and the binding, applies a kept fault's patch where there is one, runs the commands, and runs the module in a process of its own, each command and that process stopped at the time limit.
+A kept fault's patch changes existing files among the declared files only, never the binding.
 The copy uses the project's installed dependencies.
-A run that loads any other project file from outside the copy is Inconclusive, naming the file.
+A run whose process loads, in its main thread, a module of the project from outside the copy is Inconclusive, naming the file.
+What a worker thread or a process the code starts loads, and a file read as data, is not seen in this stage.
 A binding that fails, by an error, an effect outside its declaration or a failed command, makes the check Inconclusive and never counts as catching a fault.
 The declared files are the code the guard reaches, and a result names their digest.
 
@@ -86,6 +88,7 @@ A guard is removed by deleting its folder, which shows the same way.
 ### What a run checks
 
 `spex verify` checks every guard, or the ones it is given, and calls no model.
+A guard whose files or items hold an error cannot be checked and does not pass.
 
 1. It compares the inputs with the approval record.
 2. It checks every example against every reading, without the code.
@@ -161,6 +164,7 @@ This repository runs `spex verify` in its pull-request checks and before a push.
 
 A project adds a guard with two commands and one skill, and a second guard on the same interface reuses the binding.
 A binding is a JavaScript module until other kinds follow, so only code it can drive is reachable.
+`spex verify` needs Node 22.15 or newer, which it uses to see what a copy's process loads.
 An approval rests on the project's review, and a project that merges without one has only the record's history.
 The seed is fixed, so the same sequences are generated on every change until the version of fast-check or Spex or the guard's inputs change, and a wider search is a separate, later check.
 Starting each sequence from an example matters: on the prototype's second rule, sequences generated without one caught the restored fault on none of twenty seeds at the same bounds, and with one on all twenty.
