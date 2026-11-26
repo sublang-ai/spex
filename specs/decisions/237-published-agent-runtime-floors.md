@@ -5,28 +5,24 @@
 
 ## Status
 
-Accepted (2026-11-14).
-Amended by [DR-241](241-reviewable-builtin-gears.md) in the Playbook and slc floors and bundled playbook version.
-Amended by [DR-239](239-playbook-18-3-1-reference-adoption.md) in the Playbook floor and bundled playbook version.
-Amends [DR-236](236-primary-and-subagent-model-defaults.md) in model-pair ownership and the shared runtime floor, and [DR-232](232-codex-subagent-selection.md) in the meaning of an omitted Codex subagent model, fork history and tool-free calls.
-Amends [DR-224](224-playbook-18-1-4-adoption.md) in the Playbook floor and built-in release and [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in the Cligent and slc floors.
+Accepted (2026-11-14); revised (2026-11-26).
+Amends [DR-232](232-codex-subagent-selection.md), [DR-236](236-primary-and-subagent-model-defaults.md).
 
 ## Context
 
-Each place has its own provider environment.
-The IDE can be connected to a seat whose provider address is private.
+The provider environment, including a private provider address, belongs to the machine where the agent runs.
 The compiler, launcher and IDE need the same published tuning contract.
+Spex's first-run configuration is Playbook's seed, so the seeded agents change with the installed Playbook alone [[core-service-3](../packages/core-service.md#core-service-3)].
+Model and tuning choices come from runtime discovery through Cligent ([DR-052](052-runtime-model-options.md)).
 
 ## Decision
 
 Cligent owns the portable primary and subagent model pairs.
-Playbook chooses the credential-based roster.
+Playbook chooses the credential-based roster and its efforts: every seeded agent at `medium`, and a `dev.reviewer` seeded on Codex beside Claude agents at `high`.
 The core resolves model defaults where the agent runs and sends the selections to Add Player.
 A provider without a known pair supplies its own defaults.
 
-The core requires Cligent `^0.39.0`, all Playbook consumers require `^18.3.0`, and both shells require slc `^0.21.0`.
-The bundled playbooks stage as `sublang/playbooks` 18.3.0.
-Each consumer adopts the published dependencies with its lockfile, in order from Cligent to Playbook to slc to Spex.
+The core requires `@sublang/cligent` `^0.39.0` and its model-discovery export.
 The bundled compiler receives the configured subagent model and independent Ultracode setting directly.
 
 Codex selects spawn history independently of child model and effort, subject to its advertised spawn options.
@@ -36,5 +32,6 @@ An explicit `inherit` or a child effort alone requests the parent model.
 
 ## Consequences
 
-Each place can choose official models without revealing a private endpoint.
+Official models are chosen where the agent runs, without a client learning a private provider endpoint.
+A fresh seed, or a reseed of an untouched one, runs every agent at `medium` but a second-adapter `dev.reviewer` at `high`; a configuration the reader has edited keeps its models and efforts.
 A clean installation resolves the shared runtime contract in the lockfile.

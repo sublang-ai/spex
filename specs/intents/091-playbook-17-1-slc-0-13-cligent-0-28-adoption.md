@@ -9,11 +9,11 @@ Completed on `models-named-by-runtime` (2026-09-29) in two steps, Playbook 17.1 
 
 ## Intent
 
-Realize [DR-092](../decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md): the core on Playbook 17.1 and Cligent 0.28, both shells on slc 0.13, the agent SDKs locked at the releases Cligent 0.28 tests, and one engine and one Cligent in the tree.
+Adopt a runtime release under the rules now in [DR-241](../decisions/241-reviewable-builtin-gears.md): the core on Playbook 17.1 and Cligent 0.28, both shells on slc 0.13, the agent SDKs locked at the releases Cligent 0.28 tests, and one engine and one Cligent in the tree.
 
 ## Deliverables
 
-- [x] DR-092, the amended records' status lines, and the map.
+- [x] The adoption record (since merged into DR-241), the amended records' status lines, and the map.
 - [x] The core's floors `^17.1.0` and `^0.28.0`, the lockfile regenerated from the public registry with the app's Playbook and Cligent at the tree's root, and the agent SDKs locked at Claude Agent SDK 0.3.284, Codex SDK 0.159.0 with Codex 0.159.0, and OpenCode SDK 1.18.33.
 - [x] The tests, fixtures and journeys following what the new releases change.
 - [x] The changelog.

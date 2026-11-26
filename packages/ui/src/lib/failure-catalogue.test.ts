@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "vitest";
 
-// The list is the runtime's own (DR-076), reaching the test through the
+// The list is the runtime's own (DR-241), reaching the test through the
 // boundary that reads it — never through the catalogue, which would
 // then be checked against itself.
 import { PLAYBOOK_FAILURE_CODES } from "@sublang/spex-core/protocol";

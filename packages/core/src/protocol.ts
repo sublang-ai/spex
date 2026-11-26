@@ -606,7 +606,7 @@ export interface ProjectInfo {
 }
 
 /** Playbook's closed failure-code list, re-exported here unchanged
- * rather than copied into a client (core-service-12, DR-076): the
+ * rather than copied into a client (core-service-12, DR-241): the
  * runtime owns the list, so a code it adds reaches the phrase
  * catalogue as a failing test rather than as silence. */
 export { PLAYBOOK_FAILURE_CODES, type PlaybookFailureCode } from "@sublang/playbook/runtime";

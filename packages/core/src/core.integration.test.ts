@@ -695,7 +695,7 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     config: VALID_CONFIG.replace("  code:\n", '  code:\n    from: "@sublang/playbook/code/registry"\n'),
   },
   // Skills reach agents from the packages spex.yaml adds, never from a
-  // path in a shared file (core-service-2, DR-123).
+  // path in a shared file (core-service-2, DR-105).
   {
     name: "a skills list at the top of your own file",
     pattern: /(?:^|; )skills is not allowed: skills reach agents from the packages spex\.yaml adds/,
@@ -853,7 +853,7 @@ test("core-service-2: a written entry no environment places stands aside, and a 
 test("core-service-122: a session from a valid file records its agents with no supplied skills", async () => {
   // Skills reach agents from environments, so the core composes none and
   // no session record carries a key an earlier Playbook refuses
-  // (core-service-16, DR-123).
+  // (core-service-16, DR-105).
   const harness = await startHarness(VALID_CONFIG);
   const client = new Client(harness.service.port());
   await client.open();

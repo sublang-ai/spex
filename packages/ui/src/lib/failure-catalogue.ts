@@ -26,7 +26,7 @@ import { playerNamer } from "./player-names.js";
 
 // The codes this catalogue must cover are Playbook's own closed list,
 // reaching the interface as `PLAYBOOK_FAILURE_CODES` through the
-// protocol boundary that reads it (core-service-49, DR-076). Nothing
+// protocol boundary that reads it (core-service-49, DR-241). Nothing
 // here restates it: the coverage test holds the catalogue against that
 // export, so a code Playbook adds is a failing test until it has
 // words.

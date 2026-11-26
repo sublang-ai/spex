@@ -8,7 +8,7 @@
 // and none asks a model to read prose. This file proves both shapes
 // against the served page (run-view-149, run-view-132):
 //
-// - a run the real shell parked on real repository evidence (DR-076),
+// - a run the real shell parked on real repository evidence (DR-241),
 //   which really advertises its two controls — the reconciliation a
 //   complete receipt makes a no-op, disabled with its reason, and the
 //   abandonment that runs as a named turn;
@@ -242,7 +242,7 @@ test("run-view-146: a run parked on a question carries Drop, and the composer an
 });
 
 // The published-control path, over a run the real shell really parked
-// (run-view-149, DR-076): the Captain's decision starts the real /code
+// (run-view-149, DR-241): the Captain's decision starts the real /code
 // root, its coder commits the phase and leaves a stray file behind, and
 // Playbook fences the run over the residual — so what the notice draws
 // is what the runtime advertised, standings and all.

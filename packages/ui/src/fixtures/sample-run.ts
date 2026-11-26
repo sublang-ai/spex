@@ -852,7 +852,7 @@ export const MACHINE_ORPHAN: FixtureEntry[] = [
  * reported state is the shell's rest state and only the frames still
  * name the leaf (run-view-59, DR-061). The failure, its cause and the
  * frames around it are captured from a real core with substitute
- * agents (DR-076). */
+ * agents (DR-241). */
 export const MACHINE_FAILED: FixtureEntry[] = [
   rec(701, {
     type: "turn_started",
@@ -880,7 +880,7 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     // The runtime's own account of the failure (Playbook DR-063,
     // DR-075): the error it marked as the FSM failure, with the closed
     // cause attached. Captured verbatim from a real core with
-    // substitute agents under Playbook 17 (DR-076, DR-088) — the core's own
+    // substitute agents under Playbook 17 (DR-241, DR-088) — the core's own
     // `parkingScript`, whose coder committed its phase and left one
     // file behind. The observation could name no single commit, so the
     // evidence carries none. The same script runs in the core's
@@ -946,7 +946,7 @@ export const MACHINE_FAILED: FixtureEntry[] = [
  * The reconciliation is the `no-op` a complete receipt makes pointless
  * — the case DR-075 was written on, where a host that took the first
  * advertised action offered a Retry that could never work. Captured
- * from the same real core run as MACHINE_FAILED (DR-076, DR-088). */
+ * from the same real core run as MACHINE_FAILED (DR-241, DR-088). */
 export const PARKED_FAILURE: ParkedRun = {
   reason: "failure",
   actions: [
