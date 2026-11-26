@@ -52,7 +52,7 @@ Follow [Start using Spex](docs/getting-started.md) to open a project,
 install a spec package, use its skills and playbooks, and author and
 publish a workflow of your own.
 
-Install the standalone CLI with Node.js 22 or later:
+Install the standalone CLI with Node.js 22.15 or later:
 
 ```sh
 npm install -g @sublang/spex

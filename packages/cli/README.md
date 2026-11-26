@@ -13,11 +13,11 @@ Scaffolds a `specs/` directory so AI coding agents can read and follow
 your project's requirements and design. It also manages spec packages:
 it adds, installs and publishes specs, skills and playbooks in a
 folder, with no running app. And it checks guards, which protect a
-critical behavior on every change. Requires Node.js 22 or later.
+critical behavior on every change. Requires Node.js 22.15 or later.
 
 ## Install
 
-Install Spex CLI 5.0 with Node.js 22 or later:
+Install Spex CLI 5.0 with Node.js 22.15 or later:
 
 ```sh
 npm install -g @sublang/spex

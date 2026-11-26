@@ -17,7 +17,7 @@ and private packages need a registry sign-in, separate from any Space
 sign-in. Syncing a project's records is optional.
 
 The command-line workflows use Spex CLI 5.0, installed with
-`npm install -g @sublang/spex` and Node.js 22 or later. The IDE controls
+`npm install -g @sublang/spex` and Node.js 22.15 or later. The IDE controls
 follow current source and are newer than desktop app 0.9.0-beta.24;
 use the source setup below for those controls.
 

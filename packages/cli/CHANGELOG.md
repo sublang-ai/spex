@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for you to commit. `spex verify` passes no guard whose items or files
   changed since that record.
 
+### Changed
+
+- `@sublang/spex` declares Node.js 22.15 or newer, the release `spex verify` needs, where it declared Node.js 22.
+
 ### Removed
 
 - The `@sublang/spex` library drops group and member operations, team-server discovery, tickets and seat sign-in. This breaking change targets the next CLI major release. Personal Space sign-in and registry commands remain available.
