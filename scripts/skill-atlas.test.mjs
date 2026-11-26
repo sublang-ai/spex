@@ -3377,12 +3377,12 @@ test('the zh-CN catalog holds every text the page looks up, and no other (skill-
   assert.deepEqual(Object.keys(catalog.messages).filter((k) => !keys.has(k)), [], 'zh-CN entries the page never looks up');
 });
 
-// agent-skills-7 and agent-skills-8 (specs/packages/agent-skills.md).
+// agent-skills-7, agent-skills-8 and agent-skills-14 (specs/packages/agent-skills.md).
 describe('the repository\'s skills', () => {
   const SKILLS = path.join(REPO, 'skills');
   const DESCRIPTION_MAX = 1024; // Agent Skills specification: description at most 1024 characters
   const BODY_MAX_LINES = 500; // Agent Skills specification: SKILL.md body at most 500 lines
-  const SHIPPED = ['code', 'review', 'decide', 'skill-atlas'];
+  const SHIPPED = ['code', 'review', 'decide', 'skill-atlas', 'guard'];
   const folders = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
   // The repository's skills/ alone: an empty project, no home folder, no plugins and a state folder of its own,
   // so nothing installed on this machine can change what is reported.
@@ -3398,7 +3398,7 @@ describe('the repository\'s skills', () => {
   });
   const byName = (n) => atlas.skills.find((s) => s.name === n);
 
-  test('the scan of skills/ alone reports code, review, decide and skill-atlas (agent-skills-8)', () => {
+  test('the scan of skills/ alone reports code, review, decide, skill-atlas and guard (agent-skills-8, agent-skills-14)', () => {
     assert.ok(atlas.roots.every((r) => r.scope === 'extra'), `only skills/ is scanned: ${atlas.roots.map((r) => r.id)}`);
     for (const n of SHIPPED) {
       const skill = byName(n);
@@ -3599,5 +3599,28 @@ describe('the repository\'s skills', () => {
       assert.ok(skill.steps.some((st) => /`git rev-parse HEAD`/.test(stepText(skill, st))), `${skill.name} reads the revision from the repository`);
       assert.ok(skill.steps.some((st) => /\bfrom the repository\b|\bread the repository\b/i.test(stepText(skill, st))), `${skill.name} reads commits from the repository, not the reply`);
     }
+  });
+
+  test('what the scan reads from guard (agent-skills-14)', () => {
+    const guard = byName('guard');
+    assert.ok(guard, 'the guard skill is reported');
+    assert.deepEqual(guard.steps.map((st) => st.title), ['Write the items and the declaration', 'Have the readings drafted', 'Settle each disagreement by an example', 'Write the binding and a kept fault', 'Check, then ask for approval']);
+    assert.ok(!atlas.edges.some((e) => e.from === guard.id && e.kind === 'calls'), 'guard calls no other skill');
+
+    const [, readings, disagreement, , check] = guard.steps.map((st) => stepText(guard, st));
+    assert.match(readings, /\bindependent agents\b/, 'the readings come from independent agents');
+    assert.match(readings, /\bfrom the items and the declaration alone\b/, 'a reading is drafted from the items and the declaration alone');
+    assert.match(readings, /\bbefore any agent reads the code\b/, 'the readings are drafted before any agent reads the code');
+    assert.match(readings, /\bthe readings were not independent\b/, 'the second step says when the report names the readings as not independent');
+    assert.ok(guard.steps[2].tags.some((tg) => tg.id === 'human.question'), 'the third step asks the user');
+    assert.match(disagreement, /\bpermitted or forbidden\b/, 'the person marks the sequence permitted or forbidden');
+    assert.match(disagreement, /\bNever edit a reading\b/, 'a contradicted reading is dropped, never edited');
+    assert.match(check, /`spex verify <guard>`/, 'the last step runs spex verify');
+    assert.match(check, /`spex approve <guard>` only when the person says so\b/, 'spex approve runs only when the person says so');
+
+    const text = fs.readFileSync(guard.file, 'utf8');
+    assert.match(text, /\bWithout subagents\b[^.]*\bthe readings were not independent\b/, 'guard names the fallback without subagents');
+    assert.match(text, /\bWhen an item of the guard changes\b[^\n]*\bDraft the readings again\b[^\n]*\bbefore you ask for approval\b/, 'a changed item has the readings drafted again');
+    assert.match(String(guard.frontmatter.compatibility), /\bRequires the spex command\b/, 'the compatibility field says the skill needs the spex command');
   });
 });

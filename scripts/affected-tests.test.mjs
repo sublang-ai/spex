@@ -120,6 +120,19 @@ test("a shipped skill's files select script tests alone, the atlas's also its jo
   assert.equal(reach(fixture(), ["skills/skill-atlas/scripts/atlas.mjs"]).all, true, "a stale ownership entry must never skip the suites");
 });
 
+test("a guard's files select script tests alone; Markdown there is the guard's, not documentation", () => {
+  for (const path of ["guards/environments-55/guard.yaml", "guards/environments-55/readings/a.yaml", "guards/environments-55/faults/first-by-org.patch", "guards/environments-55/approval.json", "guards/bindings/exports/binding.mjs", "guards/README.md", "guards/bindings/exports/notes.md"]) {
+    assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: [] }, path);
+    assert.deepEqual(reach(fixture(), [path]), { docsOnly: false, all: false, workspaces: [] }, `${path} in any repository`);
+  }
+  // Beside a spec change the guard's file still ends documentation alone; beside code it adds nothing.
+  assert.deepEqual(reach(root, ["guards/environments-55/approval.json", "specs/packages/environments.md"]), { docsOnly: false, all: false, workspaces: [] });
+  assert.deepEqual(reach(root, ["guards/environments-55/guard.yaml", "packages/ui/src/App.tsx"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
+  assert.deepEqual(reach(root, ["guards/environments-55/guard.yaml"], "--github-output"), ["docs-only=false", "affected="]);
+  // The folder is matched whole, never as a name prefix.
+  for (const path of ["guards", "guards.yaml", "guards-extra/x.yaml"]) assert.equal(reach(root, [path]).all, true, path);
+});
+
 test("documentation beside code is no documentation alone and adds nothing to the reach", () => {
   assert.deepEqual(reach(fixture(), ["specs/x.md", "docs/y.txt", "packages/mid/src/y.ts"]), { docsOnly: false, all: false, workspaces: ["apps/app", "packages/mid"] });
 });
@@ -295,28 +308,31 @@ function documentationFixture() {
   const list = join(dir, "paths.txt");
   writeFileSync(list, "specs/packages/example.md\n");
   // An executable CLI fixture verifies the real Node process, cwd and
-  // arguments used after npm's tests, and can fail the lint independently.
+  // arguments used after npm's tests, and can fail the lint or the guards
+  // independently.
   write(join(dir, "packages/cli/dist/cli.js"), [
     'const assert = require("node:assert/strict");',
-    'assert.deepEqual(process.argv.slice(2), ["lint"]);',
-    'require("node:fs").appendFileSync(process.env.NPM_LOG, "lint\\n");',
-    'process.exit(process.env.NPM_FAIL_ON === "lint" ? 7 : 0);',
+    "const args = process.argv.slice(2);",
+    'assert.ok(args.length === 1 && ["lint", "verify"].includes(args[0]), `unexpected arguments: ${args.join(" ")}`);',
+    'assert.ok(require("node:fs").existsSync("packages/cli/dist/cli.js"), "runs at the root");',
+    'require("node:fs").appendFileSync(process.env.NPM_LOG, `${args[0]}\\n`);',
+    "process.exit(process.env.NPM_FAIL_ON === args[0] ? 7 : 0);",
     "",
   ].join("\n"));
   return { dir, list };
 }
 
-test("a computed documentation-only run executes CLI tests then spec lint; explicit selections keep their meaning", { skip: posixOnly }, () => {
+test("a computed documentation-only run executes CLI tests, then spec lint, then the guards; explicit selections keep their meaning", { skip: posixOnly }, () => {
   const { dir, list } = documentationFixture();
   const computed = runWithNpm(["--root", dir, "--run", "--paths", list]);
   assert.equal(computed.status, 0, computed.stderr);
-  assert.deepEqual(computed.calls, ["test -w packages/cli", "lint"]);
+  assert.deepEqual(computed.calls, ["test -w packages/cli", "lint", "verify"]);
   const explicit = runWithNpm(["--root", dir, "--run", "", "--paths", list]);
   assert.equal(explicit.status, 0, explicit.stderr);
   assert.deepEqual(explicit.calls, ["run test:scripts"]);
 });
 
-test("documentation validation propagates test and lint failures without running past a failed gate", { skip: posixOnly }, () => {
+test("documentation validation propagates test, lint and guard failures without running past a failed gate", { skip: posixOnly }, () => {
   const { dir, list } = documentationFixture();
   const args = ["--root", dir, "--run", "--paths", list];
   const testsFailed = runWithNpm(args, "test -w packages/cli");
@@ -325,6 +341,9 @@ test("documentation validation propagates test and lint failures without running
   const lintFailed = runWithNpm(args, "lint");
   assert.equal(lintFailed.status, 7);
   assert.deepEqual(lintFailed.calls, ["test -w packages/cli", "lint"]);
+  const guardsFailed = runWithNpm(args, "verify");
+  assert.equal(guardsFailed.status, 7);
+  assert.deepEqual(guardsFailed.calls, ["test -w packages/cli", "lint", "verify"]);
 });
 
 test("a failed classification executes no suite", { skip: posixOnly }, () => {

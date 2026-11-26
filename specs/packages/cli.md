@@ -8,7 +8,7 @@
 This package defines the package commands of the published `spex` executable under [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md): the environment of the current folder read and changed with `add`, `remove`, `install`, `update`, `list` and `search`, a package built with `export` from the project's own files and published with `publish`, and a device independently signed in to a package registry or Space with `login`, `logout` and `whoami` ([DR-168](../decisions/168-independent-package-registry.md)).
 The commands run the same package-manager library the app's core hosts, on the home `SPEX_HOME` names or `~/.spex` [[storage-1](storage.md#storage-1)], and need no running app.
 They are a project's Packages tab without an app, verb for verb, in the same words ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
-Scaffolding and linting keep their own contracts.
+Scaffolding and linting keep their own contracts, and so do guards, whose `verify` and `approve` the `guards` package defines [[guards-17](guards.md#guards-17)] [[guards-16](guards.md#guards-16)] ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 ## External Behavior
 
@@ -48,6 +48,10 @@ Sign-in
 Specs
   scaffold [<path> | --update]                          Start specs/ and point your agents at it
   lint [<path>]                                         Check specs/ for structure, IDs and citations
+
+Guards
+  verify [<guard>…]                                     Check that each guard's protected behavior still holds
+  approve <guard>                                       Record your approval of a guard's items and files
 
 spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex
 ```

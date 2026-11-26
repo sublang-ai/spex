@@ -17,7 +17,7 @@ and private packages need a registry sign-in, separate from any Space
 sign-in. Syncing a project's records is optional.
 
 The command-line workflows use Spex CLI 5.0, installed with
-`npm install -g @sublang/spex` and Node.js 22 or later. The IDE controls
+`npm install -g @sublang/spex` and Node.js 22.15 or later. The IDE controls
 follow current source and are newer than desktop app 0.9.0-beta.24;
 use the source setup below for those controls.
 
@@ -166,6 +166,18 @@ destination for one invocation.
 are separate, and signing out of one keeps the other. See the
 [CLI guide](../packages/cli/README.md) for every command, sign-in and exit
 codes.
+
+Where a project keeps guards, which protect a critical behavior on every
+change:
+
+```sh
+spex verify             # check that each guard's protected behavior still holds
+spex approve <guard>    # record your approval of a guard's items and files
+```
+
+Both need no sign-in. The CLI guide's
+[Guards](../packages/cli/README.md#guards-protect-critical-behavior-on-every-change)
+section describes them.
 
 ## Try a spec-first task
 

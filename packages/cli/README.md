@@ -12,11 +12,12 @@
 Scaffolds a `specs/` directory so AI coding agents can read and follow
 your project's requirements and design. It also manages spec packages:
 it adds, installs and publishes specs, skills and playbooks in a
-folder, with no running app. Requires Node.js 22 or later.
+folder, with no running app. And it checks guards, which protect a
+critical behavior on every change. Requires Node.js 22.15 or later.
 
 ## Install
 
-Install Spex CLI 5.0 with Node.js 22 or later:
+Install Spex CLI 5.0 with Node.js 22.15 or later:
 
 ```sh
 npm install -g @sublang/spex
@@ -224,6 +225,16 @@ installed version.
 [Scaffolding specs](#scaffolding-specs) and [Linting](#linting) describe
 them in full.
 
+### Guards
+
+| Command | What it does |
+| --- | --- |
+| `spex verify [<guard>…]` | Check that each guard's protected behavior still holds |
+| `spex approve <guard>` | Record your approval of a guard's items and files |
+
+[Guards](#guards-protect-critical-behavior-on-every-change) describes
+them in full.
+
 ### `spex add`, `remove`, `update` and `list`
 
 - `spex add <org>/<pkg>` adds the newest version the registry lists
@@ -377,8 +388,8 @@ spex logout --registry https://spex.sublang.ai
 
 ## Exit codes
 
-The package commands exit with these codes. `scaffold` and `lint` keep
-their own.
+The package commands exit with these codes. `scaffold`, `lint`,
+`verify` and `approve` keep their own.
 
 | Code | Meaning |
 | --- | --- |
@@ -521,6 +532,79 @@ Review the changes with
 `git diff -- specs CLAUDE.md AGENTS.md GEMINI.md` and run `spex lint`.
 The command prints a per-file indicator for every framework and seed path, plus a copy-paste-ready prompt for your AI agent to reconcile citations and local extensions with the refreshed law.
 
+## Guards: protect critical behavior on every change
+
+A guard protects one behavior you cannot afford to break. It states the
+behavior as one assertion, and `spex verify` checks that assertion on
+your real code on every change. Spex calls no model for this, and needs
+no app and no account.
+
+A guard is named by the ID of its assertion item. Its items live in
+`specs/` and its other files beside the code, all committed:
+
+| Kept | Where |
+| --- | --- |
+| The assertion and its permitted and forbidden examples, as test items that cite the behavior item | `specs/packages/<pkg>.md` |
+| The guard file: its binding, its bounds and each example as a sequence of events and effects | `guards/<assertion>/guard.yaml` |
+| The readings: what the assertion means, as data Spex can check | `guards/<assertion>/readings/` |
+| Each kept fault: a patch to files the binding copies that breaks the behavior, which the check must catch | `guards/<assertion>/faults/` |
+| The approval record | `guards/<assertion>/approval.json` |
+| A binding: the events it can cause in your code and the effects it can observe, with its JavaScript module | `guards/bindings/<name>/` |
+
+Every folder directly under `guards/` other than `bindings` is a guard.
+
+```sh
+spex verify                    # check every guard under guards/
+spex verify environments-55    # check the guards you name
+spex approve environments-55   # record your approval
+```
+
+Both read `specs/` and `guards/` at the top level of the Git work tree,
+else in the current folder. `spex verify` copies the files the binding
+names to a temporary folder and runs your code there, writing nothing in
+your project. It compares the guard's items and files with the approval
+record, checks every example against every reading, runs each permitted
+example on the code, then runs the sampled check: sequences of events
+that fast-check generates from the guard file's seed and bounds. Last,
+it runs the same check on a copy with each kept fault. The guard file's
+time limit stops each of the binding's commands and each check, along
+with every process they started.
+
+The check on your code ends in one of four results:
+
+| Result | What it means |
+| --- | --- |
+| `Violated on the implementation` | The code produced an effect every reading forbids. The shortest sequence found is printed. |
+| `Disagreement with the model` | A permitted example does not happen on the code as its item states. |
+| `Inconclusive` | The check could not decide: the readings disagree, an example does not fit a reading, the binding failed, the code loaded a project file from outside the copy, time ran out, or the assertion never applied. |
+| `Sampled on the implementation` | Every sequence ran and none broke the assertion. Sampled, since the check tries the sequences its bounds allow, not every one. |
+
+Spex sees a project file loaded from outside the copy only in the main
+thread of the check's process, not in worker threads or in processes
+your code starts.
+
+A guard passes only when its items and files are approved, its examples
+agree with the readings, the result on your code is
+`Sampled on the implementation`, and it has a kept fault and every kept
+fault is caught. A guard with an error in its files, or with no reading,
+no permitted example or no forbidden example, is reported as
+`Cannot be checked` and does not pass. `spex verify` exits `0` when
+every guard it checked passes, `1` otherwise, and `130` when
+interrupted, after it stops its processes and removes its copies.
+
+`spex approve <guard>` prints each example beside its stored sequence
+and what changed since the last record, then writes `approval.json`.
+Commit it, so an approval shows as a change in review. After a change to
+an item, the guard file, a reading, a kept fault or the binding,
+`spex verify` names what changed and the guard cannot pass until you
+approve it again. Changes to your code need no approval.
+
+Draft a guard with the `guard` skill
+(`npx skills add sublang-ai/spex --skill guard`), then ask your agent to
+guard a behavior. `spex verify` needs Node.js 22.15 or newer, and a
+binding is a JavaScript module, so a guard reaches only code such a
+module can drive.
+
 ## Upgrading from an earlier release
 
 ### From a pre-release source build
@@ -634,7 +718,7 @@ Then loop back to the next decision or intent.
 
 ## Requirements
 
-- Node.js >= 22
+- Node.js >= 22 (`spex verify` needs 22.15 or newer)
 - Git (optional, used for repo root detection)
 
 ## Contributing

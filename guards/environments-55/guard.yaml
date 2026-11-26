@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+format: 1
+binding: exports
+sample: { sequences: 200, events: 12, seed: 1, seconds: 300 }
+examples:
+  - item: environments-56
+    kind: permitted
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: zeta/kit, blocked: [acme/kit] }
+  - item: environments-57
+    kind: forbidden
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: acme/kit, blocked: [zeta/kit] }
+  - item: environments-58
+    kind: permitted
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: acme/kit, blocked: [] }
+  - item: environments-59
+    kind: permitted
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { placed: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit] }
+        effect: { placed: acme/kit, blocked: [] }

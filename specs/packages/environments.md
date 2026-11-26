@@ -11,6 +11,7 @@ A **spec package** is one GEARS contract with the sources, spec, skills, playboo
 An **environment** records the packages installed globally or for one project: `spex.yaml` says which spec packages it wants, `spex.lock` records exactly what it got, and `.spex/` holds what was installed, all at the environment's **root** — a project's working folder, or the global records repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)].
 An **instance** is a deployment of Spex Space known by its origin; an environment's instance is the `space` its `spex.yaml` names, else the home's default instance [[storage-2](storage.md#storage-2)], independent of the registry selected by `registry` ([DR-168](../decisions/168-independent-package-registry.md)).
 A **working folder** is where a project's sessions run; the app pairs it with the spex repository holding its records [[storage-6](storage.md#storage-6)], which the environment in it does not need.
+Items environments-55 to environments-59 are the assertion and the examples of the guard `environments-55`: on every change, `spex verify` checks on the code that the behavior they describe still holds [[guards-17](guards.md#guards-17)].
 
 ## External Behavior
 
@@ -583,6 +584,26 @@ When the command line adds and installs a stand-in registry package in a project
 #### environments-51
 
 When a real core's environment migration moves a project's environment into its working folder and rewrites the project and global manifests and locks on POSIX, the integration suite shall assert that each rewritten `spex.yaml` and `spex.lock` keeps the mode a reader set, `0664` or `0600`, and each moved file is new at `0644` [[environments-49](#environments-49)].
+
+#### environments-55
+
+While a package's spec stays selected and its release still provides it, the guard's check shall find that an install never replaces its standing copy with another package's [[environments-41](#environments-41)].
+
+#### environments-56
+
+When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, both releases providing a `kit` spec, the guard's check shall find `zeta/kit`'s copy still standing after the second install and `acme/kit` reported blocked [[environments-41](#environments-41)].
+
+#### environments-57
+
+When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, both releases providing a `kit` spec, the guard's check shall find forbidden a second install that ends with `acme/kit`'s copy standing there and `zeta/kit` reported blocked [[environments-41](#environments-41)].
+
+#### environments-58
+
+When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` alone, both releases providing a `kit` spec, the guard's check shall find `zeta/kit`'s unedited copy gone and `acme/kit`'s standing in its place after the second install, with no package reported blocked [[environments-41](#environments-41)].
+
+#### environments-59
+
+When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, `zeta/kit`'s release by then no longer providing a spec, the guard's check shall find `zeta/kit`'s unedited copy gone and `acme/kit`'s standing in its place after the second install, with no package reported blocked [[environments-41](#environments-41)].
 
 ## References
 

@@ -134,6 +134,11 @@ jobs:
         run: |
           node packages/cli/dist/cli.js lint
           npm run typecheck -w e2e
+      # Linux alone: once per change is enough, and `spex verify` has not
+      # been run on Windows or macOS (DR-252).
+      - name: Guards
+        if: ${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}
+        run: node packages/cli/dist/cli.js verify
       - name: Require Git LFS for real transport and local Apply coverage
         if: runner.os != 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
         run: git lfs version

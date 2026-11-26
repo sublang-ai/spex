@@ -13,6 +13,7 @@ Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, de
 Amended by [DR-228](228-ci-keeps-its-downloads.md) for the cache seed: a push to `main` changing the lockfile or the cache tooling refreshes caches, running no validation.
 Extended by [DR-229](229-the-cores-suite-in-four-parts.md): a Linux or macOS row reaching the core runs the core's suite in four parts beside one runner for the rest, its selection and gates unchanged.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group and seat examples in user guidance, and the hub lane in app validation and download caching.
+Extended by [DR-252](252-a-guard-is-kept-beside-the-code.md) with `spex verify` in this repository's checks.
 
 ## Context
 

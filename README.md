@@ -52,7 +52,7 @@ Follow [Start using Spex](docs/getting-started.md) to open a project,
 install a spec package, use its skills and playbooks, and author and
 publish a workflow of your own.
 
-Install the standalone CLI with Node.js 22 or later:
+Install the standalone CLI with Node.js 22.15 or later:
 
 ```sh
 npm install -g @sublang/spex
@@ -163,9 +163,11 @@ ships Agent Skills for any coding agent: `skill-atlas` maps the skills
 you have installed — which call which, what each step reads, writes,
 runs and asks — and lets you sort them into pipeline phases on a local
 page; `code`, `review` and `decide` carry the built-in playbooks'
-procedure as plain skills. Each ships in English and Simplified
-Chinese, and the atlas's page shows a skill in the reader's language
-wherever it has a translation.
+procedure as plain skills; `guard` drafts a guard with you — one
+assertion about a behavior, its examples and a kept fault it must
+catch — for `spex verify` to check on every change. Each ships in
+English and Simplified Chinese, and the atlas's page shows a skill in
+the reader's language wherever it has a translation.
 Install one with
 `npx skills add sublang-ai/spex --skill skill-atlas`
 ([about the skills](docs/skills.md)).
@@ -310,9 +312,9 @@ permissions, workflow questions, Codex's access-to-Spex prompt, and OS grants.
 
 For development: `npm ci`, `npm run build`, then `npm run test:affected` runs
 the suites reached by your changes, including untracked files. Run
-`npm run prepush` before pushing for build, type, catalog and spec checks.
-Pull requests use the same affected-suite selection; full platform checks,
-browser journeys and native browser acceptance gate
+`npm run prepush` before pushing for build, type, catalog, spec and guard
+checks. Pull requests use the same affected-suite selection; full platform
+checks, browser journeys and native browser acceptance gate
 app releases or run on explicit request. There are no nightly checks or
 duplicate runs after merging. CLI releases validate the CLI across platforms.
 For a focused browser investigation, `npm run e2e` drives the served UI in

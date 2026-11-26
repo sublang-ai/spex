@@ -1,0 +1,26 @@
+Restores the behavior before 6000e8c: the path goes to the first package by <org>, even over a standing copy.
+
+diff --git a/packages/cli/src/lib/environment/exports.ts b/packages/cli/src/lib/environment/exports.ts
+--- a/packages/cli/src/lib/environment/exports.ts
++++ b/packages/cli/src/lib/environment/exports.ts
+@@ -663,18 +663,10 @@
+     if (!held.has(path) && standingMarker(root, path)?.name === name) held.set(path, name);
+   }
+ 
+-  // 1. The basename's claim: the package whose copy stands at the path,
+-  //    else the first in name order.
+-  const standsFor = (source: SpecSource): boolean => {
+-    const path = placedSpecPath(source.id);
+-    const digest = digestOf(path);
+-    if (digest === null || digest === NOT_A_FILE) return false;
+-    return previous[source.name]?.path === path || standingMarker(root, path)?.name === source.name;
+-  };
+-  const claimants = [...ordered].sort((a, b) => Number(standsFor(b)) - Number(standsFor(a)) || byName(a, b));
++  // 1. The basename's claim: the first in name order.
+   const claims = new Map<string, SpecSource>();
+   const blocked = new Set<string>();
+-  for (const source of claimants) {
++  for (const source of ordered) {
+     const path = placedSpecPath(source.id);
+     if (claims.has(path) || held.has(path)) blocked.add(source.name);
+     else claims.set(path, source);

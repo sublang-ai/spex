@@ -67,7 +67,7 @@
     "test:integration": "node scripts/stage-scaffold.mjs && node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.15"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",
@@ -75,6 +75,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "fast-check": "^4.11.0",
     "github-slugger": "^2.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",

@@ -228,16 +228,17 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 | Invocation | Validation |
 | --- | --- |
-| Pull request changing documentation alone | CLI build and tests, plus spec lint |
-| Other pull request | Build, type, catalog and spec gates; script tests and selected workspace suites on Linux Node 22; Windows Node 22 only where the selection reaches the CLI, UI or core, running the selected CLI/UI suites and core native-storage/platform coverage, and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships |
+| Pull request changing documentation alone | CLI build and tests, plus spec lint and `spex verify` |
+| Other pull request | Build, type, catalog and spec gates, with `spex verify` on Linux; script tests and selected workspace suites on Linux Node 22; Windows Node 22 only where the selection reaches the CLI, UI or core, running the selected CLI/UI suites and core native-storage/platform coverage, and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships |
 | Full app, requested manually or by a reusable call with `full: true`, `channel: app` | On Linux and macOS, every workspace suite and script tests; on Windows, the CLI/UI suites, core native-storage/platform coverage and core store- and Git-removal, clone-move and credential-helper coverage on the Node the app's Electron ships; all browser journeys in three shards on Linux and macOS; native browser acceptance on Linux and macOS |
 | Full CLI, requested manually or by a reusable call with `full: true`, `channel: cli` | CLI tests on every supported platform/Node row, with script tests on Linux and macOS only; no app journeys or native browser acceptance |
 
 - the full supported matrix is Linux and macOS on Node 22 and 24, and Windows on Node 22;
 - a Linux or macOS row whose selection reaches the core runs on five runners, each building: four run a part of the core's suite, its test files sorted largest first and dealt to the parts in turn so each file runs in exactly one part, and the fifth runs the script tests, every other selected suite and the type and spec gates ([DR-229](../decisions/229-the-cores-suite-in-four-parts.md));
+- `spex verify` checks every guard under `guards/` [[guards-17](guards.md#guards-17)] ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)): after the spec lint for documentation alone, and otherwise once on each Linux row, on the runner that runs the type and spec gates, and on no macOS or Windows row;
 - a full invocation validates the exact tree named by its caller or manual ref, never a separately selected mutable branch;
 - the classifier reads changed paths against the merge base with the comparison ref, `origin/main` locally, including staged, unstaged and untracked local files and both sides of renames;
-- documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace and `skills/`; documentation alone contains at least one changed path and no other kind;
+- documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace, `skills/` and `guards/`; documentation alone contains at least one changed path and no other kind;
 - a workspace path, including its Markdown, selects its workspace and transitively every workspace that declares it among its dependencies, development, peer or optional dependencies;
 - an exactly listed root tool, or a path under a listed root folder, the longest such folder deciding, selects its declared owners and their transitive dependents, or script tests alone where no owner is named, under the ownership table below; a missing named workspace, root dependency or localization configuration, or any unlisted non-documentation root path selects every workspace;
 - Linux suite execution that selects the core requires Git LFS for real transport and materialization coverage, with no skip for its absence;
@@ -251,6 +252,7 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 | `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/skill-atlas.test.mjs` | Script tests alone |
 | every path under `skills/skill-atlas/` | `e2e` |
 | every other path under `skills/` | Script tests alone |
+| every path under `guards/` | Script tests alone |
 | `scripts/start-desktop.mjs`, `scripts/desktop-runner.mjs` | `apps/desktop` |
 | `scripts/start-server.mjs` | `apps/server` |
 | `scripts/storage-git.mjs`, `scripts/native-approval-stage.mjs` | `packages/core` |
@@ -262,11 +264,11 @@ When a CI invocation reaches its final result, its `checks` job shall evaluate t
 
 #### release-35
 
-When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md)).
+When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check, `spex verify` and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 #### release-43
 
-When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys or native browser acceptance ([DR-199](../decisions/199-release-gated-full-validation.md)).
+When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests, spec lint and `spex verify` for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys or native browser acceptance ([DR-199](../decisions/199-release-gated-full-validation.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 #### release-31
 
@@ -352,16 +354,16 @@ When the repository-system audit reads the CI, release and cache workflows, the 
 | --- | --- |
 | CI triggers | The validation workflow accepts pull requests, manual requests and reusable calls and has no schedule or push-to-main trigger [[release-34](#release-34)]. |
 | Pull-request lifecycle | A newer head cancels its prior run; full/manual validation is not cancelled by that rule [[release-30](#release-30)]. |
-| Documentation alone | CLI tests and spec lint run; the ordinary `checks` gate succeeds with unselected jobs skipped and no stand-in [[release-34](#release-34)] [[release-44](#release-44)]. |
-| Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool and root-folder mapping selects its specified owners, a skill's Markdown included; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
+| Documentation alone | CLI tests, spec lint and `spex verify` run in that order, a failure ending the run; the ordinary `checks` gate succeeds with unselected jobs skipped and no stand-in [[release-34](#release-34)] [[release-44](#release-44)]. |
+| Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool and root-folder mapping selects its specified owners, a skill's and a guard's Markdown included; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
 | Local working-tree selection | Committed, staged, unstaged and untracked changes and both sides of renames contribute; documentation and code use the same selection and test commands as CI [[release-43](#release-43)]. |
-| Pull-request matrix | Linux Node 22 runs the selected suites and fast gates; a selection reaching the core runs the core's suite in four parts beside one runner for the rest and the gates, a fixture suite's files dealt largest first with each in exactly one part; Windows Node 22 runs only for selected CLI/UI/core work; journeys and native browser acceptance are skipped [[release-34](#release-34)]. |
+| Pull-request matrix | Linux Node 22 runs the selected suites and fast gates, with `spex verify` in one step right after the gates, on Linux rows alone and in no part of the core's suite; a selection reaching the core runs the core's suite in four parts beside one runner for the rest and the gates, a fixture suite's files dealt largest first with each in exactly one part; Windows Node 22 runs only for selected CLI/UI/core work; journeys and native browser acceptance are skipped [[release-34](#release-34)]. |
 | Full app | The supported platform/Node suites, each Linux and macOS row in the core's four parts beside the rest, all journey shards, and native browser acceptance are selected [[release-34](#release-34)]. |
 | Full CLI | CLI suites run on every supported platform/Node row and script suites on Linux and macOS only, with app journeys and native browser acceptance skipped [[release-34](#release-34)]. |
 | Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
 | Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
 | Download caches | Every workflow step running `npm ci` restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, Electron's where its installer's and the packager's own download libraries both default with no override set, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, refusing a request on any other ref with a message naming `main` before any platform runs, installing and fetching Electron in jobs of their own on all three platforms, neither failing fast nor continuing on error, each attempted up to three times with waits that grow, keeping between installs only a dugite archive matching the locked dugite's checksum, read from a copy installed apart and checked just before each retry, so an intact one survives and a partial one is dropped even once npm rolled the install back or the copy arrived only for that retry, and running nothing else [[release-50](#release-50)]. |
-| Existing local gates | Prepush rejects conflict markers [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
+| Existing local gates | Prepush rejects conflict markers and runs `spex verify` after its build [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
 
 #### release-45
 

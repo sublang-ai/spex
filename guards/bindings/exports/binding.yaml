@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# Installs into a project whose three packages each hold a spec `kit`,
+# through the library's exportEnvironment.
+format: 1
+values:
+  package: [acme/kit, mid/kit, zeta/kit]
+events:
+  # One install: `selected` are the packages the lock holds, `providing`
+  # the packages whose release provides a `kit` spec.
+  install:
+    params: { selected: set of package, providing: set of package }
+    # `placed`: whose copy stands at specs/packages/kit.md afterwards.
+    # `blocked`: the packages the install reported blocked.
+    effect: { placed: package?, blocked: set of package }
+files:
+  - packages/cli/src
+  - packages/cli/tsconfig.json
+  - packages/cli/package.json
+commands:
+  # The library's TypeScript build, into packages/cli/dist of the copy.
+  - [node, node_modules/typescript/bin/tsc, -p, packages/cli]

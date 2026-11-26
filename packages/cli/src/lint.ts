@@ -1519,3 +1519,57 @@ export function lint(args: string[] = []): void {
     process.exit(1);
   }
 }
+
+// ---------------------------------------------------------------
+// Items for other readers (guards package, DR-252)
+// ---------------------------------------------------------------
+
+/** One spec item as the linter reads it. */
+export type SpecItem = {
+  id: string;
+  /** POSIX path relative to the base (starts with "specs/"). */
+  relPath: string;
+  /** 1-based line of its heading. */
+  line: number;
+  /** Canonical section of the containing ## heading, if known. */
+  section: string | null;
+  /** Its heading line and body lines, as the file has them. */
+  lines: string[];
+  /** The spec items its body cites by a link, in the order cited. */
+  cites: { id: string; relPath: string }[];
+};
+
+/**
+ * Every spec item under `specs/packages/` and in `specs/meta.md`, read
+ * with the linter's own parser and item rules and reporting nothing.
+ */
+export function readSpecItems(basePath: string): SpecItem[] {
+  const ctx: LintContext = { basePath, files: new Map(), findings: [] };
+  const packagesDir = join(basePath, "specs", "packages");
+  const relPaths =
+    existsSync(packagesDir) && statSync(packagesDir).isDirectory()
+      ? listMarkdownFiles(packagesDir, "specs/packages")
+      : [];
+  if (existsSync(join(basePath, "specs", "meta.md"))) relPaths.push("specs/meta.md");
+  for (const relPath of relPaths) ctx.files.set(relPath, loadFile(basePath, relPath));
+
+  const items = collectItems(ctx);
+  const bySlug = itemsBySlug(items);
+  return items.map((item) => {
+    const cites: SpecItem["cites"] = [];
+    for (const link of bodyLinks(item)) {
+      const target = linkTarget(item.file, link);
+      if (target === null) continue;
+      const cited = bySlug.get(target.relPath)?.get(target.fragment);
+      if (cited !== undefined) cites.push({ id: cited.id, relPath: cited.file.relPath });
+    }
+    return {
+      id: item.id,
+      relPath: item.file.relPath,
+      line: item.heading.line,
+      section: item.section,
+      lines: item.file.lines.slice(item.heading.line - 1, item.bodyEnd - 1),
+      cites,
+    };
+  });
+}

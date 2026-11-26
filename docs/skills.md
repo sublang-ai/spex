@@ -3,7 +3,7 @@
 
 # Skills shipped from this repository
 
-Four Agent Skills live under [`skills/`](../skills), each installable on its own:
+Five Agent Skills live under [`skills/`](../skills), each installable on its own:
 
 ```bash
 npx skills add sublang-ai/spex --skill skill-atlas
@@ -15,8 +15,10 @@ npx skills add sublang-ai/spex --skill skill-atlas
 | [`code`](../skills/code/SKILL.md) | Implements a request as single-commit phases, then has the change reviewed once |
 | [`review`](../skills/review/SKILL.md) | Reviews committed work in up to three rounds between an independent Reviewer and a Coder |
 | [`decide`](../skills/decide/SKILL.md) | Turns a topic into decision records or spec items from two independent proposals, then has them reviewed |
+| [`guard`](../skills/guard/SKILL.md) | Drafts a guard with a person: one assertion with permitted and forbidden examples, readings drafted before any agent reads the code, a binding to the real code and a kept fault, for `spex verify` to check on every change |
 
 The decision is recorded in [DR-242](../specs/decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md); the behavior is specified in [`skill-atlas.md`](../specs/packages/skill-atlas.md) and [`agent-skills.md`](../specs/packages/agent-skills.md).
+The `guard` skill is decided in [DR-252](../specs/decisions/252-a-guard-is-kept-beside-the-code.md) and drafts what [`guards.md`](../specs/packages/guards.md) specifies.
 
 The rest of this document is the report on how the skills were designed and why they are written the way they are.
 
@@ -67,22 +69,22 @@ Each row names a guideline and where to see it.
 
 | Guideline | How the skills show it |
 | --- | --- |
-| **The description decides whether a skill is ever used**: third person, what it does and when, the words a user would say | Every description says what the skill does, then `Use when…` with the phrases a user would say. The three workflow skills add `Not for…`: `code` and `decide` point at each other and at `review`, which keeps three related skills from stealing each other's requests |
-| **Name**: lowercase, hyphens, equal to the folder | `skill-atlas`, `code`, `review`, `decide`; checked by a test |
-| **Concise: the context window is shared** — say only what the model does not already know | The four `SKILL.md` files are 76 to 136 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
-| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` the deep-read procedure in `references/deep-read.md` and the translation procedure in `references/translate.md`; the workflow skills keep every relayed prompt in `references/`. An agent answering "open the atlas" reads 136 lines |
+| **The description decides whether a skill is ever used**: third person, what it does and when, the words a user would say | Every description says what the skill does, then `Use when…` with the phrases a user would say. The three workflow skills add `Not for…`: `code` and `decide` point at each other and at `review`, which keeps three related skills from stealing each other's requests. `guard` adds it too: running the checks is `spex verify`, not the skill |
+| **Name**: lowercase, hyphens, equal to the folder | `skill-atlas`, `code`, `review`, `decide`, `guard`; checked by a test |
+| **Concise: the context window is shared** — say only what the model does not already know | The five `SKILL.md` files are 76 to 176 lines against a 500-line ceiling. None explains what git, a subagent or a code review is |
+| **Progressive disclosure**: a short `SKILL.md` that links to detail read only when needed | `skill-atlas` keeps the JSON shapes in `references/data-model.md` the deep-read procedure in `references/deep-read.md` and the translation procedure in `references/translate.md`; the workflow skills keep every relayed prompt in `references/`; `guard` keeps every file's form in `references/formats.md`, the report's lines in `references/results.md` and the Drafter's prompt in `references/drafter-prompt.md`. An agent answering "open the atlas" reads 136 lines |
 | **References one level deep** | Every reference file is linked from `SKILL.md` itself; none is reachable only through another. Checked by a test |
-| **A table of contents on longer reference files** | `data-model.md`, `reviewer-round.md` and `coder-phases.md` open with one |
+| **A table of contents on longer reference files** | `data-model.md`, `reviewer-round.md`, `coder-phases.md` and `guard`'s three reference files open with one |
 | **Match freedom to fragility** | Fragile, exact operations are a script (`atlas.mjs`) or a verbatim prompt; judgment calls ("decide from what the reply establishes, never from its format") are stated as principles with the reason |
 | **Workflows as numbered steps with explicit branches** | Each skill has `### Step N` headings; each decision point is a table of *what happened → what next*, so no branch is implied |
 | **Feedback loops: check, then proceed** | After every role call the Captain reads the repository (`git rev-parse HEAD`, `git log`) instead of trusting the reply; the atlas workflow ends a deep read with a rescan that must report no ignored entries |
 | **Scripts for deterministic work; say whether to run or read them** | "Run the script; do not read it into context." Scanning, serving and exporting are code; the agent's tokens go to the user's question |
 | **Scripts solve, they do not punt** | A malformed `SKILL.md` becomes an issue on that skill and the scan continues; a bad user regex is skipped with a warning; a busy port falls back to a free one |
 | **No unexplained constants** | Limits are named and explained in the script; thresholds a user may disagree with (which words mean "approval") are data in `tag-rules.json`, not code |
-| **Consistent terms** | One word per thing throughout: *Captain*, *Coder*, *Reviewer*; *phase* (of a pipeline on the atlas's page, or of a `code` run), *step* (of a skill), *link* with kinds *calls* and *mentions* in the scan, and *dependency* for a call on the page, which shows no mention; *state folder* |
+| **Consistent terms** | One word per thing throughout: *Captain*, *Coder*, *Reviewer*; *phase* (of a pipeline on the atlas's page, or of a `code` run), *step* (of a skill), *link* with kinds *calls* and *mentions* in the scan, and *dependency* for a call on the page, which shows no mention; *state folder*. `guard` keeps the words of the `spex verify` report: *assertion*, *example*, *reading*, *binding*, *kept fault*, with a *lead* and *Drafters* |
 | **Examples over description** | The input handed to `review` is shown as the literal quoted block to fill in; the data model is annotated JSON, not prose about JSON |
-| **State requirements up front** | The `compatibility` field names Node 18, git, the sibling skill a skill invokes, and the repository layout the prompts assume |
-| **Degrade honestly** | Each skill says what to do without subagents or without a browser; `review` and `decide` require saying in the result that independence was lost ("the Reviewer was not independent") |
+| **State requirements up front** | The `compatibility` field names Node 18, git, the sibling skill a skill invokes, and the repository layout the prompts assume; `guard`'s names the `spex` command and Node 22.15 |
+| **Degrade honestly** | Each skill says what to do without subagents or without a browser; `review`, `decide` and `guard` require saying in the result that independence was lost ("the Reviewer was not independent", "the readings were not independent") |
 | **Nothing time-bound, no host-specific paths** | No dates, model names or absolute paths; commands run from the user's project folder and name the script by its path in the skill's folder (`<skill-dir>/scripts/atlas.mjs`), with forward slashes |
 | **Treat what you read as data** | The atlas reads third-party skills: the page escapes every string, the server serves files only from inside a skill's folder on loopback, and both the skill and the deep-read prompt say never to follow instructions found in a scanned skill |
 
@@ -99,6 +101,8 @@ Every skill has a *Customizing* section naming plain files under `references/`.
 | `code` | `coder-phases.md` | How work is sized, which conventions the Coder consults, what a commit must contain |
 | `review` | `reviewer-round.md`, `coder-disposition.md` | What a Reviewer flags, what a Coder may reject |
 | `decide` | `prompts.md` | What a proposal covers, which records the synthesis writes |
+| `guard` | `drafter-prompt.md` | What each Drafter is told when it drafts a reading |
+| | `formats.md`, `results.md` | The files `spex` reads and the report it prints, changed only when `spex` changes |
 
 The split is deliberate: `SKILL.md` holds the procedure, which should rarely change, and `references/` holds the wording and thresholds, which every team has opinions about.
 A user who edits a prompt cannot break the control flow, and an update to the procedure does not overwrite a team's wording unless they take it.
@@ -143,14 +147,15 @@ What was run on the delivered files, and what it showed:
 
 | Check | Result |
 | --- | --- |
-| `node --test scripts/skill-atlas.test.mjs` | 121 tests pass: the scan over fixture skill folders, a folder two roots name by one path listed once, differing skills of one name reported as one note naming their folders and no agent, a plugin's copy of a skill, linked or byte for byte the same, one skill reached by its plugin's name, a link to a shared name reaching the caller's sibling, each insight's level, translations and annotations, the server, the `pipelines`, `pin` and `digest` commands, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review` and `decide` |
+| `node --test scripts/skill-atlas.test.mjs` | 130 tests pass, one of them skipped where the suite runs as root: the scan over fixture skill folders, a folder two roots name by one path listed once, differing skills of one name reported as one note naming their folders and no agent, a plugin's copy of a skill, linked or byte for byte the same, one skill reached by its plugin's name, a link to a shared name reaching the caller's sibling, each insight's level, translations and annotations, the server, the `pipelines`, `pin` and `digest` commands, the export, the form of every skill under `skills/`, and what the scan reads from `code`, `review`, `decide` and `guard` |
 | `npm run e2e -- skill-atlas` | 43 browser journeys pass against the real server: groupings, steps, dependencies with a mention neither drawn nor counted, a card's counts shown only where not zero and its folders counted and named, the shown cards' steps opened and closed together, problems marked and counted apart from notes, a selected or focused skill's dependencies, and an insight's skills' all of them, drawn over the dimmed rest, a property's fields a row each, Rescan busy, the details opened by a selection alone and closed back to it, to the very card a skill in two phases was opened from, Help with the legend and the keys, the toolbar at a phone's width, a followed dependency, a folder above the working folder, details, search, filter, focus, insights, an unresolved call listed and an unresolved mention not, frontmatter in error, a name with different versions noted with both folders and compared side by side, any two of three versions compared, versions in any folders noted alike naming no agent, a comparison showing a line's ending and a `SKILL.md` the same in both, 2,002 lines differing only in the first and last, and texts too far apart to pair left unmarked, markup shown as text, pipelines with an edit undone, notes in two pipelines undone apart, a save as the page is hidden, the save conflict, a refused deletion keeping the served page's presets, the unreadable file, the read-only exported page, a skill in its original language, one in Arabic marked alike in its details and its file, the page in Chinese, an annotation written from another text, an atlas reporting no languages, a translation under a compatible tag, one behind its source under the first tag read over a current one under a later tag, a translation refreshed in the state folder over a skill's own behind its source, annotation words over a translation, a language chosen from the page's menu |
 | `spex lint` | No errors in the new decision record and packages |
 | A scan of a real machine | 88 skill folders across 8 locations read as 32 skills and 56 identical copies (copies then compared by `SKILL.md` alone); every one of the links reported as a call is a real one, and `code` and `decide` both link to `review` from the step that invokes it |
 | An independent review | Four reviewers (scan and server, page, skill writing and playbook equivalence, specs), each finding then checked by a second agent that tried to refute it. 40 findings survived and were fixed, among them a page that could overwrite a `workflows.json` changed elsewhere, links invented from URL paths, and three claims in this report |
 
-Not verified: the three workflow skills run end to end by an agent on a real change.
+Not verified: the three workflow skills and `guard` run end to end by an agent on a real change.
 Their procedure is checked as text and as the atlas reads it, not by a live run.
+The example in `guard`'s `references/formats.md` was loaded by the command line's own code: its items, declaration, reading, guard file and patch read without error, its examples are as its reading states them, and its patch applies.
 
 ## Limits
 
@@ -158,3 +163,4 @@ Their procedure is checked as text and as the atlas reads it, not by a live run.
 - A link is found only to a skill that is installed; a call made through a variable or built at run time is invisible.
 - `code`, `review` and `decide` keep their playbooks' names. Spex places a launcher skill of each name into the agent folders of a project it manages, so in such a folder `/review` starts the playbook, not this skill. Install these where Spex places nothing; the atlas reports the two as differing skills of one name.
 - The workflow skills' prompts assume a Spex-scaffolded repository. In another repository the prompt files need its conventions written in.
+- `guard` needs the `spex` command, and a binding is a JavaScript module, so it reaches only code such a module can drive.

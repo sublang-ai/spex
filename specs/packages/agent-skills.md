@@ -5,8 +5,8 @@
 
 ## Intent
 
-This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), and their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md).
-It owns their form and procedure, not the atlas that reads them.
+This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md), and the `guard` skill, which drafts a guard with a person, per [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
+It owns their form and procedure, not the atlas that reads them and not the guard a draft becomes [[guards-1](guards.md#guards-1)].
 
 ## External Behavior
 
@@ -83,6 +83,23 @@ When the `decide` skill is given a topic, the loading agent shall take a proposa
 
 While the `code`, `review` or `decide` skill runs, the loading agent shall read each new commit's identity and the evaluated revision from the repository, and end the run as failed where a step left no commit it required, several, or a rewritten one.
 
+### The guard skill
+
+#### agent-skills-13
+
+When the `guard` skill is asked to protect a behavior, the loading agent shall draft a guard with the person in these five steps, running `spex approve` [[guards-16](guards.md#guards-16)] only when the person says so ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
+
+1. write the assertion and the examples as test items that cite the behavior item [[guards-2](guards.md#guards-2)], and the binding's events and effects from those items [[guards-3](guards.md#guards-3)];
+2. have independent agents each draft a reading [[guards-6](guards.md#guards-6)] from the items and that declaration alone, before any agent reads the code;
+3. where readings disagree, show the person one distinguishing sequence at a time, which the person marks permitted or forbidden and which then becomes an example [[guards-10](guards.md#guards-10)], and drop the readings it contradicts;
+4. read the code only then, to write the binding's module, files and commands [[guards-5](guards.md#guards-5)], and plant a fault or restore a past defect as a kept fault [[guards-11](guards.md#guards-11)];
+5. run `spex verify` [[guards-17](guards.md#guards-17)] and tell the person what it found.
+
+- without subagents, the loading agent drafts the readings in separate passes from the items and the declaration alone, and says in its result that the readings were not independent;
+- when an item of a guard changes, the skill drafts the readings again before it asks for approval;
+- the skill needs the `spex` command and says so in its `compatibility`;
+- the prompts it relays and the forms of the files it writes stand under its `references/` [[agent-skills-2](#agent-skills-2)].
+
 ## Verification
 
 #### agent-skills-7
@@ -98,6 +115,16 @@ When the repository's `skills/` alone is scanned by the atlas, the test shall as
 - `review`'s steps in order with no call to another skill, its three-round bound stated, and each of its outcomes returning the evaluated revision [[agent-skills-4](#agent-skills-4)];
 - `decide`'s steps in order, its review step calling `review` [[agent-skills-5](#agent-skills-5)];
 - each of the three stating that commits are read from the repository [[agent-skills-6](#agent-skills-6)].
+
+#### agent-skills-14
+
+When the repository's `skills/` alone is scanned by the atlas, the test shall assert the `guard` skill reported and what the scan reads from it [[agent-skills-13](#agent-skills-13)]:
+
+- its five steps in order: the items and the declaration, the readings, the distinguishing sequence, the binding and the kept fault, and the check;
+- its second step naming independent agents, the items and the declaration alone and "before any agent reads the code", and the fallback without subagents saying that the readings were not independent;
+- its third step tagged as asking the user;
+- `spex verify` and `spex approve` named, with `spex approve` run only when the person says so;
+- that an item's change has the readings drafted again, and that the skill needs the `spex` command.
 
 ## References
 
