@@ -24,6 +24,7 @@ Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in where
 Extended by [DR-241](241-reviewable-builtin-gears.md) in the app's automatic selection of its shipped built-in package in the global environment, without changing the CLI's update scope.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the global and project environments and the retirement of server admission.
 Extended by [DR-243](243-guards-protect-critical-behavior-on-every-change.md) with `spex verify` and by [DR-252](252-a-guard-is-kept-beside-the-code.md) with `spex approve`.
+Amended by [DR-251](251-installs-copy-from-the-store.md) in the store hard-linked into installs: the store remains a cache of verified bytes, and an install copies from it.
 
 ## Context
 

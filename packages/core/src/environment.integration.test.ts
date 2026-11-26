@@ -11,7 +11,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
@@ -37,6 +37,7 @@ import {
   gitSource,
   GitSourceError,
   install,
+  INSTALL_RECORD,
   InstallError,
   launchModules,
   lockStoreKeys,
@@ -60,7 +61,6 @@ import {
   setRequest,
   sha256Hex,
   specSkill,
-  storeKey,
   writeLock,
   type InstallOptions,
   type Lock,
@@ -555,7 +555,7 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
 // environments-21: installing
 // ---------------------------------------------------------------------------
 
-test("environments-21: files land with bytes and flags through a store keeping each once, verified, atomic, collected", async () => {
+test("environments-21: files land with bytes and flags as copies from a store keeping each once, verified, atomic, collected", async () => {
   await publish(manifestOf("acme/kit", "1.0.0", { tidy: { kind: "skill", language: "en" } }), {
     ...skillFiles("tidy"),
     "skills/en/tidy/same-a.txt": "same bytes\n",
@@ -583,16 +583,21 @@ test("environments-21: files land with bytes and flags through a store keeping e
     assert.equal(sha256Hex(readFileSync(installed)), file.sha256, file.path);
     assert.equal((statSync(installed).mode & 0o100) !== 0, file.executable, file.path);
   }
-  // Each distinct file once, the executable copy apart.
+  // Each distinct file once in the store, read-only, whichever paths
+  // and executable flags select it; each installed file an ordinary
+  // writable file sharing nothing with the store.
   const same = sha256Hex("same bytes\n");
-  assert.ok(home.store.has(same, false) && home.store.has(same, true));
-  assert.equal(statSync(join(root, "skills/en/tidy/same-a.txt")).ino, statSync(home.store.pathOf(same, false)).ino);
-  assert.equal(statSync(join(root, "skills/en/tidy/same-b.txt")).ino, statSync(home.store.pathOf(same, false)).ino);
-  assert.equal(statSync(join(root, "skills/en/tidy/same-x.sh")).ino, statSync(home.store.pathOf(same, true)).ino);
-  const distinct = new Set(lock.packages["acme/kit"]!.files.map((file) => storeKey(file.sha256, file.executable)));
+  const distinct = new Set(lock.packages["acme/kit"]!.files.map((file) => file.sha256));
   assert.deepEqual(new Set(home.store.keys()), distinct);
-  assert.equal(statSync(home.store.pathOf(same, false)).mode & 0o777, 0o444);
-  assert.equal(statSync(home.store.pathOf(same, true)).mode & 0o777, 0o555);
+  assert.equal(existsSync(join(home.store.root, "x")), false, "no executable copy apart");
+  const stored = statSync(home.store.pathOf(same));
+  assert.equal(stored.mode & 0o777, 0o444, "a stored file is read-only");
+  for (const [name, mode] of [["same-a.txt", 0o644], ["same-b.txt", 0o644], ["same-x.sh", 0o755]] as const) {
+    const installed = statSync(join(root, "skills/en/tidy", name));
+    assert.notEqual(installed.ino, stored.ino, `${name} is a copy, no link into the store`);
+    assert.equal(installed.nlink, 1, `${name} shares its bytes with no other file`);
+    assert.equal(installed.mode & 0o777, mode, `${name} is an ordinary writable file`);
+  }
 
   // A wrong digest installs nothing and is reported.
   const before = snapshot(join(home.clone, ".spex", "packages"));
@@ -617,9 +622,10 @@ test("environments-21: files land with bytes and flags through a store keeping e
   await installAsOnDisk({ ...base, root: peerHome, lock: peerLock });
   assert.deepEqual(home.store.gc(lockStoreKeys([lock, newer, peerLock])), []);
   const removed = home.store.gc(lockStoreKeys([peerLock]));
-  assert.ok(removed.includes(storeKey(same, true)));
-  assert.ok(!removed.includes(storeKey(same, false)), "a file another lock selects stays");
-  assert.ok(home.store.has(same, false));
+  for (const sha of distinct) assert.equal(removed.includes(sha), sha !== same, "every file no lock selects leaves, and no other");
+  assert.ok(home.store.has(same), "a file another lock selects stays");
+  // An installed tree reads whole after its store files are removed.
+  assert.deepEqual(snapshot(join(home.clone, ".spex", "packages")), before);
 
   // cache/ may be deleted: an install that needs it rebuilds it.
   rmSync(home.cache, { recursive: true, force: true });
@@ -640,6 +646,67 @@ test("environments-21: files land with bytes and flags through a store keeping e
   assert.equal(stale.installed.length, 0);
   assert.ok(stale.stale?.some((reason) => /spex\.yaml changed/.test(reason)));
   assert.deepEqual(snapshot(join(home.clone, ".spex", "packages")), before);
+});
+
+test("environments-21: two environments hold independent copies, an update fetches only what the store lacks, and a stored file changed behind the store installs nothing", async () => {
+  const kept = Object.fromEntries([1, 2, 3, 4].map((n) => [`skills/en/pair/kept-${n}.txt`, `kept ${n}\n`]));
+  const shared = { ...kept, "skills/en/pair/shared.txt": "shared\n", "skills/en/pair/run.sh": { data: "echo shared\n", executable: true } };
+  await publish(manifestOf("acme/pair", "1.0.0", { pair: { kind: "skill", language: "en" } }), { ...skillFiles("pair", "en", "first"), ...shared });
+  await publish(manifestOf("acme/pair", "1.1.0", { pair: { kind: "skill", language: "en" } }), { ...skillFiles("pair", "en", "second"), ...shared, "skills/en/pair/added.txt": "added\n" });
+  const home = makeHome("me/one-spex");
+  const environment = (key: string) => ({ root: cloneOf(home, key), store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), pathRoot: null });
+  const installAt = async (key: string, version: string): Promise<Lock> => {
+    const lock = locked(await resolveText(cloneOf(home, key), requestsYaml({ "acme/pair": { version } })));
+    await writeLock(join(cloneOf(home, key), "spex.lock"), lock);
+    registry.script.clearRequests();
+    assert.deepEqual((await installAsOnDisk({ ...environment(key), lock })).installed, ["acme/pair"]);
+    return lock;
+  };
+  /** The registry's requests since they were last cleared. */
+  const requests = (): string[] => [...registry.script.requests];
+  const fileOf = (key: string, name: string): string => join(cloneOf(home, key), ".spex", "packages", "acme", "pair", "skills", "en", "pair", name);
+  const first = await installAt("me/one-spex", "1.0.0");
+  await installAt("me/two-spex", "1.0.0");
+  assert.deepEqual(requests(), [], "[environments-7] a second environment installs from the store alone");
+
+  // An edit in one environment, and its tree's removal, reach neither
+  // the other environment nor the store.
+  const stored = home.store.pathOf(sha256Hex("shared\n"));
+  writeFileSync(fileOf("me/one-spex", "shared.txt"), "edited\n");
+  assert.equal(readFileSync(fileOf("me/two-spex", "shared.txt"), "utf8"), "shared\n", "[environments-7] the other environment's file is as it was");
+  assert.equal(readFileSync(stored, "utf8"), "shared\n", "[environments-7] the stored file is as it was");
+  rmSync(join(cloneOf(home, "me/one-spex"), ".spex"), { recursive: true, force: true });
+  assert.equal(readFileSync(fileOf("me/two-spex", "shared.txt"), "utf8"), "shared\n", "[environments-7] a removed tree leaves the other environment's file");
+  assert.equal(readFileSync(stored, "utf8"), "shared\n", "[environments-7] and the stored file");
+  registry.script.clearRequests();
+  assert.deepEqual((await installAsOnDisk({ ...environment("me/one-spex"), lock: first })).installed, ["acme/pair"]);
+  assert.deepEqual(requests(), [], "[environments-7] the tree is built again from stored bytes");
+  assert.equal(readFileSync(fileOf("me/one-spex", "shared.txt"), "utf8"), "shared\n");
+
+  // An update fetches only the files the store lacks.
+  const second = await installAt("me/one-spex", "1.1.0");
+  const fetched = requests().filter((request) => request.startsWith("GET /acme/pair/1.1.0/"));
+  assert.deepEqual(new Set(fetched), new Set(["meta.yaml", "skills/en/pair/SKILL.md", "skills/en/pair/added.txt"].map((path) => `GET /acme/pair/1.1.0/${path}`)),
+    "[environments-7] only the files the store lacks are fetched");
+
+  // A stored file changed behind the store is never installed: it is
+  // removed and reported, and the next install fetches it again.
+  const added = home.store.pathOf(sha256Hex("added\n"));
+  chmodSync(added, 0o644);
+  writeFileSync(added, "changed\n");
+  const third = cloneOf(home, "me/three-spex");
+  mkdirSync(third, { recursive: true });
+  writeFileSync(join(third, "spex.yaml"), requestsYaml({ "acme/pair": { version: "1.1.0" } }));
+  await writeLock(join(third, "spex.lock"), second);
+  await assert.rejects(installAsOnDisk({ ...environment("me/three-spex"), lock: second }), (error: unknown) =>
+    error instanceof InstallError && error.packageName === "acme/pair" && /added\.txt no longer matched/.test(error.message));
+  assert.equal(existsSync(join(third, ".spex", "packages")), false, "[environments-7] nothing is installed");
+  assert.deepEqual(existsSync(join(home.cache, "staging")) ? readdirSync(join(home.cache, "staging")) : [], [], "[environments-7] no staged tree stays");
+  assert.equal(existsSync(added), false, "[environments-7] the stored file that no longer matches is removed");
+  registry.script.clearRequests();
+  assert.deepEqual((await installAsOnDisk({ ...environment("me/three-spex"), lock: second })).installed, ["acme/pair"]);
+  assert.deepEqual(requests().filter((request) => request.startsWith("GET /acme/pair/1.1.0/skills/")), ["GET /acme/pair/1.1.0/skills/en/pair/added.txt"], "[environments-7] the next install fetches it again");
+  assert.equal(readFileSync(fileOf("me/three-spex", "added.txt"), "utf8"), "added\n");
 });
 
 test("environments-21: obsolete-tree cleanup cannot fail a committed install or prevent its exports", {
@@ -834,7 +901,7 @@ test("playbook-library-108: an install bundles again a module carrying its engin
     assert.ok(readFileSync(module).equals(compiled), `[playbook-library-46] ${when}: the module is bundled again as a compile bundles it`);
     // [playbook-library-46] the store's copy and the lock's digest stay.
     assert.equal(lockedModule.sha256, sha256Hex(carried));
-    assert.ok(readFileSync(home.store.pathOf(lockedModule.sha256, false)).equals(carried), `[playbook-library-46] ${when}: the store keeps the release's bytes`);
+    assert.ok(readFileSync(home.store.pathOf(lockedModule.sha256)).equals(carried), `[playbook-library-46] ${when}: the store keeps the release's bytes`);
     for (const name of ["xstate", "@sublang/playbook"]) {
       assert.ok(lstatSync(join(installed, LINKED_ID, "node_modules", name)).isSymbolicLink(), `[playbook-library-46] ${when}: ${name} is linked`);
     }
@@ -842,8 +909,12 @@ test("playbook-library-108: an install bundles again a module carrying its engin
   assertEngineImported("installed");
   // [playbook-library-46] a module whose wrapper is missing stays as it
   // is, and the install goes on naming it and why.
-  assert.ok(readFileSync(join(installed, "nudge", "nudge.registry.mjs")).equals(carried), "[playbook-library-46] the module without its wrapper stays");
-  assert.deepEqual(report.engineKept, [{ module: join(installed, "nudge", "nudge.registry.mjs"), reason: "its nudge.registry.ts is missing" }]);
+  const wrapperless = join(installed, "nudge", "nudge.registry.mjs");
+  const assertWrapperless = (when: string): void => {
+    assert.ok(readFileSync(wrapperless).equals(carried), `[playbook-library-46] ${when}: the module without its wrapper stays`);
+  };
+  assertWrapperless("installed");
+  assert.deepEqual(report.engineKept, [{ module: wrapperless, reason: "its nudge.registry.ts is missing" }]);
 
   // [playbook-library-46] loaded through the core's own module loader,
   // the installed playbook runs on the very engine module the app runs.
@@ -865,16 +936,36 @@ test("playbook-library-108: an install bundles again a module carrying its engin
   assert.match(readFileSync(join(workingFolder, ".git", "info", "exclude"), "utf8"), new RegExp(`^${ENGINE_LINKS_EXCLUDE.replaceAll("*", "\\*")}$`, "m"));
   assert.equal(git(workingFolder, ["status", "--porcelain", "--untracked-files=all", "--", "tools"]).split("\n").filter((line) => line.includes("node_modules")).length, 0, "[playbook-library-46] Git ignores the links");
 
-  // [playbook-library-46] a tree an earlier app installed — its module
-  // the release's, linked from the store — is prepared where it stands
-  // when an install finds the lock installed already.
+  // [playbook-library-46] a tree the command line installed — its module
+  // the release's, copied from the store, nothing prepared — is prepared
+  // where it stands when an install finds the lock installed already.
   rmSync(module);
-  linkSync(home.store.pathOf(lockedModule.sha256, false), module);
+  copyFileSync(home.store.pathOf(lockedModule.sha256), module);
+  chmodSync(module, 0o644);
   const again = await installAsOnDisk(base);
   assert.equal(again.unchanged, true);
   assertEngineImported("found installed");
-  assert.notEqual(statSync(module).ino, statSync(home.store.pathOf(lockedModule.sha256, false)).ino, "[playbook-library-46] replaced, never written through the store's link");
+  assertWrapperless("found installed");
   assert.deepEqual(again.engineKept, report.engineKept);
+
+  // [playbook-library-46] a tree an earlier release installed — its
+  // modules hard links into the store under an install record of
+  // format 1 — is replaced: the module bundled again in the new tree,
+  // the one without its wrapper, which preparation leaves alone, a copy
+  // sharing nothing with the store.
+  for (const linked of [module, wrapperless]) {
+    rmSync(linked);
+    linkSync(home.store.pathOf(lockedModule.sha256), linked);
+  }
+  assert.ok(statSync(wrapperless).nlink > 1, "the former tree's module is a hard link into the store");
+  const recordFile = join(home.clone, ".spex", "packages", INSTALL_RECORD);
+  writeFileSync(recordFile, JSON.stringify({ ...JSON.parse(readFileSync(recordFile, "utf8")) as object, format: 1 }));
+  const replaced = await installAsOnDisk(base);
+  assert.deepEqual([replaced.installed, replaced.unchanged], [["acme/review-kit"], false], "[environments-7] a former tree is replaced");
+  assertEngineImported("a former tree replaced");
+  assertWrapperless("a former tree replaced");
+  assert.equal(statSync(wrapperless).nlink, 1, "[environments-7] a file preparation leaves alone is a copy, no link into the store");
+  assert.deepEqual(replaced.engineKept, report.engineKept);
 });
 
 test("environments-21: a Git source at a branch locks its commit and installs it through the host's credential", async () => {
@@ -1818,7 +1909,7 @@ test("environments-23: the built-in spec package seeds, resolves offline, launch
   const home = makeHome();
   const shipped = builtinPackage();
   const seeded = await seedBuiltinPackage(home.store, home.cache, shipped);
-  for (const file of seeded.files) assert.ok(home.store.has(file.sha256, file.executable), file.path);
+  for (const file of seeded.files) assert.ok(home.store.has(file.sha256), file.path);
   assert.ok(existsSync(join(home.cache, "builtins", `${shipped.version}.json`)));
 
   // No registry is reachable.

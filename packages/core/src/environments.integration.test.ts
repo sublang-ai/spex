@@ -546,7 +546,7 @@ test("environments-23, environments-7, environments-11: a lock records the archi
   // to another checksum: written beside the same `spex.yaml`, the store
   // lacking the release's files, so the install must fetch each.
   const foreign = sha256Hex(Buffer.from("the archive another device packed"));
-  const stored = (file: { sha256: string; executable: boolean }): string => join(core.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256);
+  const stored = (file: { sha256: string }): string => join(core.dataDir, "store", file.sha256);
   const installWith = async (files: Lock["packages"][string]["files"], done: (state: EnvironmentState) => boolean): Promise<EnvironmentState> => {
     writeFileSync(lockFile, serializeLock({ ...lock, packages: { "sublang/playbooks": { ...resolution, source: { ...source, checksum: foreign }, files } } }));
     for (const file of resolution.files) rmSync(stored(file), { force: true });

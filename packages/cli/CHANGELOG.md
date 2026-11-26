@@ -26,9 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `spex add`, `install`, `update` and `remove` copy a package's files out
+  of the store under the Spex home into `.spex/packages/` instead of
+  hard-linking them, as npm does. The store stays a cache of verified
+  files, checked again each time one is copied out; installed files are
+  ordinary writable files that share nothing with the store or another
+  folder. A folder an earlier release installed into is reinstalled as
+  copies at its next `install`, `add`, `update` or `remove`, downloading
+  nothing the store already holds.
+
 - `@sublang/spex` declares Node.js 22.15 or newer, the release `spex verify` needs, where it declared Node.js 22.
 
 ### Removed
+
+- The `@sublang/spex/environment` store no longer links: `ContentStore`
+  drops `link` and `removeLinked`, `storeKey` is gone, and `has`, `put`
+  and `pathOf` take a digest alone, an executable file needing no stored
+  copy of its own. This breaking change targets the next CLI major
+  release.
 
 - The `@sublang/spex` library drops group and member operations, team-server discovery, tickets and seat sign-in. This breaking change targets the next CLI major release. Personal Space sign-in and registry commands remain available.
 

@@ -43,6 +43,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- Installing a package copies its files into `.spex/packages/` instead of hard-linking them from the Spex home, as npm does; the home's `store/` stays a cache of verified files, checked again each time one is copied out. Installed files are ordinary writable files and share nothing between projects. The first start after this update reinstalls each project's packages once as copies, downloading nothing it already holds ([DR-251](specs/decisions/251-installs-copy-from-the-store.md)).
+
 - Space lists your own projects. Choose a Space to sync a project's records, then sign in on another device to open it there. Each IDE uses one core. [DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)
 
 - Resuming a Claude conversation without choosing a model leaves the choice to Claude Code: it keeps the conversation's model unless `ANTHROPIC_MODEL` is set.

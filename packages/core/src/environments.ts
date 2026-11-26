@@ -30,7 +30,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
-import { fileVersion, readVersioned, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
+import { fileVersion, readVersioned, removeTree, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
 import {
   AGENT_FOLDERS,
   BUILTIN_PACKAGE_NAME,
@@ -926,7 +926,7 @@ export class EnvironmentManager {
     for (const name of ["packages", "skills"]) {
       const former = join(dir, name);
       if (!existsSync(former)) continue;
-      try { this.contentStore.removeLinked(former); }
+      try { removeTree(former); }
       catch (error) { console.error(`spex: installed files stand; the former tree ${former} could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
     }
   }
@@ -1015,8 +1015,8 @@ export class EnvironmentManager {
             if (isPathSource(dependent.source)) dependencies = dependent.source.dependencies;
             else {
               const file = dependent.files.find((entry) => entry.path === "meta.yaml");
-              if (!file || !this.contentStore.has(file.sha256, file.executable)) throw new Error(`${name}: its locked meta.yaml is unavailable; Update must check its requirements`);
-              const bytes = readFileSync(this.contentStore.pathOf(file.sha256, file.executable));
+              if (!file || !this.contentStore.has(file.sha256)) throw new Error(`${name}: its locked meta.yaml is unavailable; Update must check its requirements`);
+              const bytes = readFileSync(this.contentStore.pathOf(file.sha256));
               const parsed = parseManifestText(bytes.toString("utf8"));
               if (sha256(bytes) !== file.sha256 || !parsed.manifest) throw new Error(`${name}: its locked meta.yaml cannot be verified`);
               dependencies = parsed.manifest.dependencies;
@@ -1175,8 +1175,8 @@ export class EnvironmentManager {
     const dir = join(this.cacheDir, "builtins");
     if (!existsSync(dir) || !this.options.builtin) return [];
     try {
-      const record = JSON.parse(readFileSync(join(dir, `${this.options.builtin.version}.json`), "utf8")) as { files?: { sha256: string; executable: boolean }[] };
-      return (record.files ?? []).map((file) => (file.executable ? `x/${file.sha256}` : file.sha256));
+      const record = JSON.parse(readFileSync(join(dir, `${this.options.builtin.version}.json`), "utf8")) as { files?: { sha256: string }[] };
+      return (record.files ?? []).map((file) => file.sha256);
     } catch {
       return [];
     }
