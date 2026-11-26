@@ -6,10 +6,8 @@
 ## Status
 
 Accepted.
-Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), and [DR-038](038-history-is-done-work.md): runtime model choices and explicit role fast-mode tuning.
-Amended by [DR-091](091-models-named-by-the-runtime.md) in how a model choice reads alone: one display rule names every choice by the specific model the runtime reports, and the model field is a listbox carrying the runtime's descriptions and default model.
-
-Amended by [DR-235](235-independent-ultracode.md) for independent Ultracode tuning.
+Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), [DR-038](038-history-is-done-work.md).
+Amended by [DR-091](091-models-named-by-the-runtime.md), [DR-235](235-independent-ultracode.md).
 
 ## Context
 
@@ -18,15 +16,18 @@ The installed agent runtime and account determine the available choices.
 
 ## Decision
 
+- Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md) and [DR-038](038-history-is-done-work.md): runtime model choices and explicit role fast-mode tuning.
 - Cligent owns runtime discovery and adapter capabilities; Spex carries its results over the core protocol to every agent and role-binding editor.
 - Discovery runs on demand without sending a task or creating a conversation; failure leaves configuration editing available.
 - Model choices write the runtime's reported IDs, including aliases, with provider default and explicit custom entry retained.
   An alias's resolved model identifies existing canonical pins without rewriting them.
   Existing values are never silently rewritten because discovery omitted them.
+  How a choice reads, and the model field's listbox, are [DR-091](091-models-named-by-the-runtime.md)'s.
 - Known model effort and fast-mode support narrow the editor's choices.
   Cligent identifies adapter efforts the discovery interface cannot report; these remain available as adapter-wide choices.
   Role bindings check inherited tuning too and expose fast-mode inheritance explicitly.
   Missing model metadata remains unknown; adapter-wide options are labeled as such.
+  Claude's workflow setting is a control of its own, apart from effort ([DR-235](235-independent-ultracode.md)).
 - Discovery does not become an online prerequisite for loading or saving shared config.
   Existing launcher validation remains the durable gate.
 - Spex's shell dependencies supply SDK runtimes; refresh their lockfile versions to adopt newer runtimes, independently of system CLI installations.

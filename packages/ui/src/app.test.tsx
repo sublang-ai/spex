@@ -1417,7 +1417,7 @@ describe("DR-038, core-service-70: sessions can be deleted from the sidebar", ()
     expect(useAppStore.getState().views["a-failed"]).toBeUndefined();
   });
 
-  test("a session another host wrote offers delete, the confirm naming the terminal history (DR-042)", async () => {
+  test("a session another host wrote offers delete, the confirm naming the terminal history (DR-045)", async () => {
     useAppStore.setState({
       sessions: SESSIONS.map((entry) =>
         entry.id === "a-failed" ? { ...entry, foreign: true as const } : entry,

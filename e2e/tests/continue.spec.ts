@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Sessions continue (DR-042, DR-051, run-view-109): a settled session takes a
+// Sessions continue (DR-045, DR-051, run-view-109): a settled session takes a
 // message and runs again on the same id — after its end, and after
 // the shell restarted underneath the page — and a session the
 // terminal wrote can be deleted from the sidebar. The real Captain

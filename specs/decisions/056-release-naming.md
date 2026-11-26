@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-09-09).
-Amends [DR-002](002-desktop-app-architecture.md) for the CLI release tag namespace.
-Amended by [DR-087](087-beta-app-releases.md): a beta app release is titled `Spex App vX.Y.Z-beta.N` and created as a pre-release.
+Amends [DR-002](002-desktop-app-architecture.md).
+Amended by [DR-087](087-beta-app-releases.md).
 
 ## Context
 
@@ -16,7 +16,8 @@ Both channels need a consistent identity without breaking published source refer
 
 ## Decision
 
-- GitHub release titles use `Spex App v<version>` and `Spex CLI v<version>`, including existing releases.
+- Amends [DR-002](002-desktop-app-architecture.md) for the CLI release tag namespace.
+- GitHub release titles use `Spex App v<version>` and `Spex CLI v<version>`, including existing releases; a beta app release is titled `Spex App vX.Y.Z-beta.N` and created as a pre-release ([DR-087](087-beta-app-releases.md)).
 - Future tags use `app-v<version>` and `cli-v<version>`; published tags, including legacy CLI `v<version>` tags, retain their names and targets.
 - The CLI remains `@sublang/spex` on npm with plain Semantic Versioning; the internal core is not a release channel.
 

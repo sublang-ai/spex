@@ -6,10 +6,8 @@
 ## Status
 
 Accepted.
-Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a drawn call tree; the trace-folded frames and the artifacts contract stand.
-Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md): a run standing in a parallel state shows each of its active steps running with its own call, and a step a player runs wears that player's mark.
-Amended by [DR-231](231-a-failure-terminal-reads-failed.md): a settled run's own failure terminal record changes its card to read failed; every other later record still changes nothing.
-Extended by [DR-240](240-a-script-step-shows-what-it-ran.md): a run's card additionally lists the script steps the run ran, each with its exit status, its command and what it printed.
+Amends [DR-028](028-run-machine-view.md).
+Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md), [DR-231](231-a-failure-terminal-reads-failed.md), [DR-240](240-a-script-step-shows-what-it-ran.md).
 
 ## Context
 
@@ -25,9 +23,10 @@ Extended by [DR-240](240-a-script-step-shows-what-it-ran.md): a run's card addit
 
 ## Decision
 
+- Amends [DR-028](028-run-machine-view.md): stacked machine cards give way to a drawn call tree; the trace-folded frames and the artifacts contract stand.
 - **One run, one card, one lifetime.**
   A card exists exactly when its run's trace opened it: only evidence that a run is underway — its start, a transition, a call it makes — opens a frame; events that merely report on a run never do, and the captain shell's own frame is not a run and never draws one.
-  A settled run's trace session is tombstoned in the folded state itself, so later events for it change nothing, in live folding and replay alike.
+  A settled run's trace session is tombstoned in the folded state itself, so later events for it change nothing, in live folding and replay alike, save its own settlement's failure terminal record, which makes it read failed ([DR-231](231-a-failure-terminal-reads-failed.md)).
   Disposal closes only a frame still open, and with the run's own reported final status — a finished run stays "done"; "stopped" is reserved for a run that ended unfinished.
 - **A call is containment, drawn.**
   A child run's card nests under its caller's card, indented, joined by a drawn connector that leaves the calling state itself — not the card's edge — so the line says "this state is running that machine."
@@ -41,7 +40,7 @@ Extended by [DR-240](240-a-script-step-shows-what-it-ran.md): a run's card addit
   A delegating caller's strip keeps the containment legible: it names the calling state and its callee, and the connector leaves the strip.
   Disclosure is the reader's arrangement axis ([DR-027](027-linked-views-contract.md)): a toggle overrides the default for that card, alters no fold state, and a replay renders identically whatever was expanded — so disclosure lives outside the fold and is not persisted.
 - **One aliveness grammar.**
-  The pulsing running mark is the only running mark: the active state box, a running run's strip, the running player's pane, and the sidebar's running rows wear the same pulse, static under reduced motion.
+  The pulsing running mark is the only running mark: each active state box — every active step of a parallel state ([DR-160](160-the-captain-dispatches-in-plain-sight.md)) — a running run's strip, the running player's pane, and the sidebar's running rows wear the same pulse, static under reduced motion.
   A parked state keeps the attention voice and a failed state the failure voice, from the same derivations the tabs and sidebar use.
 - **Neighbours draw, distance speaks in words.**
   An edge renders as a drawn line only between layout neighbours — one rank apart or side by side, close enough that its path touches nothing else; a drawn head lands on the target's border at a port no other head shares, and reciprocal pairs stay offset.
@@ -51,6 +50,7 @@ Extended by [DR-240](240-a-script-step-shows-what-it-ran.md): a run's card addit
 - **The extractor tells the whole machine.**
   Graph extraction resolves targets against the machine's declared state ids and includes a compound state's own done transition, keeping the stable edge identity so drawings keyed on edge ids never churn.
   A machine-level transition stays out: it has no single source state, so drawing it would either invent one or draw one edge per state — a hairball that says less than nothing.
+- **A card lists its script steps**, each with its exit status, its command and what it printed ([DR-240](240-a-script-step-shows-what-it-ran.md)).
 
 **Considered and declined:**
 
@@ -63,5 +63,5 @@ Extended by [DR-240](240-a-script-step-shows-what-it-ran.md): a run's card addit
 
 - The run-view machine items are rewritten to this shape — lifetime, containment, strips, the aliveness grammar, and the edge law — with replay coverage for the ghost-card, nesting, and geometry cases.
 - The playbook-library graph contract gains id-resolved targets and compound-done transitions — machine-level transitions stay out — with coverage that the installed built-ins each serve a complete, non-empty edge set.
-- The card's stacked presentation and its depth-gated join are removed; the left-to-right direction [DR-028](028-run-machine-view.md) chose is corrected to the top-to-bottom the shipped drawing uses, recorded in that decision's Status, and the run-view item follows.
+- The card's stacked presentation and its depth-gated join are removed; the left-to-right direction [DR-028](028-run-machine-view.md) chose is corrected to the top-to-bottom the shipped drawing uses, and the run-view item follows.
 - The design-check gate re-runs on the drawn result in both themes.

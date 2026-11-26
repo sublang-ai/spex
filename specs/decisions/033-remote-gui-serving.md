@@ -5,9 +5,9 @@
 
 ## Status
 
-Accepted; amends [DR-024](024-app-supplied-agent-runtimes.md) (the SDK-supply duty extends to the server shell) and the endpoint items of [core-service](../packages/core-service.md).
-Amended by [DR-036](036-file-state-store.md): the each-shell-one-store rule gives way to one shared state root with a single core admitted at a time.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: each IDE's connection, sidebar and Dashboard return to one core.
+Accepted.
+Amends [DR-024](024-app-supplied-agent-runtimes.md).
+Amended by [DR-036](036-file-state-store.md), [DR-040](040-source-only-app-releases.md), [DR-161](161-an-applet-is-a-page-the-ide-serves.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -42,7 +42,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 ### What the shell owns
 
 - The server shell declares the `claude`, `codex`, and `opencode` SDKs as its own dependencies, extending the app-supply duty of [DR-024](024-app-supplied-agent-runtimes.md) to this shell.
-- It owns its app-local store default under the XDG data directory, separate from the desktop's Electron store — each shell one instance, one store, per [DR-004](004-config-and-persistence.md).
+- It keeps its state in the home's one shared state root, where a single core is admitted at a time ([DR-036](036-file-state-store.md)).
 - To reduce remote transfer size without another dependency or option, it uses Node's built-in compression to negotiate Brotli, then gzip, for text-based bundle responses while leaving already-compressed formats unchanged.
 - Because unauthenticated static requests share the core's event loop, non-index encoded assets are cached per launch and HEAD never materializes a body; the small Host-dependent index remains uncached, and a body-materialization failure is confined to its HTTP request rather than terminating the shared core.
 - It serves `index.html` with the CSP `connect-src` retargeted to the serving origin; after removal of any negotiated HTTP content coding, the bundle otherwise matches the build, keeping the desktop's `file://` copy byte-identical.
@@ -54,7 +54,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - The remote experience is one command and one URL; token rotation is a restart, revocation is stopping the process.
 - Anyone holding the URL is the user: confidentiality of the token rests entirely on TLS or the tunnel, which is why the plaintext public bind is refuse-by-default.
 - The core's endpoint contract gains a second mode and its origin table gains one row; every other core and UI behavior is reused unchanged, and multiple browser tabs already work because the core broadcasts to all clients.
-- Packaging and distributing the server shell (beyond running from the repo) is deferred, as is any multi-user story.
+- The server shell ships in the app's source release ([DR-040](040-source-only-app-releases.md)); packaging it beyond that is deferred, as is any multi-user story.
 
 ## References
 

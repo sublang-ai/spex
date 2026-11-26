@@ -465,7 +465,7 @@ While a session's tab is shown, the run view shall read each agent's settings on
 
 #### run-view-33
 
-When a session that is not live is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, render it as a conversation a message continues, or — where the core lists it as history it cannot continue ([DR-042](../decisions/042-sessions-continue.md)) — a history notice carrying the core's reason and, while its project has a working folder, a "New session" control that starts a new session for the same project, in the composer's place — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+When a session that is not live is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, render it as a conversation a message continues, or — where the core lists it as history it cannot continue ([DR-045](../decisions/045-unified-session-storage.md)) — a history notice carrying the core's reason and, while its project has a working folder, a "New session" control that starts a new session for the same project, in the composer's place — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md)):
 
 - without a registered working folder, opening saved history [[space-46](space.md#space-46)] shows its transcript and title even while the home holds no registered project, with Back to Space, no project setup, composer, recovery or new-session controls, and a first-load failure remains in that reader with Retry; its guidance names Space → Files & history, and Back to Space opens Space with review open and focus on the Files & history control, retained as its closing return target [[space-55](space.md#space-55)], and dismissed folder tasks revealed [[space-124](space.md#space-124)]; locating project files remains a separate Space action [[space-47](space.md#space-47)] ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md), [DR-214](../decisions/214-project-navigation-and-contextual-recovery.md));
 - an uncertain session with a working folder shows recovery controls [[run-view-110](#run-view-110)];
@@ -823,14 +823,14 @@ Each session row in the sidebar shall read as its conversation — its title (th
 - an idle session whose failure still stands [[core-service-32](core-service.md#core-service-32)] while it summons nothing wears a quieter historical mark that counts toward no attention signal;
 - every mark's meaning is in the row's accessible description, so color is never the only channel;
 - the active session's row carries the app's interaction hue, the treatment the surface entries already use;
-- the row's own controls — the project's disclosure caret above it and every non-live session's delete control — are 24px targets, the delete control revealed on hover and on keyboard focus alike; a session the terminal wrote asks its inline confirm in those words, its history going too ([DR-042](../decisions/042-sessions-continue.md)), and a session holding an unsent draft names the draft in its confirm ([DR-010](../decisions/010-interface-craft.md) §4).
+- the row's own controls — the project's disclosure caret above it and every non-live session's delete control — are 24px targets, the delete control revealed on hover and on keyboard focus alike; a session the terminal wrote asks its inline confirm in those words, its history going too ([DR-045](../decisions/045-unified-session-storage.md)), and a session holding an unsent draft names the draft in its confirm ([DR-010](../decisions/010-interface-craft.md) §4).
 
 
 #### run-view-68
 
 When a session is activated in the sidebar, the workspace shall show that session's project and open the session as a tab, whatever project was current before ([DR-029](../decisions/029-session-history-home.md)):
 
-- a working session opens as its running tab, an idle one as a conversation a message continues, and history the core cannot continue as its read-only tab ([DR-042](../decisions/042-sessions-continue.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md));
+- a working session opens as its running tab, an idle one as a conversation a message continues, and history the core cannot continue as its read-only tab ([DR-045](../decisions/045-unified-session-storage.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md));
 - a session already open is focused rather than opened twice;
 - the project the switch made current is named where a new session would be dispatched [[run-view-25](#run-view-25)], so the target is never guessed;
 - the tab's close control files the session back to the sidebar, stopping nothing [[run-view-48](#run-view-48)], where it stays reachable.

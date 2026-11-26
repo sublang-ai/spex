@@ -625,7 +625,7 @@ The core service shall serve every session present in the `sessions/` directory 
 
 #### core-service-76
 
-While the core service serves a session another host wrote [[core-service-60](#core-service-60)], when that session's record leaves the shared session store's directory, the core service shall forget the session — its listing entry [[core-service-32](#core-service-32)] and its served history — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-042](../decisions/042-sessions-continue.md)).
+While the core service serves a session another host wrote [[core-service-60](#core-service-60)], when that session's record leaves the shared session store's directory, the core service shall forget the session — its listing entry [[core-service-32](#core-service-32)] and its served history — and broadcast the removal to subscribed clients, announcing `intents.changed` for its project [[core-service-51](#core-service-51)] ([DR-045](../decisions/045-unified-session-storage.md)).
 
 #### core-service-65
 
