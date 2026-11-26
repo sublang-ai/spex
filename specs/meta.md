@@ -52,10 +52,25 @@ A DR shall record design decisions and constraints, not implementation details, 
 
 ### meta-35
 
-When a substantive change to an accepted decision is accepted, the specs shall record it in a new DR, preserving the earlier decision and rationale and linking both records' status sections with the affected scope [[meta-4](#meta-4)] [[meta-16](#meta-16)]:
+When a change to an accepted decision is accepted, the specs shall keep each DR stating only decisions in force, leaving earlier text to Git history [[meta-24](#meta-24)]:
 
-- Whole replacement: the earlier DR is superseded.
-- Partial replacement: the earlier DR remains accepted with a scoped amendment.
+- Partial replacement: the new DR records the change, and the earlier DR is rewritten without what was replaced.
+- Change within one DR's concern: that DR may instead be revised in place, its status noting the revision date.
+- Little or nothing of the earlier DR left in force: its remaining decisions merge into the new DR, the earlier DR is deleted with every citation of it repointed, and its ID is never reused.
+
+### meta-36
+
+A DR's Status section shall hold at most three lines — its state with its date, the DRs it amends, and the DRs amending it, each named by its ID as a citation [[meta-16](#meta-16)] — leaving each change's scope to the amending DR's body:
+
+```text
+Accepted (2026-09-05); revised (2026-11-26).
+Amends DR-036.
+Amended by DR-103, DR-111.
+```
+
+### meta-37
+
+A DR's `map.md` summary shall state its decisions in force in one line, without amendment history.
 
 ### meta-28
 

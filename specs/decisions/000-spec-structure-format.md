@@ -6,7 +6,8 @@
 
 ## Status
 
-Accepted; extended by [DR-046](046-decision-record-evolution.md) for accepted-decision changes.
+Accepted.
+Amended by [DR-046](046-decision-record-evolution.md).
 
 ## Context
 
