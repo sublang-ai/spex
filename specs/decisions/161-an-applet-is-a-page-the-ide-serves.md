@@ -5,18 +5,13 @@
 
 ## Status
 
-Accepted (2026-10-29), under the owner's goal that a spec package in every form — a spec, a skill, a playbook, a playbook with an applet showing a local page — publishes and installs end to end for a fresh user, the IDE showing the applet through an embedded browser component with no setup.
-Extends [DR-104](104-spec-package-format-and-client-environments.md) in the one thing it left undecided: what an applet's native layout is and what Spex does with it.
-Amends, under [DR-046](046-decision-record-evolution.md):
-
-- [DR-011](011-project-workspace.md) in the project's tabs: an installed applet stands as a tab of the project's workspace beside Start, Specs and Overview.
-- [DR-033](033-remote-gui-serving.md) and [DR-097](097-media-and-browser-tools-across-hosts.md) in the core's endpoint: beside its WebSocket, the endpoint answers HTTP reads under one capability path per open applet; every other content transfer stays as it is.
-
-Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where an installed applet stands: installed under the environment's `.spex/`.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
+Accepted (2026-10-29).
+Amends [DR-011](011-project-workspace.md), [DR-033](033-remote-gui-serving.md), [DR-097](097-media-and-browser-tools-across-hosts.md), [DR-104](104-spec-package-format-and-client-environments.md).
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
+- The owner's goal is that a spec package in every form — a spec, a skill, a playbook, a playbook with an applet showing a local page — publishes and installs end to end for a fresh user, the IDE showing the applet through an embedded browser component with no setup.
 - DR-104 made `applets/<id>/` an artifact kind — "a browser-server application in its native layout; nothing more about applets is decided here". The core accepts and installs the files, the Playbooks surface lists the kind, the registry stores it, and nothing opens one.
 - The owner's case: a playbook does the work and an applet shows a local page over it — a report, a board, a drawing of what the agents produced — and the IDE should show that page itself, through an embedded browser component, as soon as the package is installed.
 - The core's endpoint carries WebSocket alone; the UI reads files through protocol commands and blob URLs; the desktop renderer is a `file://` page whose policy frames nothing, and the served page stands at the shell's own origin.
@@ -25,6 +20,10 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 ## Decision
 
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in the one thing it left undecided: what an applet's native layout is and what Spex does with it.
+- Amends [DR-011](011-project-workspace.md) in the project's tabs: an installed applet stands as a tab of the project's workspace.
+- Amends [DR-033](033-remote-gui-serving.md) and [DR-097](097-media-and-browser-tools-across-hosts.md) in the core's endpoint: beside its WebSocket, the endpoint answers HTTP reads under one capability path per open applet; every other content transfer stays as it is.
+
 ### The layout
 
 - An applet is a static web application: `applets/<id>/index.html` is its entry, and every file beside it — scripts, styles, images, data — is served as it is. Spex builds, installs and runs nothing of it; what a toolchain produces is what the publisher puts in the folder.
@@ -32,15 +31,14 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 ### Where it shows
 
-- A project's workspace shows one tab per applet that the project's environment or your own group's installs, after Start, Specs and Overview, named by the applet's id; the tab stands while the applet is installed and present on this device and leaves with it. No act is needed for it to appear.
+- A project's workspace shows one tab per applet that the project's environment or the global environment installs, after the project's other tabs, named by the applet's id; the tab stands while the applet is installed and present on this device and leaves with it. No act is needed for it to appear.
 - The tab is the embedded browser frame filling the pane, under one line naming the spec package and version the applet comes from and offering Reload. The frame loads when the tab is shown.
-- A project open on a team server's seat shows no applet tab for now: the seat's relay carries the protocol alone.
 
 ### How it is served
 
 - The UI opens an applet with `applet.open { repository, applet, project }`: the spex repository whose environment installs the applet, the applet's id, and the spex repository of the project whose tab shows it. The core answers with a path `/applets/<capability>/` on its own endpoint — the loopback server it binds, or the shell's server it is attached to.
 - The capability is a random 256-bit value the core mints once per applet and project and keeps in memory until it stops; the same ask returns the same path, so a reload keeps working, and nothing is persisted.
-- Under that path, by `GET` and `HEAD` alone, the core serves: the entry at `/` and `index.html`; a file of the applet's folder — the installed copy under `packages/`, or a path source's folder in place — at its relative path; a regular file of the project's working folder at `~/<path>`, read-only; and a JSON listing of a folder of the working folder at `~/<folder>/`. A path leading out of either root, one reached through a link that leads out, a `.git` entry, a WebSocket handshake, and any other method are refused. So is a path under `~/` leading into the home from a working folder outside it: a home folder registered as a project — a dotfiles repository at `$HOME`, where `~/.spex` lives — opens no window on the home's credentials or endpoint file.
+- Under that path, by `GET` and `HEAD` alone, the core serves: the entry at `/` and `index.html`; a file of the applet's folder — the installed copy under the environment's `.spex/packages/` ([DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md)), or a path source's folder in place — at its relative path; a regular file of the project's working folder at `~/<path>`, read-only; and a JSON listing of a folder of the working folder at `~/<folder>/`. A path leading out of either root, one reached through a link that leads out, a `.git` entry, a WebSocket handshake, and any other method are refused. So is a path under `~/` leading into the home from a working folder outside it: a home folder registered as a project — a dotfiles repository at `$HOME`, where `~/.spex` lives — opens no window on the home's credentials or endpoint file.
 - The page runs confined: every response carries a `Content-Security-Policy` naming the endpoint's own origin as the only source — inline scripts and styles allowed, `data:` and `blob:` images allowed — with `connect-src` and `form-action` at that origin and `base-uri 'none'`; the IDE frames it with `sandbox="allow-scripts allow-forms allow-modals allow-downloads"` and no `allow-same-origin`, so the page's origin is opaque: it reaches neither the IDE page nor its token, keeps no storage, and its requests and forms reach only its capability's own origin. The endpoint's token never appears in an applet's URL.
 - Where the frame may go is the IDE's to confine, not the page's policy's: no shipped directive governs a page's navigation of its own frame, and a sandbox without `allow-top-navigation` still lets a frame navigate itself, so an unconfined frame could carry what it read to any origin in a URL. A parent's `frame-src` governs every navigation of its child frames, so the served page's `frame-src` is retargeted to `'self'` — the attached core's endpoint is the serving origin — and the desktop shell, whose `file://` page cannot name the port the core took, refuses a sub-frame navigation off the endpoint's origin through Electron's `will-frame-navigate`. A refused navigation sends nothing anywhere — the browser may show its own refusal in the frame — and Reload brings the page back.
 - The built page's policy gains `frame-src` for itself and the loopback origins, so the desktop's `file://` page may frame the core's endpoint at whatever port it took; the served page's reads `'self'`.
@@ -48,7 +46,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 ### What an applet can do
 
 - It reads its own files and the project's working folder; it writes nothing and runs nothing outside the browser. A playbook that wants to show something writes files the applet reads.
-- An applet that writes, one with a server process of its own, and one shown for a project on a seat are later decisions, taken when a case needs them.
+- An applet that writes and one with a server process of its own are later decisions, taken when a case needs them.
 
 ### Considered and declined
 

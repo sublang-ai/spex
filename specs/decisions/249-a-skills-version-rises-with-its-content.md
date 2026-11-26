@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-24).
-Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the form of a shipped skill, adding its version.
+Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md).
 
 ## Context
 
@@ -22,6 +22,7 @@ Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) 
 
 ## Decision
 
+- Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the form of a shipped skill, adding its version.
 - Each shipped skill declares a semantic version [[3]] in `metadata.version` of its `SKILL.md`, and each translation of `SKILL.md` declares the same.
 - A change to any file of a skill's folder raises that skill's version above the one it has on `main`, once per change merged, whatever number of commits the change holds:
   - major: something a user, their saved state or a calling skill relied on is removed or changed incompatibly;
@@ -30,7 +31,7 @@ Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) 
 - The repository's tests compare each skill's folder with its merge base with `origin/main` and fail where the folder differs and the version is not higher.
 - The versions shipped so far are raised once for the changes since `1.0.0`:
   - `code`, `review` and `decide` to `1.1.0`, for their translations;
-  - `skill-atlas` to `2.0.0`, as the exported page no longer edits workflows and the setting for mentions is retired ([DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md)).
+  - `skill-atlas` to `2.0.0`, as the exported page no longer edits pipelines and the setting for mentions is retired ([DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md)).
 
 ## Consequences
 

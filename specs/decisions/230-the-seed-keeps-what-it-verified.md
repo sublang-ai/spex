@@ -5,12 +5,12 @@
 
 ## Status
 
-Accepted (2026-11-09) after the cache seed's first run on `main` saved no cache during GitHub's release-asset timeouts.
-Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and caches are unchanged, its jobs and retries refined.
+Accepted (2026-11-09).
+Amends [DR-228](228-ci-keeps-its-downloads.md).
 
 ## Context
 
-- The seed's first run, on the merge of DR-228, met 504 responses from GitHub's release downloads: Electron's fetch failed on Linux and Windows and dugite's download inside `npm ci` on macOS.
+- The seed's first run on `main`, on the merge of [DR-228](228-ci-keeps-its-downloads.md), met 504 responses from GitHub's release downloads: Electron's fetch failed on Linux and Windows and dugite's download inside `npm ci` on macOS.
 - A job saves its caches only when it succeeds, so each platform's one job saved none, not even npm's cache and dugite's archive that its install had already verified.
 - With nothing under `main`, the next pull request missed both archives and failed the same way twice before a rerun passed.
 - A cache may hold only what a step verified: a dugite archive cut short and saved would fail every later install that restored it.
@@ -19,6 +19,7 @@ Extends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and 
 
 ## Decision
 
+- Amends [DR-228](228-ci-keeps-its-downloads.md): the seed's triggers, scope and caches are unchanged, its jobs and retries refined.
 - On each platform the seed runs the install and Electron's fetch as jobs of their own, so a failed download fails only its own job.
   The install's success saves npm's package cache and dugite's archive, both verified by that install; the fetch's success saves Electron's archive, verified by its installer against the checksums Electron's package ships.
 - The fetch's job installs packages without their scripts, from the registry alone, and saves no npm cache, which would lack what those scripts fetch.

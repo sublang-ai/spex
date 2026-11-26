@@ -5,29 +5,25 @@
 
 ## Status
 
-Accepted (2026-10-31) on the owner's request to build macOS and Windows apps when an app tag is pushed.
-Amends [DR-040](040-source-only-app-releases.md) for binary distribution; source instructions, channel versions and existing release gates remain.
-
-Amended by [DR-177](177-native-desktop-installers.md) for macOS download format: a DMG replaces the ZIP; platform architectures and publication gates remain.
-
-Amended by [DR-219](219-developer-id-macos-downloads.md) for signed and notarized macOS downloads; Windows status and release gates remain.
-
-Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+Accepted (2026-10-31).
+Amends [DR-040](040-source-only-app-releases.md).
+Amended by [DR-177](177-native-desktop-installers.md), [DR-219](219-developer-id-macos-downloads.md), [DR-220](220-tags-own-release-versions.md).
 
 ## Context
 
+The owner asked that pushing an app tag build the macOS and Windows apps.
 Native macOS and Windows installation builds have been exercised locally, but the app tag workflow still publishes source instructions alone.
 Users need desktop downloads from the same tagged source instead of a local compiler toolchain.
-Signing credentials have not been configured.
 
 ## Decision
 
-- An accepted `app-v<version>` tag builds a macOS Apple Silicon ZIP and a Windows x64 per-user NSIS installer on their respective native runners.
+- Amends [DR-040](040-source-only-app-releases.md) in binary distribution; source instructions, channel versions and the existing release gates remain.
+- An accepted `app-v<version>` tag builds a macOS Apple Silicon download ([DR-177](177-native-desktop-installers.md)) and a Windows x64 per-user NSIS installer on their respective native runners.
 - Both builds must succeed before the workflow creates the GitHub release with both downloads and SHA-256 checksums.
-- Existing CI-green, version-match, test, changelog and beta gates remain; the CLI channel is unchanged.
+- The existing release gates remain; the CLI channel is unchanged.
 - Packaging never publishes independently of the final release job.
 - Release tags consume checksum-locked Cligent and Playbook versions from the public npm registry; temporary file, vendor and Git snapshots are not release inputs.
-- Downloads identify their version, platform and architecture, and release notes disclose unsigned and non-notarized status without claiming configured signing.
+- Downloads identify their version, platform and architecture, and release notes disclose the Windows download's unsigned status; the macOS download is signed and notarized ([DR-219](219-developer-id-macos-downloads.md)).
 - Source instructions remain available, including native Windows subject to its private-storage admission.
 
 ## Consequences

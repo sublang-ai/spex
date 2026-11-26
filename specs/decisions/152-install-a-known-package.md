@@ -5,19 +5,21 @@
 
 ## Status
 
-Accepted (2026-10-25), under the owner's fresh-user package publishing and installation goal.
-Extends [DR-104](104-spec-package-format-and-client-environments.md) in the registry installation surface.
+Accepted (2026-10-25).
+Amends [DR-104](104-spec-package-format-and-client-environments.md).
 
 ## Context
 
+The owner's fresh-user goal includes publishing and installing packages.
 Private packages are intentionally absent from registry search, including for their members.
 The IDE's registry form offers only search, so installing a known private release currently requires editing the environment file.
 The core already accepts named registry requests with a version requirement and checks access when resolving and installing them.
 
 ## Decision
 
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in the registry installation surface.
 - Add from registry also offers Add by name, accepting a known `org/name` and an explicit version requirement.
-- This submits the existing registry request for the selected environment, through its normal instance and account; it does not search for or enumerate private packages.
+- This submits the existing registry request for the selected environment, through the environment's registry and registry account; it does not search for or enumerate private packages.
 - Exact, caret and tilde requirements retain their existing meaning; the form invents no default version and does not turn an exact version into a range.
 - Request acceptance is not installation success; existing resolution, refusal and installation state remain authoritative.
 - Search, registry visibility, package format, locking, authentication and the core protocol remain unchanged.

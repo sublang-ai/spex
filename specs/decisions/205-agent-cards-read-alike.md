@@ -5,19 +5,13 @@
 
 ## Status
 
-Accepted (2026-11-02) on the owner's direction during the Workshop's manual verification.
-Amends [DR-204](204-workshop-agents-in-one-pass.md) in its agent cards: a card no position uses keeps the not-ready tone of every other; a ready card shares the not-ready card's frame; the section states what needs doing before a task can start; what is missing is plain text; the online service's action is enabled before it has an address; a ready card has no closing line and no tag; and in its reading of Claude Code's user settings: the core writes their variables into every run's environment, since a run that reads no settings file would not apply them.
-Amends [DR-091](091-models-named-by-the-runtime.md) in its model list: rows running one model read as one row, and a resolution the name already says reads once.
-Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "the core chooses no adapter, model, effort or writable path itself": behind a third-party Claude service, the seed's Claude agents take the provider's default in place of an official model name; and in "That seed reads credentials alone": it reads confirmed credentials, never an agent's home folder alone.
-The reseed of [DR-156](156-an-untouched-seed-follows-the-credentials.md) applies that seed unchanged, so an untouched seed follows a base URL as it follows a credential.
-Amended by [DR-206](206-the-workshop-points-to-its-guide.md) in "The online service before its address": the action is removed.
-
-Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the child model in a third-party Claude seed.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
+Accepted (2026-11-02) on the owner's direction.
+Amends [DR-091](091-models-named-by-the-runtime.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-204](204-workshop-agents-in-one-pass.md).
+Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-236](236-primary-and-subagent-model-defaults.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-- A not-ready card took a muted tone where no position used its agent and an alarm where one did, so one state had two looks; an attendee who reopened Spex after setting up Claude found the Codex card changed though nothing about Codex had.
+- During the Workshop's manual verification, a not-ready card took a muted tone where no position used its agent and an alarm where one did, so one state had two looks; an attendee who reopened Spex after setting up Claude found the Codex card changed though nothing about Codex had.
 - What the attendee must learn is that a task needs at least one agent, Claude recommended, and Codex optional; a card's tone said that only by implication.
 - With nothing set up, the section's line and each card's missing service took the same amber warning, so three warnings said one thing, two of them word for word and again in the badges.
 - A green line saying a task can start, on a page the attendee only opened to look, read like the toast of an action nobody took, and repeated the ready badge.
@@ -25,11 +19,16 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - "Change model" read as muted text, not as something to press; and the closing line on the first task stood on every ready card though the attendee could do nothing with it.
 - Behind DeepSeek, Claude Code's catalog lists its default alias, its Opus and Sonnet slots and the model's own row, all running one model the provider's default already runs, each slot's name the model it resolves to, so one model filled four rows and read twice in each.
 - DR-204 counted the `env` of Claude Code's `settings.json` because a Claude run applies it, but a run with no tools — the Captain's control calls — loads no settings file, so a key or base URL written only there left the Captain failing while players ran and the card read ready; and Cligent names no default model where that `env` sets `ANTHROPIC_MODEL`, so the card read "Unavailable".
-- Playbook's seed names `claude-opus-5-5` for every Claude agent.
+- Playbook's seed names an official model, such as `claude-opus-5-5`, for every Claude agent.
   A third-party service receives that name as written: an `ANTHROPIC_DEFAULT_*_MODEL` variable maps only an alias, and DeepSeek bills a `claude-opus` name as its Pro model while another service may refuse it.
   So every attendee with a third-party key met the official-name list on first start, though nobody had chosen those names.
 
 ## Decision
+
+- Amends [DR-204](204-workshop-agents-in-one-pass.md) in its agent cards — tone, frame, tags, the section's verdict, what is missing — and in its reading of Claude Code's user settings, whose variables the core writes into every run's environment.
+- Amends [DR-091](091-models-named-by-the-runtime.md) in its model list: rows running one model read as one row, and a resolution the name already says reads once.
+- Amends [DR-154](154-the-seed-follows-playbooks-rule.md): behind a third-party Claude service the seed's Claude agents take the provider's default, and the seed reads confirmed credentials, never an agent's home folder alone.
+- The reseed of [DR-156](156-an-untouched-seed-follows-the-credentials.md) applies that seed unchanged, so an untouched seed follows a base URL as it follows a credential.
 
 ### One frame, one tone per state
 
@@ -53,29 +52,21 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - Where nothing needs doing, no line stands: the badges say what is ready.
 - No verdict stands before the core answers or where the Captain's agent has no check.
 
-### The online service before its address
-
-- The online service's action is a normal primary action before the Workshop has its address, doing nothing when pressed, since the service opens soon and a disabled action with "Not open yet" made the primary route look withdrawn; the address is set in the interface's code when the service opens.
-- The action reads "Use the online service", the service no longer called temporary.
-
 ### Claude's settings in every run
 
-- Off a seat, the core writes the variables of Claude Code's user settings into the environment every run inherits — at start, before each run and before each readiness report — over the values inherited, as Claude Code's own precedence has them, so what the card counts is what every run, the Captain's included, receives.
-- A variable the file no longer sets goes back as it stood, and a stop puts every name back, as a seat's credentials do.
-- On a seat it writes none: the seat's readiness names the member's or the shared credentials as what runs, and the server account's settings are no member's, so writing them would run on a credential the card does not name.
-- A player's Claude Code on a seat still reads the server account's settings itself, as it did before this decision; keeping them from it needs Cligent to name a run's settings sources, or a configuration folder of the seat's own, and is left to a later decision.
+- The core writes the variables of Claude Code's user settings into the environment every run inherits — at start, before each run and before each readiness report — over the values inherited, as Claude Code's own precedence has them, so what the card counts is what every run, the Captain's included, receives.
+- A variable the file no longer sets goes back as it stood, and a stop puts every name back.
 - Where Cligent names no default model, `ANTHROPIC_MODEL` of that environment is the default, since it is what a run selects.
 - Counting no settings-only credential was rejected: a player reads the file itself and runs, so the card would call ready agents not ready.
 
 ### A third-party seed
 
-- Where Claude's base URL — read as a run reads it, Claude Code's user settings over the environment — names a third-party host, the seed removes each Claude agent's official `model`, so it runs on the provider's default; other agents, other fields and the template's comments stand.
+- Where Claude's base URL — read as a run reads it, Claude Code's user settings over the environment — names a third-party host, the seed leaves out each Claude agent's official primary and child models ([DR-236](236-primary-and-subagent-model-defaults.md)), so it runs on the provider's defaults; other agents, other fields and the template's comments stand.
 - An untouched seed is reseeded on that rule like any other, so an attendee who set the key after the first start needs no fix; a file changed in any byte is left to the official-name list.
 
 ### A folder is no credential
 
 - The seed counts an agent as set up by its credential variable — for Claude, in Claude Code's user settings too — or by a sign-in its own status command confirms where its folder stands, and hands Playbook's seed only those, one variable standing for each, with no home folder to read.
-- On a seat it counts the member's and the shared credentials alone, as the seat's readiness does: the server account's settings and sign-ins are no member's.
 - Playbook's rule counts `~/.claude` or `~/.codex` as a credential, but the runtime creates that folder on its first start, signed in or not, and Spex starts Codex to read its models: an attendee who set up only Claude found the reviewer on Codex at the next start, its steps failing.
 - An unconfirmed sign-in counts as none, so a slow status command leaves the template's agents on Claude, which a later start reseeds.
 

@@ -6,10 +6,8 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player.
-Amends [DR-205](205-agent-cards-read-alike.md) in the models omitted from a third-party Claude seed, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the fields supplied to the compiler.
-
-Amended by [DR-237](237-published-agent-runtime-floors.md) in model ownership and the shared runtime floor.
+Amends [DR-019](019-inline-agent-configuration.md), [DR-084](084-the-block-is-the-whole-compiler-agent.md), [DR-205](205-agent-cards-read-alike.md).
+Amended by [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 
@@ -19,7 +17,8 @@ The compiler and an untouched new-player draft each need the child choice the re
 
 ## Decision
 
-- For official services, seed Claude with `claude-fable-5-2` and child `claude-opus-5-5`, and Codex with `gpt-6-astra` and child `gpt-6.1-sol`.
+- Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player, [DR-205](205-agent-cards-read-alike.md) in the models left out of a third-party Claude seed, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the fields supplied to the compiler.
+- For official services, Claude runs `claude-fable-5-2` with child `claude-opus-5-5`, and Codex `gpt-6-astra` with child `gpt-6.1-sol`; the pairs are Cligent's, resolved where the agent runs ([DR-237](237-published-agent-runtime-floors.md)).
 - Playbook owns the credential-based first-run lineup and its efforts. Spex follows it under [DR-154](154-the-seed-follows-playbooks-rule.md) and reseeds a previously untouched file under [DR-156](156-an-untouched-seed-follows-the-credentials.md).
 - Adding a new roster player starts with the same model pair for the chosen adapter. Changing the adapter on an existing player still clears adapter-specific settings.
 - For a third-party Claude service, leave official primary and child pins out of the starter and new-player defaults, so the provider can supply its models.
@@ -31,4 +30,3 @@ The compiler and an untouched new-player draft each need the child choice the re
 
 A personal edit continues to own both selections.
 A config that omits a child retains its existing inheritance semantics, and a recorded call keeps its original model identity.
-Desktop and server receive the new first-run lineup when their shared dependency lock adopts the published Playbook, Cligent and slc changes under [DR-167](167-the-compiler-shares-the-apps-engine.md).

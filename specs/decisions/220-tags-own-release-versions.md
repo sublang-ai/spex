@@ -5,20 +5,21 @@
 
 ## Status
 
-Accepted (2026-11-03) on the owner's request for app and npm releases without version-only PRs.
-Amends [DR-087](087-beta-app-releases.md) and [DR-184](184-native-desktop-tag-packages.md) in version and notes preparation, and [DR-199](199-release-gated-full-validation.md) only in deterministic metadata preparation before full validation.
-
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) to retire release preparation of the hub’s archived tree.
+Accepted (2026-11-03) on the owner's request.
+Amends [DR-087](087-beta-app-releases.md), [DR-184](184-native-desktop-tag-packages.md), [DR-199](199-release-gated-full-validation.md).
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
+The owner asked for app and npm releases without version-only PRs.
 Requiring source manifests and dated changelog headings to match each new tag creates a release-only PR even when no business code changes.
 Tag workflows already own validation, native packaging and publication, but source/version mismatch currently prevents them from doing that work.
 
 ## Decision
 
+- Amends [DR-087](087-beta-app-releases.md) and [DR-184](184-native-desktop-tag-packages.md) in version and notes preparation, and [DR-199](199-release-gated-full-validation.md) only in deterministic metadata preparation before full validation.
 - Keep disjoint `app-vX.Y.Z[-beta.N]` and stable `cli-vX.Y.Z` channels, deriving the released version exclusively from the tag.
-- Before installation, prepare only that channel's workspace manifest and lockfile version fields in every validation/build checkout, including the hub's archived tree. Preserve dependencies and development defaults in Git; do not commit or push generated metadata.
+- Before installation, prepare only that channel's workspace manifest and lockfile version fields in every validation/build checkout. Preserve dependencies and development defaults in Git; do not commit or push generated metadata.
 - Validate and package the same tagged source plus that deterministic version metadata. Preserve full channel validation, OIDC/provenance, both native builds, strict packaged compilation and signed/notarized Mac distribution.
 - Prefer existing exact-version curated notes; otherwise use commits since the most recent published same-channel ancestor with source and comparison links. Exclude drafts/unpublished tags and stale `[Unreleased]`; describe first or empty ranges explicitly.
 - Inspect the actual npm tarball, archived app manifest and native installer/app metadata against the tag, publishing the exact checked tarball and downloads.

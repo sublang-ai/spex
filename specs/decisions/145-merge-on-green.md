@@ -7,7 +7,7 @@
 
 Accepted (2026-10-23).
 Amends [DR-086](086-tests-in-tiers.md).
-Amended by [DR-166](166-pull-requests-run-without-macos.md), [DR-185](185-the-suites-a-change-reaches.md), [DR-199](199-release-gated-full-validation.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md), [DR-252](252-a-guard-is-kept-beside-the-code.md).
+Amended by [DR-185](185-the-suites-a-change-reaches.md), [DR-199](199-release-gated-full-validation.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md), [DR-252](252-a-guard-is-kept-beside-the-code.md).
 
 ## Context
 

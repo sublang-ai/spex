@@ -5,30 +5,27 @@
 
 ## Status
 
-Accepted (2026-11-02) on the owner's direction to accelerate CI and local checks, remove nightly runs, and keep broad validation at release.
-Amends [DR-040](040-source-only-app-releases.md) in the publication gate, [DR-086](086-tests-in-tiers.md) and [DR-087](087-beta-app-releases.md) in the timing of hermetic checks and release evidence, [DR-145](145-merge-on-green.md), [DR-166](166-pull-requests-run-without-macos.md) and [DR-185](185-the-suites-a-change-reaches.md) in validation selection and the merge gate.
-
-Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
-Amended by [DR-228](228-ci-keeps-its-downloads.md) for the cache seed: a push to `main` changing the lockfile or the cache tooling refreshes caches, running no validation.
-Extended by [DR-229](229-the-cores-suite-in-four-parts.md): a Linux or macOS row reaching the core runs the core's suite in four parts beside one runner for the rest, its selection and gates unchanged.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group and seat examples in user guidance, and the hub lane in app validation and download caching.
-Extended by [DR-252](252-a-guard-is-kept-beside-the-code.md) with `spex verify` in this repository's checks.
+Accepted (2026-11-02).
+Amends [DR-040](040-source-only-app-releases.md), [DR-086](086-tests-in-tiers.md), [DR-087](087-beta-app-releases.md), [DR-145](145-merge-on-green.md), [DR-185](185-the-suites-a-change-reaches.md).
+Amended by [DR-220](220-tags-own-release-versions.md), [DR-228](228-ci-keeps-its-downloads.md), [DR-229](229-the-cores-suite-in-four-parts.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md), [DR-252](252-a-guard-is-kept-beside-the-code.md).
 
 ## Context
 
+- The owner directed that CI and local checks be faster, nightly runs removed, and broad validation kept at release.
 - Every code change still runs all browser journeys and native browser acceptance despite affected-workspace selection, and a merge repeats the full matrix on `main` before a nightly repeats it again.
 - The selected workspace suites already provide direct behavior coverage; exhaustive per-behavior journey ownership would add a fragile second dependency model.
 - Release workflows currently poll for a successful CI run before publishing, so removing automatic `main` CI requires an explicit replacement at the exact release commit.
 
 ## Decision
 
-- Pull requests run fast build, type, catalog and spec gates plus the conservatively selected workspace suites on Linux Node 22; Windows Node 22 runs only when the selection reaches the CLI, UI or core, retaining those Windows suites.
-  Documentation alone keeps its CLI tests and spec lint.
-  Journeys, native browser acceptance and the privileged hub lane are full-validation work.
-- Full validation runs only by explicit request or as a reusable dependency of a release workflow, on that invocation's exact tree.
-  App validation runs the full existing platform and Node matrix, all journeys, native browser acceptance and the privileged hub lane.
-  CLI validation runs CLI tests across the supported platform matrix and script tests on Linux and macOS, preserving the existing Windows exception, with no app journeys, native browser acceptance or hub lane.
-- Neither CI nor the hub lane runs on a schedule or automatically after a push to `main`.
+- Amends [DR-040](040-source-only-app-releases.md) in the publication gate, [DR-086](086-tests-in-tiers.md) and [DR-087](087-beta-app-releases.md) in the timing of hermetic checks and release evidence, and [DR-145](145-merge-on-green.md) and [DR-185](185-the-suites-a-change-reaches.md) in validation selection and the merge gate.
+- Pull requests run fast build, type, catalog and spec gates, with `spex verify` ([DR-252](252-a-guard-is-kept-beside-the-code.md)), plus the conservatively selected workspace suites on Linux Node 22; Windows Node 22 runs only when the selection reaches the CLI, UI or core, retaining those Windows suites.
+  Documentation alone keeps its CLI tests, spec lint and `spex verify`.
+  Journeys and native browser acceptance are full-validation work.
+- Full validation runs only by explicit request or as a reusable dependency of a release workflow, on that invocation's exact tree after only deterministic release-version metadata preparation ([DR-220](220-tags-own-release-versions.md)).
+  App validation runs the full existing platform and Node matrix, all journeys and native browser acceptance.
+  CLI validation runs CLI tests across the supported platform matrix and script tests on Linux and macOS, preserving the existing Windows exception, with no app journeys or native browser acceptance.
+- Validation runs on no schedule and not automatically after a push to `main`, where only the cache seed of [DR-228](228-ci-keeps-its-downloads.md) runs, validating nothing.
 - Both release channels call full validation directly and cannot publish unless it succeeds.
   A prior reduced pull-request run is no substitute; preparation no longer requires a pre-existing CI run for the commit being tagged.
   Downstream release jobs do not repeat the completed test suites.

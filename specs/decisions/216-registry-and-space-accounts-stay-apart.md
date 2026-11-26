@@ -5,28 +5,27 @@
 
 ## Status
 
-Amended by [DR-222](222-cli-publication-registry-override.md) to allow a CLI publication to name its registry for one invocation.
-
-Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring registry-only namespace selection until publication and using a local placeholder for authoring and a one-shot compile without a namespace grant.
-
-Accepted (2026-11-03) on the owner's direction that package management, playbook authoring and publishing use only the registry account, while groups and servers use only the Space account.
-Amends [DR-168](168-independent-package-registry.md) in legacy registry selection, namespace suggestions and the CLI's default account report; [DR-127](127-a-home-signed-in-to-several-instances.md) in group-derived authoring defaults and registry rehoming at placement; [DR-173](173-the-registry-is-no-face-of-a-space.md) in package-surface account context; and [DR-200](200-publishing-names-need-registry-authority.md) in group-derived Org suggestions.
-The scoped account links of [DR-202](202-registry-guidance-keeps-account-scope.md) remain.
+Accepted (2026-11-03) on the owner's direction.
+Amends [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-168](168-independent-package-registry.md), [DR-173](173-the-registry-is-no-face-of-a-space.md), [DR-200](200-publishing-names-need-registry-authority.md).
+Amended by [DR-218](218-write-a-playbook-before-publishing.md), [DR-222](222-cli-publication-registry-override.md).
 
 ## Context
 
+- The owner directed that package management, playbook authoring and publishing use only the registry account, and Space work only the Space account.
 - Legacy manifests without `registry` still selected a Space's origin and credential for package operations.
-- Authoring could suggest a Space group's path as a publishing Org, including while no registry account was signed in.
+- Authoring could suggest a Space namespace as a publishing Org, including while no registry account was signed in.
 - Distinct sign-in controls cannot express independent accounts while defaults, suggestions or installation fallback still cross that boundary.
 
 ## Decision
 
-- Package operations select the explicit `registry` in `spex.yaml`, else `https://spex.sublang.ai`, independent of `space`, placement and the home's Spaces.
-  Package account displays, sign-in, namespace suggestions and publishing links use that registry alone; Space groups, account names and addresses supply none of them.
+- Amends [DR-168](168-independent-package-registry.md) in legacy registry selection, namespace suggestions and the CLI's default account report; [DR-127](127-a-home-signed-in-to-several-instances.md) in Space-derived authoring defaults and registry rehoming at placement; [DR-173](173-the-registry-is-no-face-of-a-space.md) in package-surface account context; and [DR-200](200-publishing-names-need-registry-authority.md) in Space-derived Org suggestions.
+  The scoped account links of [DR-202](202-registry-guidance-keeps-account-scope.md) remain.
+- Package operations select the explicit `registry` in `spex.yaml`, else `https://spex.sublang.ai`, independent of `space`, placement and the home's Spaces; a CLI publication may name its registry for one invocation ([DR-222](222-cli-publication-registry-override.md)).
+  Package account displays, sign-in, namespace suggestions and publishing links use that registry alone; Space accounts, names and addresses supply none of them.
   `spex whoami` defaults to the selected registry; a Space account is reported only through `--space`.
 - Every registry operation uses registry-purpose credentials or anonymous access, never a Space grant, including when the origins are equal and when reading an older lock.
   Signing in, refreshing or signing out either account changes no credential or account state of the other.
-- Authoring suggests only namespaces authorized by the selected registry account, the first by name as its untouched Org default, or an empty field without an answer.
+- Publication suggests only namespaces authorized by the selected registry account, the first by name as its untouched Org default, or an empty field without an answer; authoring and a one-shot compile need no namespace grant ([DR-218](218-write-a-playbook-before-publishing.md)).
   Account and registry changes refresh untouched fields; manually entered names and existing packages remain as they are.
 - Existing manifests, credentials and package names are not rewritten merely because this rule changes.
   Explicit registry choices remain; exact installs retain the lock's source origin, version, checksum and file digests, requesting only that registry or an explicitly trusted mapping, with a registry grant where needed.
@@ -36,5 +35,5 @@ The scoped account links of [DR-202](202-registry-guidance-keeps-account-scope.m
 ## Consequences
 
 - New and legacy environments have the same registry-account boundary without losing their locked provenance or Space accounts.
-- Offline authoring remains available with a manually entered Org; publication still requires fresh registry authorization.
-- Shared-library, core, CLI and rendered-surface integration coverage exercises missing-registry manifests, same-origin independent grants, locked-source installation and registry-only authoring context.
+- Offline authoring needs no Org; publication still requires fresh registry authorization.
+- Shared-library, core, CLI and rendered-surface integration coverage exercises missing-registry manifests, same-origin independent grants, locked-source installation and registry-only publishing context.

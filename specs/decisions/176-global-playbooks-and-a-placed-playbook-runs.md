@@ -5,27 +5,15 @@
 
 ## Status
 
-Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
-Amended by [DR-241](241-reviewable-builtin-gears.md) in global registry-sourced built-in updates: startup selects the newer release the app ships, with removal and explicit path or Git sources standing.
-
-Accepted (2026-11-02) on the owner's direction, after a design review of the project's Playbooks tab that started from one row: a built-in under "Enabled" wearing "Personal" and offering "Enable for ⟨project⟩" — one fact said three ways, two of them global acts on a project page.
-Amends, under [DR-046](046-decision-record-evolution.md):
-
-- [DR-172](172-surfaces-a-fresh-user-reads.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours, "Personal" staying the name of your own group on Space; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
-- [DR-104](104-spec-package-format-and-client-environments.md) in where a playbook is enabled, and [DR-174](174-what-a-package-provides-is-placed.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
-- [DR-032](032-session-players.md) in how a player bound by more than one playbook reads: the row groups the roles one player plays and says nothing more; the binding editor names the other playbooks.
-- [DR-058](058-chat-assisted-playbook-authoring.md) in the workspace's last tab: "Add" in "Enable"'s place, writing the players and requesting the package from the environment of the page the playbook was created on.
-- [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package under development is made: the global page makes one in the global environment's own folder.
-- [DR-103](103-the-home-and-its-groups.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
-- [DR-105](105-playbook-17-5-0-adoption.md) in the core's parity with the launcher: the default bindings and players the core composes for placed playbooks are its third exception, beside `from` and `skills`.
-- Extends [DR-069](069-key-phrases-not-sentences.md) with one principle: a page's acts match its scope.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
+Accepted (2026-11-02).
+Amends [DR-032](032-session-players.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-069](069-key-phrases-not-sentences.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-105](105-playbook-17-5-0-adoption.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-174](174-what-a-package-provides-is-placed.md).
+Amended by [DR-218](218-write-a-playbook-before-publishing.md), [DR-241](241-reviewable-builtin-gears.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-- The project's Playbooks tab listed every playbook a session there could run, from the project's packages and your own group's, and let the reader enable each in either config.
+- The project's Playbooks tab listed every playbook a session there could run, from the project's packages and the global ones, and let the reader enable each in either config.
   A row under "Enabled" wore "Personal", offered "Enable for ⟨project⟩" as its primary act and, once pressed, "in ⟨project⟩" beside "Personal".
-  The built-ins are seeded into your own group's config at first run, so this was every built-in's row on every project: the fresh user's view.
+  The built-ins were seeded into the global config at first run, so this was every built-in's row on every project: the fresh user's view.
 - One fact — which config holds the entry — was said three ways; "Personal" has no referent on a project page; the primary act wrote a file nobody needed written; and the rare act, a playbook for the team, outranked the daily one.
 - The root was global acts on a project page.
   [DR-172](172-surfaces-a-fresh-user-reads.md) retired the global Playbooks entry so that no two pages competed for one job, and gave the project's tab both jobs.
@@ -37,6 +25,15 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 ## Decision
 
+- Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in where a playbook is enabled, and [DR-174](174-what-a-package-provides-is-placed.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
+- Amends [DR-032](032-session-players.md) in how a player bound by more than one playbook reads: the row groups the roles one player plays and says nothing more; the binding editor names the other playbooks.
+- Amends [DR-058](058-chat-assisted-playbook-authoring.md) in the workspace's last tab: "Add" in "Enable"'s place, writing the players and requesting the package from the environment of the page the playbook was created on.
+- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package under development is made: the global page makes one in the global environment's own folder.
+- Amends [DR-103](103-the-home-and-its-groups.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
+- Amends [DR-105](105-playbook-17-5-0-adoption.md) in the core's parity with the launcher: the default bindings and players the core composes for placed playbooks are its third exception, beside `from` and `skills`.
+- Amends [DR-069](069-key-phrases-not-sentences.md) with one principle: a page's acts match its scope.
+
 ### A page's acts match its scope
 
 - Settings holds what exists: the agents with their credentials, and your players with their default agent and model.
@@ -45,14 +42,12 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - A project's Playbooks tab lists what runs in the project under two headings: ⟨project⟩, its packages' playbooks with their role → player mapping, and Global, the global playbooks as they come, each role overridable for this project.
   Every act on the tab is the project's; every act on the global page is global.
 - The project's Packages tab holds the project's packages alone; the global packages are managed on the global page.
-- The rail reads Dashboard, Projects, Playbooks, Space, Settings; a remembered Playbooks surface opens the global page; the place selector serves Playbooks as it serves Settings and Space, since a server's seat had a global environment of its own.
+- The rail reads Dashboard, Projects, Playbooks, Space, Settings; a remembered Playbooks surface opens the global page.
 
 ### "Global" is the word
 
 - Global is the word, on every surface, for what applies to every project of yours: the global page, the Global heading, a global package, a global playbook.
-  It replaces "Personal", "your own group's" and "every project of yours" wherever a package's or a playbook's reach is named; the specs say the global environment and the global config where they speak of that reach, and your own group's spex repository where they speak of the place.
-- Personal stays the name of your own group on Space: a place records go.
-  Global names reach, Personal names a place, and the two never stand on one surface.
+  It replaces "Personal" and "every project of yours" wherever a package's or a playbook's reach is named; the specs say the global environment and the global config where they speak of that reach, and the global records repository where they speak of the place.
 - The Chinese glossary gains 全局 for Global.
 - The command line is unchanged: it reads the folder it runs in and no home, as [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) decided, and its `-g` stays later.
 
@@ -83,7 +78,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 - The built-in spec package is a global package: requested in the global environment once, when the home is made, as the seed writes its entries, and in no project's `spex.yaml` from then on.
   A project that requested it before this change keeps the request, harmlessly: the playbook lists once, under Global.
-- From the first run on it is one package among the rest: its rows name it with its version as every row does, it can be removed and added again, and a newer release the app ships reads Update as today.
+- From the first run on it is one package among the rest: its rows name it with its version as every row does, and it can be removed and added again; at startup the app selects a newer release it ships ([DR-241](241-reviewable-builtin-gears.md)).
   Removed, it is not seeded again.
 - "built in" retires as a label on a playbook's row and as the Packages tab's one unremovable line; it stays the source's name — the glyph's tooltip, the command line's lock marker — as "From the registry" is a source's name.
 

@@ -5,20 +5,13 @@
 
 ## Status
 
-Accepted (2026-11-02) on the owner's rejection of the repair screen's unexplained names, connection language and ambiguous folder action.
-Amended by [DR-211](211-a-panel-carries-its-own-way-out.md) in allowing review to close while its warning remains, with new blockers reopening it.
-Amends [DR-189](189-repairs-explain-the-next-step.md) in its repair presentation, next steps and issue count; structured causes and preservation remain.
-Amends [DR-065](065-repairs-the-reader-answers.md) in acknowledgement meaning and presentation: Not now postpones optional recovery, without asserting where a project belongs.
-Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, attention styling, naming and actions, and extends [DR-069](069-key-phrases-not-sentences.md) to make an action's purpose and scope visible before asking for it.
-
-Amended by [DR-195](195-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
-
-Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the header review count and persistent return path.
-
-Amended by [DR-197](197-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
+Accepted (2026-11-02).
+Amends [DR-065](065-repairs-the-reader-answers.md), [DR-069](069-key-phrases-not-sentences.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-189](189-repairs-explain-the-next-step.md).
+Amended by [DR-195](195-read-saved-conversations-before-locating-files.md), [DR-197](197-dismiss-reminders-without-losing-history.md), [DR-211](211-a-panel-carries-its-own-way-out.md), [DR-214](214-project-navigation-and-contextual-recovery.md).
 
 ## Context
 
+The owner rejected the repair screen's unexplained names, connection language and ambiguous folder action.
 The previous repair screen made storage diagnostics into mandatory setup work after sign-in.
 A personal history container's derived name stood as a project name, a folder's relationship to it was described as a connection, and selecting an existing folder looked like an invitation to create or convert one.
 Personal conversations may have used a general folder: a missing project relationship does not prove that project files were lost.
@@ -27,13 +20,16 @@ Error styling should be reserved for problems that need to interrupt work [[1]],
 
 ## Decision
 
-- Nonblocking recovery is an optional Saved work review, quiet and initially closed; a blocking problem alone calls for attention and opens the review.
+- Amends [DR-189](189-repairs-explain-the-next-step.md) in its repair presentation, next steps and issue count; structured causes and preservation remain.
+- Amends [DR-065](065-repairs-the-reader-answers.md) in acknowledgement meaning and presentation: setting a folder task aside postpones optional recovery, without asserting where a project belongs.
+- Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, attention styling, naming and actions, and [DR-069](069-key-phrases-not-sentences.md) to make an action's purpose and scope visible before asking for it.
+- Nonblocking recovery is an optional review in Space → Files & history ([DR-214](214-project-navigation-and-contextual-recovery.md)), quiet and initially closed; a blocking problem alone calls for attention and opens the review.
 - The task is to continue recognizable saved conversations: show up to three recent conversation titles, with saved-date or untitled fallbacks, and a project name only when project metadata supplies it.
-- Storage-derived names and group/project composites never identify a recovery task.
+- Storage-derived names never identify a recovery task.
 - Previously used folders are labelled as such; their checks and technical failures live in collapsed Technical details, not as errors before the person has made a choice.
-- Choose project… asks for an existing project folder in which all the conversations in that task will continue, with that purpose and scope visible before confirmation.
+- Locate folder… ([DR-195](195-read-saved-conversations-before-locating-files.md)) asks for an existing project folder in which all the conversations in that task will continue, with that purpose and scope visible before confirmation.
 - The editor starts with a checked valid proposal or an empty candidate, never a known unusable folder; a failed submission names the exact candidate and explains the existing-Git-project requirement without creating one.
-- Not now keeps the conversations and leaves the task for later; returning to it retains the choice to select a folder.
+- Dismissing a folder task ([DR-197](197-dismiss-reminders-without-losing-history.md)) keeps the conversations and leaves the task for later; returning to it retains the choice to select a folder.
 - One folder task also carries its dependent older-session import failures, so one choice is not counted twice.
 - Saving a folder retries those imports immediately; the outcome confirms the saved folder, while any remaining unreadable conversation keeps its own report.
 - A conversation Spex cannot read is described as unavailable with its original file preserved, not as homework to share details through a support route that does not exist.

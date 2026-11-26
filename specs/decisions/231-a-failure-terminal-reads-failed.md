@@ -5,13 +5,12 @@
 
 ## Status
 
-Accepted (2026-11-11) on a packaged-app session in which a workflow ended in the failure terminal it declares and its card read "done".
-Amends [DR-031](031-machine-call-tree.md) in its tombstone rule alone: a settled run's own failure terminal record changes its card; every other later record still changes nothing.
-Applies the status vocabulary of [DR-160](160-the-captain-dispatches-in-plain-sight.md) to that run.
-Leaves the ledger as [DR-077](077-up-next-is-a-committed-queue.md) rules it: typed traces serve machine presentation and decide no standing, attention or advancement.
+Accepted (2026-11-11).
+Amends [DR-031](031-machine-call-tree.md).
 
 ## Context
 
+- In a packaged-app session a workflow ended in the failure terminal it declares, and its card read "done".
 - A workflow may end in a final state it declares a failure.
   The runtime publishes that as the run's terminal record — the state's id, the kind `failure`, and the description the workflow authored for the Boss — in the run's own turn-settlement trace.
 - The run view settles a run on its closing transition and reads its outcome from the machine's status.
@@ -22,6 +21,9 @@ Leaves the ledger as [DR-077](077-up-next-is-a-committed-queue.md) rules it: typ
 
 ## Decision
 
+- Amends [DR-031](031-machine-call-tree.md) in its tombstone rule alone: a settled run's own failure terminal record changes its card; every other later record still changes nothing.
+- Applies the status vocabulary of [DR-160](160-the-captain-dispatches-in-plain-sight.md) to that run.
+- Leaves the ledger as [DR-077](077-up-next-is-a-committed-queue.md) rules it: typed traces serve machine presentation and decide no standing, attention or advancement.
 - A settled run whose own turn-settlement trace carries a terminal record of kind `failure` reads "failed", in the status vocabulary's red, wherever the run settled: in the thread for a root, under its calling state for a child.
 - That record is the one later record that changes a settled card.
   A status, a disposal, and a settlement carrying a `success` record or none still change nothing.

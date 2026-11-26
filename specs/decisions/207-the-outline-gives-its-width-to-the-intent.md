@@ -5,9 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-02) on the owner's direction during the Workshop's manual verification.
-Amends [DR-158](158-a-legible-graph-and-outline.md) in the outline's table and the split: the counts share one cell of labeled counts under no heading row, the cross-package rollup reads by labeled counts, a collapsed intent holds one line, an expanded package's header pins at the outline's top, and the graph starts at a third of the split.
-Its full group names on the filters, the group colors, the filters' status line, the unresolved mark and the split's pixel floors stand.
+Accepted (2026-11-02) on the owner's direction.
+Amends [DR-158](158-a-legible-graph-and-outline.md).
 
 ## Context
 
@@ -18,6 +17,7 @@ Its full group names on the filters, the group colors, the filters' status line,
 
 ## Decision
 
+- Amends [DR-158](158-a-legible-graph-and-outline.md) in the outline's table and the split, as below; its full group names on the filters, the group colors, the filters' status line, the unresolved mark and the split's pixel floors stand.
 - A package row's counts stand in one right-aligned cell, one labeled count per group still on and holding any, reading the group's short name with the count in parentheses (`Ext (7)`, `对外(7)`), in its group's color, each named in full in its own title and accessible name.
 - A group with no items in the package is left out of the cell rather than shown as a dash.
 - No heading row stands over the rows: each count names its own group, and the group filters above, in the same colors, give those names in full.

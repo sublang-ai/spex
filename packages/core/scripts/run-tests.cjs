@@ -19,7 +19,7 @@ const root = join(__dirname, "..");
 // subprocess contention, keeping Node's default on 1/2-CPU hosts.
 // Three files at once at most: the suites use scratch homes and free
 // ports, the CI runners have four cores, and a fourth file slowed
-// the whole run on a loaded runner more than it saved (DR-166).
+// the whole run on a loaded runner more than it saved (DR-185).
 const concurrency = Math.min(3, Math.max(1, availableParallelism() - 1));
 
 function collect(dir) {

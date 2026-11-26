@@ -5,35 +5,30 @@
 
 ## Status
 
-Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md): missing `registry` selects the public registry without Space credential fallback, publishing suggestions use no group context, and the CLI's default account report names only the registry; exact locked source provenance remains preserved.
-
-Accepted (2026-10-30) on the owner's direction to separate package management, Space management and server execution, preserving existing accounts and records.
-Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where the registry's sign-in shows, and by [DR-173](173-the-registry-is-no-face-of-a-space.md): the registry stands nowhere on the Space surface.
-Completed by [DR-188](188-registry-sign-in-opens-the-browser.md) in the desktop's browser opening for an independent registry sign-in and its manual continuation link.
-Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) and [DR-127](127-a-home-signed-in-to-several-instances.md) in registry selection and credentials, and [DR-151](151-publish-local-spec-packages.md) in publishing selection.
-The instance-only presentation of [DR-120](120-the-instance-is-the-space.md), project placements and execution ownership stand.
-
-Amended by [DR-200](200-publishing-names-need-registry-authority.md) in authoring guidance and fresh publishing-rights checks.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: seat-only execution, credentials, configuration, storage checks and applet restrictions. Each home's runtime still owns its work.
+Accepted (2026-10-30).
+Amends [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-151](151-publish-local-spec-packages.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md).
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-173](173-the-registry-is-no-face-of-a-space.md), [DR-188](188-registry-sign-in-opens-the-browser.md), [DR-200](200-publishing-names-need-registry-authority.md), [DR-216](216-registry-and-space-accounts-stay-apart.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
-The package manager is already one library used by the standalone CLI and IDE, and each Space already authorizes independently hosted servers.
-However, an environment's `space` also selects its registry, publishing destination, account and credential.
-Registry failures can sign out the Space, and origin-only credential slots cannot represent independent registry and Space grants at the same URL.
-The owner requires one public default registry, isolated Spaces and independent package permissions, including on a server seat.
+The owner directed that package management and Space management be separated, preserving existing accounts and records.
+The package manager is already one library used by the standalone CLI and IDE.
+However, an environment's `space` also selected its registry, publishing destination, account and credential.
+Registry failures could sign out the Space, and origin-only credential slots cannot represent independent registry and Space grants at the same URL.
+The owner requires one public default registry, isolated Spaces and independent package permissions.
 
 ## Decision
 
+- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) and [DR-127](127-a-home-signed-in-to-several-instances.md) in registry selection and credentials, and [DR-151](151-publish-local-spec-packages.md) in publishing selection.
+  The Space-only presentation of [DR-120](120-the-instance-is-the-space.md) and project placements stand.
 - A registry supplies immutable packages and controls namespace ownership, publication and private reads.
-  A Space controls groups, records and admission to its servers; a server executes projects in member seats.
+  A Space holds a person's records.
   The same origin may offer both registry and Space capabilities.
 - `spex.yaml` names the package registry independently as `registry: <origin>`.
-  New environments record `https://spex.sublang.ai` as the default registry; an explicitly chosen registry is preserved across Space placement and execution-place changes.
-  `space` continues to select collaboration and the preferred credential broker for Git sources, never the registry of an environment that names one.
-- Existing manifests without `registry` retain their former package destination through a compatibility path until explicitly migrated.
-  A migration preserves private-source selection, publishing destination, locked versions, checksums and origin provenance; matching bytes alone never transfer namespace ownership or permission.
-  Independent installs use the locked registry or an explicitly trusted equivalent source, not every signed-in Space.
+  New environments record `https://spex.sublang.ai` as the default registry; an explicitly chosen registry is preserved across Space placement.
+  `space` selects record sync and the preferred credential broker for Git sources, never the registry.
+- A manifest without `registry` selects the public registry ([DR-216](216-registry-and-space-accounts-stay-apart.md)).
+  Installs keep the lock's source origin, version, checksums and provenance, using the locked registry or an explicitly trusted equivalent source, not every signed-in Space; matching bytes alone never transfer namespace ownership or permission.
 - Registry sign-in and Space sign-in are separate grants, credential slots, refresh and sign-out operations even when their origins are equal.
   Existing origin-only credentials remain Space credentials and are not promoted to registry credentials.
   A registry failure cannot sign out a Space, and a Space failure cannot sign out the registry.
@@ -42,16 +37,13 @@ The owner requires one public default registry, isolated Spaces and independent 
   The IDE exposes the same independent registry account and package operations through the shared library.
 - Public packages need no account.
   The canonical registry authenticates through GitHub.com or GitLab.com; private reads and publication need that registry's own grant and live namespace permission.
-  A person with only a Space sign-in can install public packages; no Space membership creates registry authority.
+  A person with only a Space sign-in can install public packages; no Space account creates registry authority.
 - Publishing offers all registry namespaces the registry account may publish to, with provider metadata.
-  A project's root-group name may suggest a matching namespace but cannot hide other authorized choices or require a Space association.
 - The public registry directory lists Spaces by display name, origin and sign-in kinds, and the IDE offers these choices beside a custom URL.
   Discovery supplies no credential trust and exposes no backend locator or configuration.
-- A server seat receives only its Space grant through admission.
-  Private package use on that seat requires its own registry sign-in; server admission, tickets, leases and execution ownership are unchanged.
 
 ## Consequences
 
-The shared CLI library, Core and IDE gain independent registry configuration and account state while retaining the current package format, immutable lock sources and server model.
+The shared CLI library, Core and IDE gain independent registry configuration and account state while retaining the current package format and immutable lock sources.
 Compatibility registry reads remain served at old origins until their data and client migration are verified; authenticated reads are never redirected across origins.
-Integration and live acceptance cover independent same-origin sign-in, refresh and sign-out; anonymous public installs; private installation and publication; explicit legacy migration; two Spaces using one registry; directory discovery; and a server seat before and after registry sign-in.
+Integration and live acceptance cover independent same-origin sign-in, refresh and sign-out; anonymous public installs; private installation and publication; manifests without `registry`; two Spaces using one registry; and directory discovery.

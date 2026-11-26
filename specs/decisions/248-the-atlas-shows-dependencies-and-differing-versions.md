@@ -6,13 +6,12 @@
 ## Status
 
 Accepted (2026-11-22).
-Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls.
-Amends [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page's settings and their labels, retiring the setting for mentions, and in the control choosing the page's language.
-Amended in the name of workflows, pipelines since, by [DR-250](250-the-atlas-arranges-pipelines.md).
+Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), [DR-245](245-skills-and-the-atlas-in-the-readers-language.md).
+Amended by [DR-250](250-the-atlas-arranges-pipelines.md).
 
 ## Context
 
-- The exported page let a reader edit workflows and download them as a file ([DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)).
+- The exported page let a reader edit pipelines, then called workflows, and download them as a file ([DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md)).
   Nobody edits an exported copy: its reader has neither the skills nor the state folder, so an edit there reaches no one.
 - The page drew two kinds of link, a call and a mention, a skill named without being run.
   A mention answers an author's proofreading question, not a reader's question of what depends on what, and it cost a control, a style and a concept.
@@ -42,7 +41,8 @@ Amended in the name of workflows, pipelines since, by [DR-250](250-the-atlas-arr
 
 ## Decision
 
-- The exported page is read-only: it shows the atlas and the workflows, and offers no control that would change them.
+- Amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls, and [DR-245](245-skills-and-the-atlas-in-the-readers-language.md) in the page's settings and their labels, retiring the setting for mentions, and in the control choosing the page's language.
+- The exported page is read-only: it shows the atlas and the pipelines, and offers no control that would change them.
 - The page shows dependencies only, the calls between skills, and names the relation a dependency.
   - The scan still classifies every link as a call or a mention, an unresolved one included, and reports both.
 - Skills of one name with different content are one fact, stated without a verdict.
@@ -69,7 +69,7 @@ Amended in the name of workflows, pipelines since, by [DR-250](250-the-atlas-arr
 
 ## Consequences
 
-- An exported page has fewer controls, and a reader who wants to arrange workflows runs the page from the skill.
+- An exported page has fewer controls, and a reader who wants to arrange pipelines runs the page from the skill.
 - A mention no longer shows on the page; an unresolved name the skill steers away from is not shown either.
 - Differing versions of a name raise a note, not a problem, whether intended or not; the reader who knows which agents they use decides.
 - No agent's rule needs maintaining, so a new agent changes nothing but the folders the scan reads.

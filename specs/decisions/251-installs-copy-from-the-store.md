@@ -5,14 +5,8 @@
 
 ## Status
 
-Accepted (2026-11-25), by the owner's direction.
-Amends, under [DR-046](046-decision-record-evolution.md):
-
-- [DR-104](104-spec-package-format-and-client-environments.md) in how the store's bytes reach an installed tree and in the store's layout: an install copies them, and the executable copy kept apart goes;
-- [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in the one sentence saying the store is hard-linked into installs;
-- [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in the store it says stands as DR-104 decided.
-
-The store itself, its place under the home, the lock's digests, atomic installs and the collection at the core's start stand.
+Accepted (2026-11-25) on the owner's direction.
+Amends [DR-104](104-spec-package-format-and-client-environments.md), [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md).
 
 ## Context
 
@@ -31,6 +25,10 @@ The store itself, its place under the home, the lock's digests, atomic installs 
 - Environments installed until now are hard links, read-only, in every folder the app or the command line installed into, and the home records only the folders the app knows.
 
 ## Decision
+
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in how the store's bytes reach an installed tree and in the store's layout: an install copies them, and the executable copy kept apart goes.
+- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in the one sentence saying the store is hard-linked into installs, and [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in the store it says stands as DR-104 decided.
+- The store itself, its place under the home, the lock's digests, atomic installs and the collection at the core's start stand.
 
 ### Principle
 

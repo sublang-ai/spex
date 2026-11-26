@@ -5,17 +5,18 @@
 
 ## Status
 
-Accepted (2026-11-03) on the owner's request to reuse the verified KeySync signing identity and notarization credentials for Spex.
-Amends [DR-184](184-native-desktop-tag-packages.md) and [DR-177](177-native-desktop-installers.md) for macOS signing and notarization; architectures, Windows signing status and publication gates remain.
+Accepted (2026-11-03) on the owner's request.
+Amends [DR-177](177-native-desktop-installers.md), [DR-184](184-native-desktop-tag-packages.md).
 
 ## Context
 
-The Mac download is currently ad-hoc signed and not notarized.
+The Mac download was ad-hoc signed and not notarized; the owner asked to reuse the verified KeySync signing identity and notarization credentials for Spex.
 An isolated Spex beta.26 App and DMG passed actual Developer ID signing, Apple notarization, ticket validation and Gatekeeper assessment with the existing credentials.
 That acceptance required a fresh temporary keychain to sign the DMG after packaging rather than relying on the builder's DMG signing.
 
 ## Decision
 
+- Amends [DR-177](177-native-desktop-installers.md) and [DR-184](184-native-desktop-tag-packages.md) for macOS signing and notarization; their architectures, Windows signing status and publication gates remain.
 - Keep Spex and `ai.sublang.spex`, using the configured Developer ID Application identity and team independently of the product name.
 - Require signing credentials for the distribution command and the native Mac tag job; never fall back silently to unsigned or pending-notarization downloads.
 - Sign the App with hardened runtime and Electron's required entitlements, preserving its Electron-as-Node compiler and native dependencies.
