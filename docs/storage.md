@@ -14,7 +14,7 @@ The home itself is not a Git repository; only clones are.
 
 ## File catalog
 
-A **session bundle** is one session's physical manifest root, replay descriptor, immutable chunks and owned assets, or its legacy manifest and replay stream with assets.
+A **session bundle** is every file of `sessions/` named for one session: its manifest file and the files under its replay, blob and asset folders.
 Synchronization selects that complete bundle from the same revision or deletes it; it never merges its parts independently.
 Git does not enforce this relationship.
 
@@ -29,12 +29,12 @@ Ignored files can contain durable local state.
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | The global environment's requests and lock. A project's stand at its working folder's root, committed with its code; the app moves them there from a project's clone once. | Tracked, one unit |
 | `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
 | `<clone>/intents/<id>.assets/` | Immutable uploaded files retained by that intent. | Tracked with its intent |
-| `<clone>/sessions/<id>.json` | Schema-8 storage root with identity, `cwd`, state, timestamps and a reference to the logical schema-7 manifest. | Tracked |
-| `<clone>/sessions/<id>.replay.json`, `<clone>/sessions/<id>.chunks/` | Bounded replay descriptor and immutable recovery/replay chunks. | Tracked with the complete session bundle |
-| `<clone>/sessions/<id>.records.jsonl` | Legacy monolithic replay, retained until explicit session migration. | Tracked in a legacy bundle |
+| `<clone>/sessions/<id>.json` | Schema-9 manifest file: the whole logical manifest and the replay prefix it binds, replaced atomically. | Tracked |
+| `<clone>/sessions/<id>.replay/`, `<clone>/sessions/<id>.blobs/` | Append-only replay segments, and values past the 8 MiB per-file bound. | Tracked with the complete session bundle |
 | `<clone>/sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
 | `<clone>/authoring/<id>.json`, `.records.jsonl`, `.assets/` | An authoring session: its queue, compile state, transcript and owned files. | Tracked, one unit |
 | `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
+| `<clone>/.legacy-sessions/` | The earlier-format files of sessions Playbook's conversion command converted. | Ignored |
 | `<clone>/.spex/` | The global environment's installed spec packages, generated skills and install record, rebuilt from `spex.lock`. A project's stand under its working folder's `.spex/`, which Git ignores. | Ignored |
 | `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
 | `store/`, `cache/` | A cache of verified spec package files by content digest, which every environment on the device copies its installed files from, and rebuildable caches such as fetched Git sources. | Outside any clone |
@@ -55,7 +55,7 @@ Writes require the corresponding lease.
 ## Session contents
 
 The logical **manifest** stores recovery state: the checkpoint, journal, unresolved work and effect ledger used to reconcile external actions.
-Playbook 18 hydrates it through the shared API from a small versioned root and immutable chunks; each newly written root, replay descriptor and chunk is at most 8 MiB, without truncating history or recovery evidence.
+Playbook 20 stores it whole in the session's manifest file beside an append-only replay log; a value past 8 MiB moves into the session's blob parts, so no file passes that bound, without truncating history or recovery evidence.
 Asset files keep their separate attachment limits.
 This bounds individual runtime files, not total retained disk space or the memory required to hydrate a session.
 Recovery evidence is durable before external actions run, independently of transcript writes.
@@ -101,7 +101,7 @@ Agent-written Markdown paths and remote URLs are not imported as assets.
 ## Git synchronization
 
 Each clone tracks portable files only; provider tokens never enter recovery fields that Git sees.
-Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files, chunk directories and asset directories.
+Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files, every file under `sessions/` and asset directories.
 
 The app's Space surface syncs each spex repository's `spex` branch with the remote of each of its placements in turn, one spex repository at a time, without stopping the core, and never text-merges a file.
 Signed in, Spex asks the Git host for a short-lived Git credential before each transport to the host's Git origin and hands it to Git through its own credential helper, run on the app's runtime, in a file only you can read that is removed when Git ends; it never enters a remote URL.
@@ -141,7 +141,7 @@ Matching paths still require compatible runtimes and repository/effect reconcili
 
 ## Deletion
 
-With the session lease held, delete replay, its descriptor and chunks, hints, assets, any active legacy sidecar and derived session state, then the manifest last.
+With the session lease held, delete replay, blobs, hints, assets and derived session state, then the manifest last.
 Interrupted cleanup is retryable; incomplete bundles cannot continue.
 Deletion fails if another writer is active or exclusive ownership cannot be proven.
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.
@@ -159,34 +159,47 @@ Unsaved drafts and access tokens are not portable session state.
 
 ## Migration and definitions
 
-Before upgrading, stop legacy writers and snapshot both `~/.spex` and `$XDG_STATE_HOME/playbook` (or `~/.local/state/playbook` when XDG is unset).
-Upgrade every desktop, server and CLI writer sharing a store to the Playbook 18 format together before any upgraded writer saves.
-Monolithic schema-7 sessions remain readable without automatic conversion, but require explicit `playbook migrate-session <id>` before continuation.
-Use configuration selecting the clone's actual `sessions/` directory; `--with <path>` supplies a configuration overlay.
-Migration holds the session lease, retains the exact source bytes under the clone's ignored `local/migrations/` directory, validates the complete new bundle before retiring active legacy replay, and preserves the recorded working directory.
-It does not rewrite old Git commits or remove oversized blobs from prior history.
+### Converting earlier sessions
+
+This release reads sessions only in Playbook 20's format, schema 9.
+A session saved by an earlier release — schema 8 chunks or a schema 7 manifest — is listed as an older conversation that cannot be opened, and its files stay as they are.
+A clone that tracks one cannot sync until it is converted.
+On each device that shares the home:
+
+1. Quit Spex, and every other app, server or Playbook CLI using the home.
+2. Upgrade them all to releases on Playbook 20.
+3. Convert the home's sessions, its root `sessions/` and every clone's, with Node.js 20.6 or later:
+
+   ```sh
+   npx @sublang/playbook@20 sessions upgrade --recursive ~/.spex --dry-run
+   npx @sublang/playbook@20 sessions upgrade --recursive ~/.spex
+   ```
+
+   Use your `SPEX_HOME` in place of `~/.spex` where you set one.
+   The first command lists what it would convert; the second converts each session after checking that its manifest and replay are unchanged, and keeps the former files in the clone's `.legacy-sessions/`, which never syncs.
+   A session another writer holds is skipped; run the command again once it is free.
+4. Start Spex and sync.
+
+Conversion does not rewrite old Git commits or remove oversized blobs from prior history.
 
 A home in the former layout — `projects.json` at its root and no `home.yaml` — migrates once at startup under the home lease:
 each project becomes `workspace/<own>/<name>-spex/` with one file per open or finished intent, its intent attachments and the sessions that ran in its folder;
 your global records repository receives the settings, with every `playbooks.<id>.from` dropped, and the remaining sessions;
 preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
 Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
-Bounded CLI sessions arriving in the home's root `sessions/` are retained by a separate receipt-backed stage and transferred whole into the matching clone, or your global records repository when no working folder matches, before writers are admitted.
+Sessions the Playbook CLI saves in the home's root `sessions/`, its default, are retained by a separate receipt-backed stage and transferred whole into the matching clone, or your global records repository when no working folder matches, before writers are admitted.
 The first write that saves a Space's reported Git address changes `home.yaml` from format 2 to format 3.
 Spex uses the saved address after restart, including while the Space is signed out.
 
 A home whose `home.yaml` names one instance in format 1 takes format 2 once at startup under the home lease, its instance written as its origin and its app token re-keyed to that origin in the same step, with a receipt beside the earlier layout receipt; an older Spex refuses the migrated home.
 In the same migration every clone at that instance moves under its folder, each by one rename with its pair, sync preferences and forge cache entry following: one recording the host's id at its path there with its remote renamed to the folder, any other outside your personal folder at its key keeping its remote; your global records repository renames its remote and keeps its folder, and the projects never shared stay.
 A clone a live session's lease holds keeps its key and remote, named in the receipt, until its next sync or the next start moves it.
-Default-home startup also imports the former CLI session directory into your global records repository.
-Skipped files remain in place with their reasons reported.
-Use `playbook migrate-session <id>` to migrate a session in an explicitly configured store; `--with <path>` selects configuration files.
-CLI schemas 2–5 and desktop checkpoints without compatible recovery data remain history only.
+This release no longer imports the former CLI session directory, `$XDG_STATE_HOME/playbook/sessions`, or desktop session sidecars, and leaves their files unchanged; open a home still holding them once with an earlier release, which imports them, then convert it.
 Legacy provider tokens cannot become usable hints because their checkpoint binding is unproven.
 
 [DR-103](../specs/decisions/103-the-home-and-its-groups.md) records the layout;
 [DR-104](../specs/decisions/104-spec-package-format-and-client-environments.md) records spec packages and environments;
-[DR-045](../specs/decisions/045-unified-session-storage.md) records the shared session store.
+[DR-045](../specs/decisions/045-unified-session-storage.md) records the shared session store, and [DR-254](../specs/decisions/254-sessions-are-a-manifest-and-a-replay-log.md) its current layout and conversion.
 Exact formats and behavior are defined by their owning packages:
 
 | Owner | Definition |

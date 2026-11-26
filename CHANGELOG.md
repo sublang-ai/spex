@@ -43,6 +43,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- **Breaking:** conversations are saved as Playbook 20 saves them: one manifest file beside an append-only replay log, so a long conversation is a handful of files instead of thousands, and opening, checking and syncing it cost time in proportion to its size ([DR-254](specs/decisions/254-sessions-are-a-manifest-and-a-replay-log.md)). Conversations saved by an earlier release show as older conversations that cannot be opened, their files unchanged, and a project that tracks one cannot sync until it is converted. Quit Spex and every other host using the home, upgrade them all, then convert on each device with `npx @sublang/playbook@20 sessions upgrade --recursive ~/.spex`, as [Converting earlier sessions](docs/storage.md#converting-earlier-sessions) describes.
+
 - Installing a package copies its files into `.spex/packages/` instead of hard-linking them from the Spex home, as npm does; the home's `store/` stays a cache of verified files, checked again each time one is copied out. Installed files are ordinary writable files and share nothing between projects. The first start after this update reinstalls each project's packages once as copies, downloading nothing it already holds ([DR-251](specs/decisions/251-installs-copy-from-the-store.md)).
 
 - Space lists your own projects. Choose a Space to sync a project's records, then sign in on another device to open it there. Each IDE uses one core. [DR-246](specs/decisions/246-remove-groups-and-team-servers-from-the-clients.md)
@@ -859,6 +861,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - The global environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of the global records repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" in the global environment asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A global request by a path in a paired working folder reads as missing until its folder moves into the clone. A project's paths stay relative to its working folder.
 
 ### Removed
+
+- The startup import of the former Playbook CLI session directory, `$XDG_STATE_HOME/playbook/sessions`, and of desktop session sidecars; their files stay unchanged. Open a home still holding them once with an earlier release, then convert it.
 
 - Groups, membership, invitations, project sharing and team servers have been retired, including the hub, seats and IDE relay. The client protocol is now version 35. Development homes that relied on those features require a fresh start.
 
