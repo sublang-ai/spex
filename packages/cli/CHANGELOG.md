@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The scaffold's `meta.md` keeps each decision record to the decisions
+  in force. A change rewrites or removes the text it replaces, a record
+  left with little in force merges into its successor and is deleted
+  with its citations repointed, a record's Status holds at most three
+  lines, and its `map.md` summary one (meta-35, meta-36, meta-37). Git
+  history keeps the earlier text. `spex scaffold --update` brings the
+  new rules into an existing project.
+
 - `spex add`, `install`, `update` and `remove` copy a package's files out
   of the store under the Spex home into `.spex/packages/` instead of
   hard-linking them, as npm does. The store stays a cache of verified
