@@ -7,7 +7,7 @@
 
 Accepted.
 Amends [DR-007](007-conversational-session-start.md), [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md).
-Amended by [DR-038](038-history-is-done-work.md), [DR-042](042-sessions-continue.md), [DR-044](044-no-money-in-the-interface.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-057](057-space-surface.md), [DR-066](066-every-summons-has-a-door.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amended by [DR-038](038-history-is-done-work.md), [DR-044](044-no-money-in-the-interface.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-057](057-space-surface.md), [DR-066](066-every-summons-has-a-door.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -40,7 +40,7 @@ Amended by [DR-038](038-history-is-done-work.md), [DR-042](042-sessions-continue
   A project's chevron discloses; its row selects.
   Expansion is never a function of which project is current, so history in another project is browsable without moving the workspace into it — the axis split [DR-027](027-linked-views-contract.md) already legislated for the spec view, applied to the same shapes here.
 - **Closing files a session away.**
-  A tab's close control files the session back to the sidebar and never stops an agent; a session is a conversation a message continues, with no ending control ([DR-042](042-sessions-continue.md), [DR-051](051-runtime-held-for-a-turn.md)).
+  A tab's close control files the session back to the sidebar and never stops an agent; a session is a conversation a message continues, with no ending control ([DR-051](051-runtime-held-for-a-turn.md)).
   A project's "new session" control opens that project's start tab.
 - **Every project shows a recent window, never an unbounded list.**
   A project lists its most recent sessions with one control that reveals the rest in place, so the sidebar's height stays a function of attention rather than of history's age.
