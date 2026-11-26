@@ -3,7 +3,7 @@
 
 /*
  * Guards package (guards-5, guards-13, guards-21, guards-22,
- * guards-36), DR-251:
+ * guards-36), DR-252:
  * the process that runs one copy's checks. `spex verify` starts it
  * with the copy as its working folder and the path of a job file. It
  * loads the binding's module from the copy, runs the permitted

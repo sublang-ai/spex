@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the approval record. A guard's inputs are
+ * Guards package, DR-252: the approval record. A guard's inputs are
  * its items and its files, each under a label (`item <id>` or
  * `file <path from the root>`) with one SHA-256 digest. The record,
  * `guards/<guard>/approval.json`, is a committed file holding the

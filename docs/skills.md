@@ -18,7 +18,7 @@ npx skills add sublang-ai/spex --skill skill-atlas
 | [`guard`](../skills/guard/SKILL.md) | Drafts a guard with a person: one assertion with permitted and forbidden examples, readings drafted before any agent reads the code, a binding to the real code and a kept fault, for `spex verify` to check on every change |
 
 The decision is recorded in [DR-242](../specs/decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md); the behavior is specified in [`skill-atlas.md`](../specs/packages/skill-atlas.md) and [`agent-skills.md`](../specs/packages/agent-skills.md).
-The `guard` skill is decided in [DR-251](../specs/decisions/251-a-guard-is-kept-beside-the-code.md) and drafts what [`guards.md`](../specs/packages/guards.md) specifies.
+The `guard` skill is decided in [DR-252](../specs/decisions/252-a-guard-is-kept-beside-the-code.md) and drafts what [`guards.md`](../specs/packages/guards.md) specifies.
 
 The rest of this document is the report on how the skills were designed and why they are written the way they are.
 

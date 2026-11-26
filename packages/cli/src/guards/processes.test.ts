@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-12), DR-251: the processes a run starts.
+ * Guards package (guards-12), DR-252: the processes a run starts.
  * Each test runs small Node programs through `runProcess` in a temp
  * folder of its own.
  */

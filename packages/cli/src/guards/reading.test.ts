@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: loading a reading, one reading's verdict on
+ * Guards package, DR-252: loading a reading, one reading's verdict on
  * a step, an example walked against a reading, and a sequence walked
  * through several readings.
  */

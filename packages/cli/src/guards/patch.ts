@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: a kept fault's patch. It is a unified diff
+ * Guards package, DR-252: a kept fault's patch. It is a unified diff
  * as `git diff` writes it, changing existing files. Spex reads and
  * applies it itself, with no `git`: each change goes at its stated
  * line, else at the nearest place where its lines match. Lines

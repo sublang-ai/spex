@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the small language a reading's conditions
+ * Guards package, DR-252: the small language a reading's conditions
  * are written in. It is closed (no loops, definitions, input or
  * output) and total: every condition is type-checked when its file
  * loads, so working one out cannot fail on types, and the only thing

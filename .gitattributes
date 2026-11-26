@@ -10,7 +10,7 @@ specs/packages/*.md text eol=lf
 # (DR-245): keep LF on every checkout so a Windows clone reads the
 # shipped translations as up to date.
 skills/** text eol=lf
-# A kept fault is a patch (DR-251): keep LF on every checkout so a patch
+# A kept fault is a patch (DR-252): keep LF on every checkout so a patch
 # and a guard's other files read on Windows as they were written. The
 # digests do not need it; they are taken over LF text.
 guards/** text eol=lf

@@ -1521,7 +1521,7 @@ export function lint(args: string[] = []): void {
 }
 
 // ---------------------------------------------------------------
-// Items for other readers (guards package, DR-251)
+// Items for other readers (guards package, DR-252)
 // ---------------------------------------------------------------
 
 /** One spec item as the linter reads it. */

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the declared types a binding and a reading
+ * Guards package, DR-252: the declared types a binding and a reading
  * are written in, the values of those types, and how a value is read
  * from YAML or JSON and printed.
  *

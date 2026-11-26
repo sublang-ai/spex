@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-12, guards-28), DR-251: the copy a run
+ * Guards package (guards-12, guards-28), DR-252: the copy a run
  * checks, made outside the project and removed without touching it.
  */
 

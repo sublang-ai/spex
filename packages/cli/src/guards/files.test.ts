@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: binding.yaml and guard.yaml, and loading one
+ * Guards package, DR-252: binding.yaml and guard.yaml, and loading one
  * whole guard with every error naming the file or item and the cause.
  */
 

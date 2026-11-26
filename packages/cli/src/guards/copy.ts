@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-12, guards-28), DR-251: the copy a run
+ * Guards package (guards-12, guards-28), DR-252: the copy a run
  * checks. It is made in a fresh folder under the OS temp folder: the
  * binding's `files` and the binding's own folder at the paths they
  * have in the project, links followed, every `node_modules` and

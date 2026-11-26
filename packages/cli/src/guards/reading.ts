@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: a reading. It is data: its own state, for
+ * Guards package, DR-252: a reading. It is data: its own state, for
  * each event when the event is legal and how the state changes with
  * the observed effect, and the assertion as rules saying when each
  * applies and what must then hold of the effect.

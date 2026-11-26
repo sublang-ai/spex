@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the integration suite (guards-29 to
+ * Guards package, DR-252: the integration suite (guards-29 to
  * guards-35). It runs the built CLI in a fixture project written to a
  * temp folder: a small entitlement module of plain `.mjs` files with
  * `grant`, `revoke` and `use`, its items under `specs/packages/`, and

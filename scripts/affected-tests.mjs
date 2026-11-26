@@ -14,7 +14,7 @@
 //   ... --run [all|"<folders>"] [--part all|rest|"core <i>/<n>"]
 //       runs the script tests, then the tests of everything or of each folder
 //       with no explicit selection, documentation alone runs CLI tests, lint
-//       and `spex verify` (DR-251);
+//       and `spex verify` (DR-252);
 //       a part runs a share of that on a runner of its own (DR-229)
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -65,7 +65,7 @@ const ROOT_OWNERS = new Map([
 ]);
 // Folders of the agent skills shipped from the repository, owned whole: the
 // script tests check every skill, and the atlas's page has a browser journey.
-// A guard's files (DR-251) are owned whole too: the Guards step of CI and
+// A guard's files (DR-252) are owned whole too: the Guards step of CI and
 // the documentation-alone run check them with `spex verify`, so they select
 // no workspace.
 // The longest listed folder holding a path owns it.
@@ -292,7 +292,7 @@ function main(argv) {
       const result = compute();
       if (result.docsOnly) {
         console.log("affected-tests: documentation alone runs the CLI tests, spec lint and guards");
-        // A guard reads its items from specs/, so a change there runs the guards too (DR-251).
+        // A guard reads its items from specs/, so a change there runs the guards too (DR-252).
         return run(options.root, [["test", "-w", "packages/cli"]])
           || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "lint"])
           || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "verify"]);

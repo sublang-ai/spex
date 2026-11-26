@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-16, guards-17, guards-27), DR-251: the two
+ * Guards package (guards-16, guards-17, guards-27), DR-252: the two
  * commands. `spex verify [<guard>…]` checks every guard, or the ones
  * named, and exits 0 only when each passes. `spex approve <guard>`
  * prints what a person is approving and writes the approval record.

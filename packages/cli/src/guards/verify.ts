@@ -3,7 +3,7 @@
 
 /*
  * Guards package (guards-12, guards-17 to guards-25, guards-28,
- * guards-36), DR-251: what `spex verify` does for one guard. It loads the guard,
+ * guards-36), DR-252: what `spex verify` does for one guard. It loads the guard,
  * compares its inputs with the approval record, checks the examples
  * against the readings without the code, runs the permitted examples
  * and the sampled check on a copy of the project's code, runs the

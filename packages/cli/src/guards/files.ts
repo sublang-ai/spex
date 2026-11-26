@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: a guard's files. A binding's declaration
+ * Guards package, DR-252: a guard's files. A binding's declaration
  * (`guards/bindings/<name>/binding.yaml`) names the values, the
  * events with their params and effects, the files a run copies and
  * the commands that build the copy. The guard file

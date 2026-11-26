@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the spec items a guard reads. They are read
+ * Guards package, DR-252: the spec items a guard reads. They are read
  * with the linter's own parser, so an item here is exactly what
  * `spex lint` takes for one.
  *

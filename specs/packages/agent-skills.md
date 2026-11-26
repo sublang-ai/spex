@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md), and the `guard` skill, which drafts a guard with a person, per [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md).
+This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md), and the `guard` skill, which drafts a guard with a person, per [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
 It owns their form and procedure, not the atlas that reads them and not the guard a draft becomes [[guards-1](guards.md#guards-1)].
 
 ## External Behavior
@@ -87,7 +87,7 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-13
 
-When the `guard` skill is asked to protect a behavior, the loading agent shall draft a guard with the person in these five steps, running `spex approve` [[guards-16](guards.md#guards-16)] only when the person says so ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When the `guard` skill is asked to protect a behavior, the loading agent shall draft a guard with the person in these five steps, running `spex approve` [[guards-16](guards.md#guards-16)] only when the person says so ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 1. write the assertion and the examples as test items that cite the behavior item [[guards-2](guards.md#guards-2)], and the binding's events and effects from those items [[guards-3](guards.md#guards-3)];
 2. have independent agents each draft a reading [[guards-6](guards.md#guards-6)] from the items and that declaration alone, before any agent reads the code;

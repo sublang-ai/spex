@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The binding `exports` (DR-251): installs into a scratch project through
+// The binding `exports` (DR-252): installs into a scratch project through
 // the library's exportEnvironment, as built in the copy. Three packages
 // each hold a spec `kit`, so all three want specs/packages/kit.md
 // (environments-41). It reports what the install did and holds no

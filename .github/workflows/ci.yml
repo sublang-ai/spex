@@ -135,7 +135,7 @@ jobs:
           node packages/cli/dist/cli.js lint
           npm run typecheck -w e2e
       # Linux alone: once per change is enough, and `spex verify` has not
-      # been run on Windows or macOS (DR-251).
+      # been run on Windows or macOS (DR-252).
       - name: Guards
         if: ${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}
         run: node packages/cli/dist/cli.js verify

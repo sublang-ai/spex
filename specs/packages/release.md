@@ -235,7 +235,7 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 - the full supported matrix is Linux and macOS on Node 22 and 24, and Windows on Node 22;
 - a Linux or macOS row whose selection reaches the core runs on five runners, each building: four run a part of the core's suite, its test files sorted largest first and dealt to the parts in turn so each file runs in exactly one part, and the fifth runs the script tests, every other selected suite and the type and spec gates ([DR-229](../decisions/229-the-cores-suite-in-four-parts.md));
-- `spex verify` checks every guard under `guards/` [[guards-17](guards.md#guards-17)] ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)): after the spec lint for documentation alone, and otherwise once on each Linux row, on the runner that runs the type and spec gates, and on no macOS or Windows row;
+- `spex verify` checks every guard under `guards/` [[guards-17](guards.md#guards-17)] ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)): after the spec lint for documentation alone, and otherwise once on each Linux row, on the runner that runs the type and spec gates, and on no macOS or Windows row;
 - a full invocation validates the exact tree named by its caller or manual ref, never a separately selected mutable branch;
 - the classifier reads changed paths against the merge base with the comparison ref, `origin/main` locally, including staged, unstaged and untracked local files and both sides of renames;
 - documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace, `skills/` and `guards/`; documentation alone contains at least one changed path and no other kind;
@@ -264,11 +264,11 @@ When a CI invocation reaches its final result, its `checks` job shall evaluate t
 
 #### release-35
 
-When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check, `spex verify` and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md), [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)).
+When the developer/agent is about to push, they shall run `npm run prepush`, which refuses a tree holding a conflict marker and then runs `spex lint`, the catalogs' check, `spex verify` and the type check, pushing only once it passes ([DR-145](../decisions/145-merge-on-green.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 #### release-43
 
-When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests, spec lint and `spex verify` for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys or native browser acceptance ([DR-199](../decisions/199-release-gated-full-validation.md), [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)).
+When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests, spec lint and `spex verify` for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys or native browser acceptance ([DR-199](../decisions/199-release-gated-full-validation.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 #### release-31
 

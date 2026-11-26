@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: reading a kept fault's patch and applying
+ * Guards package, DR-252: reading a kept fault's patch and applying
  * it without git — at the stated line, at the nearest matching place,
  * to files with CRLF endings, and the two ways a patch fails to
  * count: it does not apply, or it changes nothing.

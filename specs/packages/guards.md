@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines guards as the `spex` command line checks them, under [DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](../decisions/244-a-guard-is-checked-on-the-implementation.md) in the first stage [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md) sets: where a project keeps a guard, the items and files a guard is made of, the language its readings are written in, the approval a person records with `spex approve`, and what `spex verify` checks, finds and reports.
+This package defines guards as the `spex` command line checks them, under [DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](../decisions/244-a-guard-is-checked-on-the-implementation.md) in the first stage [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md) sets: where a project keeps a guard, the items and files a guard is made of, the language its readings are written in, the approval a person records with `spex approve`, and what `spex verify` checks, finds and reports.
 A **guard** protects one behavior on every change: it checks one assertion on the project's code, has shown that it catches a fault, and changes only with a person's approval.
 Its **assertion** is a test item saying what must hold, its **behavior item** is the item that assertion cites, and an **example** is a test item describing one sequence, **permitted** or **forbidden**.
 A **binding** connects guards to the code: its **declaration** names each **event** it can cause and the **effect** it observes of it, and its **module** causes them.
@@ -25,7 +25,7 @@ This package owns the two commands and the files they read, not the `guard` skil
 
 #### guards-1
 
-Where a project keeps guards, the CLI shall read them from `guards/` at the project's root, taking as a guard every folder directly under `guards/` other than `bindings`, and naming it by that folder's name ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+Where a project keeps guards, the CLI shall read them from `guards/` at the project's root, taking as a guard every folder directly under `guards/` other than `bindings`, and naming it by that folder's name ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Kept | Where |
 | --- | --- |
@@ -284,7 +284,7 @@ Each kept fault shall be a patch that the CLI applies itself, without Git, to a 
 
 #### guards-12
 
-When `spex verify` checks code — the project's code, and each kept fault apart — it shall make a copy outside the project and run that copy's checks in a process of its own, by these steps ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify` checks code — the project's code, and each kept fault apart — it shall make a copy outside the project and run that copy's checks in a process of its own, by these steps ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 1. make a fresh folder under the OS temp folder;
 2. copy each of the binding's `files` [[guards-3](#guards-3)] and the binding's folder to the paths they have in the project, following links and leaving out every `node_modules` and `.git` folder;
@@ -306,7 +306,7 @@ When `spex verify` checks code — the project's code, and each kept fault apart
 
 #### guards-13
 
-While a copy's process runs, the CLI shall note every module that is resolved in the main thread of that process — by `import`, `require` or `import.meta.resolve` — to a path inside the project's root, outside the copy and under no `node_modules` folder as a **project file loaded from outside the copy**, and name the first one in the result [[guards-23](#guards-23)], real paths being compared with links followed ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+While a copy's process runs, the CLI shall note every module that is resolved in the main thread of that process — by `import`, `require` or `import.meta.resolve` — to a path inside the project's root, outside the copy and under no `node_modules` folder as a **project file loaded from outside the copy**, and name the first one in the result [[guards-23](#guards-23)], real paths being compared with links followed ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 - a module resolved in a worker thread, or in a process the code starts, is not seen in this stage.
 
@@ -331,7 +331,7 @@ When a binding's command or module does not do what its declaration and its expo
 
 #### guards-14
 
-When the CLI reads a guard's inputs, for `spex approve` and for `spex verify` alike, it shall take one SHA-256 digest, written in hex, for each of these under its label ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When the CLI reads a guard's inputs, for `spex approve` and for `spex verify` alike, it shall take one SHA-256 digest, written in hex, for each of these under its label ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Label | Input |
 | --- | --- |
@@ -368,7 +368,7 @@ The approval record of a guard shall be the JSON file `approval.json` holding `f
 
 #### guards-16
 
-When `spex approve <guard>` runs, the CLI shall load the one guard named [[guards-18](#guards-18)], print what a person is approving, and write its approval record [[guards-15](#guards-15)], running no check and asking no question ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex approve <guard>` runs, the CLI shall load the one guard named [[guards-18](#guards-18)], print what a person is approving, and write its approval record [[guards-15](#guards-15)], running no check and asking no question ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 1. print `<guard> — protects <behavior item>` and, under it, the assertion item's statement [[guards-2](#guards-2)];
 2. print each example: `<example item> — <kind>`, its item's statement, and its stored sequence with one line for each step, as the report writes a step [[guards-26](#guards-26)];
@@ -388,7 +388,7 @@ When `spex approve <guard>` runs, the CLI shall load the one guard named [[guard
 
 #### guards-17
 
-When `spex verify [<guard>…]` runs, the CLI shall check every guard in name order, or the guards named in the order given, each by these steps in order, calling no model ([DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md), [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify [<guard>…]` runs, the CLI shall check every guard in name order, or the guards named in the order given, each by these steps in order, calling no model ([DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Step | What it does |
 | --- | --- |
@@ -424,7 +424,7 @@ When a guard's files, items or expressions hold an error, the CLI shall find tha
 
 #### guards-19
 
-When `spex verify` compares a guard's inputs [[guards-14](#guards-14)] with its approval record [[guards-15](#guards-15)], it shall find the guard approved only where both hold the same labels with the same digests, and otherwise name what differs ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify` compares a guard's inputs [[guards-14](#guards-14)] with its approval record [[guards-15](#guards-15)], it shall find the guard approved only where both hold the same labels with the same digests, and otherwise name what differs ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Named as | When |
 | --- | --- |
@@ -472,7 +472,7 @@ When `spex verify` runs a guard's permitted examples on the copy of the project'
 
 #### guards-22
 
-When `spex verify` runs the sampled check on a copy, it shall have fast-check generate `sample.sequences` sequences from `sample.seed`, each of at most `sample.events` events [[guards-10](#guards-10)], run each from a fresh `start` through the module, and have every reading judge each step it causes ([DR-244](../decisions/244-a-guard-is-checked-on-the-implementation.md), [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify` runs the sampled check on a copy, it shall have fast-check generate `sample.sequences` sequences from `sample.seed`, each of at most `sample.events` events [[guards-10](#guards-10)], run each from a fresh `start` through the module, and have every reading judge each step it causes ([DR-244](../decisions/244-a-guard-is-checked-on-the-implementation.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 - a sequence is the first steps of one permitted example, any number of them from none to all, with their events and params, then generated events, each drawn evenly from the declared events with each param drawn from its type, the whole cut to `sample.events` events;
 - a drawn set of whole numbers has at most 32 members;
@@ -488,7 +488,7 @@ When `spex verify` runs the sampled check on a copy, it shall have fast-check ge
 
 #### guards-23
 
-When the checks on the project's code end [[guards-21](#guards-21)] [[guards-22](#guards-22)], `spex verify` shall give the guard one result, the first of these that it found ([DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md), [DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When the checks on the project's code end [[guards-21](#guards-21)] [[guards-22](#guards-22)], `spex verify` shall give the guard one result, the first of these that it found ([DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md), [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Result | Found |
 | --- | --- |
@@ -499,7 +499,7 @@ When the checks on the project's code end [[guards-21](#guards-21)] [[guards-22]
 
 #### guards-24
 
-When `spex verify` checks a kept fault, it shall run the sampled check alone [[guards-22](#guards-22)], at the guard's bounds, on a copy of its own with the fault's patch applied [[guards-12](#guards-12)], and find the fault **caught** only where that check finds a violation, and otherwise not caught for the first of these reasons that holds ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify` checks a kept fault, it shall run the sampled check alone [[guards-22](#guards-22)], at the guard's bounds, on a copy of its own with the fault's patch applied [[guards-12](#guards-12)], and find the fault **caught** only where that check finds a violation, and otherwise not caught for the first of these reasons that holds ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 | Reason, as printed | When |
 | --- | --- |
@@ -514,7 +514,7 @@ When `spex verify` checks a kept fault, it shall run the sampled check alone [[g
 
 #### guards-25
 
-When `spex verify` has checked a guard, it shall find that the guard passes only where all of these hold ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)):
+When `spex verify` has checked a guard, it shall find that the guard passes only where all of these hold ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
 - its inputs are approved [[guards-19](#guards-19)];
 - its examples have no failure against its readings [[guards-20](#guards-20)], so it has a forbidden example and a permitted one that shows the protected behavior happening;
@@ -599,7 +599,7 @@ When `spex verify` or `spex approve` ends, the CLI shall exit with the status of
 
 #### guards-28
 
-While `spex verify` runs, the CLI shall write nothing in the project — no result, no copy and no record — keeping each copy under the OS temp folder until its checks end [[guards-12](#guards-12)], so that the approval record `spex approve` writes [[guards-16](#guards-16)] is the one file either command leaves and an earlier run decides nothing in a later one ([DR-251](../decisions/251-a-guard-is-kept-beside-the-code.md)).
+While `spex verify` runs, the CLI shall write nothing in the project — no result, no copy and no record — keeping each copy under the OS temp folder until its checks end [[guards-12](#guards-12)], so that the approval record `spex approve` writes [[guards-16](#guards-16)] is the one file either command leaves and an earlier run decides nothing in a later one ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 ## Verification
 

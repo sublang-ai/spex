@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-16, guards-26, guards-27), DR-251: every
+ * Guards package (guards-16, guards-26, guards-27), DR-252: every
  * word `spex verify` and `spex approve` print. Reports go to standard
  * output and a refusal's cause to standard error. Nothing else in the
  * guards code prints.

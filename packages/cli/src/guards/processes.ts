@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package (guards-12), DR-251: the processes a run starts,
+ * Guards package (guards-12), DR-252: the processes a run starts,
  * each of a binding's commands and the copy's own process alike. A
  * process is stopped at the time limit, and whatever it started is
  * stopped with it: at the limit, when it ends, and when the run is

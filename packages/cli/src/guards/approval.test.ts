@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: approval labels and digests, comparing a
+ * Guards package, DR-252: approval labels and digests, comparing a
  * guard's inputs with its record, and the record's file.
  */
 

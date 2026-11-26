@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: declared types, values and how data is read
+ * Guards package, DR-252: declared types, values and how data is read
  * as a value.
  */
 

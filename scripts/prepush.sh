@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
-# The pre-push check (release-35, DR-145, DR-251): no conflict marker in
+# The pre-push check (release-35, DR-145, DR-252): no conflict marker in
 # the tree, then the spec lint, the catalogs' checks, the guards and the
 # type checks — what the first CI minute would refuse, and a spec item id
 # another branch took.

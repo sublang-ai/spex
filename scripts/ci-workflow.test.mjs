@@ -135,7 +135,7 @@ test("release-33: fast gates precede selected suites, once per row; Windows reta
   assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
   assert.equal(steps[gateAt].run.trim(), "node packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
   assert.equal(steps[gateAt].if, "${{ !startsWith(matrix.part, 'core') }}", "the rest's runner or the whole row's runs the gates; no core part repeats them");
-  // The guards run right after the spec gates, once per change (DR-251).
+  // The guards run right after the spec gates, once per change (DR-252).
   const guardsAt = steps.findIndex((step) => step.name === "Guards");
   assert.equal(guardsAt, gateAt + 1);
   assert.equal(steps[guardsAt].run, "node packages/cli/dist/cli.js verify");
@@ -235,7 +235,7 @@ test("release-33: the pre-push check refuses a conflict marker (release-35)", ()
   assert.match(run.stderr, /left\.ts/);
 });
 
-test("release-33: the pre-push check runs the guards on the CLI its build made (release-35, DR-251)", () => {
+test("release-33: the pre-push check runs the guards on the CLI its build made (release-35, DR-252)", () => {
   const lines = readFileSync(join(root, "scripts/prepush.sh"), "utf8").split("\n");
   const buildAt = lines.indexOf("npm run -s build > /dev/null");
   const guardsAt = lines.indexOf("node packages/cli/dist/cli.js verify");

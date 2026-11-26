@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-251: the condition language — how it groups,
+ * Guards package, DR-252: the condition language — how it groups,
  * what each operator gives, the rules for the missing value, that
  * every well-typed condition has a value, and every kind of error
  * with its message.

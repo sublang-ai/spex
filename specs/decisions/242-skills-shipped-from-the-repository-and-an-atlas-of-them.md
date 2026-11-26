@@ -10,7 +10,7 @@ Extended in the atlas's scan, page and state folder and in the form of a shipped
 Amended in the links the page shows, the exported page, what a shared name reports, the insights' levels and the page's controls by [DR-248](248-the-atlas-shows-dependencies-and-differing-versions.md).
 Amended in the form of a shipped skill, adding its version, by [DR-249](249-a-skills-version-rises-with-its-content.md).
 Amended in the name of the ordered lists of phases, workflows here and pipelines since, by [DR-250](250-the-atlas-arranges-pipelines.md).
-Amended in what a shipped skill may need by [DR-251](251-a-guard-is-kept-beside-the-code.md): the `guard` skill needs the `spex` command.
+Amended in what a shipped skill may need by [DR-252](252-a-guard-is-kept-beside-the-code.md): the `guard` skill needs the `spex` command.
 
 ## Context
 
