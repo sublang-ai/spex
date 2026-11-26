@@ -18,6 +18,7 @@ import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { WebSocket } from "ws";
 import { seedHistorySession } from "./testing/demo.js";
+import { FIRST_SEGMENT } from "./testing/session-storage.js";
 import { Home } from "./home.js";
 import type { SpaceHost } from "./space.js";
 import type { Command, SpaceState, ServerMessage } from "./protocol.js";
@@ -102,7 +103,7 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId), "saved sessions remain listed with no code remote");
   assert.ok((await home.client.expectOk("history.get", { sessionId })).records.length > 0, "saved session history remains readable with no code remote");
   const tracked = git(clone, "ls-files").split("\n");
-  assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.replay.json`));
+  assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.replay/${FIRST_SEGMENT}`));
   // The environment's lock is the one tracked `.lock` (storage-1).
   for (const file of tracked.filter((path) => path !== "spex.lock")) assert.doesNotMatch(file, /\.hints\.json$|\.lock|^\.spex-/, `must not track ${file}`);
   assert.equal(prefsOf(home.dataDir)[`viewed:${sessionId}`], 1, "the viewed marker stays in this device's preferences");
@@ -578,6 +579,13 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   mkdirSync(join(clone, "intents", `${intent.id}.assets`), { recursive: true });
   symlinkSync(home.projectDir, join(clone, "link"));
   writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "{}");
+  // A record past the per-file bound is kept in blob parts; the
+  // originals Playbook's conversion keeps, and a desktop sidecar, are
+  // legacy files that stay here (DR-254).
+  const large = await seedHistorySession(join(clone, "sessions"), home.projectDir, turnRecords(`Large ${"x".repeat(9 * 1024 * 1024)}`, 1));
+  writeFileSync(join(clone, "sessions", `${sessionId}.spex.json`), "{}");
+  mkdirSync(join(clone, ".legacy-sessions", "sessions"), { recursive: true });
+  writeFileSync(join(clone, ".legacy-sessions", "sessions", `${randomUUID()}.json`), "{}");
   writeFileSync(join(clone, "README.md"), "# Demo\n");
   writeFileSync(join(clone, "big.log"), Array.from({ length: 3_500 }, (_, i) => `line ${String(i).padStart(6, "0")} ${"x".repeat(80)}`).join("\n") + "\n");
   const root = await home.client.expectOk("space.tree", { repository: key });
@@ -634,15 +642,25 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(hints?.family, "provider hints");
   assert.equal(hints?.sync, "local");
   assert.equal(hints?.preview, "withheld");
-  const records = sessions.entries.find((e) => e.name === `${sessionId}.replay.json`);
+  const records = sessions.entries.find((e) => e.name === `${sessionId}.replay`);
+  assert.equal(records?.kind, "dir");
   assert.equal(records?.family, "session records");
-  const chunks = sessions.entries.find((e) => e.name === `${sessionId}.chunks`);
-  assert.equal(chunks?.family, "session chunks");
-  assert.deepEqual(chunks?.owner, { sessionId, title: "Fix the login redirect" });
-  const chunkFiles = await home.client.expectOk("space.tree", { repository: key, path: `sessions/${sessionId}.chunks` });
-  assert.ok(chunkFiles.entries.length > 0);
-  assert.ok(chunkFiles.entries.every((entry) => entry.family === "session chunks" && entry.owner?.sessionId === sessionId));
-  assert.ok((records?.size ?? 0) > 0 && typeof records?.mtime === "number");
+  assert.deepEqual(records?.owner, { sessionId, title: "Fix the login redirect" });
+  const segments = await home.client.expectOk("space.tree", { repository: key, path: `sessions/${sessionId}.replay` });
+  assert.ok(segments.entries.some((entry) => entry.name === FIRST_SEGMENT));
+  assert.ok(segments.entries.every((entry) => entry.family === "session records" && entry.owner?.sessionId === sessionId));
+  const segment = segments.entries.find((entry) => entry.name === FIRST_SEGMENT);
+  assert.ok((segment?.size ?? 0) > 0 && typeof segment?.mtime === "number");
+  const blobs = sessions.entries.find((e) => e.name === `${large}.blobs`);
+  assert.equal(blobs?.family, "session chunks");
+  assert.equal(blobs?.owner?.sessionId, large);
+  const blobFiles = await home.client.expectOk("space.tree", { repository: key, path: `sessions/${large}.blobs` });
+  assert.ok(blobFiles.entries.length > 0);
+  assert.ok(blobFiles.entries.every((entry) => entry.family === "session chunks" && entry.owner?.sessionId === large));
+  for (const legacy of [sessions.entries.find((e) => e.name === `${sessionId}.spex.json`), entry(".legacy-sessions")]) {
+    assert.equal(legacy?.family, "legacy session sidecar");
+    assert.equal(legacy?.sync, "local");
+  }
   const intents = await home.client.expectOk("space.tree", { repository: key, path: "intents" });
   const intentEntry = intents.entries.find((e) => e.name === `${intent.id}.json`);
   assert.equal(intentEntry?.family, "intent");
@@ -663,7 +681,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.ok(yaml.kind === "text" && yaml.text === PROJECT_CONFIG);
   const markdown = await home.client.expectOk("space.read", { repository: key, path: "README.md" });
   assert.ok(markdown.kind === "text" && markdown.text === "# Demo\n" && markdown.lines === 1);
-  const stream = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.replay.json` });
+  const stream = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.replay/${FIRST_SEGMENT}` });
   assert.ok(stream.kind === "text" && stream.lines >= 2 && stream.text.split("\n")[0].startsWith("{"));
   const cut = await home.client.expectOk("space.read", { repository: key, path: "big.log" });
   assert.ok(cut.kind === "text" && cut.truncated && cut.lines <= 2_000 && cut.text.endsWith("\n") && Buffer.byteLength(cut.text) <= 256 * 1024);
@@ -703,7 +721,7 @@ test("space-130: overlapping reads share one recomputation, and a session's file
   // The session's files: one batch, never a child per file (space-32), and
   // the shared recomputation read none of them again (space-33).
   const sessionFiles = git(clone, "ls-files", "--others", "--exclude-standard", "--", "sessions").split("\n").filter((file) => file && !file.includes(".assets/"));
-  assert.ok(sessionFiles.some((file) => file.includes(".chunks/")), sessionFiles.join("\n"));
+  assert.ok(sessionFiles.some((file) => file.includes(".replay/")), sessionFiles.join("\n"));
   const oids = new Set(git(clone, "hash-object", "--", ...sessionFiles).split("\n"));
   assert.deepEqual(calls("cat-file blob").filter((line) => oids.has(line.split(" ").at(-1)!)), [], "no session file read alone");
   assert.equal(calls("cat-file --batch").length, before.batches + 1, "one batch across the three reads");
@@ -806,23 +824,30 @@ test("space-51: deferred folder review survives restart and changed checks, with
   assert.ok(history.records.some((r) => r.record.type === "turn_started"));
 });
 
+/** The root of a session an earlier Playbook wrote in a clone's
+ * `sessions/`, in schema 7, which this Playbook refuses until its
+ * conversion command converts it: an older-conversation notice (DR-254). */
+function earlierSession(clone: string, reason: string): { root: string; original: string } {
+  const sessionId = randomUUID();
+  mkdirSync(join(clone, "sessions"), { recursive: true, mode: 0o700 });
+  const root = join(clone, "sessions", `${sessionId}.json`);
+  const original = JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId, cwd: join(scratch, "earlier"), createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason, contextSeq: null, replay: { seq: 0, sha256: "0".repeat(64), incomplete: false } });
+  writeFileSync(root, original, { mode: 0o600 });
+  return { root, original };
+}
+
 test("core-service-149: dismissing an older-conversation notice preserves its source and survives restart without hiding changed failures", async (t) => {
   const userHome = mkdtempSync(join(scratch, "notice-home-"));
   const dataDir = join(userHome, ".spex");
-  const stateDir = join(userHome, "state");
-  const legacyDir = join(stateDir, "playbook", "sessions");
-  mkdirSync(legacyDir, { recursive: true });
-  const source = join(legacyDir, `${randomUUID()}.json`);
-  const otherSource = join(legacyDir, `${randomUUID()}.json`);
-  const original = JSON.stringify({ schemaVersion: 1, title: "An earlier conversation" });
-  writeFileSync(source, original, { mode: 0o600 });
-  writeFileSync(otherSource, original, { mode: 0o600 });
-  const options = { dataDir, project: false, env: { HOME: userHome, XDG_STATE_HOME: stateDir }, extra: { home: userHome } };
+  const options = { dataDir, project: false, env: { HOME: userHome }, extra: { home: userHome } };
   let home = await startHome("notice", options);
   t.after(() => home.stop());
   const { key: projectKey } = await addFolder(home, gitFolder("notice-project"));
   await home.stop();
   const unpaired = Home.load(dataDir); unpaired.unpair(projectKey); unpaired.save();
+  // Two older conversations in the global records repository.
+  const { root: source, original } = earlierSession(ownClone(dataDir), "An earlier conversation");
+  const { root: otherSource, original: otherOriginal } = earlierSession(ownClone(dataDir), "An earlier conversation");
   home = await startHome("notice-unpaired", options);
   const noticeIn = (state: SpaceState, file = source) => state.diagnostics.find((entry) => entry.file === file);
   const all = await home.client.expectOk("space.get", {});
@@ -831,9 +856,9 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
   const before = await home.client.expectOk("space.repair.decline", { repair: folderTask.key, declined: true });
   assert.equal(before.issues, all.issues - 1, "dismissing the folder task leaves both independent notices counted");
   const notice = noticeIn(before);
-  assert.equal(notice?.code, "session-import");
+  assert.equal(notice?.code, "session-upgrade");
   assert.equal(notice.blocking, false);
-  assert.match(notice.reason, /unsupported legacy schema 1/);
+  assert.match(notice.reason, /schema 7 is unsupported/);
   assert.ok(notice.notice?.key);
   assert.equal(notice.notice.dismissed, undefined);
   const key = notice.notice.key;
@@ -863,7 +888,7 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
   await waitObserved((state) => state.issues === dismissed.issues && noticeIn(state)?.notice?.dismissed === dismissedAt);
   assert.equal(noticeIn(dismissed, otherSource)?.notice?.dismissed, undefined, "the other unsupported conversation still counts");
   assert.equal(readFileSync(source, "utf8"), original, "dismissal does not convert or delete the old conversation");
-  assert.equal(readFileSync(otherSource, "utf8"), original);
+  assert.equal(readFileSync(otherSource, "utf8"), otherOriginal);
   assert.equal(git(ownClone(dataDir), "status", "--porcelain"), status, "dismissal changes no tracked data");
   assert.deepEqual(prefsOf(dataDir)[`space:notice:${key}`], { dismissed: dismissedAt });
   assert.deepEqual((await home.client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === source)?.notice, { key, dismissed: dismissedAt }, "both diagnostic surfaces report the stored answer");
@@ -889,7 +914,7 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
 
   // The same source path can now hold different work. The old answer
   // must neither hide it nor authorize a stale dismissal command.
-  writeFileSync(source, JSON.stringify({ schemaVersion: 1, title: "Different earlier work" }));
+  writeFileSync(source, original.replace("An earlier conversation", "Different earlier work"));
   const changed = await home.client.expectOk("space.get", {});
   const changedKey = noticeIn(changed)?.notice?.key;
   assert.ok(changedKey && changedKey !== key);
@@ -936,14 +961,12 @@ test("core-service-149: dismissing an older-conversation notice preserves its so
 
 test("core-service-149: overlapping notice answers cannot publish stale counts or source capabilities", async (t) => {
   const userHome = mkdtempSync(join(scratch, "overlapping-notices-"));
-  const stateDir = join(userHome, "state");
-  const legacyDir = join(stateDir, "playbook", "sessions");
-  mkdirSync(legacyDir, { recursive: true });
-  const sources = [join(legacyDir, `${randomUUID()}.json`), join(legacyDir, `${randomUUID()}.json`)];
-  const original = JSON.stringify({ schemaVersion: 1 });
-  for (const source of sources) writeFileSync(source, original, { mode: 0o600 });
-  const home = await startHome("overlapping-notices", { dataDir: join(userHome, ".spex"), project: false,
-    env: { HOME: userHome, XDG_STATE_HOME: stateDir }, extra: { home: userHome } });
+  const dataDir = join(userHome, ".spex");
+  const options = { dataDir, project: false, env: { HOME: userHome }, extra: { home: userHome } };
+  await (await startHome("overlapping-notices-first", options)).stop();
+  const written = [earlierSession(ownClone(dataDir), "An earlier conversation"), earlierSession(ownClone(dataDir), "An earlier conversation")];
+  const sources = written.map(({ root }) => root);
+  const home = await startHome("overlapping-notices", options);
   t.after(() => home.stop());
   const before = await home.client.expectOk("space.get", {});
   const keys = sources.map((file) => {
@@ -995,11 +1018,11 @@ test("core-service-149: overlapping notice answers cannot publish stale counts o
       for (const key of keys) assert.equal(message.state.diagnostics.find((entry) => entry.notice?.key === key)?.notice?.dismissed !== undefined, dismissed);
     }
   }
-  for (const source of sources) assert.equal(readFileSync(source, "utf8"), original);
+  for (const { root, original } of written) assert.equal(readFileSync(root, "utf8"), original);
   const hold = holdNextRead();
   const earlier = home.client.expectOk("space.get", {});
   await hold.entered();
-  writeFileSync(sources[0]!, `${original}\n`);
+  writeFileSync(sources[0]!, `${written[0]!.original}\n`);
   hold.release();
   const changed = await earlier;
   const changedNotice = changed.diagnostics.find((entry) => entry.file === sources[0])?.notice;

@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
-import { ASKING, askingScript, failingScript, parkingScript } from "./testing/demo.js";
+import { ASKING, askingScript, failingScript, parkingScript, seedHistorySession } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
@@ -49,7 +49,7 @@ import type {
   TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
-import { readSessionManifest, writeSessionManifest, readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
+import { FIRST_SEGMENT, readSessionManifest, writeSession, writeSessionManifest, readSessionReplay, writeSessionReplay } from "./testing/session-storage.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -2944,42 +2944,53 @@ test("core-service-64: a legacy library relocates into the root with config from
 // CORE-60/65: sessions another host wrote into the shared session store
 // ---------------------------------------------------------------------------
 
-/** A captain-session record and replay stream as the playbook CLI writes
- * them: `<id>.json` naming the working directory, `<id>.records.jsonl`
- * carrying the history in the shared v1 envelope. */
-function writeForeignSession(
+/** A session as another host leaves it in a clone's `sessions/`, written
+ * through Playbook's own file layer: `<id>.json`, a history-only manifest
+ * naming the working directory, and its replay log `<id>.replay/`
+ * carrying the history in the shared v1 envelope (DR-254). */
+async function writeForeignSession(
   sessionsDir: string,
   id: string,
   cwd: string,
   records: Record<string, unknown>[],
-): void {
-  writeForeignRecordEntries(
-    sessionsDir,
-    id,
-    cwd,
-    records.map((record) => ({ record })),
-  );
+  times?: { createdAt: string; updatedAt: string },
+): Promise<void> {
+  await writeForeignRecordEntries(sessionsDir, id, cwd, records.map((record) => ({ record })), times);
 }
 
-function writeForeignRecordEntries(
+async function writeForeignRecordEntries(
   sessionsDir: string,
   id: string,
   cwd: string,
   entries: { record: Record<string, unknown>; role?: string }[],
-): void {
-  mkdirSync(sessionsDir, { recursive: true });
-  writeFileSync(
-    join(sessionsDir, `${id}.json`),
-    JSON.stringify({ schemaVersion: 6, sessionId: id, state: "settled", cwd }), {mode:0o600},
-  );
-  writeFileSync(
-    join(sessionsDir, `${id}.records.jsonl`),
-    entries
-      .map((entry, index) =>
-        JSON.stringify({ v: 1, seq: index + 1, ...entry }),
-      )
-      .join("\n") + "\n", {mode:0o600},
-  );
+  times?: { createdAt: string; updatedAt: string },
+): Promise<void> {
+  mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+  const replay = entries.map(({ record, role }, index) =>
+    `${JSON.stringify({ v: 1, seq: index + 1, ...(role === undefined ? {} : { role }), record })}\n`).join("");
+  const stamps = entries.map(({ record }) => record.timestamp).filter((at): at is number => typeof at === "number" && Number.isFinite(at));
+  for (const folder of ["replay", "blobs"]) rmSync(join(sessionsDir, `${id}.${folder}`), { recursive: true, force: true });
+  await writeSession(join(sessionsDir, `${id}.json`), validateSessionManifest({
+    schemaVersion: 7, kind: "captain-session", sessionId: id, cwd,
+    createdAt: times?.createdAt ?? new Date(stamps[0] ?? 0).toISOString(),
+    updatedAt: times?.updatedAt ?? new Date(stamps.at(-1) ?? 0).toISOString(),
+    state: "history-only", reason: "Written by another host", contextSeq: null,
+    replay: { seq: entries.length, sha256: createHash("sha256").update(replay).digest("hex"), incomplete: false },
+  }), replay);
+}
+
+/** The newest segment of a session's replay log: where its writer
+ * appends past what the manifest binds (DR-254). */
+/** The lease another host holds on a session while it appends, as the
+ * terminal holds its writer lease: what it appends is read while it holds
+ * (core-service-60, core-service-158). */
+function hostLease(sessionsDir: string, id: string): Promise<{ release: () => Promise<void> }> {
+  return createSessionStore({ sessionsDir }).acquireManagement(id);
+}
+
+function replayTail(sessionsDir: string, id: string): string {
+  const dir = join(sessionsDir, `${id}.replay`);
+  return join(dir, readdirSync(dir).filter((name) => name.endsWith(".jsonl")).sort().at(-1) ?? FIRST_SEGMENT);
 }
 
 test("core-service-103: stored call spans fold to per-agent active time", async (t) => {
@@ -3030,16 +3041,16 @@ test("core-service-103: stored call spans fold to per-agent active time", async 
     { record: { type: "player_prompt", turnId: 3, playerId: "dev.open", prompt: "still open", timestamp: 2_700 } },
     { record: { type: "player_finished", turnId: 3, playerId: "dev.none", timestamp: 2_800, result: { status: "success" } } },
   ];
-  writeForeignRecordEntries(sessionsDir, measuredId, projectDir, measured);
-  writeForeignSession(sessionsDir, noPairId, projectDir, [
+  await writeForeignRecordEntries(sessionsDir, measuredId, projectDir, measured);
+  await writeForeignSession(sessionsDir, noPairId, projectDir, [
     { type: "player_prompt", turnId: 1, playerId: "dev.never", prompt: "open", timestamp: 10 },
     { type: "player_finished", turnId: 2, playerId: "dev.never", timestamp: 20, result: { status: "success" } },
   ]);
-  writeForeignSession(sessionsDir, incompleteId, projectDir, [
+  await writeForeignSession(sessionsDir, incompleteId, projectDir, [
     { type: "captain_prompt", turnId: 1, prompt: "measured prefix", timestamp: 10, visibility: "hidden" },
     { type: "captain_finished", turnId: 1, timestamp: 20, visibility: "hidden", result: { status: "success" } },
   ]);
-  appendFileSync(join(sessionsDir, `${incompleteId}.records.jsonl`), '{"v":1,"seq":3\n');
+  appendFileSync(replayTail(sessionsDir, incompleteId), '{"v":1,"seq":3\n');
 
   const service = await CoreService.start({
     token: "test",
@@ -3089,7 +3100,8 @@ test("core-service-103: stored call spans fold to per-agent active time", async 
   );
 
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: measuredId } });
-  const stream = join(sessionsDir, `${measuredId}.records.jsonl`);
+  const host = await hostLease(sessionsDir, measuredId);
+  const stream = replayTail(sessionsDir, measuredId);
   const finishSeq = measured.length + 1;
   appendFileSync(stream, JSON.stringify({
     v: 1,
@@ -3110,6 +3122,7 @@ test("core-service-103: stored call spans fold to per-agent active time", async 
     message.session.streamIncompleteAfterSeq !== undefined &&
     message.session.agentActiveMs === undefined,
   );
+  await host.release();
 });
 
 test("core-service-116: stored init reports fold to the model each agent's runtime named", async (t) => {
@@ -3186,17 +3199,17 @@ test("core-service-116: stored init reports fold to the model each agent's runti
     init("dev.other", 130, { model: "gpt-6-astra", reportedModel: "gpt-6-astra-2026-09" }),
     { type: "turn_finished", turnId: 2, timestamp: 140 },
   ];
-  writeForeignSession(sessionsDir, reportedId, projectDir, reported);
-  writeForeignSession(sessionsDir, silentId, projectDir, [
+  await writeForeignSession(sessionsDir, reportedId, projectDir, reported);
+  await writeForeignSession(sessionsDir, silentId, projectDir, [
     context(10, block("opus"), { "dev.coder": block() }, { coder: { playerId: "dev.coder" } }),
     init(undefined, 20, { model: "opus" }),
     init("dev.coder", 30, { model: "unknown", reportedModel: "" }),
   ]);
-  writeForeignSession(sessionsDir, incompleteId, projectDir, [
+  await writeForeignSession(sessionsDir, incompleteId, projectDir, [
     context(10, block("opus"), { "dev.coder": block() }, { coder: { playerId: "dev.coder" } }),
     init(undefined, 20, { model: "opus", reportedModel: "claude-opus-5-5" }),
   ]);
-  appendFileSync(join(sessionsDir, `${incompleteId}.records.jsonl`), '{"v":1,"seq":3\n');
+  appendFileSync(replayTail(sessionsDir, incompleteId), '{"v":1,"seq":3\n');
 
   const service = await CoreService.start({
     token: "test", configPath, dataDir: join(dir, "state"), env: {}, home: join(dir, "home"), watchConfig: true,
@@ -3227,7 +3240,8 @@ test("core-service-116: stored init reports fold to the model each agent's runti
 
   // A report stored later is folded and published as it lands.
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: reportedId } });
-  appendFileSync(join(sessionsDir, `${reportedId}.records.jsonl`), JSON.stringify({
+  const host = await hostLease(sessionsDir, reportedId);
+  appendFileSync(replayTail(sessionsDir, reportedId), JSON.stringify({
     v: 1, seq: reported.length + 1,
     record: init("dev.other", 150, { model: "gpt-6-astra", reportedModel: "gpt-6-astra-2026-10" }),
   }) + "\n");
@@ -3235,6 +3249,7 @@ test("core-service-116: stored init reports fold to the model each agent's runti
     message.type === "session.state" && message.session.id === reportedId &&
     message.session.agentReportedModels?.["dev.other"]?.model === "gpt-6-astra-2026-10",
   );
+  await host.release();
 });
 
 test("core-service-116: a live session's runtime reports reach its summary as sent", async (t) => {
@@ -3345,17 +3360,17 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
 
   // One session is already there when the service starts...
   const atStartup = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
-  writeForeignSession(sessionsDir, atStartup, projectDir, foreignTurn("from the terminal"));
+  await writeForeignSession(sessionsDir, atStartup, projectDir, foreignTurn("from the terminal"));
   // ...one recorded in a directory no project is registered for, yet
   // held by the project's clone, so the project's all the same
   // (storage-6)...
   const elsewhere = "ccccccc1-3333-4333-8333-cccccccccccc";
-  writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
+  await writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
   // ...and one in a clone no folder pairs — the global records clone — whose history remains
   // readable without borrowing that project's folder
   // (core-service-60, DR-195).
   const unpaired = "ccccccc2-3333-4333-8333-cccccccccccc";
-  writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
+  await writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
 
   const service = await CoreService.start({
     token: "test",
@@ -3376,7 +3391,7 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
 
   // A record that lands while the service runs binds on arrival.
   const arrival = "bbbbbbb2-2222-4222-8222-bbbbbbbbbbbb";
-  writeForeignSession(sessionsDir, arrival, projectDir, foreignTurn("while running"));
+  await writeForeignSession(sessionsDir, arrival, projectDir, foreignTurn("while running"));
 
   const listed = await client.waitFor(
     (m) =>
@@ -3386,10 +3401,13 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   assert.ok(listed, "an arrival while running is announced");
 
   // A record written before the CLI teed its stream carries only its
-  // Boss journal; it lists from that (core-service-60).
+  // Boss journal. It is a schema 2–6 record Playbook no longer reads: a
+  // nonblocking notice, neither listed nor read, its file unchanged
+  // (core-service-10, core-service-86, DR-254).
   const journaled = "ddddddd4-4444-4444-8444-dddddddddddd";
+  const journaledRoot = join(sessionsDir, `${journaled}.json`);
   writeFileSync(
-    join(sessionsDir, `${journaled}.json`),
+    journaledRoot,
     JSON.stringify({
       schemaVersion: 3,
       kind: "captain-session",
@@ -3409,22 +3427,17 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
       },
     }), {mode:0o600},
   );
-  await client.waitFor(
-    (m) =>
-      m.type === "session.state" &&
-      (m as { session: SessionInfo }).session.id === journaled,
-  );
+  const journaledBytes = readFileSync(journaledRoot, "utf8");
+  await service["syncForeignSessions"]();
 
   const sessions = await client.expectOk("session.list", {});
   const ids = sessions.map((s: SessionInfo) => s.id);
-  const fromJournal = sessions.find((s: SessionInfo) => s.id === journaled);
-  assert.equal(fromJournal?.title, "Resolve issue 42");
-  assert.equal(fromJournal?.turns, 2);
-  const journalHistory = await client.expectOk("history.get", { sessionId: journaled });
-  assert.deepEqual(
-    journalHistory.records.map((r: StoredRecord) => r.record.type),
-    ["turn_started", "captain_reply", "turn_finished", "turn_started", "captain_reply", "turn_finished"],
-  );
+  assert.equal(ids.includes(journaled), false, "an earlier-format record is not listed");
+  const journalNotice = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === journaledRoot);
+  assert.ok(journalNotice && journalNotice.code === "session-upgrade" && !journalNotice.blocking, JSON.stringify(journalNotice));
+  const journalHistory = await client.command("history.get", { sessionId: journaled });
+  assert.ok(!journalHistory.ok && journalHistory.error.code === "not_found", "nor is it read");
+  assert.equal(readFileSync(journaledRoot, "utf8"), journaledBytes);
   assert.ok(ids.includes(atStartup), "the session present at startup is served");
   assert.ok(ids.includes(arrival), "the session that arrived is served");
   assert.equal(
@@ -3448,15 +3461,16 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   );
 
   // CORE-65: this core writes none of another host's files.
-  const before = readFileSync(join(sessionsDir, `${atStartup}.records.jsonl`), "utf8");
-  assert.ok(!existsSync(join(sessionsDir, `${atStartup}.spex.json`)));
+  const files = (): [string, Buffer][] => [`${atStartup}.json`, join(`${atStartup}.replay`, FIRST_SEGMENT)]
+    .map((name) => [name, readFileSync(join(sessionsDir, name))]);
+  const owned = (): string[] => readdirSync(sessionsDir).filter((name) => name.includes(atStartup)).sort();
+  const before = files();
+  const ownedBefore = owned();
   client.close();
   await service.stop();
-  assert.equal(
-    readFileSync(join(sessionsDir, `${atStartup}.records.jsonl`), "utf8"),
-    before,
-    "the foreign stream is byte-identical afterwards",
-  );
+  assert.deepEqual(files(), before, "the foreign root and replay are byte-identical afterwards");
+  assert.deepEqual(owned(), ownedBefore, "no file joins them");
+  assert.equal(readFileSync(journaledRoot, "utf8"), journaledBytes);
 });
 
 test("core-service-62: CLI stream changes refresh history and subscribers without duplicating folds or writing foreign files", async (t) => {
@@ -3471,16 +3485,18 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   writeFileSync(configPath, VALID_CONFIG);
   const sessionId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
   const manifest = join(sessionsDir, `${sessionId}.json`);
-  const stream = join(sessionsDir, `${sessionId}.records.jsonl`);
   const opening = { type: "captain_status", turnId: null, message: "ready", timestamp: 1000 };
-  writeForeignSession(sessionsDir, sessionId, projectDir, [opening]);
+  await writeForeignSession(sessionsDir, sessionId, projectDir, [opening]);
+  // The CLI appends to its replay log's newest segment, past what the
+  // manifest binds (DR-254).
+  const stream = replayTail(sessionsDir, sessionId);
   // Sorting ahead of the healthy manifest exposed the old whole-scan
   // catch, which let one malformed neighbor hide every later session.
   const malformed = join(sessionsDir, "00000000-0000-4000-8000-000000000000.json");
   writeFileSync(malformed, '{"sessionId":');
   const invalidStreamId = "00000000-0000-4000-8000-000000000001";
-  writeForeignSession(sessionsDir, invalidStreamId, projectDir, [opening]);
-  const invalidStream = join(sessionsDir, `${invalidStreamId}.records.jsonl`);
+  await writeForeignSession(sessionsDir, invalidStreamId, projectDir, [opening]);
+  const invalidStream = replayTail(sessionsDir, invalidStreamId);
   const invalidStreamBefore = '{"v":1,"seq":1,"record":null}\n';
   writeFileSync(invalidStream, invalidStreamBefore);
   const manifestBefore = readFileSync(manifest, "utf8");
@@ -3529,8 +3545,10 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   ];
   const secondStart = { type: "turn_started", turnId: 2, turn: { id: 2, prompt: "second terminal turn" }, timestamp: 7000 };
   const line = (seq: number, record: Record<string, unknown>) => JSON.stringify({ v: 1, seq, record });
-  // Only the stream changes. The parseable last record is deliberately
-  // not newline-terminated, just as a reader can catch an append.
+  // Only the stream changes, under the terminal's lease. The parseable
+  // last record is deliberately not newline-terminated, just as a reader
+  // can catch an append.
+  const host = await hostLease(sessionsDir, sessionId);
   appendFileSync(stream, firstTurn.map((record, index) => line(index + 2, record)).join("\n") + "\n" + line(8, secondStart));
   // Continuing directory activity must not postpone this stream's
   // subscriber updates until the writer goes quiet.
@@ -3557,6 +3575,7 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   assert.equal((await client.expectOk("history.get", { sessionId })).records.at(-1)?.seq, 8);
   const secondEnd = [usage(2, 8000, 6, 2), { type: "turn_finished", turnId: 2, timestamp: 9000 }];
   appendFileSync(stream, secondEnd.map((record, index) => line(index + 9, record)).join("\n") + "\n");
+  await host.release();
   await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.endedAt === 9000);
   await client.waitFor((message) => message.type === "record" && message.sessionId === sessionId && message.seq === 10);
   const completeHistory = await client.expectOk("history.get", { sessionId });
@@ -3589,7 +3608,8 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
     { ...firstTurn[3], timestamp: 5500 },
     ...firstTurn.slice(4),
   ];
-  writeFileSync(stream, replacement.map((record, index) => line(index + 1, record)).join("\n") + "\n");
+  // Another host replaces the history, its root rebinding the new replay.
+  await writeSessionReplay(manifest, replacement.map((record, index) => line(index + 1, record)).join("\n") + "\n");
   await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.title === "replaced terminal history");
   const resetIndex = client.messages.findIndex((message) => message.type === "session.history-replaced" && message.sessionId === sessionId);
   const stateIndex = client.messages.findIndex((message) => message.type === "session.state" && message.session.id === sessionId && message.session.title === "replaced terminal history");
@@ -3602,14 +3622,15 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   assert.deepEqual(replacedHistory.records.map((entry) => entry.seq), [1, 2, 4, 6, 7]);
   assert.deepEqual(client.records("session").map((entry) => entry.seq), [2, 4, 6, 7, 8, 9, 10]);
 
-  const streamAfterExternalWrites = (await readSessionReplay(stream)).toString("utf8");
+  const streamAfterExternalWrites = (await readSessionReplay(manifest)).toString("utf8");
+  const owned = readdirSync(sessionsDir).filter((name) => name.includes(sessionId)).sort();
   client.close();
   await service.stop();
-  assert.equal((await readSessionReplay(stream)).toString("utf8"), streamAfterExternalWrites);
+  assert.equal((await readSessionReplay(manifest)).toString("utf8"), streamAfterExternalWrites);
   assert.equal(readFileSync(manifest, "utf8"), manifestBefore);
   assert.equal(readFileSync(malformed, "utf8"), malformedBefore);
   assert.equal(readFileSync(invalidStream, "utf8"), invalidStreamBefore);
-  assert.ok(!existsSync(join(sessionsDir, `${sessionId}.spex.json`)));
+  assert.deepEqual(readdirSync(sessionsDir).filter((name) => name.includes(sessionId)).sort(), owned, "no file joins the session's");
 });
 
 
@@ -3628,7 +3649,7 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     await client.expectOk("turn.submit", { sessionId: session.id, text: "first" });
     await settledSession(client, session.id, 1);
     const history = await client.expectOk("history.get", { sessionId: session.id });
-    const paths = ["json", "replay.json", "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
+    const paths = ["json", `replay/${FIRST_SEGMENT}`, "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
     const before = paths.map((path) => existsSync(path) ? readFileSync(path) : undefined);
     const unpairedHomePath = join(harness.dataDir, "home.yaml");
     const pairedHomeBytes = readFileSync(unpairedHomePath);
@@ -3722,7 +3743,7 @@ test("core-service-71: session.delete removes an ended session and its traces, r
   // the registration rescans (storage-6, core-service-60).
   const foreignId = "eeeeeee5-5555-4555-8555-eeeeeeeeeeee";
   const project = await client.expectOk("project.register", { path: harness.projectDir });
-  writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignTurn("from the terminal"));
+  await writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignTurn("from the terminal"));
   assert.equal((await client.expectOk("project.register", { path: harness.projectDir })).id, project.id);
 
   // A settled session that served an intent, with its runtime released.
@@ -3747,10 +3768,10 @@ test("core-service-71: session.delete removes an ended session and its traces, r
   await client.waitFor((m) => m.type === "session.state" && m.session.id === ended.id && m.session.turns === 1 && !m.session.turnActive && !m.session.live);
   const live = await client.expectOk("session.create", { projectId: project.id });
 
-  const sidecar = join(sessionsDir, `${ended.id}.json`);
-  const stream = join(sessionsDir, `${ended.id}.replay.json`);
+  const root = join(sessionsDir, `${ended.id}.json`);
+  const stream = join(sessionsDir, `${ended.id}.replay`);
   const prefsFile = join(harness.dataDir, "local", "prefs.json");
-  assert.ok(existsSync(sidecar) && existsSync(stream), "the ended session's files exist");
+  assert.ok(existsSync(root) && existsSync(stream), "the ended session's files exist");
   assert.ok(readFileSync(prefsFile, "utf8").includes(`viewed:${ended.id}`));
 
   // The live session ends first (core-service-70).
@@ -3767,16 +3788,16 @@ test("core-service-71: session.delete removes an ended session and its traces, r
   assert.equal(ended.foreign, undefined, "a session this core ran is not");
   writeForeignLease(sessionsDir, foreignId, { pid: process.pid, hostname: hostname() });
   const manifestBefore = readFileSync(join(sessionsDir, `${foreignId}.json`), "utf8");
-  const streamBefore = readFileSync(join(sessionsDir, `${foreignId}.records.jsonl`), "utf8");
+  const streamBefore = readFileSync(join(sessionsDir, `${foreignId}.replay`, FIRST_SEGMENT), "utf8");
   const refused = await client.command("session.delete", { sessionId: foreignId });
   assert.ok(!refused.ok && refused.error.code === "busy");
   assert.ok(!refused.ok && refused.error.message.includes(String(process.pid)));
   assert.equal(readFileSync(join(sessionsDir, `${foreignId}.json`), "utf8"), manifestBefore);
-  assert.equal(readFileSync(join(sessionsDir, `${foreignId}.records.jsonl`), "utf8"), streamBefore);
+  assert.equal(readFileSync(join(sessionsDir, `${foreignId}.replay`, FIRST_SEGMENT), "utf8"), streamBefore);
 
   // The ended session deletes: files, listing, history, viewed marker.
   await client.expectOk("session.delete", { sessionId: ended.id });
-  assert.ok(!existsSync(sidecar) && !existsSync(stream), "the files are gone");
+  assert.ok(!existsSync(root) && !existsSync(stream), "the files are gone");
   const listed = await client.expectOk("session.list", {});
   assert.ok(!listed.some((s: SessionInfo) => s.id === ended.id), "dropped from the listing");
   assert.ok(listed.some((s: SessionInfo) => s.id === live.id), "the live session stays");
@@ -3845,7 +3866,7 @@ test("core-service-78: another host's session deletes lease-free, its lock dirs 
   const abroad = "f0000003-3333-4333-8333-f00000000003";
   const vanishing = "f0000004-4444-4444-8444-f00000000004";
   for (const id of [held, released, abroad, vanishing]) {
-    writeForeignSession(sessionsDir, id, projectDir, foreignTurn(`terminal ${id}`));
+    await writeForeignSession(sessionsDir, id, projectDir, foreignTurn(`terminal ${id}`));
   }
   // A dead pid on this host holds nothing; a retired lease beside it
   // is the CLI's own transient and stays.
@@ -3881,7 +3902,7 @@ test("core-service-78: another host's session deletes lease-free, its lock dirs 
   // stay, and subscribed clients learn the removal (core-service-70).
   await client.expectOk("session.delete", { sessionId: released });
   assert.ok(!existsSync(join(sessionsDir, `${released}.json`)), "the record is gone");
-  assert.ok(!existsSync(join(sessionsDir, `${released}.records.jsonl`)), "the stream is gone");
+  assert.ok(!existsSync(join(sessionsDir, `${released}.replay`)), "the replay is gone");
   assert.ok(!existsSync(releasedLock), "the shared owner reclaims and releases the dead lease");
   assert.ok(existsSync(join(retired, "owner.json")), "a retired lease is never removed");
   const removed = await watcher.waitFor(
@@ -3902,7 +3923,7 @@ test("core-service-78: another host's session deletes lease-free, its lock dirs 
   // Vanishing from the shared store while the service runs: the CLI
   // removed it, and the listing follows (core-service-76).
   rmSync(join(sessionsDir, `${vanishing}.json`));
-  rmSync(join(sessionsDir, `${vanishing}.records.jsonl`));
+  rmSync(join(sessionsDir, `${vanishing}.replay`), { recursive: true });
   const gone = await watcher.waitFor(
     (m) => m.type === "session.removed" && m.sessionId === vanishing,
   );
@@ -3913,7 +3934,7 @@ test("core-service-78: another host's session deletes lease-free, its lock dirs 
   const history = await client.command("history.get", { sessionId: vanishing });
   assert.ok(!history.ok && history.error.code === "not_found");
   // The others are untouched by either event.
-  assert.ok(existsSync(join(sessionsDir, `${held}.records.jsonl`)));
+  assert.ok(existsSync(join(sessionsDir, `${held}.replay`, FIRST_SEGMENT)));
 
   client.close();
   watcher.close();
@@ -3955,7 +3976,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   await service.stop();
 
   const sessionsDir = projectSessions(harness.dataDir);
-  const nativeStream = join(sessionsDir, `${native.id}.records.jsonl`);
+  const nativeStream = join(sessionsDir, `${native.id}.replay`);
   const original = (await readSessionReplay(nativeStream)).toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
   const opaque = [
     {},
@@ -3975,8 +3996,9 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
     opaque[0], ...foreignTurn("known CLI turn").slice(0, 1),
     ...opaque.slice(1), ...foreignTurn("known CLI turn").slice(1), {},
   ];
-  writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignRecords);
-  const foreignStream = join(sessionsDir, `${foreignId}.records.jsonl`);
+  await writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignRecords);
+  const foreignRoot = join(sessionsDir, `${foreignId}.json`);
+  const foreignStream = replayTail(sessionsDir, foreignId);
   // The released Playbook reader is the compatibility oracle, including
   // its private-file boundary; no duplicate mock parser defines v1 here.
   chmodSync(sessionsDir, 0o700);
@@ -3984,14 +4006,13 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   const playbook = openSessionStore(sessionsDir);
   const expectedForeign = (await playbook.readStream(foreignId)).entries;
   assert.equal(expectedForeign.length, foreignRecords.length);
-  const foreignBytes = (await readSessionReplay(foreignStream)).toString("utf8");
+  const foreignBytes = (await readSessionReplay(foreignRoot)).toString("utf8");
+  // Records with no finite timestamp: the summary times are the
+  // manifest's (core-service-60).
   const opaqueId = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
-  writeForeignSession(sessionsDir, opaqueId, harness.projectDir, [{}, { type: "future" }]);
   const createdAt = "2026-09-01T01:00:00.000Z";
   const updatedAt = "2026-09-01T02:00:00.000Z";
-  writeFileSync(join(sessionsDir, `${opaqueId}.json`), JSON.stringify({
-    sessionId: opaqueId, cwd: harness.projectDir, createdAt, updatedAt,
-  }));
+  await writeForeignSession(sessionsDir, opaqueId, harness.projectDir, [{}, { type: "future" }], { createdAt, updatedAt });
 
   service = await CoreService.start({
     token: "test", configPath: join(harness.dir, "playbook.config.yaml"),
@@ -4032,14 +4053,16 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
 
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: foreignId } });
   const appended = [{ type: "future" }, { type: "captain_reply", turnId: 1, timestamp: 3000, text: "after opaque records" }];
+  const host = await hostLease(sessionsDir, foreignId);
   appendFileSync(foreignStream, appended.map((record, index) => JSON.stringify({
     v: 1, seq: foreignRecords.length + index + 1, record,
   })).join("\n") + "\n");
   await client.waitFor((message) => message.type === "record" && message.sessionId === foreignId && message.seq === foreignRecords.length + 2);
+  await host.release();
   assert.deepEqual(client.records("session").map((message) => message.record), appended);
   assert.equal((await client.expectOk("history.get", { sessionId: foreignId })).records.at(-1)?.seq, foreignRecords.length + 2);
   assert.equal((await readSessionReplay(nativeStream)).toString("utf8"), nativeBytes);
-  assert.ok((await readSessionReplay(foreignStream)).toString("utf8").startsWith(foreignBytes));
+  assert.ok((await readSessionReplay(foreignRoot)).toString("utf8").startsWith(foreignBytes));
   assert.ok(!existsSync(join(sessionsDir, `${foreignId}.spex.json`)));
 });
 
@@ -4058,8 +4081,10 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     v, seq, record: { type: "captain_status", turnId: null, timestamp: 1, message: "unfinished append" },
   });
   const cases = [
-    { name: "unterminated record", suffix: (seq: number) => envelope(seq) },
-    { name: "torn JSON", suffix: () => '{"v":1,"seq":' },
+    // An unfinished final record is an append not yet made: withheld and
+    // refusing continuation, never damage (DR-254).
+    { name: "unterminated record", suffix: (seq: number) => envelope(seq), pending: true },
+    { name: "torn JSON", suffix: () => '{"v":1,"seq":', pending: true },
     { name: "malformed complete line", suffix: () => "{broken}\n" },
     { name: "sequence gap", suffix: (seq: number) => envelope(seq + 1) + "\n" },
     { name: "unknown version", suffix: (seq: number) => envelope(seq, 2) + "\n" },
@@ -4072,11 +4097,12 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     id: string;
     name: string;
     stream: string;
-    sidecar: string;
+    root: string;
     bytes: string;
     boundary: number;
     history: CommandResults["history.get"];
     earlier?: boolean;
+    pending?: boolean;
   }[] = [];
   for (const example of cases) {
     const session = await client.expectOk("session.create", { projectId: project.id });
@@ -4084,7 +4110,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     await client.expectOk("turn.submit", { sessionId: session.id, text: example.name });
     await client.waitFor((message) => message.type === "record" && message.sessionId === session.id && message.record.type === "turn_finished");
     await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && !m.session.turnActive && !m.session.live);
-    const stream = join(projectSessions(harness.dataDir), `${session.id}.records.jsonl`);
+    const stream = join(projectSessions(harness.dataDir), `${session.id}.replay`);
     const before = (await readSessionReplay(stream)).toString("utf8");
     const records = before.trimEnd().split("\n").map((line) => JSON.parse(line) as StoredRecord);
     const lastSeq = records.at(-1)?.seq ?? 0;
@@ -4093,11 +4119,12 @@ test("core-service-22: damaged native streams remain readable but cannot continu
       id: session.id,
       name: example.name,
       stream,
-      sidecar: join(projectSessions(harness.dataDir), `${session.id}.json`),
+      root: join(projectSessions(harness.dataDir), `${session.id}.json`),
       bytes: before + example.suffix(lastSeq + 1),
       boundary: (await readSessionManifest(join(projectSessions(harness.dataDir), `${session.id}.json`))).replay.seq,
       history,
       earlier: example.earlier,
+      pending: example.pending,
     });
   }
   client.close();
@@ -4105,9 +4132,9 @@ test("core-service-22: damaged native streams remain readable but cannot continu
   for (const example of damaged) {
     await writeSessionReplay(example.stream, example.bytes);
     if (example.earlier) {
-      const meta = (await readSessionManifest(example.sidecar));
+      const meta = (await readSessionManifest(example.root));
       meta.replay.incomplete = true;
-      await writeSessionManifest(example.sidecar, meta);
+      await writeSessionManifest(example.root, meta);
     }
   }
   service = await CoreService.start({
@@ -4126,7 +4153,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
   const sessions = await client.expectOk("session.list", {});
   for (const example of damaged) {
     const listed = sessions.find((session) => session.id === example.id);
-    assert.equal(listed?.streamIncompleteAfterSeq, example.boundary, example.name);
+    assert.equal(listed?.streamIncompleteAfterSeq, example.pending ? undefined : example.boundary, example.name);
     assert.equal(listed?.continuable, undefined, example.name);
     assert.equal(listed?.live, false, example.name);
     assert.deepEqual(await client.expectOk("history.get", { sessionId: example.id }), example.history, example.name);
@@ -4134,7 +4161,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     assert.ok(!refused.ok, example.name);
     assert.ok(!refused.ok && /incomplete|replay|checkpoint|damage/i.test(refused.error.message), example.name);
     assert.equal((await readSessionReplay(example.stream)).toString("utf8"), example.bytes, example.name);
-    assert.ok(!existsSync(example.sidecar.replace(/\.json$/, ".spex.json")), "no desktop authority file");
+    assert.ok(!existsSync(example.root.replace(/\.json$/, ".spex.json")), "no desktop authority file");
   }
 });
 
@@ -4149,7 +4176,7 @@ test("core-service-77: a real session continues after restart and respects anoth
   await client.expectOk("turn.submit", {sessionId:session.id,text:"first"});
   // Settlement releases the runtime (core-service-91).
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 1);
-  const stream = join(projectSessions(harness.dataDir),`${session.id}.records.jsonl`);
+  const stream = join(projectSessions(harness.dataDir),`${session.id}.replay`);
   const before = (await readSessionReplay(stream)).toString("utf8");
   client.close(); await service.stop();
   service = await CoreService.start({token:"test",configPath:join(harness.dir,"playbook.config.yaml"),dataDir:harness.dataDir,adapterImports:fakeAdapterImports({fallback:{result:"continued answer"}}).imports,env:{},watchConfig:false});
@@ -5152,67 +5179,6 @@ test("playbook-library-32: compile.run binds derived roles however the form case
 });
 
 
-for (const selection of ["default", "home override", "sessions override"] as const) {
-  test(`storage-15: legacy default discovery respects ${selection}`, async (t) => {
-    const home = scratchDir("spex-legacy-default-");
-    const dataDir = selection === "home override" ? join(home,"custom") : join(home,".spex");
-    const legacyDir = join(home,"old-state","playbook","sessions");
-    const projectPath = join(home,"project");
-    const configPath = join(home,"custom-config.yaml");
-    mkdirSync(legacyDir,{recursive:true,mode:0o700}); mkdirSync(projectPath);
-    execFileSync("git",["init","-q",projectPath]);
-    writeFileSync(configPath,(selection === "sessions override" ? `sessions: ${join(dataDir,"sessions")}\n` : "") + VALID_CONFIG);
-    const plan = await loadLaunchPlan({userConfigPath:configPath,modules:builtinLaunchModules(configPath)});
-    const {imports} = fakeAdapterImports({fallback:{result:"Done"}});
-    const seedDir = join(home,"seed-sessions");
-    const seed = await openSessionHost({store:createSessionStore({sessionsDir:seedDir}),mode:"new",cwd:projectPath,
-      config:executionConfigFromPlan(plan),adapterImports:imports});
-    await seed.handleBossTurn("Prior CLI work");
-    const sessionId = seed.sessionId;
-    const source = join(legacyDir,`${sessionId}.json`);
-    const original = JSON.stringify(await seed.read());
-    assert.equal(JSON.parse(original).schemaVersion,6,"the public lifecycle exports the released legacy recovery projection");
-    await seed.dispose();
-    writeFileSync(source,original,{mode:0o600});
-    writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),await readSessionReplay(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
-    const unsupported = join(legacyDir, `${randomUUID()}.json`);
-    const unsupportedBytes = JSON.stringify({ schemaVersion: 1 });
-    writeFileSync(unsupported, unsupportedBytes, { mode: 0o600 });
-    const service = await CoreService.start({token:"test",configPath,dataDir,home,own:OWN,watchConfig:false,
-      env:{HOME:home,XDG_STATE_HOME:join(home,"old-state"),...(selection === "home override" ? {SPEX_HOME:dataDir} : {})}});
-    t.after(async () => {await service.stop();rmSync(home,{recursive:true,force:true});});
-    const client = new Client(service.port()); t.after(() => client.close()); await client.open();
-    await client.expectOk("project.register",{path:projectPath});
-    const sessions = await client.expectOk("session.list",{});
-    if (selection === "default") {
-      // storage-18: the default import puts unmatched sessions in the global
-      // records repository. Without a paired folder they are history only (core-service-60, storage-12).
-      const ownKey = `${OWN}/${OWN}-spex`;
-      assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into global sessions");
-      assert.deepEqual(sessions.map((session) => session.id), [sessionId], "the imported session is listed for reading");
-      assert.equal(sessions[0]!.projectId, ownKey, "the session belongs to the clone holding it, not its recorded working folder");
-      assert.equal(sessions[0]!.continuable, undefined, "an unpaired session offers no continuation");
-      const history = await client.expectOk("history.get", { sessionId });
-      assert.deepEqual(history.records.filter(({ record }) => record.type === "turn_started")
-        .map(({ record }) => (record as { turn: { prompt: string } }).turn.prompt), ["Prior CLI work"], "imported conversation history can be read without its project files");
-      const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
-      assert.equal(repair?.repair?.sessions, 1, "the global records clone is reported once it holds the session");
-      const skipped = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === unsupported);
-      assert.equal(skipped?.code, "session-import", "the skipped import carries guidance without parsing its reason");
-      assert.equal(skipped?.blocking, false);
-      assert.equal(readFileSync(unsupported, "utf8"), unsupportedBytes, "the unsupported older file is preserved");
-      assert.equal(existsSync(source),false,"old active manifest retires after the new bundle is valid");
-      // Retained in the destination store's receipts (storage-18).
-      const migrations = join(clonePath(dataDir, ownKey),"local","migrations");
-      const inputs = readdirSync(migrations,{recursive:true}).filter((path) => String(path).endsWith(join("inputs","0")));
-      assert.ok(inputs.some((path) => readFileSync(join(migrations,String(path)),"utf8") === original),"original bytes are retained locally");
-    } else {
-      assert.equal(sessions.length,0); assert.equal(readFileSync(source,"utf8"),original);
-      assert.equal((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === unsupported), false);
-    }
-  });
-}
-
 for (const action of ["restore", "discard", "restore after recorded work"] as const) {
   test(`core-service-84: desktop ${action} recovers CLI storage without current config`, async (t) => {
     const dir = scratchDir("spex-cross-host-recovery-");
@@ -5302,7 +5268,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
       const restored = validateSessionManifest(await shared.readManifest(sessionId));
       assert.equal(restored.state, "settled", "restore the initialized turn-zero checkpoint");
       assert.equal(restored.snapshot.sequences.turn, 0);
-      assert.ok(existsSync(join(sessionsDir, `${sessionId}.replay.json`)));
+      assert.ok(existsSync(join(sessionsDir, `${sessionId}.replay`, FIRST_SEGMENT)));
       assert.equal((await client.expectOk("session.list", {}))[0]?.recovery, undefined);
     }
   });
@@ -5775,7 +5741,18 @@ test("core-service-81: saved Captain, player context and graphs survive removal 
   assert.equal(imports,importsAtStartup,"reading saved history and graphs imports no module");
 });
 
-test("core-service-86: unreadable legacy sidecars and forge cache preserve unrelated startup", async (t) => {
+/** An earlier-format session as an earlier release left it: a schema 7
+ * manifest root and its record stream, which Playbook no longer reads. */
+function earlierSession(sessionsDir: string, cwd: string, id = randomUUID()): { id: string; root: string; stream: string; bytes: { root: string; stream: string } } {
+  const stream = `${JSON.stringify({ v: 1, seq: 1, record: { type: "turn_started", turnId: 1, turn: { id: 1, prompt: "earlier" }, timestamp: 1000 } })}\n`;
+  const root = JSON.stringify({ schemaVersion: 7, kind: "captain-session", sessionId: id, cwd, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", state: "history-only", reason: "earlier", contextSeq: null, replay: { seq: 1, sha256: createHash("sha256").update(stream).digest("hex"), incomplete: false } });
+  mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+  writeFileSync(join(sessionsDir, `${id}.json`), root, { mode: 0o600 });
+  writeFileSync(join(sessionsDir, `${id}.records.jsonl`), stream, { mode: 0o600 });
+  return { id, root: join(sessionsDir, `${id}.json`), stream: join(sessionsDir, `${id}.records.jsonl`), bytes: { root, stream } };
+}
+
+test("core-service-86: an earlier-format session, a sidecar and an unreadable forge cache preserve unrelated startup", async (t) => {
   const harness=await startHarness(VALID_CONFIG,{realShell:true});
   let service=harness.service; let client=new Client(service.port()); await client.open();
   t.after(async()=>{client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
@@ -5783,28 +5760,31 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   const prior=await client.expectOk("session.create",{projectId:project.id});
   await client.expectOk("session.dispose",{sessionId:prior.id});
   client.close(); await service.stop();
+  const earlier=earlierSession(projectSessions(harness.dataDir),harness.projectDir);
   const sidecar=join(projectSessions(harness.dataDir),`${randomUUID()}.spex.json`);
-  const malformed=join(projectSessions(harness.dataDir),`${randomUUID()}.spex.json`);
-  const malformedBytes=JSON.stringify({id:"../outside-store",projectId:project.id,players:[],initialVisible:[]});
   const cache=join(harness.dataDir,"local","forge-cache.json");
-  writeFileSync(sidecar,"{broken sidecar",{mode:0o600}); writeFileSync(malformed,malformedBytes,{mode:0o600}); writeFileSync(cache,"{broken cache");
+  writeFileSync(sidecar,"{broken sidecar",{mode:0o600}); writeFileSync(cache,"{broken cache");
   service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
   client=new Client(service.port()); await client.open();
   const diagnostics=await client.expectOk("storage.diagnostics",{});
-  assert.ok(diagnostics.some((entry)=>entry.file===sidecar&&entry.reason.length>0&&entry.code==="session-upgrade"));
-  assert.ok(diagnostics.some((entry)=>entry.file===malformed&&entry.reason.length>0&&entry.code==="session-upgrade"));
+  const notice=diagnostics.find((entry)=>entry.file===earlier.root);
+  assert.ok(notice&&notice.reason.length>0&&notice.code==="session-upgrade"&&!notice.blocking,"an earlier-format session is a nonblocking older-conversation notice");
+  assert.equal(diagnostics.some((entry)=>entry.file===sidecar),false,"a sidecar is no longer read");
   assert.ok(diagnostics.some((entry)=>entry.file===cache&&!entry.blocking));
-  assert.ok((await client.expectOk("session.list",{})).some((session)=>session.id===prior.id));
+  const listed=await client.expectOk("session.list",{});
+  assert.ok(listed.some((session)=>session.id===prior.id));
+  assert.equal(listed.some((session)=>session.id===earlier.id),false,"an earlier-format session is neither listed nor read");
   await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Still available"}}});
   const created=await client.expectOk("session.create",{projectId:project.id});
   assert.equal(created.live,true);
+  assert.equal(readFileSync(earlier.root,"utf8"),earlier.bytes.root);
+  assert.equal(readFileSync(earlier.stream,"utf8"),earlier.bytes.stream);
   assert.equal(readFileSync(sidecar,"utf8"),"{broken sidecar");
-  assert.equal(readFileSync(malformed,"utf8"),malformedBytes);
   assert.equal(readFileSync(cache,"utf8"),"{broken cache");
 });
 
-test("core-service-86: saved conversations share one folder task and import when its folder is saved", async (t) => {
-  const root = scratchDir("spex-sidecar-folder-");
+test("core-service-86: saved conversations of an unpaired clone share one folder task and read before its folder is saved", async (t) => {
+  const root = scratchDir("spex-unpaired-folder-");
   const dataDir = join(root, "state");
   const projectPath = join(root, "project");
   const configPath = join(root, "playbook.config.yaml");
@@ -5817,45 +5797,27 @@ test("core-service-86: saved conversations share one folder task and import when
   home.folders = [];
   writeFileSync(homePath, stringifyYaml(home));
   const longTitle = `Saved conversation 4 ${"long description ".repeat(20)}`;
-  const older = Array.from({ length: 4 }, (_, index) => {
-    const id = randomUUID();
-    const file = join(sessionsDir, `${id}.spex.json`);
-    const original = JSON.stringify({ v: 1, id, projectId: key, createdAt: 1, endedAt: index === 3 ? null : index + 2, live: false, players: [], initialVisible: [] });
-    writeFileSync(file, original, { mode: 0o600 });
+  const older: { id: string; records: Record<string, unknown>[] }[] = [];
+  for (let index = 0; index < 4; index++) {
     const records = foreignTurn(index === 3 ? longTitle : `Saved conversation ${index + 1}`)
       .map((record) => ({ ...record, timestamp: Number(record.timestamp) + index * 1000 }));
-    writeFileSync(join(sessionsDir, `${id}.records.jsonl`), records.map((record, seq) => JSON.stringify({ v: 1, seq: seq + 1, record })).join("\n") + "\n", { mode: 0o600 });
-    return { id, file, original, records };
-  });
-  const refusedId = randomUUID();
-  const refusedFile = join(sessionsDir, `${refusedId}.spex.json`);
-  const refusedBytes = JSON.stringify({ v: 99, id: refusedId, projectId: key, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
-  writeFileSync(refusedFile, refusedBytes, { mode: 0o600 });
-  const ownKey = `${OWN}/${OWN}-spex`;
-  const ownSessions = projectSessions(dataDir, ownKey);
-  const personalId = randomUUID();
-  const personalFile = join(ownSessions, `${personalId}.spex.json`);
-  const personalBytes = JSON.stringify({ v: 1, id: personalId, projectId: ownKey, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
-  writeFileSync(personalFile, personalBytes, { mode: 0o600 });
+    older.push({ id: await seedHistorySession(sessionsDir, projectPath, records), records });
+  }
   const options = { token: "test", configPath, dataDir, home: join(root, "home"), own: OWN, env: {}, watchConfig: false };
   const service = await CoreService.start(options);
   const client = new Client(service.port());
   await client.open();
   t.after(async () => { client.close(); await service.stop(); rmSync(root, { recursive: true, force: true }); });
   const diagnostics = await client.expectOk("storage.diagnostics", {});
-  const repairEntry = diagnostics.find((entry) => entry.repair?.repository === key)!;
-  const repair = repairEntry.repair!;
+  const repair = diagnostics.find((entry) => entry.repair?.repository === key)!.repair!;
   assert.equal(repair.projectName, "project");
-  assert.equal(repair.sessions, 5);
+  assert.equal(repair.sessions, 4);
+  const updated = (index: number): number => Math.max(...older[index]!.records.map((record) => Number(record.timestamp)));
   assert.deepEqual(repair.conversations, [
-    { id: older[3]!.id, title: `${longTitle.slice(0, 119)}…`, updatedAt: 5000 },
-    { id: older[2]!.id, title: "Saved conversation 3", updatedAt: 4000 },
-    { id: older[1]!.id, title: "Saved conversation 2", updatedAt: 3000 },
-  ], "bounded titles identify recent saved work even when its older sidecar has no end time");
-  assert.deepEqual(repair.details?.map((detail) => detail.file).sort(), [...older.map((entry) => entry.file), refusedFile].sort());
-  assert.equal(diagnostics.some((entry) => entry.code === "session-folder-required"), false);
-  assert.equal(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.projectName, undefined, "personal records never invent a project name from their storage key");
-  assert.deepEqual(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.conversations, [{ id: personalId }], "missing title and date stay unknown while the known conversation remains addressable");
+    { id: older[3]!.id, title: `${longTitle.slice(0, 119)}…`, updatedAt: updated(3) },
+    { id: older[2]!.id, title: "Saved conversation 3", updatedAt: updated(2) },
+    { id: older[1]!.id, title: "Saved conversation 2", updatedAt: updated(1) },
+  ], "bounded titles identify recent saved work");
   const listedBeforePairing = await client.expectOk("session.list", {});
   for (const preview of repair.conversations!) {
     const original = older.find((entry) => entry.id === preview.id)!;
@@ -5870,16 +5832,11 @@ test("core-service-86: saved conversations share one folder task and import when
   assert.deepEqual((await client.expectOk("history.get", { sessionId: older[0]!.id })).records.map(({ record }) => record), older[0]!.records.filter((record) => !("visibility" in record) || record.visibility !== "hidden"), "refusing execution appends no agent or turn records");
   assert.deepEqual(await client.expectOk("project.list", {}), [], "reading history creates no project");
   assert.deepEqual(parseYaml(readFileSync(homePath, "utf8")).folders, [], "reading saved history does not bind a folder");
-  for (const entry of older) assert.equal(readFileSync(entry.file, "utf8"), entry.original, "a missing folder preserves every older file");
-  const repeated = foldDiagnostics([...diagnostics, { file: older[0]!.file, reason: repair.details!.find((detail) => detail.file === older[0]!.file)!.reason, blocking: false, code: "session-folder-required", repository: key }]);
-  assert.deepEqual(repeated, diagnostics, "folding a repeated finding keeps its evidence once");
-  const blocked = { file: "blocking.json", reason: "requires repair", blocking: true, code: "session-folder-required" as const, repository: key };
+  const blocked = { file: "blocking.json", reason: "requires repair", blocking: true };
   assert.ok(foldDiagnostics([...diagnostics, blocked]).includes(blocked), "blocking damage never disappears into a folder task");
-  const independent = { file: "other.json", reason: "unsupported format", blocking: false, code: "session-upgrade" as const, repository: key };
+  const independent = { file: "other.json", reason: "unsupported format", blocking: false, code: "session-upgrade" as const };
   assert.ok(foldDiagnostics([...diagnostics, independent]).includes(independent), "another failure remains its own task even for the same repository");
-  const groups = await client.expectOk("space.get", {});
-  assert.equal(groups.issues, 2, "five related import failures and their folder selection are one task, beside personal history");
-  assert.deepEqual(groups.diagnostics.find((entry) => entry.repair?.repository === key)?.repair?.details, repair.details);
+  assert.deepEqual(foldDiagnostics(diagnostics), diagnostics, "folding a folded list changes nothing");
   const refusedFolder = await client.command("project.rebind", { projectId: key, path: root });
   assert.equal(refusedFolder.ok, false);
   if (!refusedFolder.ok) {
@@ -5890,20 +5847,13 @@ test("core-service-86: saved conversations share one folder task and import when
   }
   assert.equal(existsSync(join(root, ".git")), false, "selecting a folder never initializes Git");
   await client.expectOk("project.rebind", { projectId: key, path: projectPath });
-  for (const entry of older) {
-    assert.equal(existsSync(entry.file), false, "saving the folder imports the supported sidecar without a restart");
-    assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === entry.id));
-    await client.waitFor((message) => message.type === "session.state" && message.session.id === entry.id);
-  }
   const after = await client.expectOk("storage.diagnostics", {});
   assert.equal(after.some((entry) => entry.repair?.repository === key), false);
-  assert.equal(after.find((entry) => entry.file === refusedFile)?.code, "session-upgrade", "an import that still fails remains visible with its current cause");
-  assert.equal(readFileSync(refusedFile, "utf8"), refusedBytes);
-  assert.equal(readFileSync(personalFile, "utf8"), personalBytes, "saving a folder retries no other container");
+  for (const entry of older) assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === entry.id));
 });
 
-test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {
-  const root=scratchDir("spex-migration-refusal-");
+test("storage-15: repeated startup reports an earlier-format session without lease residue or change", async (t) => {
+  const root=scratchDir("spex-earlier-refusal-");
   const home=join(root,"home");const dataDir=join(home,".spex");
   // A config file directly under the home's config/ is the former layout
   // (storage-9), so this one sits outside the home.
@@ -5913,28 +5863,17 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
   let service=await CoreService.start(options);let client=new Client(service.port());await client.open();
   t.after(async()=>{client.close();await service.stop();rmSync(root,{recursive:true,force:true});});
   const project=await client.expectOk("project.register",{path:projectPath});
-  // The sidecar sits in the session store of the project's clone (storage-6).
+  // The session sits in the session store of the project's clone (storage-6).
   const sessionsDir=projectSessions(dataDir,project.id);
   client.close();await service.stop();
-  const id=randomUUID();const sidecar=join(sessionsDir,`${id}.spex.json`);
-  const valid={v:1,id,projectId:project.id,createdAt:1,endedAt:2,live:false,players:[],initialVisible:[]};
-  const refused=JSON.stringify({...valid,v:99});writeFileSync(sidecar,refused,{mode:0o600});
-  const guards=()=>readdirSync(sessionsDir).filter((name)=>name.startsWith(`.${id}.lock`)).sort();
+  const earlier=earlierSession(sessionsDir,projectPath);
+  const guards=()=>readdirSync(sessionsDir).filter((name)=>name.startsWith(`.${earlier.id}.lock`)).sort();
   for(let restart=0;restart<3;restart++){
     service=await CoreService.start(options);client=new Client(service.port());await client.open();
-    assert.ok((await client.expectOk("storage.diagnostics",{})).some((entry)=>entry.file===sidecar&&entry.reason.includes("invalid legacy desktop")));
-    assert.equal(readFileSync(sidecar,"utf8"),refused);assert.deepEqual(guards(),[]);
+    assert.ok((await client.expectOk("storage.diagnostics",{})).some((entry)=>entry.file===earlier.root&&entry.code==="session-upgrade"));
+    assert.equal(readFileSync(earlier.root,"utf8"),earlier.bytes.root);assert.equal(readFileSync(earlier.stream,"utf8"),earlier.bytes.stream);assert.deepEqual(guards(),[]);
     client.close();await service.stop();
   }
-  writeFileSync(sidecar,JSON.stringify(valid));
-  service=await CoreService.start(options);client=new Client(service.port());await client.open();
-  assert.equal(existsSync(sidecar),false);
-  assert.equal((await readSessionManifest(join(sessionsDir,`${id}.json`))).state,"history-only");
-  assert.ok((await client.expectOk("session.list",{})).some((session)=>session.id===id));
-  const migratedGuards=guards();assert.equal(migratedGuards.length,1);
-  client.close();await service.stop();
-  service=await CoreService.start(options);client=new Client(service.port());await client.open();
-  assert.deepEqual(guards(),migratedGuards,"successful migration is not retried on the next startup");
 });
 
 test("core-service-101: Codex delegation reaches session projections and the adapter boundary", async (t) => {
@@ -6741,7 +6680,7 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
   assert.equal(existsSync(cloneOf(late.id)), false);
 });
 
-test("core-service-60: a bounded external replay append is announced without rewriting its session root", async (t) => {
+test("core-service-60: an external replay append is announced without rewriting its session root", async (t) => {
   const dir = scratchDir("spex-bounded-foreign-");
   const projectDir = join(dir, "project"); mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
@@ -6763,22 +6702,28 @@ test("core-service-60: a bounded external replay append is announced without rew
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: id } });
   const root = join(sessionsDir, `${id}.json`);
   const before = readFileSync(root);
-  assert.equal(JSON.parse(before.toString()).schemaVersion, 8);
-  assert.equal(existsSync(join(sessionsDir, `${id}.records.jsonl`)), false);
-  const start = { type: "turn_started", turnId: 1, timestamp: 1000, turn: { id: 1, prompt: "Published through a replay descriptor" } };
+  assert.equal(JSON.parse(before.toString()).schemaVersion, 9);
+  assert.ok(existsSync(join(sessionsDir, `${id}.replay`, FIRST_SEGMENT)), "the history is the session's replay log");
+  const start = { type: "turn_started", turnId: 1, timestamp: 1000, turn: { id: 1, prompt: "Appended to the replay log" } };
   const finish = { type: "turn_finished", turnId: 1, timestamp: 1001 };
   await external.lease.append(start);
   await external.lease.append(finish);
   assert.ok((await shared.readHistory(id)).entries.some((entry) => (entry.record as { type?: string }).type === "turn_finished"));
   await client.waitFor((m) => m.type === "record" && m.sessionId === id && m.record.type === "turn_finished");
-  assert.deepEqual(readFileSync(root), before, "the descriptor alone announces newly readable records");
+  assert.deepEqual(readFileSync(root), before, "the replay log alone announces newly readable records");
   assert.equal(client.records("session").filter((entry) => entry.sessionId === id && entry.record.type === "turn_started").length, 1);
   const listed = (await client.expectOk("session.list", {})).find((entry) => entry.id === id);
   assert.equal(listed?.title, start.turn.prompt);
   assert.equal(listed?.turns, 1);
+  // A turn the writer began with an input past the per-file bound:
+  // Playbook keeps that manifest value in blob parts the root names.
+  await external.lease.beginTurn({ input: `large:${"x".repeat(9 * 1024 * 1024)}`, attemptId: randomUUID(),
+    attemptedExecutionProjection: executionConfigFromPlan(plan) });
   await external.dispose();
-  const physical = JSON.parse(readFileSync(root, "utf8"));
-  rmSync(join(sessionsDir, `${id}.chunks`, physical.root.sha256));
+  const physical = JSON.parse(readFileSync(root, "utf8")) as { spills?: { parts: { sha256: string }[] }[] };
+  const part = physical.spills?.[0]?.parts[0]?.sha256;
+  assert.ok(part, "the root names a blob part");
+  rmSync(join(sessionsDir, `${id}.blobs`, part));
   await service["syncForeignSessions"]();
   const damaged = (await client.expectOk("session.list", {})).find((entry) => entry.id === id);
   assert.ok(damaged, "a readable root still associates damaged recovery with its session");
@@ -6933,11 +6878,11 @@ test("core-service-160: another host's writes read its session alone, and change
   const validations = countValidations(harness.service, project.id);
   const held = validations.hold(id);
   const started = (turnId: number) => ({ type: "turn_started", turnId, timestamp: turnId * 1000, turn: { id: turnId, prompt: `External turn ${turnId}` } });
-  // Each append publishes the session's replay descriptor anew.
+  // Each append lands in the session's replay log (DR-254).
   const append = async (turnId: number): Promise<void> => {
-    const before = scans.reported(`${id}.replay.json`);
+    const before = scans.reported(`${id}.replay`);
     await external.lease.append(started(turnId));
-    await until(() => scans.reported(`${id}.replay.json`) > before, `the watch to report turn ${turnId}'s append`);
+    await until(() => scans.reported(`${id}.replay`) > before, `the watch to report turn ${turnId}'s append`);
   };
   await append(1);
   // The read of the first append is in flight; the next append is
@@ -6966,7 +6911,7 @@ test("core-service-161: a session file that is a pipe, or a link to one, holds u
   await client.open();
   const project = await client.expectOk("project.register", { path: harness.projectDir });
   const saved: string[] = [];
-  for (const text of ["A healthy turn", "A turn whose descriptor becomes a pipe", "A turn whose record becomes a link"]) {
+  for (const text of ["A healthy turn", "A turn whose newest replay segment becomes a pipe", "A turn whose root becomes a link"]) {
     const session = await client.expectOk("session.create", { projectId: project.id });
     await client.expectOk("turn.submit", { sessionId: session.id, text });
     await settledSession(client, session.id, 1);
@@ -6974,7 +6919,7 @@ test("core-service-161: a session file that is a pipe, or a link to one, holds u
   }
   const [healthy, piped, linked] = saved;
   const sessionsDir = projectSessions(harness.dataDir, project.id);
-  const pipe = join(sessionsDir, `${piped}.replay.json`);
+  const pipe = replayTail(sessionsDir, piped);
   rmSync(pipe);
   execFileSync("mkfifo", [pipe]);
   rmSync(join(sessionsDir, `${linked}.json`));
@@ -7062,7 +7007,7 @@ test("core-service-124: what one home captured runs on it alone, and a second ho
   // Continuation, a control, Restore and Discard are refused with the
   // phrase and the label, writing nothing (core-service-73,
   // core-service-82, core-service-83).
-  const streamFile = join(projectSessions(harness.dataDir, project.id), `${session.id}.records.jsonl`);
+  const streamFile = join(projectSessions(harness.dataDir, project.id), `${session.id}.replay`);
   const streamBefore = await readSessionReplay(streamFile);
   refusedAs(await client.command("turn.submit", { sessionId: session.id, text: "Keep going" }), "invalid_request", "turn.submit");
   refusedAs(await client.command("session.control", { sessionId: session.id, kind: "recovery" }), "invalid_request", "session.control");

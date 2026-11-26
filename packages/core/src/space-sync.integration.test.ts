@@ -10,17 +10,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Store } from "./store.js";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { readSessionReplay } from "./testing/session-storage.js";
+import { FIRST_SEGMENT, readSessionReplay } from "./testing/session-storage.js";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
 import { clonePath, createSpaceHarness, OWN_KEY, ownClone, placementOf, prefsOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, bareRepo, otherDevice, sameNameFolder, addFolder, sleepingSsh, sleep, joinRemote, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
+
+/** Land a session's replay from `from` over the one in `to`, as an apply
+ * writes a session's other files before its root (storage-11). */
+function landReplay(from: string, to: string, id: string): void {
+  cpSync(join(from, "sessions", `${id}.replay`), join(to, "sessions", `${id}.replay`), { recursive: true });
+}
 
 // ---------------------------------------------------------------------------
 // space-38: the sync loop of one spex repository over two homes
@@ -82,7 +89,7 @@ test("space-38: the global records repository joins with one Settings choice, an
   const from = b.client.mark();
   await joinRemote(b, key);
   assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.json`)), true);
-  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.replay.json`)), true);
+  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.replay`, FIRST_SEGMENT)), true);
   const listed = (await b.client.expectOk("session.list", {})).find((s) => s.id === sessionA);
   assert.equal(listed?.title, "Fix the login redirect");
   assert.equal(listed?.projectId, key);
@@ -222,7 +229,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   const done = await b.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${shared}`]: "remote" } });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.json`)), readFileSync(join(aClone, "sessions", `${shared}.json`)));
-  assert.deepEqual(await readSessionReplay(join(bClone, "sessions", `${shared}.records.jsonl`)), await readSessionReplay(join(aClone, "sessions", `${shared}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(bClone, "sessions", `${shared}.json`)), await readSessionReplay(join(aClone, "sessions", `${shared}.json`)));
   assert.equal(existsSync(join(bClone, "sessions", `${shared}.hints.json`)), false, "hints cleared");
   assert.equal(prefsOf(b.dataDir)[`viewed:${shared}`], undefined, "viewed marker cleared");
   const messages = b.client.messages.slice(from);
@@ -246,7 +253,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   const gone = await a.client.settle("space.sync", { repository: key, placement: null, choices: { [`sessions/${doomed}`]: "remote" } });
   assert.equal(gone.sync.phase, "done", JSON.stringify(gone.sync));
   assert.equal(existsSync(join(aClone, "sessions", `${doomed}.json`)), false);
-  assert.equal(existsSync(join(aClone, "sessions", `${doomed}.replay.json`)), false);
+  for (const folder of ["replay", "blobs"]) assert.equal(existsSync(join(aClone, "sessions", `${doomed}.${folder}`)), false, `no ${folder} folder is left`);
   assert.ok(!(await a.client.expectOk("session.list", {})).some((s) => s.id === doomed));
   assert.ok(a.client.messages.some((m) => m.type === "session.removed" && m.sessionId === doomed));
 });
@@ -285,12 +292,13 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   // marker not yet cleared; the other's replay landed and its manifest did
   // not; the marker stands.
   const marker = join(clone, ".spex-apply.json");
-  for (const file of [`${whole}.records.jsonl`, `${whole}.json`]) writeFileSync(join(clone, "sessions", file), readFileSync(join(theirsDir, "sessions", file)));
+  landReplay(theirsDir, clone, whole);
+  writeFileSync(join(clone, "sessions", `${whole}.json`), readFileSync(join(theirsDir, "sessions", `${whole}.json`)));
   writeFileSync(join(clone, "sessions", `${whole}.hints.json`), "{}");
   const prefsFile = join(dataDir, "local", "prefs.json");
   const prefs = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, "utf8")) : { format: 1, prefs: {} };
   writeFileSync(prefsFile, JSON.stringify({ ...prefs, prefs: { ...prefs.prefs, [`viewed:${whole}`]: Date.now() } }));
-  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  landReplay(theirsDir, clone, sessionId);
   writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
   const home = await startHome("repair-start", { dataDir, project: false });
   t.after(() => home.stop());
@@ -464,7 +472,7 @@ test("space-38: unsafe partial Apply defers refresh and repairs after restoring 
     repository.store = { ...sessions, acquireManagement: async (id) => {
       const lease = await acquire(id);
       if (!replaced && id === ids[1]) {
-        assert.match((await readSessionReplay(join(clone, "sessions", `${ids[0]}.records.jsonl`))).toString("utf8"), /Incoming/);
+        assert.match((await readSessionReplay(join(clone, "sessions", `${ids[0]}.json`))).toString("utf8"), /Incoming/);
         renameSync(join(clone, "intents"), kept); symlinkSync(outside, join(clone, "intents"), "dir");
         if (refusal === "changed") {
           const file = join(clone, "sessions", `${id}.json`);
@@ -487,7 +495,7 @@ test("space-38: unsafe partial Apply defers refresh and repairs after restoring 
     assert.ok(state.diagnostics.some((d) => d.file.endsWith("/intents") && /unsafe destination/.test(d.reason)));
     rmSync(join(clone, "intents")); renameSync(kept, join(clone, "intents"));
     // Restore the concurrent unit to its recorded preimage for this repair.
-    if (refusal === "changed") writeFileSync(join(clone, "sessions", `${ids[1]}.json`), git(clone, "show", `HEAD:sessions/${ids[1]}.json`));
+    if (refusal === "changed") writeFileSync(join(clone, "sessions", `${ids[1]}.json`), execFileSync("git", ["-C", clone, "show", `HEAD:sessions/${ids[1]}.json`]));
     const repaired = await home.client.settle("space.sync", { repository: key });
     assert.equal(repaired.sync.phase, "done", JSON.stringify(repaired.sync));
     assert.equal(existsSync(join(clone, ".spex-apply.json")), false);
@@ -528,7 +536,7 @@ test("space-38: a half-written selection whose startup repair a held session lea
   // not, so this device's manifest no longer matches its replay; the
   // marker stands.
   const marker = join(clone, ".spex-apply.json");
-  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  landReplay(theirsDir, clone, sessionId);
   writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
   // Another process holds that session across the core's start: the
   // startup repair is refused at its lease, and the half-written session
@@ -555,7 +563,7 @@ test("space-38: a half-written selection whose startup repair a held session lea
   assert.equal(existsSync(marker), false);
   assert.equal(git(clone, "log", "--merges", "--format=%P", `${ours}..HEAD`), `${ours} ${theirs}`, "the recorded merge on the Save commit");
   assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.json`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.json`)));
-  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.records.jsonl`)), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.json`)), await readSessionReplay(join(theirsDir, "sessions", `${sessionId}.json`)));
   assert.equal(git(clone, "show", "HEAD:notes.txt"), "ours");
   assert.equal(git(remote, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   const after = await home.client.expectOk("space.get", {});
@@ -638,7 +646,7 @@ test("space-38: two Syncs sent together over a marker a released lease left are 
   assert.ok(!(await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.file.endsWith(".spex-apply.json")));
   assert.equal(existsSync(marker), false);
   assert.equal(git(clone, "log", "--merges", "--format=%P", `${recorded.ours}..HEAD`), `${recorded.ours} ${recorded.theirs}`, "one merge of the recorded sides on the Save commit");
-  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.records.jsonl`)), await readSessionReplay(join(peer, "sessions", `${sessionId}.records.jsonl`)));
+  assert.deepEqual(await readSessionReplay(join(clone, "sessions", `${sessionId}.json`)), await readSessionReplay(join(peer, "sessions", `${sessionId}.json`)));
   assert.equal(git(clone, "show", "HEAD:notes.txt"), "mine");
   assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
 });
@@ -695,23 +703,33 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   assert.ok(!/SSH key|gh auth|[Ss]ign this computer in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
 });
 
-test("space-38: Save refuses orphan bounded replay and chunks before committing or pushing", async (t) => {
+test("space-38: Save refuses an orphan replay or blob folder before committing or pushing", async (t) => {
   const remote = bareRepo();
-  const home = await startHome("orphan-bounded-save"); t.after(() => home.stop());
+  const home = await startHome("orphan-session-save"); t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
   await home.client.expectOk("space.remote.set", { repository: key, url: remote });
   assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
   const saved = git(clone, "rev-parse", "HEAD"); const pushed = git(remote, "rev-parse", "spex");
+  const refused = async (folder: string): Promise<void> => {
+    const result = await home.client.settle("space.sync", { repository: key });
+    assert.equal(result.sync.phase, "stopped", JSON.stringify(result.sync));
+    assert.equal(result.sync.step, "save");
+    assert.match(result.sync.message ?? "", /root is missing/);
+    assert.equal(git(clone, "rev-parse", "HEAD"), saved);
+    assert.equal(git(remote, "rev-parse", "spex"), pushed);
+    assert.ok(existsSync(folder), `${folder} is kept`);
+  };
+  // A session's replay folder without its root.
   const id = await runTurn(home, key, "Orphan validation fixture");
   const root = join(clone, "sessions", `${id}.json`);
-  assert.equal(JSON.parse(readFileSync(root, "utf8")).schemaVersion, 8);
+  assert.equal(JSON.parse(readFileSync(root, "utf8")).schemaVersion, 9);
   rmSync(root);
-  const result = await home.client.settle("space.sync", { repository: key });
-  assert.equal(result.sync.phase, "stopped", JSON.stringify(result.sync));
-  assert.equal(result.sync.step, "save");
-  assert.match(result.sync.message ?? "", /root is missing/);
-  assert.equal(git(clone, "rev-parse", "HEAD"), saved);
-  assert.equal(git(remote, "rev-parse", "spex"), pushed);
-  assert.ok(existsSync(join(clone, "sessions", `${id}.replay.json`)));
-  assert.ok(existsSync(join(clone, "sessions", `${id}.chunks`)));
+  await refused(join(clone, "sessions", `${id}.replay`, FIRST_SEGMENT));
+  rmSync(join(clone, "sessions", `${id}.replay`), { recursive: true });
+  // A session's blob folder alone: a record past the per-file bound is
+  // kept in blob parts.
+  const large = await seedHistorySession(join(clone, "sessions"), home.projectDir, turnRecords(`Large ${"x".repeat(9 * 1024 * 1024)}`, 1));
+  assert.ok(existsSync(join(clone, "sessions", `${large}.blobs`)));
+  rmSync(join(clone, "sessions", `${large}.json`)); rmSync(join(clone, "sessions", `${large}.replay`), { recursive: true });
+  await refused(join(clone, "sessions", `${large}.blobs`));
 });

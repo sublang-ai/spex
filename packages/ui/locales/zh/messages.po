@@ -844,11 +844,6 @@ msgstr "每个角色一个 Player、一条命令和一个意图"
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "需要回复。请回答，或请 Captain 解释。"
 
-#. a folder requirement not associated with an actionable recovery card
-#: src/components/SpaceRepairs.tsx
-msgid "A saved conversation needs a project folder"
-msgstr "已保存的会话需要项目文件夹"
-
 #: src/state/dashboard.ts
 msgid "A session failed"
 msgstr "有会话失败"

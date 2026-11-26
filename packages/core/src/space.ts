@@ -956,17 +956,20 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
   if (rel !== "spex.lock" && /\.lock$|\.lock\./.test(base)) return "lease";
   if (/\.tmp$/.test(base)) return "temporary write";
   if (/\.bak(?:\.|$)|\.backup(?:\.|$)/.test(base)) return "config backup";
+  // The originals Playbook's conversion keeps are session files an
+  // earlier release wrote, never shared (DR-254).
+  if (parts[0] === ".legacy-sessions") return "legacy session sidecar";
   if (parts[0] === "sessions") {
     if (parts.length === 1) return "session bundles";
     const assets = /^([0-9a-f-]{36})\.assets$/.exec(parts[1]);
     if (assets && UUID.test(assets[1])) return "session attachments";
-    const chunks = /^([0-9a-f-]{36})\.chunks$/.exec(parts[1]);
-    if (chunks && UUID.test(chunks[1])) return "session chunks";
+    const replay = /^([0-9a-f-]{36})\.replay$/.exec(parts[1]);
+    if (replay && UUID.test(replay[1])) return "session records";
+    const blobs = /^([0-9a-f-]{36})\.blobs$/.exec(parts[1]);
+    if (blobs && UUID.test(blobs[1])) return "session chunks";
     if (parts.length === 2) {
       const manifest = /^([0-9a-f-]{36})\.json$/.exec(base);
       if (manifest && UUID.test(manifest[1])) return "session manifest";
-      const records = /^([0-9a-f-]{36})\.(?:records\.jsonl|replay\.json)$/.exec(base);
-      if (records && UUID.test(records[1])) return "session records";
       const hints = /^([0-9a-f-]{36})\.hints\.json$/.exec(base);
       if (hints && UUID.test(hints[1])) return "provider hints";
       const sidecar = /^([0-9a-f-]{36})\.spex\.json$/.exec(base);
@@ -1169,7 +1172,7 @@ const noticePref = (key: string): string => `space:notice:${key}`;
  * that cannot be verified remains visible but cannot be dismissed. */
 function noticeKey(entry: StorageDiagnostic): string | undefined {
   if (entry.blocking || entry.repair ||
-    (entry.code !== "session-import" && entry.code !== "session-upgrade")) return;
+    entry.code !== "session-upgrade") return;
   try {
     const source = lstatSync(entry.file, { bigint: true });
     if (!source.isFile()) return;
@@ -4507,7 +4510,7 @@ class RepositorySync {
   }
 
   private ownerOf(rel: string): SpaceEntry["owner"] | undefined {
-    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|records\.jsonl|replay\.json|hints\.json|spex\.json|assets(?:\/.*)?|chunks(?:\/.*)?)$/.exec(rel);
+    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|hints\.json|spex\.json|(?:replay|blobs|assets)(?:\/.*)?)$/.exec(rel);
     if (session && UUID.test(session[1])) {
       const info = this.host.store.describeSession(session[1]);
       return { sessionId: session[1], ...(info?.title ? { title: info.title } : {}) };

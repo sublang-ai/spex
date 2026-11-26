@@ -40,14 +40,14 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { discardTree, makePrivateDirectory, moveFolder, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { discardTree, makePrivateDirectory, moveFolder, portable, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, placementPrefKey, readPlacementFiles, readPlacements } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, rekeyDeferred, settleDeferred, type DeferredMove } from "./migrate-instances.js";
-import { gitEnvironment, initializeClone } from "./storage-git.js";
+import { earlierSessionFormat, gitEnvironment, initializeClone, SESSION_STORAGE_VERSION, sessionStorageVersion } from "./storage-git.js";
 import { canonicalOrigin, instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
 import { SEED_PREF, seedConfig, type SeedCredentials, type SeedHome, type SeedRecord } from "./config.js";
 import { createRequire } from "node:module";
@@ -385,59 +385,6 @@ function legacyImportMarker(legacyDbPath: string): string {
   return `${legacyDbPath}.imported`;
 }
 
-/**
- * JSONL as a reader that owns nothing: the complete newline-terminated
- * prefix is the readable content, damage is tolerated by stopping at
- * it, and the file is never mutated — the contract a lease-free reader
- * of another host's stream must honor (DR-036).
- */
-function readRecordsPrefix(file: string, retainSequenceGaps = false): { records: StoredRecord[]; incompleteAfterSeq?: number } {
-  if (!existsSync(file)) return { records: [] };
-  const lines = readFileSync(file, "utf8").split("\n");
-  // A parseable last line is still uncommitted until its newline lands.
-  const unterminated = lines.pop() !== "";
-  const records: StoredRecord[] = [];
-  let lastSeq = 0;
-  let incompleteAfterSeq: number | undefined;
-  const markIncomplete = (): void => { incompleteAfterSeq ??= lastSeq; };
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const value: unknown = JSON.parse(trimmed);
-      const entry = value as Partial<StoredRecord> & { v?: unknown };
-      if (
-        !entry || typeof entry !== "object" ||
-        entry.v !== 1 || typeof entry.seq !== "number" ||
-        !Number.isSafeInteger(entry.seq) || entry.seq <= lastSeq ||
-        Object.keys(entry).some((key) => !["v", "seq", "role", "record"].includes(key)) ||
-        (entry.role !== undefined && typeof entry.role !== "string") ||
-        !entry.record || typeof entry.record !== "object" ||
-        Array.isArray(entry.record)
-      ) {
-        markIncomplete();
-        break;
-      }
-      if (entry.seq !== lastSeq + 1) {
-        markIncomplete();
-        // Legacy native imports can have gaps. Their later increasing
-        // records stay readable, but never certify safe continuation.
-        if (!retainSequenceGaps) break;
-      }
-      // Payloads are opaque in v1; only their presenters require a
-      // type and timestamp. Unknown records still consume a sequence.
-      const { v: _v, ...kept } = entry;
-      records.push(kept as StoredRecord);
-      lastSeq = entry.seq;
-    } catch {
-      markIncomplete();
-      break;
-    }
-  }
-  if (unterminated) markIncomplete();
-  return { records, ...(incompleteAfterSeq !== undefined ? { incompleteAfterSeq } : {}) };
-}
-
 function usageTotals(entries: UsageEntry[]): UsageTotals {
   const sources = new Set<string>();
   const totals = { inputTokens: 0, outputTokens: 0, toolUses: 0, totalCostUsd: 0 };
@@ -470,8 +417,8 @@ function forgeCacheFileOf(dir: string): string { return join(dir, "local", "forg
 /** A session file opens without following a link or waiting on a pipe
  * or device; a flag the platform lacks is left out. */
 const OPEN_SESSION_FILE = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
-/** The most a session's record or replay descriptor is read for its
- * fingerprint: either is a few hundred bytes in a bounded root. */
+/** The most a session's root is read for its fingerprint: its whole
+ * manifest, past which Playbook moves values into blob parts. */
 const FINGERPRINT_LIMIT = 16 * 1024 * 1024;
 
 /** A session file read only where it is a regular file — never through a
@@ -501,37 +448,51 @@ function readSessionFile(path: string, limit = Infinity): { bytes: Buffer; stamp
 }
 
 /** What a session's files in `sessionsDir` stand at, as one digest; none
- * where its record is not a regular file, or its replay descriptor
- * stands and is none, so such a session never stands unchanged
- * (core-service-159). The record and the replay descriptor count by
- * their bytes — each names the content it stands on by hash — and by
- * the file holding them, so a record put back as it once stood is a
- * change all the same; a former stream by its size and time; the folders
- * of its chunks and assets by their time, which a file leaving either
- * changes. */
+ * where its root is not a regular file, or a folder named for it is not
+ * a folder, so such a session never stands unchanged (core-service-159).
+ * The root counts by its bytes — they bind the sealed replay segments and
+ * blob parts by hash — and by the file holding it, so a root put back as
+ * it once stood is a change all the same; its replay, blob and
+ * attachment folders by their time, which a file joining or leaving one
+ * changes; and its newest replay segment, the one appended to past the
+ * root's binding, by its size and time (DR-254). */
 function sessionFilesDigest(sessionsDir: string, id: string): string | undefined {
   const hash = createHash("sha256");
-  for (const name of [`${id}.json`, `${id}.replay.json`]) {
-    const read = readSessionFile(join(sessionsDir, name), FINGERPRINT_LIMIT);
-    if (read === undefined || (read === "absent" && name === `${id}.json`)) return undefined;
-    hash.update(`\0${name}\0`);
-    if (read === "absent") hash.update("!ENOENT");
-    else hash.update(read.stamp).update("\0").update(read.bytes);
-  }
-  for (const name of [`${id}.records.jsonl`, `${id}.chunks`, `${id}.assets`]) {
-    let stood: string;
+  const root = readSessionFile(join(sessionsDir, `${id}.json`), FINGERPRINT_LIMIT);
+  if (root === undefined || root === "absent") return undefined;
+  hash.update(`\0${id}.json\0`).update(root.stamp).update("\0").update(root.bytes);
+  const stamp = (path: string, directory: boolean): string | undefined => {
     try {
-      const stat = lstatSync(join(sessionsDir, name), { bigint: true });
-      if (stat.isDirectory()) stood = `${stat.mtimeNs}`;
-      else if (stat.isFile()) stood = `${stat.ino}:${stat.size}:${stat.mtimeNs}`;
-      else return undefined;
+      const stat = lstatSync(path, { bigint: true });
+      if (directory ? !stat.isDirectory() : !stat.isFile()) return undefined;
+      return directory ? `${stat.mtimeNs}` : `${stat.ino}:${stat.size}:${stat.mtimeNs}`;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
-      stood = "!ENOENT";
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? "!ENOENT" : undefined;
     }
+  };
+  for (const name of [`${id}.replay`, `${id}.blobs`, `${id}.assets`]) {
+    const stood = stamp(join(sessionsDir, name), true);
+    if (stood === undefined) return undefined;
     hash.update(`\0${name}\0${stood}`);
   }
+  let segments: string[] = [];
+  try { segments = readdirSync(join(sessionsDir, `${id}.replay`)).filter((name) => name.endsWith(".jsonl")).sort(); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined; }
+  const newest = segments.at(-1);
+  if (newest !== undefined) {
+    const stood = stamp(join(sessionsDir, `${id}.replay`, newest), false);
+    if (stood === undefined) return undefined;
+    hash.update(`\0${newest}\0${stood}`);
+  }
   return hash.digest("hex");
+}
+
+/** The portable files and folders in `sessionsDir` named for a session,
+ * whatever Playbook's format: none of its hints, leases or temporary
+ * files (DR-254). */
+function sessionEntries(sessionsDir: string, id: string): string[] {
+  try { return readdirSync(sessionsDir).filter((name) => name.startsWith(`${id}.`) && portable(`sessions/${name}`)).sort(); }
+  catch { return []; }
 }
 
 /** A clone's record, the files it holds named once (storage-1). */
@@ -1087,76 +1048,14 @@ export class Store {
     return this.sessionLocations.get(sessionId);
   }
 
-  /** Migrate each clone's legacy session files through Playbook and
-   * index every session (core-service-60). */
+  /** Prepare each clone's session store and index every session
+   * (core-service-60): Playbook tightens what it may before reading. */
   async initializeSessions(): Promise<void> {
-    for (const repository of this.repositories.values()) {
-      await this.migrateLegacySessions(repository);
+    for (const repository of [...this.repositories.values()]) {
+      if (this.repositories.get(repository.key) !== repository) continue;
+      await repository.store.prepare();
     }
     await this.adoptForeignSessions();
-  }
-
-  /** Retry only the selected project's older files after its folder is
-   * saved. The service's ordinary scan indexes and broadcasts the result. */
-  async retryLegacySessions(key: string): Promise<void> {
-    await this.migrateLegacySessions(this.requireRepository(key));
-  }
-
-  private async migrateLegacySessions(repository: SpexRepository): Promise<void> {
-    const shared = repository.store;
-    await shared.prepare();
-    if (this.repositories.get(repository.key) !== repository) return;
-    const sessionsDir = repository.sessionsDir;
-    const cwd = this.homeFile.folderOf(repository.key)?.path;
-    let filenames: string[];
-    try { filenames = readdirSync(sessionsDir); }
-    catch (error) {
-      // An existing clone may have no sessions yet. Reading or rebinding
-      // it makes neither that directory nor a vanished clone (storage-2).
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
-    }
-    for (const filename of filenames) {
-      if (this.repositories.get(repository.key) !== repository) break;
-      const sidecar = filename.endsWith(".spex.json");
-      if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
-      const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
-      if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
-      const sourcePath = join(sessionsDir, filename);
-      try {
-        if (!sidecar && (await shared.readManifest(id)).schemaVersion === 7) continue;
-        const source = readJson<Record<string, unknown>>(sourcePath);
-        if (!source) continue;
-        if (sidecar && !this.sessions.has(id)) this.loadSidecar(repository, id, source);
-        await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
-        if (this.sessionProblems.get(id)?.file === sourcePath) this.sessionProblems.delete(id);
-      } catch (error) {
-        this.sessionLocations.set(id, repository.key);
-        this.untrackedSessions.add(id);
-        this.sessionProblems.set(id, {
-          file: sourcePath, reason: String(error), blocking: false,
-          // A sidecar needs the project's paired folder to import.
-          // Its error also covers invalid metadata, so report the
-          // known missing prerequisite without parsing that wording.
-          ...(sidecar ? cwd && isAbsolute(cwd) && resolve(cwd) === cwd
-            ? { code: "session-upgrade" as const }
-            : { code: "session-folder-required" as const, repository: repository.key } : {}),
-        });
-      }
-    }
-  }
-
-  /** A legacy import's staged session, read before Playbook converts it. */
-  private loadSidecar(repository: SpexRepository, id: string, source: Record<string, unknown>): void {
-    const meta = source as unknown as SessionMeta;
-    if (meta.id !== id || !Array.isArray(meta.players) || !Array.isArray(meta.initialVisible)) return;
-    this.sessionLocations.set(id, repository.key);
-    this.sessions.set(id, { ...meta, projectId: repository.key, live: false });
-    const { records: stored, incompleteAfterSeq } = readRecordsPrefix(join(repository.sessionsDir, `${id}.records.jsonl`), true);
-    const loaded = this.sessions.get(id)!;
-    if (incompleteAfterSeq !== undefined) loaded.streamIncompleteAfterSeq = Math.min(loaded.streamIncompleteAfterSeq ?? incompleteAfterSeq, incompleteAfterSeq);
-    this.records.set(id, stored);
-    for (const entry of stored) this.foldRecord(id, entry.record);
   }
 
   /**
@@ -1301,14 +1200,27 @@ export class Store {
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ) || undefined;
       recoveryReason = reason === undefined && manifest.state === "uncertain";
-      if (checked.history.incomplete || checked.history.pendingTail || (manifest.schemaVersion === 7 && manifest.replay.incomplete)) {
+      // An unfinished final record is an append not yet made — still in
+      // progress, or one Playbook's next lease truncates — withheld, never
+      // damage (DR-254).
+      if (checked.history.incomplete || (manifest.schemaVersion === 7 && manifest.replay.incomplete)) {
         incompleteAfterSeq = Math.min(checked.history.lastReadableSeq, manifest.schemaVersion === 7 ? manifest.replay.seq : checked.history.lastReadableSeq);
       }
     } catch (error) {
       if (!currentRead()) return;
       reason = error instanceof Error ? error.message : String(error);
       excludeFromSync = true;
-      problem = {file:join(shared.sessionsDir, `${id}.json`), reason, blocking: !/unsupported.*version|version.*unsupported/i.test(reason)};
+      // An earlier format waits for Playbook's conversion command: a
+      // notice, with its files unchanged and the session unread (DR-254).
+      if (earlierSessionFormat(shared.sessionsDir, id) !== undefined) {
+        problem = { file: join(shared.sessionsDir, `${id}.json`), reason, blocking: false, code: "session-upgrade" };
+        publishReadStatus();
+        return;
+      }
+      // A later Playbook's storage version is unsupported here, never damage.
+      const version = sessionStorageVersion(shared.sessionsDir, id);
+      const unsupported = version !== undefined && version !== SESSION_STORAGE_VERSION;
+      problem = {file:join(shared.sessionsDir, `${id}.json`), reason, blocking: !unsupported && !/unsupported.*version|version.*unsupported/i.test(reason)};
       // Unknown versions remain opaque and readable; these fields only
       // associate history, never authorize recovery or rewrite the file.
       let raw: Record<string, unknown> | undefined;
@@ -1435,7 +1347,7 @@ export class Store {
     if (!problem || existsSync(problem.file)) return problem;
     this.sessionProblems.delete(id);
     const dir = dirname(problem.file);
-    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`)) && !existsSync(join(dir, `${id}.replay.json`)) && !existsSync(join(dir, `${id}.chunks`))) this.untrackedSessions.delete(id);
+    if (!this.sessions.has(id) && sessionEntries(dir, id).length === 0) this.untrackedSessions.delete(id);
     return undefined;
   }
 
@@ -1448,7 +1360,7 @@ export class Store {
     if (directory.startsWith("..") || isAbsolute(directory)) return [];
     return [...this.untrackedSessions]
       .filter((id) => this.sessionLocations.get(id) === key)
-      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`), ...[`${id}.replay.json`, `${id}.chunks`].filter((name) => existsSync(join(repository.sessionsDir, name))).map((name) => join(directory, name))]);
+      .flatMap((id) => [...new Set([`${id}.json`, ...sessionEntries(repository.sessionsDir, id)])].filter((name) => name !== `${id}.assets`).map((name) => join(directory, name)));
   }
 
   /** Reserve local admission before any asynchronous host/scan work; a

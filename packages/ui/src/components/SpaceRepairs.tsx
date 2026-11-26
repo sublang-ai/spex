@@ -303,7 +303,7 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
         {repair.directories.map((directory) => <span key={directory} className="break-all font-mono" title={directory}>{tildify(directory)}</span>)}
       </div> : null}
       {editing ? editor : controls}
-      {(repair.directories.length > 0 || repair.details?.length) && !folderRepair ? <TechnicalDetails entries={repair.details}>
+      {repair.directories.length > 0 && !folderRepair ? <TechnicalDetails>
         {repair.directories.map((directory) => {
           const finding = repair.checked?.find((entry) => entry.path === directory);
           const evidence = !finding || finding.unknown
@@ -366,8 +366,7 @@ type IssueEntry = SpaceState["diagnostics"][number];
 
 /** Only the core's explicit capability permits dismissing a notice. */
 const dismissibleNotice = (entry: IssueEntry): boolean =>
-  !entry.blocking && !entry.repair && entry.notice !== undefined &&
-  (entry.code === "session-import" || entry.code === "session-upgrade");
+  !entry.blocking && !entry.repair && entry.notice !== undefined && entry.code === "session-upgrade";
 const dismissedNotice = (entry: IssueEntry): boolean =>
   dismissibleNotice(entry) && entry.notice?.dismissed !== undefined;
 
@@ -405,13 +404,10 @@ function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged, onPendingCh
       setBusy(false);
     }
   };
-  const folderRequired = entry.code === "session-folder-required";
-  const olderSession = folderRequired || entry.code === "session-import" || entry.code === "session-upgrade";
-  const summary = folderRequired
-    ? i18n._({ id: "A saved conversation needs a project folder", comment: "a folder requirement not associated with an actionable recovery card" })
-    : olderSession
-      ? i18n._({ id: "An older conversation can’t be opened", comment: "this version could not read an older saved conversation" })
-      : i18n._({ id: "Saved data needs attention", comment: "a stored file could not be used; the technical cause is in Details" });
+  const olderSession = entry.code === "session-upgrade";
+  const summary = olderSession
+    ? i18n._({ id: "An older conversation can’t be opened", comment: "this version could not read an older saved conversation" })
+    : i18n._({ id: "Saved data needs attention", comment: "a stored file could not be used; the technical cause is in Details" });
   return (
     <li data-testid="space-diagnostic" className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0">
       <h3 className="font-medium">{summary}</h3>

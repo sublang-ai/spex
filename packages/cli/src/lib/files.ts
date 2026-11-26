@@ -267,7 +267,7 @@ function publish(file: string, bytes: Buffer | string, { privately, expected, mo
 /** Whether a path of a clone may leave the device: not one of the
  * catalog's ignored families (storage-1, storage-17). */
 export const portable = (file: string): boolean =>
-  !/^(\.spex\/|packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
+  !/^(\.spex\/|packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock|\.legacy-sessions\/)/.test(file) &&
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** Remove a file or a tree as `rmSync` with `recursive` and `force`

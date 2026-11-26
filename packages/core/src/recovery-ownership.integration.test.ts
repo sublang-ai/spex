@@ -21,7 +21,6 @@ import { parkingScript } from "./testing/demo.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
-import { readSessionReplay } from "./testing/session-storage.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
 
@@ -37,6 +36,18 @@ playbooks:
     roles:
       coder: dev.coder
 `;
+
+/** Every file of a session — its root and the files under its replay and
+ * blob folders — by its path in the sessions folder (DR-254). */
+function sessionFiles(sessionsDir: string, id: string): Map<string, Buffer> {
+  const files = new Map<string, Buffer>([[`${id}.json`, readFileSync(join(sessionsDir, `${id}.json`))]]);
+  for (const folder of [`${id}.replay`, `${id}.blobs`]) {
+    let names: string[];
+    try { names = readdirSync(join(sessionsDir, folder)); } catch { continue; }
+    for (const name of names.sort()) files.set(`${folder}/${name}`, readFileSync(join(sessionsDir, folder, name)));
+  }
+  return files;
+}
 
 function boundary() {
   let resolve!: () => void;
@@ -69,8 +80,8 @@ async function interrupted(t: TestContext) {
   manager.onSessionState = (state) => states.push(state);
   t.after(async () => { await manager.disposeAll(); await cli.dispose(); store.close(); rmSync(dir, { recursive: true, force: true }); });
   const manifest = join(shared.sessionsDir, `${id}.json`);
-  const stream = join(shared.sessionsDir, `${id}.replay.json`);
-  return { store, shared, project, manager, stats, id, manifest, stream, states, composed: await composeConfig(parseYaml(CONFIG), undefined, undefined, { modules: { repository: "tester/tester-spex", find: (id) => (modules[id] ? { module: modules[id], builtin: true } : undefined) } }) };
+  const files = () => sessionFiles(shared.sessionsDir, id);
+  return { store, shared, project, manager, stats, id, manifest, files, states, composed: await composeConfig(parseYaml(CONFIG), undefined, undefined, { modules: { repository: "tester/tester-spex", find: (id) => (modules[id] ? { module: modules[id], builtin: true } : undefined) } }) };
 }
 
 async function restored(fixture: Awaited<ReturnType<typeof interrupted>>) {
@@ -128,9 +139,9 @@ for (const ownership of ["active", "unknown"] as const) {
     try {
       await f.store.refreshSession(f.id, false);
       assert.equal(await f.shared.readLeaseState(f.id), ownership);
-      const before = [readFileSync(f.manifest), readFileSync(f.stream)];
+      const before = f.files();
       await assert.rejects(f.manager.restoreSession(f.project, f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
-      assert.deepEqual([readFileSync(f.manifest), readFileSync(f.stream)], before);
+      assert.deepEqual(f.files(), before);
       assert.equal(f.stats.runs.length, 0);
       assert.equal(await f.shared.readLeaseState(f.id), ownership);
     } finally { await holder?.release(); }
@@ -164,14 +175,14 @@ test("core-service-84: opening stays reserved while authoritative ownership refr
   f.store.refreshSessionOwnership = async (id) => { await refresh(id); started.resolve(); await proceed.promise; };
   const opening = f.manager.restoreSession(f.project, f.id);
   await started.promise;
-  const before = [readFileSync(f.manifest), readFileSync(f.stream)];
+  const before = f.files();
   try {
     await assert.rejects(f.manager.restoreSession(f.project, f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
     await assert.rejects(f.manager.discardSession(f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
     const sessionsBefore = readdirSync(f.shared.sessionsDir).filter((file) => file.endsWith(".json"));
     await assert.rejects(f.manager.createSession(f.project, f.composed), (error: unknown) => error instanceof CoreError && error.code === "busy");
     assert.deepEqual(readdirSync(f.shared.sessionsDir).filter((file) => file.endsWith(".json")), sessionsBefore, "a different session of this project starts no checkpoint during opening");
-    assert.deepEqual([readFileSync(f.manifest), readFileSync(f.stream)], before);
+    assert.deepEqual(f.files(), before);
   } finally { proceed.resolve(); }
   await opening;
   await f.manager.getLive(f.id)?.operation;
@@ -187,14 +198,14 @@ test("core-service-84: Discard recovery reservation lasts through ownership publ
   f.store.refreshSessionOwnership = async (id) => { await refresh(id); started.resolve(); await proceed.promise; };
   const discard = f.manager.discardSession(f.id).catch((error: unknown) => error);
   await started.promise;
-  const before = [readFileSync(f.manifest), readFileSync(f.stream)];
+  const before = f.files();
   try {
     await assert.rejects(f.manager.restoreSession(f.project, f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
     await assert.rejects(f.manager.discardSession(f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
     const sessionsBefore = readdirSync(f.shared.sessionsDir).filter((file) => file.endsWith(".json"));
     await assert.rejects(f.manager.createSession(f.project, f.composed), (error: unknown) => error instanceof CoreError && error.code === "busy");
     assert.deepEqual(readdirSync(f.shared.sessionsDir).filter((file) => file.endsWith(".json")), sessionsBefore, "a different session of this project starts no checkpoint during recovery publication");
-    assert.deepEqual([readFileSync(f.manifest), readFileSync(f.stream)], before);
+    assert.deepEqual(f.files(), before);
   } finally { proceed.resolve(); }
   const refusal = await discard;
   assert.ok(refusal instanceof CoreError && /restored and reported/.test(refusal.message));
@@ -209,11 +220,11 @@ test("core-service-84: ownership refresh failure preserves the original Discard 
   const reporting = console.error;
   console.error = (...args: unknown[]) => reported.push(args.map(String).join(" "));
   f.store.refreshSessionOwnership = async () => { throw new Error("fixture ownership read failure"); };
-  const before = [readFileSync(f.manifest), readFileSync(f.stream)];
+  const before = f.files();
   try {
     await assert.rejects(f.manager.discardSession(f.id), (error: unknown) => error instanceof CoreError && error.code === "invalid_request" && /restored and reported/.test(error.message));
   } finally { console.error = reporting; f.store.refreshSessionOwnership = refresh; }
-  assert.deepEqual([readFileSync(f.manifest), readFileSync(f.stream)], before);
+  assert.deepEqual(f.files(), before);
   assert.equal(await f.shared.readLeaseState(f.id), "idle");
   assert.ok(reported.some((line) => line.includes("fixture ownership read failure")));
   await restored(f);
@@ -225,18 +236,17 @@ test("core-service-84: a local live runtime still refuses Restore after foreign 
   await f.store.refreshSession(f.id, false);
   await holder.release();
   const local = await f.manager.createSession(f.project, f.composed);
-  const before = [readFileSync(f.manifest), readFileSync(f.stream)];
+  const before = f.files();
   await assert.rejects(f.manager.restoreSession(f.project, f.id), (error: unknown) => error instanceof CoreError && error.code === "busy");
   assert.equal(f.manager.getLive(local.id)?.info.id, local.id);
-  assert.deepEqual([readFileSync(f.manifest), readFileSync(f.stream)], before);
+  assert.deepEqual(f.files(), before);
   assert.equal(f.stats.runs.length, 0);
 });
 
 test("core-service-84: refusing the same live session preserves its local ownership marker", async (t) => {
   const f = await interrupted(t);
   const local = await f.manager.createSession(f.project, f.composed);
-  const paths = [join(f.shared.sessionsDir, `${local.id}.json`), join(f.shared.sessionsDir, `${local.id}.replay.json`)];
-  const before = paths.map((path) => readFileSync(path));
+  const before = sessionFiles(f.shared.sessionsDir, local.id);
   for (const request of [() => f.manager.restoreSession(f.project, local.id), () => f.manager.continueSession(f.project, f.composed, local)]) {
     await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "busy");
     assert.equal(await f.store.refreshSession(local.id, false), undefined, "a scanner refresh cannot adopt a locally reserved runtime as foreign");
@@ -244,7 +254,7 @@ test("core-service-84: refusing the same live session preserves its local owners
     assert.equal(f.store.describeSession(local.id)?.externalWriter, undefined);
     assert.equal(f.manager.getLive(local.id)?.info.id, local.id);
   }
-  assert.deepEqual(paths.map((path) => readFileSync(path)), before);
+  assert.deepEqual(sessionFiles(f.shared.sessionsDir, local.id), before);
   assert.equal(f.stats.runs.length, 0);
 });
 
@@ -298,8 +308,6 @@ test("core-service-124: an uncertain session offers Restore on its own runtime a
   const { imports, stats } = fakeAdapterImports(parkingScript());
   const manager = new SessionManager({ store, adapterImports: imports, env: {} });
   t.after(async () => { await manager.disposeAll(); store.close(); rmSync(dir, { recursive: true, force: true }); });
-  const manifest = join(shared.sessionsDir, `${id}.json`);
-  const stream = join(shared.sessionsDir, `${id}.records.jsonl`);
   const lanes = () => manager.listLanes().filter((lane) => lane.projectId === project.id).map((lane) => lane.sessionId);
 
   // Another runtime offers nothing on it: no recovery and no
@@ -314,12 +322,12 @@ test("core-service-124: an uncertain session offers Restore on its own runtime a
   assert.deepEqual(lanes(), []);
   // Restore and Discard are refused with the phrase and the label before
   // anything opens, writing nothing (core-service-82, core-service-83).
-  const before = [readFileSync(manifest), await readSessionReplay(stream)];
+  const before = sessionFiles(shared.sessionsDir, id);
   for (const request of [() => manager.restoreSession(project, id), () => manager.discardSession(id)]) {
     await assert.rejects(request(), (error: unknown) => error instanceof CoreError && error.code === "invalid_request" &&
       error.message === "Runs on build-server" && isDeepStrictEqual(error.details, { runsOn: "build-server" }));
   }
-  assert.deepEqual([readFileSync(manifest), await readSessionReplay(stream)], before);
+  assert.deepEqual(sessionFiles(shared.sessionsDir, id), before);
   assert.equal(await shared.readLeaseState(id), "idle");
 
   // On its own runtime — the same folder at the same path — the stopped

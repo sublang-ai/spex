@@ -175,8 +175,8 @@ for (const scenario of ["old-path failure", "delayed success", "old directory sc
       for (const entry of readdirSync(directory, { withFileTypes: true })) {
         const path = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
-          if (ids.some((id) => path === `${id}.chunks`)) collect(join(directory, entry.name), path);
-        } else if (ids.some((id) => path === `${id}.json` || path === `${id}.replay.json` || path.startsWith(`${id}.chunks/`))) {
+          if (ids.some((id) => path === `${id}.replay` || path === `${id}.blobs`)) collect(join(directory, entry.name), path);
+        } else if (ids.some((id) => path === `${id}.json` || path.startsWith(`${id}.replay/`) || path.startsWith(`${id}.blobs/`))) {
           saved.set(path, readFileSync(join(directory, entry.name)));
         }
       }
@@ -535,9 +535,9 @@ test("core-service-61: a held state root refuses a second store, and releases on
 
 test("core-service-64: a legacy SQLite store imports once, rows served from files", async () => {
   // A pre-DR-036 release left a spex.db behind. Its rows must serve
-  // identically from the file state, with turns, titles, and usage
-  // folded from the imported record stream — and the legacy file must
-  // stay in place, imported exactly once.
+  // identically from the file state but for its sessions, staged as
+  // desktop sidecars that only an earlier release imports (DR-254) —
+  // and the legacy file must stay in place, imported exactly once.
   const dir = scratchDir("spex-import-");
   const legacyDbPath = join(dir, "spex.db");
   const root = join(dir, "state");
@@ -648,21 +648,17 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
 
   const store = await Store.open({ machineIdentity, dir: root, legacyDbPath, own: "tester" });
   await store.initializeSessions();
-  // A session live when the legacy store last closed is not live now.
-  const session = store.listSessions().find((entry) => entry.id === "71000000-0000-4000-8000-000000000001");
-  assert.equal(session?.live, false);
-  assert.equal(session?.title, "ship the import");
-  assert.equal(session?.turns, 1);
-  // Usage folds from the imported stream (core-service-10), across
-  // both payload generations.
-  assert.deepEqual(store.sessionUsage("71000000-0000-4000-8000-000000000001"), {
-    inputTokens: 100,
-    outputTokens: 15,
-    toolUses: 3,
-    totalCostUsd: 0.25,
-    costSources: ["provider-reported"],
-  });
-  assert.equal(store.getRecords("71000000-0000-4000-8000-000000000001")[1]?.role, "coder");
+  // The session stands staged in its project's clone, its records and
+  // sidecar unread, and is not served.
+  const stagedDir = join(store.home.clonePath(store.home.keyForFolder(PROJECT_PATH)!), "sessions");
+  const staged = join(stagedDir, `${SESSION}.records.jsonl`);
+  const stream = readFileSync(staged, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { seq: number; role?: string; record: { type: string } });
+  assert.deepEqual(stream.map((entry) => [entry.seq, entry.record.type]), [[1, "turn_started"], [2, "player_event"], [3, "turn_finished"], [4, "captain_event"]]);
+  assert.equal(stream[1].role, "coder");
+  assert.equal(JSON.parse(readFileSync(join(stagedDir, `${SESSION}.spex.json`), "utf8")).live, false, "a session live when the legacy store last closed is not live now");
+  const stagedBytes = readFileSync(staged);
+  assert.equal(store.listSessions().some((entry) => entry.id === SESSION), false);
+  assert.deepEqual(store.getRecords(SESSION), []);
   assert.equal(store.getPref("viewed:71000000-0000-4000-8000-000000000001"), 1);
   assert.equal(store.getIntent("71000000-0000-4000-8000-000000000002")?.dispatched?.turnId, 1);
   store.close();
@@ -677,6 +673,7 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
   assert.equal(third.getPref("viewed:71000000-0000-4000-8000-000000000001"), 4);
   assert.ok(existsSync(legacyDbPath));
   third.close();
+  assert.deepEqual(readFileSync(staged), stagedBytes, "the staged session stays unchanged");
 
   // The file carries its mark, so a state root created later on this
   // machine — a second home, a reinstall into a fresh one — imports
@@ -1193,7 +1190,7 @@ test("shared replay remains token-free in memory and across restart", async () =
 
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   await reopened.initializeSessions();
-  const text = (await readSessionReplay(join(sessionsOf(dir), "71000000-0000-4000-8000-000000000001.records.jsonl"))).toString("utf8");
+  const text = (await readSessionReplay(join(sessionsOf(dir), `${SESSION}.json`))).toString("utf8");
   assert.ok(!text.includes("sess-abc") && !text.includes("sess-def"));
   const serialized = JSON.stringify(reopened.getRecords("71000000-0000-4000-8000-000000000001"));
   assert.ok(!serialized.includes("resumeToken") && !serialized.includes("sess-abc"));
@@ -1219,7 +1216,7 @@ test("a lease-free shared read serves only the complete prefix and mutates nothi
   store.close();
 
   // A torn tail, as a crashed writer leaves it.
-  const file = join(sessionsOf(dir), "71000000-0000-4000-8000-000000000001.records.jsonl");
+  const file = join(sessionsOf(dir), `${SESSION}.json`);
   const damaged = (await readSessionReplay(file)).toString("utf8") + '{"v":1,"seq":2,"rec';
   await writeSessionReplay(file, damaged);
 
@@ -1237,14 +1234,17 @@ test("shared stream failure preserves the incomplete marker across Store restart
   const dir = tempRoot(); const store = new Store({ machineIdentity, dir, own: "tester" });
   const lease = await sharedSession(store);
   await lease.append({ type: "player_prompt", turnId: 1, timestamp: 10, playerId: "dev.coder", prompt: "measure" });
-  const file = join(sessionsOf(dir), `${SESSION}.replay.json`);
-  const prefix = readFileSync(file);
-  chmodSync(file, 0o644);
-  await assert.rejects(() => lease.append({ type: "player_finished", turnId: 1, timestamp: 11, playerId: "dev.coder", result: { status: "ok", playerId: "dev.coder", turnId: 1 } }));
-  chmodSync(file, 0o600);
+  const file = join(sessionsOf(dir), `${SESSION}.json`);
+  const prefix = await readSessionReplay(file);
+  // A record past the per-file bound is written in blob parts, so a file
+  // standing where its blob folder must be made fails the append.
+  const blobs = join(sessionsOf(dir), `${SESSION}.blobs`);
+  writeFileSync(blobs, "synthetic file in the blob folder's place\n", { mode: 0o600 });
+  await assert.rejects(() => lease.append({ type: "player_finished", turnId: 1, timestamp: 11, playerId: "dev.coder", result: { status: "ok", playerId: "dev.coder", turnId: 1, finalText: "x".repeat(9 * 1024 * 1024) } }));
+  rmSync(blobs);
   assert.equal(lease.streamStatus().incomplete, true);
   await lease.release(); store.close();
-  assert.deepEqual(readFileSync(file), prefix);
+  assert.deepEqual(await readSessionReplay(file), prefix);
   const reopened = new Store({ machineIdentity, dir, own: "tester" }); await reopened.initializeSessions();
   assert.equal(reopened.describeSession(SESSION)?.streamIncompleteAfterSeq, 1, "failure retains the last fsynced checkpoint, not merely readable bytes");
   assert.equal(reopened.describeSession(SESSION)?.agentActiveMs, undefined);
