@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's direction to make public repositories open on a server without setup, with no new credential or private-repository flow.
-Amends [DR-103](103-the-home-and-its-groups.md) in the code remote recorded with a project and its matching across devices, and [DR-132](132-team-servers.md) in cloning public GitHub code and explaining a failed code clone.
+Amends [DR-103](103-the-home-and-its-groups.md) in the code remote recorded with a project and its matching across devices, and in cloning public GitHub code and explaining a failed code clone.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
 
 ## Context

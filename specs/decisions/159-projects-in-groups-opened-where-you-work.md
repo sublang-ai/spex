@@ -8,7 +8,6 @@
 Extended by [DR-225](225-bounded-surfaces-and-attached-records.md) with one records panel expanded immediately beneath its owning row.
 
 Accepted (2026-10-28) on the owner's direction: a member signs in to a space once, finds a project in one of their groups and opens it where they want to work — on this computer or on one of the group's servers — in one act; the records' Git, the seats and the sync stay beneath the surfaces, reached from a row and shown on none.
-Amended by [DR-164](164-the-seat-signs-in-on-its-ticket.md) in "A seat opens when needed": the open hands the ticket it presented to the seat's sign-in, and the approval page is opened only where the space still asks for it; the declined item on the ticket's consent is decided there.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 Amended by [DR-175](175-projects-shown-where-they-are-open.md) in "Projects", "Space" and "A seat opens when needed": one "From your groups" whose rows carry the row's Open control, a server's line with no Connect, and the phrase for code on no Git host.
 Amends, under [DR-046](046-decision-record-evolution.md):
@@ -16,17 +15,13 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-057](057-space-surface.md) and [DR-103](103-the-home-and-its-groups.md) in the Space surface's rows: a row is a project, named as its code is, never a spex repository named `<name>-spex`; a group's own repository reads as the group's own sessions; the Git of the records is reached from a row's overflow and shown on no row.
 - [DR-120](120-the-instance-is-the-space.md) in the groups list's headings: your namespace heads nothing while it lists only your own group's repository; another account's login heads "Shared by @<login>"; the servers of a space stand under their group.
 - [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its presentation alone: a placement's line, "Place at…", "Leave…" and Attach move behind one overflow control per row, their meanings standing.
-- [DR-133](133-one-desktop-over-several-cores.md) in "The relay" and "Remote projects": a seat opens by the first act that needs it, the contract shown by that act; the open starts the seat's sign-in at the space and names where to approve it; the welcome page and the project palette offer the groups' projects at every place.
 - [DR-135](135-a-welcome-page-before-the-first-project.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome page's actions: a signed-in home's page also opens a project from the member's groups, and one not signed in leads to the sign-in.
 - [DR-065](065-repairs-the-reader-answers.md) in a repair's naming: by the project and its group, the folder it remembers secondary.
 - [DR-041](041-chrome-that-fits.md) in its label budget: a menu's entry, and a row's act this record fixes as a whole phrase — "Add to a group…", "Merge histories…", "Not on this computer", "Open on <server>" among them — may exceed fourteen characters and wraps within its row.
-- [DR-132](132-team-servers.md) in "A client presents a ticket": every admission mints a bearer of its own, those of the person's earlier admissions standing while the lease lasts; and in "The helper creates the account on first admission": the account is made without the host's login skeleton, and one bound covers the whole admission — the account, the unit and the seat's socket — which the client's wait exceeds.
 
-Amended by [DR-192](192-choose-a-group-before-adding.md) in the flow opened by "Add to a group…": selection is reviewed before an explicit Add to group or Connect project action.
 
 Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row controls and palette: one overflow includes alternate places, the direct action reads Open project, and record counts and local-location wording are explicit.
 
-Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in opening a server immediately from the explicit project-opening request.
 
 Amended by [DR-215](215-add-to-a-group-and-start-working.md) in adding a project also opening it on its chosen server.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
@@ -54,7 +49,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 - The welcome page of a home signed in to a space offers "Open a project from your groups" beside its local-project action; one not signed in offers "Sign in to your Space", which leads to the sign-in; a server's welcome page keeps its form.
 - The project palette lists "From your groups" for this computer as it does for a server: each project the member may open, with the place it would open at, and nothing of a place whose seat is not yet signed in except that it is signing in.
-- Opening a group's project on this computer clones its records and its code into a folder the member picks, the picker opened by the act itself; on a server, into the folder the server allocates ([DR-132](132-team-servers.md)).
+- Opening a group's project on this computer clones its records and its code into a folder the member picks, the picker opened by the act itself; on a server, into the folder the server allocates.
 
 ### Space
 
@@ -71,7 +66,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 ### A seat opens when needed
 
 - "Open on <server>" on a project, and Connect on a server's line, open the member's seat there where none is open: the contract once per device, then "Connecting to <server>…" for as long as the admission may take, the first start of a seat saying it can take a minute.
-- The open then starts the seat's sign-in at the space by the device flow of [DR-132](132-team-servers.md), the desktop opening the approval page, the line reading "Approve Spex on <server> in your browser" with the link until the sign-in completes, and "Sign in again" with the cause where it fails.
+- The open then starts the seat's sign-in at the space by the device flow of the team-server decision, the desktop opening the approval page, the line reading "Approve Spex on <server> in your browser" with the link until the sign-in completes, and "Sign in again" with the cause where it fails.
 - Once the seat is signed in, the project's open proceeds there; a project opened on a seat that is still signing in waits for it, and says so.
 - The hub keeps every bearer it minted for a person while the lease lasts, so a second device's admission ends no relay.
 - A seat's account is made with an empty home, no login skeleton copied, so a first admission costs what a later one does; one bound covers the whole admission at the hub — the account, the unit and the seat's socket — and the client waits longer than that bound, so an admission the hub still runs is never one the client has given up on.
@@ -83,12 +78,12 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 ### Settings
 
-- Settings keeps its sections; its header names the place and the config file's path shortened under the user's home, and on a seat its Credentials section ([DR-132](132-team-servers.md)).
+- Settings keeps its sections; its header names the place and the config file's path shortened under the user's home, and on a seat its Credentials section.
 - A phrase naming "this device" on a seat's surface names the server instead.
 
 ### Considered and declined
 
-- One merged Space over every place, retiring the selector: a seat's sign-in, credentials and sync state are its own ([DR-133](133-one-desktop-over-several-cores.md)); the local Space instead says where each project is open.
+- One merged Space over every place, retiring the selector: a seat's sign-in, credentials and sync state are its own; the local Space instead says where each project is open.
 - Approving the seat's sign-in by the ticket's consent, with no approval page: a decision of the space's, recorded later at spex.space; this record starts the flow and names the approval.
 - A sync on a timer: [DR-103](103-the-home-and-its-groups.md) reads the host on events alone.
 - Renaming the members panel's Share: [DR-114](114-groups-and-sharing-from-spex.md)'s names stand, so a project's act is "Add to a group…".

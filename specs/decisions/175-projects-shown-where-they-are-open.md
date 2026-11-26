@@ -8,7 +8,6 @@
 Accepted (2026-11-02) on the owner's direction, after a fresh-user walk of the first sign-in to a space with a team server: the left panel lists projects and nothing that reads as a group or a server, the Space stores records and never code, and a project reaches a server from a group alone.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
-- [DR-133](133-one-desktop-over-several-cores.md) in "Places" and "Remote projects": a place's heading stands in the sidebar only while a seat holds a project or is opening one; a seat holding none shows no heading and no page of its own, so the welcome page has no server form.
 - [DR-159](159-projects-in-groups-opened-where-you-work.md) in "Projects", "Space" and "A seat opens when needed": the palette lists the groups' projects once, every row carrying its Space row's Open control; a server's line offers no Connect, the seat opening on "Open on <server>" alone; a project whose code is on no Git host says so and offers no server.
 - [DR-172](172-surfaces-a-fresh-user-reads.md) in its vocabulary: the code glyph's phrase for code on no Git host.
 

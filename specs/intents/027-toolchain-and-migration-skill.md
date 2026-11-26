@@ -9,11 +9,11 @@ Done
 
 ## Intent
 
-Realize [DR-021](../decisions/021-skill-based-migration.md) and align the CLI with the rewritten [DR-000](../decisions/000-spec-structure-format.md) law: ship the migration as an installable agent skill with a user guide, and bring seeding, linting, and update messaging to the new generation.
+Realize the skill-based migration decision (since replaced by [DR-022](../decisions/022-prompt-based-migration.md)) and align the CLI with the rewritten [DR-000](../decisions/000-spec-structure-format.md) law: ship the migration as an installable agent skill with a user guide, and bring seeding, linting, and update messaging to the new generation.
 
 ## Deliverables
 
-- [x] DR-021 recorded; the scaffold and lint package items restated for the skill-based migration story
+- [x] The skill-based migration decision recorded; the scaffold and lint package items restated for the skill-based migration story
 - [x] `skills/spec-structure-migration/` skill: process instructions, meta ID mapping, conformance checker, install-and-run guide
 - [x] `docs/spec-migration.md` walking a user through the migration end to end
 - [x] CLI seeds the packages-only tree (template manifest and created directories)
@@ -23,7 +23,7 @@ Realize [DR-021](../decisions/021-skill-based-migration.md) and align the CLI wi
 
 ## Tasks
 
-1. Record DR-021 and this intent; restate the scaffold and lint package items.
+1. Record the skill-based migration decision and this intent; restate the scaffold and lint package items.
 2. Author the migration skill and the user guide.
 3. Align seeding: template manifest and created directories.
 4. Rewrite the lint rules to the new law with fixture coverage.

@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-29).
-Replaces the attached CLI decided on 2026-10-27 and the `package init` and endpoint-file decisions of 2026-10-29, formerly DR-157, DR-162 and DR-163: the owner had their records removed from the tree with the design they recorded, and Git history keeps them.
+Replaces the attached CLI decided on 2026-10-27 and the `package init` and endpoint-file decisions of 2026-10-29: the owner had their records removed from the tree, and Git history keeps them.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-104](104-spec-package-format-and-client-environments.md) in where an environment's installed files live, in the field naming its Space, in the source of the agent table, in how a publish names its package and in where the manager's code lives;

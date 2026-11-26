@@ -7,12 +7,11 @@
 
 Accepted (2026-09-12).
 Amended by [DR-104](104-spec-package-format-and-client-environments.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
-Supersedes [DR-054](054-issue-intent-delivery.md): the issue seed no longer instructs a coder to branch and open a pull request, and the Boss no longer merges.
 Amends [DR-035](035-intent-ledger.md)'s issue capture seed and [DR-037](037-playbook-12-adoption.md)'s built-in catalog.
 
 ## Context
 
-- DR-054 carried the delivery steps as seed prose for the Captain to route, ending at an open pull request that the Boss merged by hand.
+- An earlier decision carried the delivery steps as seed prose for the Captain to route, ending at an open pull request that the Boss merged by hand.
 - Playbook 13.2 ships two maintained playbooks, `branch` and `pr`, and an issue-aware `dev` that composes them [[1]]: when a development request names a GitHub issue or asks for pull-request delivery, `dev` calls `branch` before its `code` or `decide`-then-`code` path and `pr` after `code` succeeds; `pr` publishes the branch, waits for the checks, fixes red checks through `code` once, merges with a merge commit, deletes the branch, and restores the default-branch checkout, and GitHub closes the linked issue on merge.
 - The Captain's command parse takes everything after a registered command, later lines included, so a seed starting with `/dev` dispatches deterministically with the issue reference in its body.
 

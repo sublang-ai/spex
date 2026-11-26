@@ -13,7 +13,7 @@ Amended (2026-09-02) on the owner's review: the running sessions list again as t
 Amended by [DR-085](085-boss-talks-through-captain.md) in what clears a session question: the runtime's report that the question is gone, never the next Boss turn.
 Amended (2026-09-02): the permanent deletion deferred below is decided — a remove act retires a closed intent from every band, so a row the Boss no longer wants on the record leaves History behind the inline confirm ([DR-010](010-interface-craft.md) §4) while its acts stay in the append-only log and no state column returns.
 Amended by [DR-051](051-runtime-held-for-a-turn.md): the lane Start reuses is the project's current conversation — derived from stored state — and the fresh lane is the start tab, since no session is ended any more.
-Amended by [DR-054](054-issue-intent-delivery.md): issue capture seeds include verification and PR delivery instructions, with issue closure on merge.
+Amended by [DR-059](059-issue-delivery-through-dev.md): issue capture seeds dispatch `/dev` with the issue, and delivery ends at the merged pull request.
 
 Amended by [DR-055](055-queue-advancement.md): proven successful queued work advances automatically without a verdict; human confirmations and explicit after-link gates remain.
 Failure acknowledgment amended by [DR-062](062-ending-a-failed-workflow.md): a later Boss turn no longer clears a failure that parked a run, which now stands until that run leaves its failure state; the verdict acts and every other fold contract stand.
@@ -21,7 +21,6 @@ Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: every Up next
 Amended by [DR-103](103-the-home-and-its-groups.md): an intent is one file in its project's records, with no rank and no link to another intent, and the next to run is the oldest one waiting; capture, delivery and verdicts stand.
 Amended by [DR-119](119-an-answer-continues-its-intent.md) in what a Boss turn sent while a question waits belongs to: it continues the work that asked, a session entry standing in where no intent is bound leads with the turn that opened that work rather than the latest, and a dispatch waits for the answer; the fields, turn ranges, derived states, bands and verdicts stand.
 Amended by [DR-134](134-execution-ownership.md) in its attention queue and verdicts: only the runtime's own records count.
-Amended by [DR-133](133-one-desktop-over-several-cores.md) in the Dashboard's attention: one queue joins every connected core's attention.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: each IDE's connection, sidebar and Dashboard return to one core.
 
 ## Context

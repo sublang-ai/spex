@@ -45,7 +45,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - A project's Playbooks tab lists what runs in the project under two headings: ⟨project⟩, its packages' playbooks with their role → player mapping, and Global, the global playbooks as they come, each role overridable for this project.
   Every act on the tab is the project's; every act on the global page is global.
 - The project's Packages tab holds the project's packages alone; the global packages are managed on the global page.
-- The rail reads Dashboard, Projects, Playbooks, Space, Settings; a remembered Playbooks surface opens the global page; the place selector serves Playbooks as it serves Settings and Space, since a server's seat has a global environment of its own ([DR-132](132-team-servers.md)).
+- The rail reads Dashboard, Projects, Playbooks, Space, Settings; a remembered Playbooks surface opens the global page; the place selector serves Playbooks as it serves Settings and Space, since a server's seat had a global environment of its own.
 
 ### "Global" is the word
 

@@ -10,7 +10,7 @@ Extended by [DR-086](086-tests-in-tiers.md): the live desktop smoke is the live 
 
 ## Context
 
-- The automated smoke suite ([DR-016](016-relationship-presentation.md) era) proves the core round-trip headlessly and renders the desktop shell once, but nothing automated exercises the packaged critical path — a real Electron process, the real shared config seeding, a real project, and a real agent turn — before a release.
+- The automated smoke suite proves the core round-trip headlessly and renders the desktop shell once, but nothing automated exercises the packaged critical path — a real Electron process, the real shared config seeding, a real project, and a real agent turn — before a release.
 - The desktop's acceptance mode screenshots the rendered shell and exits within seconds by design; it cannot host a turn.
 - A real agent turn depends on local sign-in and a provider round-trip; hermetic gates must not depend on it.
 
