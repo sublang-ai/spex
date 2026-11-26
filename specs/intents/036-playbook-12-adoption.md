@@ -13,7 +13,7 @@ Realize [DR-037](../decisions/037-playbook-12-adoption.md): move the floor to pl
 
 ## Deliverables
 
-- [x] DR-037 accepted with the DR-034/DR-032/DR-036 amendments; core-service and playbook-library packages amended, lint-clean.
+- [x] DR-037 accepted with the DR-032/DR-036 amendments; core-service and playbook-library packages amended, lint-clean.
 - [x] Core: floor bump, artifact schemas read from the installed package, host capabilities with pre-turn reconciliation, template by path, `dev` built-in, config relocation, journal listing.
 - [x] Coverage: real-shell and acceptance suites over playbook 12, relocation, and journal listing; every workspace suite green.
 - [x] Live check on this machine: the real state migrates (config relocated, SQLite imported, CLI history listed), a `playbook run` turn appears in the app, and the desktop renders it.

@@ -247,7 +247,7 @@ export function demoAdapterImports(options: { delayMs?: number } = {}) {
 
 /**
  * The script that parks a real run on real repository evidence
- * (DR-076): the Captain's decision starts the real /code root, the
+ * (DR-241): the Captain's decision starts the real /code root, the
  * coder commits its phase and leaves a stray file behind, and the
  * phase's own adjudication passes — so the run reaches its governed
  * receipt, fails closed on the residual, and settles with one

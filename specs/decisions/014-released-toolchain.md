@@ -1,35 +1,32 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-014: Released Toolchain Adoption
+# DR-014: The Released Toolchain's Host Boundary
 
 ## Status
 
-Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agent-configuration.md) — effort vocabularies are adapter-scoped and the adapter set is the embedded runtime's — and the dependency floor is superseded by [DR-023](023-runtime-compatibility-from-cligent.md), which raises it and removes the agent SDKs from Spex's own declarations.
+Accepted.
+Amended by [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md).
 
 ## Context
 
-- The toolchain Spex embeds and invokes has shipped: `@sublang/slc` 0.1.0 is on npm, `@sublang/playbook` is at 2.0.0, and `@sublang/cligent` is at 0.16.0.
-  Spex still pins `@sublang/playbook` ^0.9.0 and `@sublang/cligent` ^0.13.0.
-- slc 0.1.0 emits thin artifacts: `<id>.playbook/<id>.playbook.ts` delegates to `@sublang/playbook/xstate-runtime`'s shared engine, and a registry-entry module `<id>.ts` is emitted beside the artifact directory — the manifest gap [DR-005](005-compilation-integration.md) worked around no longer exists.
-- The playbook 2.0.0 registry contract dropped the optional state-id fields; the runtime contract moved to six ports, session-identity `init`, structured run results, and a Captain failure that resolves as a `failed` outcome instead of rejecting.
-- cligent 0.14 renamed the agent option `reasoningEffort` to `effort`.
+- slc emits thin artifacts: `<id>.playbook/<id>.playbook.ts` delegates to `@sublang/playbook/xstate-runtime`'s shared engine, and a registry-entry module `<id>.ts` is emitted beside the artifact directory — the manifest gap [DR-005](005-compilation-integration.md) worked around no longer exists.
+- The playbook registry contract has no state-id fields; its runtime contract has session-identity `init`, structured run results, and a Captain failure that resolves as a `failed` outcome instead of rejecting.
+- cligent renamed the agent option `reasoningEffort` to `effort`.
   cligent's own legacy-key migration lives only in its tmux-play YAML loader, which Spex does not use: Spex validates the shared config itself ([DR-004](004-config-and-persistence.md)) and passes composed agents straight to `createTmuxPlayRuntime`.
-- slc emits `requiredRoleIds` verbatim from the compiled gears (`Coder`, `Reviewer` in its own demo), while cligent player ids must match `^[a-z][a-z0-9_-]*$` and the Captain shell resolves host players by exact `<id>-<role>` composition.
+- slc emits `requiredRoleIds` verbatim from the compiled gears (`Coder`, `Reviewer` in its own demo).
 - The shared engine runs script gears with `cwd` from the playbook's options, defaulting to the host process working directory; nothing carries the session's project path there.
-- Registry bundles compiled before this adoption embed the 0.9 runtime contract and are referenced by absolute `from:` paths in user configs; they pass structural validation and would fail only mid-turn.
+- A registry module generated for an earlier runtime contract passes structural validation and would fail only mid-turn.
 
 ## Decision
 
-### Dependency floor
+### The compiler stays external
 
-- `packages/core` depends on `@sublang/playbook` ^2.0.0 and `@sublang/cligent` ^0.16.0.
-  Superseded by [DR-023](023-runtime-compatibility-from-cligent.md): the floor is now playbook ^4.0.0 and cligent ^0.18.0, and Spex declares no agent SDK of its own.
-- slc stays an external, never-imported toolchain per [DR-005](005-compilation-integration.md); its resolution order and the Node >= 23.6 floor are unchanged.
+- slc stays an external, never-imported toolchain per [DR-005](005-compilation-integration.md).
 
 ### Canonical `effort` key
 
-- The shared config's agent blocks use `effort`; Spex writes only `effort` (template, profile saves).
+- The shared config's agent blocks use `effort`; Spex writes only `effort`.
 - Spex's own validator accepts `reasoningEffort` as a read-only legacy alias: it maps to `effort` during composition, and a block setting both keys is invalid.
 - The protocol and UI surfaces carry `effort` end to end.
 
@@ -38,15 +35,15 @@ Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agen
 - The compile pipeline treats slc's emitted `<id>.ts` entry module as the registry source of truth; Spex stops synthesizing `createRuntime` conventions from FSM introspection.
 - Spex generates a thin wrapper module around the emitted entry that:
   - overrides `command` and `intent` with the user's judgment fields when provided (the id is never overridden);
-  - lowercases `requiredRoleIds` for the host boundary and maps player ids back to the entry's canonical casing at the port seam, so cligent's player-id grammar and the Captain shell's exact role lookup both hold;
-  - exports a registry-contract marker identifying the playbook 2.0 generation.
+  - passes the entry's role ids through in their authored casing, since a role is a playbook-local slot a user binds to a player ([DR-032](032-session-players.md));
+  - exports the current registry-contract marker.
 - FSM introspection remains only as display metadata (state ids in compile results and artifacts), never as registry content.
 
 ### Role reconciliation in the compile flow
 
-- Compile requests keep carrying the user's role-to-profile assignments, but the compiled entry's derived role ids are authoritative.
-- After the fail-closed entry load, the service re-keys the assignments onto the derived (lowercased) role ids by case-insensitive name match.
-- When assignments cannot be matched, the compile reports the derived roles as a structured error before any config write; the compiled artifacts stay in the library for a re-registration without recompiling.
+- Compile requests carry the user's role bindings, but the compiled entry's derived role ids are authoritative.
+- After the fail-closed entry load, the service re-keys the bindings onto the derived role ids by case-insensitive name match.
+- When bindings cannot be matched, the compile reports the derived roles as a structured error before any config write; the compiled artifacts stay in the library for a re-registration without recompiling.
 
 ### Stale bundle invalidation
 
@@ -58,12 +55,12 @@ Accepted; the effort key and adapter set are amended by [DR-019](019-inline-agen
 
 ### Captain failure surface
 
-- The playbook 2.0 Captain failure contract changes only record-stream shapes (a finished turn with parked telemetry instead of an error path); Spex adapts its expected record sequences and surfaces the parked state per [DR-009](009-at-hand-interaction.md).
+- The Captain failure contract changes only record-stream shapes (a finished turn with parked telemetry instead of an error path); Spex adapts its expected record sequences and surfaces the parked state per [DR-009](009-at-hand-interaction.md).
 
 ## Consequences
 
-- The upgrade is a host-boundary rewrite concentrated in config validation, registry generation, and session wiring; the WebSocket protocol is unchanged by this decision except the `effort` field rename.
-- Pre-adoption compiled playbooks degrade to an actionable invalid state instead of failing mid-session; recompiling re-admits them.
-- The role-id normalization wrapper is Spex-owned glue; upstreaming role-id normalization into slc or the Captain shell would let it shrink.
-- User configs written before the rename keep composing via the legacy alias; the next profile save canonicalizes them.
+- The host boundary is concentrated in config validation, registry generation, and session wiring; the WebSocket protocol carries the `effort` field.
+- Playbooks compiled for an earlier contract degrade to an actionable invalid state instead of failing mid-session; recompiling re-admits them.
+- The wrapper is Spex-owned glue over slc's emitted entry.
+- User configs written before the rename keep composing via the legacy alias; the next effort edit of a block canonicalizes it.
 - Registry generation now tracks slc's emitted entry instead of the Captain shell's contract; the fail-closed validation gate from [DR-005](005-compilation-integration.md) stays as the last line of defense.

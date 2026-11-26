@@ -9,11 +9,11 @@ Completed on `slc-0-14`, merged to `main` in fa530e4 on 2026-10-01 (UTC), and re
 
 ## Intent
 
-Realize [DR-094](../decisions/094-the-compiler-adopts-the-apps-cligent.md): both shells on slc 0.14, the root override retired, one Cligent by the dependencies alone.
+Realize the one-Cligent rule now in [DR-167](../decisions/167-the-compiler-shares-the-apps-engine.md): both shells on slc 0.14, the root override retired, one Cligent by the dependencies alone.
 
 ## Deliverables
 
-- [x] DR-094, the amended records' status lines and the map.
+- [x] The adoption record (since merged into DR-167), the amended records' status lines and the map.
 - [x] Both shells at `@sublang/slc` `^0.14.0`, no root `overrides`, the lockfile regenerated from the public registry; the changelog.
 - [x] `app-v0.9.0-beta.5`.
 

@@ -130,7 +130,7 @@ export interface AppOptions {
   /** Keep the real Captain journal/recovery; substitute only provider replies. */
   realCaptain?: boolean;
   /**
-   * The real Captain shell with the parking script (DR-076): the first
+   * The real Captain shell with the parking script (DR-241): the first
    * Boss turn starts the real /code root, whose coder commits its
    * phase and leaves a stray file behind, so the run parks over one
    * unresolved effect and really advertises its controls. Implies

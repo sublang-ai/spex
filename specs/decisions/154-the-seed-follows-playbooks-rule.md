@@ -7,10 +7,8 @@
 
 Accepted (2026-10-26) for the owner's P0-2 default configuration.
 Amends [DR-019](019-inline-agent-configuration.md) in §"Spex writes only blocks": the seed no longer keeps a single-vendor lineup of its own; its agents are the ones Playbook's seeding rule selects from this machine's credentials.
-Amends [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Playbook floor and built-in release alone; its Cligent, slc and lock decisions stand.
 Amends [DR-037](037-playbook-12-adoption.md) in its seeding: the first-run config is no longer the installed template copied as written, and the two hosts' files are no longer identical by construction; only their agent settings are.
 Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seeded file still at the bytes the core wrote is reseeded when the credentials change; the exclusive first create and the text stand.
-Amended by [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook floor and built-in release alone: Playbook `^18.1.2`, staging `sublang/playbooks` 18.1.2.
 Amended by [DR-205](205-agent-cards-read-alike.md): behind a third-party Claude service the seed's Claude agents take the provider's default in place of an official model name; the seed reads confirmed credentials, never an agent's home folder alone.
 
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for the global records repository that holds the seeded configuration.
@@ -30,8 +28,6 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for 
 - Seeding stays one exclusive create of an absent file, never touching an existing config; nothing rewrites a seeded file afterwards.
 - The promise is that the Captain's and each player's agent settings (`adapter`, `model`, `effort`, `writablePaths`) match what the CLI seeds under the same credentials and home; the two files are not promised equal, since they sit at different paths and Spex removes `from`.
 - Unifying the two hosts' config locations and the `from` convention is out of scope.
-- The core and root acceptance tooling require Playbook `^18.1.0`, the first release publishing `@sublang/playbook/seed-config`; its dependencies are 18.0.1's, so the lock changes only Playbook's own entry.
-- The staged built-in release follows the installed Playbook to `sublang/playbooks` 18.1.0, whose playbooks are 18.0.1's unchanged.
 
 ## Consequences
 

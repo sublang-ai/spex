@@ -25,7 +25,7 @@ Codex has a separate reasoning effort named `ultra`.
 
 ## Consequences
 
-App adoption uses the published compatible compiler, launcher and adapter under [DR-182](182-published-desktop-runtime-adoption.md).
+App adoption uses the published compatible compiler, launcher and adapter under [DR-167](167-the-compiler-shares-the-apps-engine.md).
 
 Existing configurations run without conversion.
 A reader can change the workflow setting without pinning reasoning effort, including when resuming a conversation.

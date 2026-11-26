@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player and [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the model lineup.
+Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player.
 Amends [DR-205](205-agent-cards-read-alike.md) in the models omitted from a third-party Claude seed, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the fields supplied to the compiler.
 
 Amended by [DR-237](237-published-agent-runtime-floors.md) in model ownership and the shared runtime floor.
@@ -31,4 +31,4 @@ The compiler and an untouched new-player draft each need the child choice the re
 
 A personal edit continues to own both selections.
 A config that omits a child retains its existing inheritance semantics, and a recorded call keeps its original model identity.
-Desktop and server receive the new first-run lineup when their shared dependency lock adopts the published Playbook, Cligent and slc changes under [DR-182](182-published-desktop-runtime-adoption.md).
+Desktop and server receive the new first-run lineup when their shared dependency lock adopts the published Playbook, Cligent and slc changes under [DR-167](167-the-compiler-shares-the-apps-engine.md).

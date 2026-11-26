@@ -33,7 +33,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 - Native Windows removes a project's records, cleans up after a join or a new project's first commit fails, and keeps one mirror when two of its own fetches of a Git source meet; Git's read-only files, and Spex's own watching of a project's records, refused these before. A removal refused, such as while another program holds a file of the project's records open, leaves the project as it was. Replacing or removing installed packages no longer empties the folders their links point to, such as the app's own playbook engine.
 
-- Native Windows adds packages in any project folder, and starts and keeps writing after another tool, such as the Codex sandbox, grants itself read access to the Spex home; Spex still creates its storage owner-only, as on macOS ([DR-223](specs/decisions/223-windows-storage-checks-what-macos-checks.md)). Playbook 18.1.4 applies the same rule to its sessions and machine identity ([DR-224](specs/decisions/224-playbook-18-1-4-adoption.md)).
+- Native Windows adds packages in any project folder, and starts and keeps writing after another tool, such as the Codex sandbox, grants itself read access to the Spex home; Spex still creates its storage owner-only, as on macOS ([DR-223](specs/decisions/223-windows-storage-checks-what-macos-checks.md)). Playbook 18.1.4 applies the same rule to its sessions and machine identity ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)).
 
 - A playbook run that ends in a failure its workflow declares reads "failed" on its card, with the workflow's own reason beside it; it read "done" before, and only the Captain's reply said otherwise ([DR-231](specs/decisions/231-a-failure-terminal-reads-failed.md)).
 
@@ -426,7 +426,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   The first edit to the file ends automatic updates.
 - A new seed runs Codex on `gpt-6.1-sol` and every agent at effort
   `medium`, except a Codex `dev.reviewer` beside Claude agents at `high`
-  ([DR-208](specs/decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)).
+  ([DR-237](specs/decisions/237-published-agent-runtime-floors.md)).
   The app requires Playbook 18.1.2, Cligent 0.37.0, whose Codex runtime
   floor 0.159.1 serves that model, and slc 0.20.1, which shares that
   Cligent. The built-in playbooks stage as `sublang/playbooks` 18.1.2,
@@ -481,7 +481,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   writer starts.
 
 - The app requires Cligent 0.36.1 and slc 0.19.1, keeping the locked agent
-  SDKs ([DR-153](specs/decisions/153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md)).
+  SDKs ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)).
   Captain decision, Judge and reporting calls, and every compiler call, turn
   off, as far as each agent allows, the skills the agent finds by itself in
   its project and user skill folders, so the skills and specs Spex exports
@@ -506,9 +506,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
   the local seed when its files match the lock. `environment.search`
   requires `repository`.
 
-- The app previously adopted Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
+- The app previously adopted Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
-- The app previously adopted Playbook 17.8.0 and slc 0.16.1 ([DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md)).
+- The app previously adopted Playbook 17.8.0 and slc 0.16.1 ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)).
   A judge's reply is fitted to the machine and a parked judge is a
   failure the catalogue phrases, every commit of a step is taken, a
   role is one word, and the relay marker is language-neutral.
@@ -570,14 +570,14 @@ source; run source with `npm ci` and `npm start` (desktop) or
   asking again while it holds records the host has not received, and never
   touches the working folder. Space syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app previously adopted Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md), [DR-116](specs/decisions/116-playbook-17-8-0-slc-0-16-1-adoption.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
-  [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
+- The app previously adopted Playbook 17.9.0, slc 0.16.1 and Cligent 0.33.5 ([DR-241](specs/decisions/241-reviewable-builtin-gears.md), [DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+  [DR-241](specs/decisions/241-reviewable-builtin-gears.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
-  [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
+  [DR-167](specs/decisions/167-the-compiler-shares-the-apps-engine.md),
   [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md),
   [DR-097](specs/decisions/097-media-and-browser-tools-across-hosts.md),
   [DR-098](specs/decisions/098-live-tool-approvals.md),
-  [DR-102](specs/decisions/102-playbook-17-4-1-adoption.md)),
+  [DR-241](specs/decisions/241-reviewable-builtin-gears.md)),
   and locks the agent SDKs at the releases Cligent 0.33.1 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
   compiler shares the app's Cligent; slc 0.19.0 retains a compiler-only
@@ -661,7 +661,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
 - The app requires Node.js 22.19 or later, the floor of the catalog
   tooling ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md));
   CI drops Node 20, which reached end of life in April 2026.
-- With Playbook 14.1 ([DR-076](specs/decisions/076-playbook-14-1-adoption.md)),
+- With Playbook 14.1 ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)),
   uncommitted work already in your tree is now the Coder's context rather
   than an ambiguity: a governed call may carry it in its one commit, the
   Coder is told which changes predate its task and to leave them alone
@@ -851,9 +851,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
   `registry.state` and a separate registry selection in environment
   state.
 
-- The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-116 unchanged.
-- The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
-- The app previously adopted Playbook 17.10.1, Cligent 0.34.0 and slc 0.18.0 ([DR-123](specs/decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)). A judge sees a field whose shape nobody recorded as `<value>`, not `<string>`, the published CODE GEARS carry no framework-owned Boss-question result, and a playbook compiled by slc 0.16.4 or later validates the options the Captain hands it; recompile a playbook slc 0.16.1 built whose options are required. Skills reach agents from the spec packages your environments install: a `skills` list in your configuration, which Playbook's own launcher now accepts, is refused with its entry named.
+- The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-241 unchanged.
+- The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
+- The app previously adopted Playbook 17.10.1, Cligent 0.34.0 and slc 0.18.0 ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md)). A judge sees a field whose shape nobody recorded as `<value>`, not `<string>`, the published CODE GEARS carry no framework-owned Boss-question result, and a playbook compiled by slc 0.16.4 or later validates the options the Captain hands it; recompile a playbook slc 0.16.1 built whose options are required. Skills reach agents from the spec packages your environments install: a `skills` list in your configuration, which Playbook's own launcher now accepts, is refused with its entry named.
 - Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and the global environment's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
 - A working folder paired with a project whose environment is already installed gets its skills, specs and playbooks at once, not at the next start, sync or environment command. The Playbooks surface lists what the last export left out under "Not exported": a skill kept out of an agent folder that already holds a folder of yours by that name, named with that folder, and a spec package whose files are not on this device; "Export again" exports once you have moved your folder or brought the files.
 - The global environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of the global records repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" in the global environment asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A global request by a path in a paired working folder reads as missing until its folder moves into the clone. A project's paths stay relative to its working folder.
@@ -932,7 +932,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   changing the preserved session files.
 - Require Playbook 17.11.1 for classified entry when a finished workflow
   starts again, preserving the Boss text and clearing prior run exchanges
-  only after a valid new entry ([DR-131](specs/decisions/131-playbook-17-11-1-adoption.md)).
+  only after a valid new entry ([DR-241](specs/decisions/241-reviewable-builtin-gears.md)).
 
 - Compiling or repackaging a playbook now accepts required runtime
   options without defaults. Packaging preserves the entry's validator;

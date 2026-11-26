@@ -7,7 +7,7 @@
 // config the launcher accepts or rejects is treated identically here,
 // with the same error messages wherever the rule exists upstream —
 // except a playbook's `from` and any `skills` list, which name a path on
-// one device and are refused here (DR-105, DR-123), and the default
+// one device and are refused here (DR-105), and the default
 // entries and players composed for placed playbooks, which no file
 // holds (DR-176).
 
@@ -940,7 +940,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
-/** The refusal of the launcher's `skills` (DR-123): skills reach agents
+/** The refusal of the launcher's `skills` (DR-105): skills reach agents
  * from the packages a project's spex.yaml adds, never from a path in a
  * shared file (core-service-2, DR-104, DR-172). */
 function skillsRefusal(path: string): string {

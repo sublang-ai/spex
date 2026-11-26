@@ -26,7 +26,7 @@ Codex accepts native per-run defaults for a spawned agent's model and reasoning 
 ## Consequences
 
 The same editor and saved settings work across adapters, with the runtime determining how it applies a selection.
-Adopting the capability in a released app requires published, mutually compatible dependencies under [DR-167](167-the-compiler-shares-the-apps-engine.md) and [DR-182](182-published-desktop-runtime-adoption.md).
+Adopting the capability in a released app requires published, mutually compatible dependencies under [DR-167](167-the-compiler-shares-the-apps-engine.md).
 
 ## References
 

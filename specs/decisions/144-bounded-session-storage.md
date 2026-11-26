@@ -6,27 +6,17 @@
 ## Status
 
 Accepted (2026-10-22) on the owner's direction to make runtime session files bounded end to end.
-Amends [DR-045](045-unified-session-storage.md) and [DR-103](103-the-home-and-its-groups.md) in the portable session's files: Playbook's versioned root, replay descriptor and session-owned immutable chunks replace the monolithic manifest and replay for new sessions, with the semantic host API preserved.
-Amends [DR-111](111-the-core-coordinates-as-git-does.md) in a session unit's members and publication order: every chunk belongs to its session, dependencies precede their descriptor and root, and a chunk added since Save refuses that unit's replacement.
-Amends [DR-131](131-playbook-17-11-1-adoption.md) in the Playbook floor and built-in release, and permits its compiler-only nested Playbook dependency; the remaining dependency and SDK identities stay preserved.
-Amended by [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Playbook floor, compiler dependency and built-in release alone; its bounded-storage decisions stand.
-Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md), which withdraws the compiler-only nested Playbook exception and requires a verified shared engine; the bounded-storage decisions stand.
+Amends [DR-045](045-unified-session-storage.md), [DR-103](103-the-home-and-its-groups.md), [DR-111](111-the-core-coordinates-as-git-does.md).
 
 ## Context
 
 A session's recovery snapshot and replay grow with its work.
 Splitting the durable representation into bounded immutable files keeps one session's files transferable while retaining the complete recovery state and history.
 Spex must select a session whole rather than select its physical files independently.
-slc 0.19.0 declares Playbook `^17.11.0`, and its shipped entry points use phase execution, ABI validation and compiler definitions rather than the Captain session store or host.
-Releasing an unrelated compiler update only to deduplicate those libraries is unnecessary for the session-format upgrade.
 
 ## Decision
 
-- The core requires Playbook `^18.0.0`, adopted from its verified public release with the npm lock regenerated from that artifact; Cligent, slc, xstate and existing agent SDK resolutions stay unchanged unless a separate adoption requires otherwise.
-- Root acceptance tooling declares the same Playbook 18 development dependency so its direct session-store imports use the supported writer rather than an accidentally hoisted compiler dependency.
-- The unchanged slc 0.19.0 may resolve its declared Playbook 17 dependency naturally as a nested compiler-only copy; it must never serve as a Captain session writer, and the core's session-store/host APIs use Playbook 18.
-- The installed closure keeps one shared Cligent and xstate with their existing SDK identities, without overrides or links; the official post-install lock and physical dependency tree must verify that closure.
-- The built-in `sublang/playbooks` package follows the installed Playbook 18 release; existing environment locks keep their selected release until explicitly resolved again.
+- Root acceptance tooling declares the core's Playbook as a development dependency, so its direct session-store imports use the supported writer rather than an accidentally hoisted copy.
 - Playbook owns the physical format, its content bounds, hydration, validation and explicit conversion of legacy sessions; the semantic manifest and replay contracts presented to hosts remain unchanged.
 - A session's tracked unit includes its root, replay descriptor, every file in its own chunk directory, its legacy replay where present, and its owned assets.
 - A selected session must validate through the shared store with every referenced chunk from that selected revision; missing or damaged dependencies refuse the candidate before any live write.

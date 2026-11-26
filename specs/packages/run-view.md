@@ -1477,7 +1477,7 @@ When an integration suite presents active and unprovable external ownership, it 
 
 Where the runtime's closed failure-code list is read at its boundary, the test suite shall assert that the failure catalogue phrases every code that list holds [[run-view-147](#run-view-147)] ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md)):
 
-- the list under test is the runtime's own export reaching the interface through that boundary, never a copy the interface keeps, so the catalogue is never held against itself ([DR-076](../decisions/076-playbook-14-1-adoption.md));
+- the list under test is the runtime's own export reaching the interface through that boundary, never a copy the interface keeps, so the catalogue is never held against itself ([DR-241](../decisions/241-reviewable-builtin-gears.md));
 - each code has a row whose phrase is non-empty for a sample evidence carrying every member any code reads, and for no evidence at all;
 - the catalogue holds no code the list does not, so a code that leaves the runtime leaves the catalogue with it;
 - a code outside the list, and a standing reason the catalogue has no phrase for, still read as their own identifiers in words;
@@ -1668,7 +1668,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### run-view-149
 
-Where the harness boots the served shell with the demo project registered and a substitute coder that commits its phase and leaves a file uncommitted, so the runtime parks the run it started over that residual and really advertises its controls, the test suite shall assert the published-control round trip through the page ([DR-076](../decisions/076-playbook-14-1-adoption.md)):
+Where the harness boots the served shell with the demo project registered and a substitute coder that commits its phase and leaves a file uncommitted, so the runtime parks the run it started over that residual and really advertises its controls, the test suite shall assert the published-control round trip through the page ([DR-241](../decisions/241-reviewable-builtin-gears.md)):
 
 - the notice names the failed workflow by its command and says why in the catalogue's phrase for the cause the runtime attached, carrying the residual's own path [[run-view-128](#run-view-128)] [[run-view-147](#run-view-147)];
 - it draws one control per advertised action in the action's own label, the reconciliation the runtime reports as a no-op visible and disabled with its phrased reason in its tooltip and in the what-now line, the abandonment beside it activatable, and Drop's tooltip carrying the ending the shell advertised [[run-view-128](#run-view-128)];

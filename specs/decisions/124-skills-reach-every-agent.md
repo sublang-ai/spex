@@ -32,7 +32,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in e
 - **Playbook skills stay with Claude Code.** The skill generated for a playbook goes only into Claude Code's folders; skills and specs go into both.
 - **An unchanged skill stays.** A mirrored skill folder whose files match is left as it is, and a changed one is replaced whole by renaming a complete copy into place, the replaced one restored where that rename fails.
 - **Names are strings.** A generated or rewritten `name` is written as a YAML string, since four of the agents read a skill by that name.
-- **One channel.** Spex passes no skills per run ([DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)), so each skill reaches an agent through the folder it reads.
+- **One channel.** Spex passes no skills per run ([DR-105](105-playbook-17-5-0-adoption.md)), so each skill reaches an agent through the folder it reads.
 
 Considered and declined:
 

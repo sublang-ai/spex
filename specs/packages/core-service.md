@@ -68,7 +68,7 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-208](../decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)):
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-237](../decisions/237-published-agent-runtime-floors.md)):
 
 - The core passes confirmed credential presence to the Playbook seed for roster selection and supplies the actual agent environment separately for model selection. The core uses the user home and preserves the returned settings and comments and removes each `playbooks.<id>.from` ([DR-237](../decisions/237-published-agent-runtime-floors.md)).
 - That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start — so the Captain's and each player's `adapter`, `model`, `subagentModel`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-205](../decisions/205-agent-cards-read-alike.md)):
@@ -722,7 +722,7 @@ The `packages/core` workspace package shall build as a headless Node package tha
 The core package shall define the WebSocket protocol — message schemas, protocol version, and TypeScript message types — in one module and export it from a dedicated entry point free of Node-only runtime imports, so the UI package consumes the protocol from that one entry point and never redefines it:
 
 - When the protocol changes incompatibly, the version carried by the hello message [[core-service-1](#core-service-1)] is bumped; the personal Space and single-core protocol is version 35 ([DR-246](../decisions/246-remove-groups-and-team-servers-from-the-clients.md)).
-- A closed vocabulary a client must hold against the runtime's own — the embedded runtime's failure-code list — is re-exported here unchanged rather than copied into a client ([DR-076](../decisions/076-playbook-14-1-adoption.md)).
+- A closed vocabulary a client must hold against the runtime's own — the embedded runtime's failure-code list — is re-exported here unchanged rather than copied into a client ([DR-241](../decisions/241-reviewable-builtin-gears.md)).
 
 #### core-service-13
 
@@ -774,7 +774,7 @@ When the core package reads a session whose runtime it does not hold [[core-serv
 
 #### core-service-16
 
-The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package — a playbook's `from`, a `skills` list, and the default entries and players the core composes for placed playbooks [[core-service-2](#core-service-2)] excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package — a playbook's `from`, a `skills` list, and the default entries and players the core composes for placed playbooks [[core-service-2](#core-service-2)] excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
 | Rule | Composition |
 | --- | --- |
