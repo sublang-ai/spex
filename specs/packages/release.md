@@ -283,6 +283,13 @@ A suite shall be deterministic by construction ([DR-145](../decisions/145-merge-
 
 When the developer/agent runs `npm run test:linux`, optionally naming a workspace and the test command's arguments, the repository shall run that workspace's tests in a Linux container holding the CI runners' Node and Git versions over a copy of the working tree, so a difference between the developer's platform and the CI platform shows before a push ([DR-145](../decisions/145-merge-on-green.md)).
 
+#### release-51
+
+When the CLI's or the core's test suite runs through its runner, the runner shall report every result its test files produce and fail by name whatever does not finish, forcing no file's exit ([DR-253](../decisions/253-a-test-file-that-outlives-its-tests-fails-by-name.md)):
+
+- a test still running at the runner's per-test timeout fails by its name;
+- a file whose process still runs 60 seconds after its tests finished is ended and fails by its name, with the kinds of resource holding it open, on every supported Node version.
+
 ### CI Downloads
 
 #### release-49
@@ -348,7 +355,7 @@ When the release-notes integration suite runs the actual notes command over isol
 
 #### release-33
 
-When the repository-system audit reads the CI, release and cache workflows, the download-caches action, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
+When the repository-system audit reads the CI, release and cache workflows, the download-caches action, merge script, selection commands and suite runners and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
 
 | Case | Assertions |
 | --- | --- |
@@ -363,6 +370,7 @@ When the repository-system audit reads the CI, release and cache workflows, the 
 | Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
 | Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
 | Download caches | Every workflow step running `npm ci` restores Electron's and dugite's archives first, keyed by platform and locked version, from where the installed tools read them, Electron's where its installer's and the packager's own download libraries both default with no override set, and only installing jobs save npm's cache [[release-49](#release-49)]; the cache seed alone runs on `main`, for lockfile or cache-tooling changes or on request, refusing a request on any other ref with a message naming `main` before any platform runs, installing and fetching Electron in jobs of their own on all three platforms, neither failing fast nor continuing on error, each attempted up to three times with waits that grow, keeping between installs only a dugite archive matching the locked dugite's checksum, read from a copy installed apart and checked just before each retry, so an intact one survives and a partial one is dropped even once npm rolled the install back or the copy arrived only for that retry, and running nothing else [[release-50](#release-50)]. |
+| Suite runners | Over fixture suites run by the CLI's and the core's real runners, every result of a clean file and of a file with a failing test is reported with the failing assertion, a file that closes what it opened within the wait is left alone, and a file that leaves a server listening fails by name with the kinds of resource it holds [[release-51](#release-51)]. |
 | Existing local gates | Prepush rejects conflict markers and runs `spex verify` after its build [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
 
 #### release-45
