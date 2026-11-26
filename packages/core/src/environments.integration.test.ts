@@ -744,9 +744,12 @@ test("environments-22 through a real core: retained files of another lock are no
   await core.stop();
   writeFileSync(core.configPath, CONFIG);
 
-  // A synced older lock cannot be restored. Its previous installed tree
-  // stays intact, including an engine link invalidated by a local move.
-  const major = builtinPackage().version.split(".")[0]!;
+  // A synced lock of the shipped release cannot be restored — startup
+  // advances an older one to the release it ships (DR-241). Its previous
+  // installed tree stays intact, including an engine link invalidated by
+  // a local move.
+  const shipped = builtinPackage().version;
+  const major = shipped.split(".")[0]!;
   const requests = stringifyYaml({ format: 1, packages: { "sublang/playbooks": { version: `^${major}.0.0` } } });
   writeFileSync(join(clone, "spex.yaml"), requests);
   const lockPath = join(clone, "spex.lock");
@@ -754,7 +757,7 @@ test("environments-22 through a real core: retained files of another lock are no
   lock.requests = requestsDigest(requests);
   const previous = lock.packages["sublang/playbooks"]!;
   assert.ok("version" in previous.source);
-  previous.source.version = `${major}.0.0`;
+  previous.source.version = shipped;
   previous.files[0]!.sha256 = "0".repeat(64);
   writeFileSync(lockPath, stringifyYaml(lock));
   for (const id of ["code", "review"]) {
