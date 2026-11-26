@@ -5,62 +5,47 @@
 
 ## Status
 
-Accepted; the built-in catalog is amended by [DR-025](025-playbook-7-adoption.md) — the built-ins are code, review, and decide, with sources shipped in the installed package.
-Amended by [DR-104](104-spec-package-format-and-client-environments.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
-Amended by [DR-158](158-a-legible-graph-and-outline.md) in the internal group's hue: lime rather than fuchsia.
-Amended by [DR-058](058-chat-assisted-playbook-authoring.md) (2026-09-12): the slc example's prefill opens a draft workspace in the Source tab's paste mode instead of filling the compile form.
-Amended by [DR-089](089-every-fresh-user-scenario-walked-for-real.md) (2026-09-28) in the example's text: slc's demo adapted, its two open limits settled for the clarifications the bundled compiler asked and its normalized text kept by hand beside the source, rather than vendored as it stands.
-The Academy example's return after removal is amended by [DR-140](140-reopen-the-removed-academy-example.md).
+Accepted.
+Amends [DR-011](011-project-workspace.md).
+Amended by [DR-058](058-chat-assisted-playbook-authoring.md), [DR-089](089-every-fresh-user-scenario-walked-for-real.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-140](140-reopen-the-removed-academy-example.md), [DR-158](158-a-legible-graph-and-outline.md).
 
 ## Context
 
-- The built-in `/code` and `/discuss` playbooks load from `@sublang/playbook` registry exports, but the published package omits their prose sources (`code.md`, `discuss.md`); only the compiled gears and FSM artifacts ship.
-  The Library's pipeline panel therefore shows the built-ins without the source stage.
-- Only `/code` ships in the config template; `/discuss` is absent from the app entirely, and the Library lists configured playbooks only — there is no way to see or enable a known built-in that is not yet in the config.
-- slc's repository carries a complete worked example — a six-line two-agent workflow compiled to gears, FSM, and runtime — that demonstrates what compilation produces; the app has no example content in the Playbooks surface.
-- The repository's `demo/` directory ("Academy") is a complete, lint-clean specs corpus in the [DR-012](012-spec-package-files.md) packages layout, self-described as the initial example project for the app; no code references it.
-- The spec view still parses the legacy `user/`/`dev/`/`test/` layout; adapting it to the packages layout was deferred when [DR-012](012-spec-package-files.md) landed, so the view cannot render Academy — or this repository's own tree.
-- The compile form prefills need a normalized source: the pipeline writes sources as `<id>.md`, which skips slc's normalize phase for raw prose.
+- slc's repository carries a complete worked example — a short two-agent workflow compiled to gears, FSM, and runtime — that demonstrates what compilation produces; the app had no example content in the Playbooks surface.
+- The repository's `demo/` directory ("Academy") is a complete, lint-clean specs corpus in the [DR-012](012-spec-package-files.md) packages layout, self-described as the initial example project for the app; no code referenced it.
+- The spec view still parsed the legacy `user/`/`dev/`/`test/` layout, so it could not render Academy — or this repository's own tree.
 
 ## Decision
 
-### Built-in playbook sources
+### The built-in playbooks
 
-- Spex vendors `code.md` and `discuss.md` from the playbook project as core assets, with provenance headers naming the upstream path.
-- Artifact resolution falls back to the vendored source when a published-package registry's directory has no adjacent source; gears and FSM keep resolving from the package.
-- `captain.md` is not vendored; the published package ships it.
-
-### Built-in catalog
-
-- The core serves a catalog of known built-in playbooks (`code`, `discuss`) — id, command, intent, derived role ids, registry specifier, and source markdown — loaded from the registry modules the core already depends on plus the vendored sources.
-- The Library renders uncofigured built-ins from the catalog: their sources are browsable before any config change, and an add flow maps roles to profiles and applies the existing `playbook.add` config edit.
-- The config template ships both built-ins ([DR-004](004-config-and-persistence.md) seeding rules unchanged: existing configs are never rewritten).
+- The built-in playbooks come from a spec package the app ships ([DR-104](104-spec-package-format-and-client-environments.md)), their sources browsable before any configuration change.
 
 ### The slc demo example
 
-- The Playbooks surface shows slc's two-agent workflow demo as a read-only example card: raw source, normalized text, gears, and FSM staged from vendored raw-text assets, presented in the same pipeline grammar as compiled playbooks.
-- A prefill action copies the normalized text (not the raw prose) into the compile form, since the compile pipeline skips slc's normalize phase.
-- The example is display content owned by the UI; it does not touch config, protocol, or the library directory.
+- A project's Playbooks tab shows an example adapted from slc's two-agent workflow demo as a read-only example card: source, normalized text, gears, and FSM, presented in the same pipeline grammar as compiled playbooks and crediting slc's demo ([DR-089](089-every-fresh-user-scenario-walked-for-real.md)).
+- A prefill action opens an authoring workspace with the example placed ([DR-058](058-chat-assisted-playbook-authoring.md)).
+- The example is display content owned by the UI; it does not touch config or protocol.
 
 ### Academy as the seed project
 
 - The Academy corpus ships as a core asset, staged at build from the repository's `demo/` directory (the single source of truth).
 - Project creation gains an example mode, mutually exclusive with scaffold mode: materialize the corpus into an empty or absent directory, `git init`, add everything, and commit; then register the project as usual.
+  An existing unregistered Academy working folder is registered and opened without reseeding ([DR-140](140-reopen-the-removed-academy-example.md)).
 - The project palette and the spec view's empty state offer the example with one action.
 
 ### Spec view: packages layout
 
 - `specs.get` parses `packages/**` (collection directories are navigation only), `decisions/`, `intents/`, `map.md`, and `meta.md`.
 - A file's short form comes from its `# <SHORT>: <Title>` heading, falling back to the majority item prefix.
-- The three filter groups remain section kinds, keeping the [DR-011](011-project-workspace.md) three-toggle model and hues: external (sky: External Behavior), internal (fuchsia: Internal Behavior), and test (teal: Verification).
+- The three filter groups are section kinds, keeping [DR-011](011-project-workspace.md)'s three-toggle model: external (sky: External Behavior), internal (lime: Internal Behavior — [DR-158](158-a-legible-graph-and-outline.md)), and test (teal: Verification).
 - Citations are read from inline links only and presented as plain inbound and outbound rows with no derived classes; relationship-metadata lines are absent.
 - The legacy layout is detected and reported as an explicit tree state; the view renders a migration notice naming `npx @sublang/spex scaffold --update` instead of a package tree.
 - The protocol version bumps with the tree-shape change; core and UI move together.
 
 ## Consequences
 
-- [DR-011](011-project-workspace.md)'s spec-view group model (user/dev/test) is amended by this decision; its other sections stand.
-- The vendored sources and Academy corpus add a sync burden, bounded by staging from single sources of truth and provenance headers; upstreaming the source files into the published playbook package would remove the vendored copies.
-- The example card and catalog give the Playbooks surface teaching content without inventing a second pipeline grammar.
+- The Academy corpus adds a sync burden, bounded by staging from its single source of truth.
+- The example card gives the Playbooks tab teaching content without inventing a second pipeline grammar.
 - Seeding Academy gives every fresh install a real project to open, browse in the spec view, and run `/code` against.
 - The legacy spec layout stops rendering; migration guidance replaces silent partial parses.

@@ -6,9 +6,8 @@
 ## Status
 
 Accepted.
-Extends [DR-010](010-interface-craft.md)'s interface principles to data graphics, occasioned by the spec citation graph.
-§4's viewport rule and §7's emphasis precedence are amended by [DR-027](027-linked-views-contract.md): the presentation may fill the pane within a stated bound, and inspection never takes the emphasis.
-§1's edge-width count, §4's always-on labels and layout-bounded camera, §5's direction at rest, §6's placement of isolated packages, §2's hue budget, §7's dimming-only emphasis and card on any focus, and §8's split bounds and graph affordances are amended by [DR-158](158-a-legible-graph-and-outline.md): orange joins the budget for the selection's own citations and the internal group's hue turns lime, the resting graph draws an undirected backbone at a threshold the reader sets, counts are written beside names, a label without room waits for inspection, unlinked packages stand in a row of their own, the selection hides the edges it does not touch, the card answers hover and keyboard focus alone, the camera is bounded by the fitted frame, the split holds pixel floors, and the pane's controls stand above the graph and its key below.
+Amends [DR-010](010-interface-craft.md).
+Amended by [DR-027](027-linked-views-contract.md), [DR-158](158-a-legible-graph-and-outline.md).
 
 ## Context
 
@@ -29,44 +28,43 @@ Nine principles govern data graphics in Spex — the spec graph today, any chart
 Numeric floors below are deliberate defaults, revisable only by a recorded decision, because numbers are what makes the design gate mechanical.
 
 1. **One channel, one meaning, keyed.**
-   A mark's visual channel encodes exactly one named variable, and every channel in use is decodable on the surface — from the legend, an on-mark label, or the hover card; an encoding nobody can decode is decoration and is removed [[3]].
-   Quantities map honestly: circle area (not radius) carries a count, stroke width follows a square-root ramp on an absolute scale comparable across trees, and both run in clamped bands — node diameters within about a 3× ratio above a hit-target floor, strokes within roughly 1.5–6 canvas units [[3]].
-   Applied to the graph: node area carries the package's item count, stated by a numeral on the node that holds text AA against its fill in both themes — direct labeling beats decoding; edge width carries the pair's citation count; degree needs no size channel because it is already drawn as the edges themselves.
+   A mark's visual channel encodes exactly one named variable, and every channel in use is decodable on the surface — from the key, an on-mark label, or the card; an encoding nobody can decode is decoration and is removed [[3]].
+   Quantities map honestly: circle area (not radius) carries a count, in a clamped band above a hit-target floor [[3]].
+   Applied to the graph: node area carries the package's item count, stated by a numeral on the node that holds text AA against its fill in both themes — direct labeling beats decoding; citation counts are written in the selection's list and each line's card rather than encoded in edge width ([DR-158](158-a-legible-graph-and-outline.md)).
 2. **Reserved hues stay reserved; no gray categories.**
-   The hue budget is enumerated: brand purple marks interaction alone ([DR-013](013-sublang-brand.md)); emerald/amber/red mark status and neutral marks idle or de-emphasis (DR-010 §8); sky/fuchsia/teal mark the item groups ([DR-011](011-project-workspace.md)); a new categorical hue may come only from outside every reserved set, with a recorded decision.
+   The hue budget is enumerated: brand purple marks interaction alone ([DR-013](013-sublang-brand.md)); emerald/amber/red mark status and neutral marks idle or de-emphasis (DR-010 §8); sky/lime/teal mark the item groups; orange marks the selection's own citations ([DR-158](158-a-legible-graph-and-outline.md)); a new categorical hue may come only from outside every reserved set, with a recorded decision.
    A category never wears the gray that elsewhere means disabled or de-emphasized [[4]]; de-emphasis is one uniform axis — opacity — orthogonal to what a mark is.
-   Applied to the graph: the map adds no new hue at all — its two roles are achromatic ink at text-grade contrast, distinguished by fill treatment: solid ink where peers cite the package, ink ring on a tinted fill where none do, worded in the legend as "cited by peers" and "not cited by peers" so both classes stay true for the packages no citation reaches at all.
-   The weight asymmetry is intended hierarchy — contracts anchor the architecture — with both treatments unmistakably active, and interaction purple pops against the monochrome ground.
+   Applied to the graph: its two roles are achromatic ink at text-grade contrast, distinguished by fill treatment: solid ink where peers cite the package, ink ring on a tinted fill where none do, worded in the key as "cited by peers" and "not cited by peers".
+   The weight asymmetry is intended hierarchy — contracts anchor the architecture — with both treatments unmistakably active.
 3. **Contrast is computed, not eyeballed — and pinned.**
    Every resting mark meets the 3:1 non-text floor and every text mark meets 4.5:1, verified as computed composites — opacity times color over the actual theme token — in both themes [[1]].
    A transient state (a dimmed non-neighbor during hover) may drop below the floor; the resting picture never does.
    The composites are not review folklore: the surface's verification items pin them as assertions over the rendered component's classes and tokens, so a regression fails a test, not a reviewer.
 4. **Content sets density; the camera fits content.**
-   Layout extent grows from the content — measured label boxes and node radii set collision and link distances — and is never stretched to fill a viewport; proximity is meaning, and inflating all distances erases it.
-   The initial camera fits the content's bounding box with padding — overview first [[5]] — and re-fits on tree change, pane resize, or toggling the graph, unless the user has moved the camera, in which case a visible fit control is the way home — a hidden gesture that duplicates a visible control only muddies the plain click.
-   Zoom is clamped between the fitted overview and a detail ceiling, so the picture can never be lost off-canvas.
-   Labels are always on, sit on the app type scale with a 12px on-screen floor at the fitted view — DR-010 §8's no-arbitrary-type rule includes SVG text — and are haloed in the ground color where linework crosses them [[6]].
-5. **Direction reads at rest.**
-   A directed edge shows its direction without hover: direction is structure, and structure never gates on pointer state [[5]].
-   Direction glyphs are constant-size — decoupled from stroke width [[2]] — sit at the target's rim, and take the edge's own hue one step stronger against the surface, never the interaction hue, so they read as glyphs rather than line widening.
+   Layout extent grows from the content — measured label boxes and node radii set collision and link distances — and the presentation fills its pane only within the bounded aspect relaxation [DR-027](027-linked-views-contract.md) solves; proximity is meaning, and inflating all distances erases it.
+   The initial camera fits the content's bounding box with padding — overview first [[5]] — and re-fits on tree change, pane resize, or toggling the graph, unless the user has moved the camera, in which case a visible fit control is the way home.
+   Zoom is clamped between the fitted overview and a detail ceiling, and the camera is bounded by the fitted frame, so the picture can never be lost off-canvas ([DR-158](158-a-legible-graph-and-outline.md)).
+   Labels sit on the app type scale with a 12px on-screen floor at the fitted view — DR-010 §8's no-arbitrary-type rule includes SVG text — haloed in the ground color where linework crosses them [[6]]; a label with no free place waits for inspection or the selection ([DR-158](158-a-legible-graph-and-outline.md)).
+5. **Direction reads where it is drawn.**
+   The resting overview draws undirected pairs; a selected package's citations draw directed ([DR-158](158-a-legible-graph-and-outline.md)).
+   Direction glyphs are constant-size — decoupled from stroke width [[2]] — sit at the target's rim, and never take the interaction hue, so they read as glyphs rather than line widening.
    Curvature never carries direction (the cited study found biased curvature the worst direction encoding [[7]]), and a reciprocal pair renders as two parallel-offset edges, never one double-headed line.
-   The tapered-edge evidence [[7]] is noted and declined: width already carries weight, so a small constant head is the honest remainder — and a head that never scales with weight dissolves the "huge ugly arrows" dilemma.
 6. **A mature engine under our rendering.**
    Force layout, drag, and camera math come from the maintained d3 modules — d3-force and d3-zoom, ISC-licensed, headless [[8]] — under the app's own React SVG rendering; no bespoke physics, and no framework that owns rendering and would evict the app's styling system.
    The settled layout is a pure deterministic function of the tree: seeded, settled synchronously before first paint, with no entrance animation — same tree, same picture.
    Dragging a node pins it to the pointer while the simulation reheats live around it; release cools the layout to a stop within a bounded few seconds — never idling warm, never silently pinning, never persisting positions — so reopening restores the canonical picture (the Obsidian-graph model [[9]]).
-   Isolated packages stay on the map, held by the centering force — the map's completeness includes its loners.
+   Packages with no cross-package citation stay on the map, in one row at the canvas's foot outside the arrangement ([DR-158](158-a-legible-graph-and-outline.md)) — the map's completeness includes its loners.
    Emphasis transitions are short (on the order of 100–150 ms) so isolation never strobes; under the reduced-motion preference, transitions turn instant and drag feedback may fall back to discrete position updates [[10]].
-7. **One focus-state model: selection is stable, hover previews, details on demand.**
-   All emphasis states speak the single dim axis of principle 2 — no state recolors, resizes, or moves anything — with precedence base < selection < keyboard focus < hover preview.
-   The two gestures do different work: clicking chooses, and only a choice isolates a neighborhood; hovering inspects, showing a mark's numbers while leaving the picture whole — an emphasis on hover would merely restate what a click already says. Escape dismisses the card, then the selection.
-   Keyboard focus reaches every node (DR-010 §6), shows the app's one focus ring ([DR-013](013-sublang-brand.md)), and triggers the same isolation hover does; Enter opens, and zoom, pan, and fit have key bindings.
-   Details live in an instant, themed hover card — never the native `<title>` tooltip [[11]] — shown on focus as well: identity, the total behind the size encoding, then the per-group breakdown as a list in the group hues following the outline's count grammar [[spec-view-2](../packages/spec-view.md#spec-view-2)] — each count with its group word, zero muted rather than absent, color never the only channel; edges answer hover with their citation count.
+7. **One focus-state model: selection is stable, inspection previews, details on demand.**
+   Emphasis speaks the single dim axis of principle 2 and recolors, resizes or moves nothing; the selection alone isolates its neighborhood, also hiding the edges it does not touch ([DR-158](158-a-legible-graph-and-outline.md)), and inspection never takes the emphasis ([DR-027](027-linked-views-contract.md)).
+   The two gestures do different work: clicking chooses, and only a choice isolates a neighborhood; hovering or keyboard focus inspects, showing a mark's numbers while leaving the picture whole. Escape dismisses the card, then the selection.
+   Keyboard focus reaches every node (DR-010 §6) and shows the app's one focus ring ([DR-013](013-sublang-brand.md)); Enter opens, and zoom, pan, and fit have key bindings.
+   Details live in an instant, themed card — never the native `<title>` tooltip [[11]] — raised by hover or keyboard focus alone, and pinned for the selection ([DR-158](158-a-legible-graph-and-outline.md)): identity, the total behind the size encoding, then the per-group breakdown following the outline's count grammar [[spec-view-2](../packages/spec-view.md#spec-view-2)], color never the only channel.
 8. **Controls sit with what they govern.**
-   The outline is the permanent surface; one toggle — on by default, persisted with the project's view state — sets whether the graph stands beside it; the three-state mode control retires, and no maximize mode reintroduces a third state.
-   The reader sets the balance between the two panes with a draggable, keyboard-operable divider, bounded so neither pane can be squeezed past reading; a narrower graph pane is absorbed by the space between marks, never by the type, which holds its on-screen size.
+   The outline is the permanent surface; one toggle — on by default, persisted with the project's view state — sets whether the graph stands beside it; no maximize mode reintroduces a third state.
+   The reader sets the balance between the two panes with a draggable, keyboard-operable divider, bounded by pixel floors so neither pane can be squeezed past reading ([DR-158](158-a-legible-graph-and-outline.md)); a narrower graph pane is absorbed by the space between marks, never by the type, which holds its on-screen size.
    Item filters and search live in the outline pane and scope to it; graph geometry is a function of the tree alone — an active search reflects on the graph only as a non-geometric highlight of matching packages, and filters do not touch it — so the projections differ only where the controls visibly say so.
-   Graph affordances — fit, legend, gesture hints — live on the graph pane, and selecting from the graph never rearranges the workspace ([DR-009](009-at-hand-interaction.md)).
+   Graph affordances — the threshold, fit and key — live on the graph pane ([DR-158](158-a-legible-graph-and-outline.md)), and selecting from the graph never rearranges the workspace ([DR-009](009-at-hand-interaction.md)).
 9. **No unexamined pixels.**
    A change that touches rendered UI lands only with a design check recorded in the change: the affected surfaces rendered and inspected in both themes with realistic data, each new color composite contrast-verified numerically, every active encoding confirmed keyed, and the diff read against [DR-010](010-interface-craft.md), [DR-013](013-sublang-brand.md), and this record.
    "It boots" is not "it is designed": the acceptance screenshot proves the first, this check proves the second.
@@ -77,7 +75,7 @@ Crossing that envelope is a recorded revisit — the ordered degradations are zo
 Considered and declined, so the precedents cannot re-enter piecemeal:
 
 - force/density sliders and switchable size semantics (Obsidian, Gephi) — they multiply the states the design gate must hold and break "same tree, same picture";
-- arrows hidden at rest (Obsidian's default) — direction is semantics in a citation graph, not clutter;
+- arrows hidden on a selection's citations — direction is semantics in a citation graph, not clutter;
 - a visible settle animation on open — breaks the deterministic first paint;
 - drag pinning or persisted node positions — a new decision with its own persistence design if ever wanted;
 - a side inspector panel — [DR-009](009-at-hand-interaction.md) keeps details at hand, not in a second surface;
@@ -85,7 +83,7 @@ Considered and declined, so the precedents cannot re-enter piecemeal:
 
 ## Consequences
 
-- The spec-view package decomposes its graph law: `spec-view-20` keeps the projection requirement under its released ID (outline permanent, one graph toggle, one selection across two projections), and the encodings, the focus-state and interaction model, the camera policy, and the search reflection land as new per-concern items [[meta-29](../meta.md#meta-29)]; `spec-view-21` is re-pinned to the two-state round trip.
+- The spec-view package holds the graph law per concern: the projection, the encodings, the focus-state and interaction model, the camera policy, and the search reflection [[meta-29](../meta.md#meta-29)].
 - Verification gains the mechanical gates: composite-contrast assertions over both themes' tokens, a layout-determinism assertion (same fixture tree, same coordinates), and a legend-completeness check, at integration level [[meta-21](../meta.md#meta-21)].
 - The UI package takes d3-force and d3-zoom as dependencies; the hand-rolled physics, label-declutter, and viewport math retire.
 - The design check (principle 9) binds all UI work from this decision on, not only the graph.

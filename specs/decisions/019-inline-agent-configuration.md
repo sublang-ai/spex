@@ -5,27 +5,16 @@
 
 ## Status
 
-Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for mutable browser execution settings and host preparation.
-
-Accepted; the seeded lineup is amended by [DR-025](025-playbook-7-adoption.md) — single-role CODE plus the review and decide blocks.
-
-Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come from runtime discovery.
-Amended by [DR-093](093-a-players-subagent-model.md) in §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
-Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
-Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) on the project home before a session: Captain's identity and current agent chip sit by the task composer; the chip opens its in-place editor.
-Amended by [DR-154](154-the-seed-follows-playbooks-rule.md) in §"Spex writes only blocks": the seeded agents follow Playbook's credential-based seeding rule instead of a single-vendor lineup of Spex's own.
-
-Amended by [DR-235](235-independent-ultracode.md) for independent Ultracode tuning.
-
-Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the default pair when adding a new player.
+Accepted.
+Amends [DR-002](002-desktop-app-architecture.md), [DR-004](004-config-and-persistence.md), [DR-007](007-conversational-session-start.md), [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md), [DR-014](014-released-toolchain.md).
+Amended by [DR-032](032-session-players.md), [DR-052](052-runtime-model-options.md), [DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-097](097-media-and-browser-tools-across-hosts.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-235](235-independent-ultracode.md), [DR-236](236-primary-and-subagent-model-defaults.md).
 
 ## Context
 
-- Playbook 3.0 removed the shared config's `profiles` map and the agent-block `profile` key: every `captain` and `players.<role>` value is an inline agent block (`adapter`, `model`, `effort`, `permissions`) or a scalar adapter shorthand, and the launcher migrates profiles-era configs in place once, with a backup.
-  Playbook 3.1 and slc 0.2 are otherwise contract-stable for this host; slc's emitted entry and the registry wrapper of [DR-014](014-released-toolchain.md) carry over unchanged.
+- Playbook removed the shared config's `profiles` map and the agent-block `profile` key: every agent is an inline agent block (`adapter`, `model`, `effort`, `permissions`) or a scalar adapter shorthand, and the launcher migrates profiles-era configs in place once, with a backup.
 - The launcher now hands the Captain shell its own adapter (`captainOptions.captainAdapter`); the shell restricts control-call tools at the provider level only for adapters that enforce them, falling back to prompt-level restriction otherwise.
   Spex composes captain options itself, so it must supply the same field or Codex captains keep failing every turn.
-- Effort vocabularies are adapter-scoped in the embedded runtime (Claude adds `ultracode`, Codex adds `ultra`, Kimi accepts only `off`/`on`); a single flat effort list both rejects valid configs and accepts ones that fail mid-turn.
+- Effort vocabularies are adapter-scoped in the embedded runtime (Codex adds `ultra`, Kimi accepts only `off`/`on`); a single flat effort list both rejects valid configs and accepts ones that fail mid-turn.
 - The runtime starts sessions only for its known adapter set (claude, codex, gemini, kimi, opencode); ids outside it fail at session start regardless of acceptance at load.
 - The owner retires the shorthand concept from the product: seeded first-use defaults make it unnecessary, and per-playbook, per-run tuning is the norm.
 
@@ -42,12 +31,11 @@ Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the default p
 
 ### Spex writes only blocks
 
-- The seeded template is fully explicit inline blocks — no scalars — and keeps this host's recorded single-vendor seed: a Claude captain, coder, reviewer, host, and participant, with a commented second-vendor example.
-  This deliberately diverges from the upstream starter's Codex reviewer (Spex has no launch gate to catch a cold second-vendor sign-in) and from its commented-out discuss (per [DR-015](015-reference-content.md)).
+- The seeded template is fully explicit inline blocks — no scalars — whose agents Playbook's credential-based seeding rule selects ([DR-154](154-the-seed-follows-playbooks-rule.md)).
 - Every config edit writes inline blocks.
-  Captain and per-role player edits are merge patches over the existing block — only the provided keys change, so hand-written fields (`instruction`, granular permissions) survive.
-  A patch key set to null unsets it, so a pinned model or effort can return to its adapter's default and a cleared field means what it shows.
-  Registration flows (playbook add, compile) carry full blocks whose schema includes the optional hand-written fields.
+  Edits are merge patches over the existing block — only the provided keys change, so hand-written fields (`instruction`, granular permissions) survive.
+  A patch key set to null on a player or the Captain unsets it, so a pinned model or effort can return to its adapter's default and a cleared field means what it shows; on a role binding it means "inherit the player" ([DR-032](032-session-players.md)).
+  Registration flows carry full blocks whose schema includes the optional hand-written fields.
 
 ### Protocol
 
@@ -58,21 +46,19 @@ Amended by [DR-236](236-primary-and-subagent-model-defaults.md) in the default p
 
 ### UX
 
-- One shared agent editor (adapter with readiness dot, model, adapter-scoped effort, permission mode and writable paths) and one agent chip (adapter · model @ effort, readiness dot) everywhere an agent is shown or edited.
-- Settings replaces the profile section with the Captain's editor and a per-adapter readiness panel; player editing lives with the playbooks: role rows in the Library open the editor in place, per [DR-009](009-at-hand-interaction.md).
-- The Captain-home popover carries the full editor, keeping the at-hand switch of [DR-007](007-conversational-session-start.md) and [DR-009](009-at-hand-interaction.md).
-- First-use defaults: seeding covers every shipped role; a new role assignment defaults to a fixed neutral Claude block, with an explicit "same as Captain" action copying adapter, model, effort, and permissions only.
+- One shared editor grammar — adapter with readiness dot, model and effort from the runtime's choices ([DR-052](052-runtime-model-options.md)), subagent model and effort on one row with them ([DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), Claude's independent Ultracode ([DR-235](235-independent-ultracode.md)), permission mode and writable paths, and the browser execution setting ([DR-097](097-media-and-browser-tools-across-hosts.md)) — and one agent chip (adapter · model @ effort, readiness dot) everywhere an agent is shown or edited; players and role bindings fork the editor by what each owns ([DR-032](032-session-players.md)).
+- Settings carries the Captain's editor and a per-adapter readiness panel; player editing lives with the playbooks, opened in place per [DR-009](009-at-hand-interaction.md).
+- The Captain's chip beside the task composer opens its full editor in place ([DR-141](141-project-start-explains-the-task-and-slash-discovery.md)).
+- Adding a new player starts with the model pair for the chosen adapter ([DR-236](236-primary-and-subagent-model-defaults.md)), with an explicit "same as Captain" action copying adapter, model, effort, and permissions only.
 - The shorthand concept does not appear in the product: no shorthand options, no shorthand labels; a scalar read from a hand-edited config displays as its adapter's defaults and becomes a block on the next edit.
 
-### Sources and toolchain
+### Compiles
 
-- The vendored built-in sources retire: playbook 3.1 ships `code.md` and `discuss.md`, and artifact resolution finds them in the installed package.
-- Compiles invoke slc without an explicit link target (the canonical bare form); a compiled entry with no derived roles is refused with recompile guidance naming slc 0.2's fix.
+- Compiles invoke slc without an explicit link target (the canonical bare form); a compiled entry with no derived roles is refused with recompile guidance.
 
 ## Consequences
 
 - The launcher-parity boundary stays honest in both directions: everything the launcher accepts composes, and everything spex composes can actually start a session.
 - Codex captains work through the prompt-level restriction; the composed captain options are the carrier, and a test pins it.
 - Existing user configs keep composing through the load-time migration; the launcher and Spex can migrate interchangeably, whichever runs first.
-- The single-vendor seed remains a first-hour protection; second-vendor setups keep working through the editor and readiness guidance.
-- The settings, core-service, playbook-library, run-view, and app-shell package items and the affected decision records are amended; the settings editor's coverage intent (comment preservation, fail-closed edits) is re-established over the new operations.
+- The settings editor's coverage intent (comment preservation, fail-closed edits) holds over the block operations.

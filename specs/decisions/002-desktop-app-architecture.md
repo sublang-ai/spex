@@ -5,11 +5,8 @@
 
 ## Status
 
-Accepted; the Settings surface's profile inventory is amended by [DR-019](019-inline-agent-configuration.md) — agents carry inline settings, so Settings owns the Captain's agent and adapter readiness while per-role agents live with their playbooks; distribution is amended by [DR-040](040-source-only-app-releases.md) — app releases ship as source on GitHub Releases, with binaries deferred until signing exists.
-Supported host platforms are amended by [DR-049](049-supported-app-hosts.md).
-The project session's one-live-session rule is amended by [DR-051](051-runtime-held-for-a-turn.md): one working turn per project, the runtime held only for a turn.
-The CLI release tag namespace is amended by [DR-056](056-release-naming.md): future releases use `cli-v*`, preserving published `v*` tags.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: each IDE's connection, sidebar and Dashboard return to one core.
+Accepted.
+Amended by [DR-019](019-inline-agent-configuration.md), [DR-040](040-source-only-app-releases.md), [DR-049](049-supported-app-hosts.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-056](056-release-naming.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -25,8 +22,8 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 ### Product
 
 - The app is named **Spex**: a desktop app to compile, configure, run, and monitor playbooks over local projects.
-- Distribution is via GitHub Releases; the app itself is not published to npm.
-- First platform target: macOS arm64, unsigned local/dev builds; Windows/Linux and code signing follow later.
+- Distribution is via GitHub Releases, as source with native downloads ([DR-040](040-source-only-app-releases.md), [DR-184](184-native-desktop-tag-packages.md)); the app itself is not published to npm.
+- Supported hosts follow [DR-049](049-supported-app-hosts.md).
 
 ### Three-layer, web-first architecture
 
@@ -37,6 +34,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - **Shell** (`apps/desktop`): an Electron [[1]] wrapper that boots the core in-process, loads the built UI, and adds OS integration (notifications, dock badge, file dialogs, login-shell environment capture).
 - The cloud port is the same core behind a server socket and the same UI served as static assets; only the shell layer is replaced.
   Multi-tenant auth for the cloud variant is explicitly out of scope here.
+- Each IDE connects to one core: the desktop to its embedded core, the browser IDE to the core serving the page ([DR-246](246-remove-groups-and-team-servers-from-the-clients.md)).
 
 ### Protocol
 
@@ -49,13 +47,14 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 ```text
 Spex
 ├── Workspace surfaces
-│   ├── Dashboard  — attention queue, running sessions, issues to do / PRs to review, usage
-│   ├── Projects   — local git repo + forge binding; a project is the run environment (cwd)
-│   ├── Library    — playbooks: browse, enable, map players to profiles, compile new ones
-│   └── Settings   — profiles, captain, layout, notifications, adapter readiness
-├── Project session (at most one live session per project)
-│   ├── Captain pane   — status glyphs, engagement state, captain chat
-│   ├── Player panes   — read-only streaming transcripts, visibility-driven
+│   ├── Dashboard  — attention queue and per-project intent ledger
+│   ├── Projects   — local Git repo + forge binding; a project is the run environment (cwd)
+│   ├── Playbooks  — browse, bind roles to players, author and compile
+│   ├── Space      — sign-in and sync of the person's project records
+│   └── Settings   — Captain agent, adapter readiness, language, config
+├── Project session (one working turn per project at a time)
+│   ├── Captain pane   — status, engagement state, captain chat
+│   ├── Player panes   — read-only streaming transcripts
 │   ├── Boss composer  — the single input; slash commands and free text
 │   └── Engagement     — one active playbook; parks and resumes; switch = finish or dismiss
 └── Foundations
@@ -76,17 +75,15 @@ Spex
 
 - The root `package.json` becomes a private workspace root; `specs/` stays at the repo root and covers all packages.
 - The CLI keeps its npm identity, bin, files whitelist, tests, and `CHANGELOG.md` (which moves with it to `packages/cli/`).
-- `v*` tags keep releasing the CLI exactly as today; the release workflow is updated to build, validate, version-check, and publish from `packages/cli`.
-  The CI-green gate ([[release-18](../packages/release.md#release-18)]) is unchanged and now covers all workspaces.
-- Desktop app releases use a distinct tag namespace (`app-v*`) added in a later iteration, so CLI and app release cadences stay independent.
+- The release workflow builds, validates, version-checks, and publishes the CLI from `packages/cli`.
+- CLI and app releases use distinct tag namespaces, `cli-v*` and `app-v*`, with published legacy `v*` CLI tags kept ([DR-056](056-release-naming.md)), so their cadences stay independent.
 
 ## Consequences
 
 - The UI is portable by construction; the cloud web app is a deployment task, not a rewrite.
 - Everything the panes show comes from one observer stream, so tmux-play and Spex render the same truth — tmux-play remains a faithful verification twin.
 - Electron adds ~120 MB download weight; accepted for v1 in exchange for zero-glue reuse of the Node ecosystem (cligent, playbook, agent SDKs).
-- Two release channels live in one npm-workspaces [[2]] repo; tag namespaces (`v*` vs `app-v*`) and workspace-scoped workflows must stay disjoint.
-- The scaffold CLI move to `packages/cli` touches the release workflow; the npm tarball must be verified equivalent before the first post-move release.
+- Two release channels live in one npm-workspaces [[2]] repo; tag namespaces (`cli-v*` vs `app-v*`) and workspace-scoped workflows must stay disjoint.
 - Native binaries spawned by agent SDKs constrain Electron packaging (asar unpacking); handled in the shell layer.
 
 ## References

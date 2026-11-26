@@ -5,10 +5,9 @@
 
 ## Status
 
-Accepted.
-Generalizes [DR-027](027-linked-views-contract.md)'s pane divider into house chrome law; [DR-029](029-session-history-home.md)'s sidebar tree rides on it.
-Clarified by [DR-041](041-chrome-that-fits.md): panes stacking under a container width is layout, not the auto-collapse declined below — the rail still moves only by the user's hand.
-Extended (2026-09-02) on the owner's ask: the divider idiom turns horizontal at a capped frame's bottom edge.
+Accepted; revised (2026-09-02).
+Amends [DR-027](027-linked-views-contract.md).
+Amended by [DR-041](041-chrome-that-fits.md).
 
 ## Context
 
@@ -42,11 +41,11 @@ Extended (2026-09-02) on the owner's ask: the divider idiom turns horizontal at 
 
 - free-form resizing of the navigation rail — the reference product's essence is the two-state collapse, and a continuously resizable label rail buys only tuning;
 - hover-peek of collapsed chrome — pointer-only, invisible to keyboards, and a surprise on trackpads;
-- auto-collapse at narrow widths — chrome that moves by itself trades predictability for cleverness.
+- auto-collapse at narrow widths — chrome that moves by itself trades predictability for cleverness; panes stacking under a container width is layout, not auto-collapse, and the rail still moves only by the reader's hand ([DR-041](041-chrome-that-fits.md)).
 
 ## Consequences
 
 - The run-view package gains the rail-collapse item and its coverage; the sidebar tree ([DR-029](029-session-history-home.md)) cites this idiom rather than restating it.
 - The spec view's graph divider stands as the idiom's first instance, unchanged.
 - The navigation entries gain glyphs in the one icon language (DR-010 §8), since a collapsed rail has only icons to speak with.
-- The Dashboard's History frame and the Library's stage box become instances of the frame control, each remembering its height under its own frame identity — per project group, and per playbook.
+- The Dashboard's History frame and a playbook's stage box become instances of the frame control, each remembering its height under its own frame identity — per project group, and per playbook.
