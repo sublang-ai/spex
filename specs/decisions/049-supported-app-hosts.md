@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-09-05).
-Amended by [DR-178](178-native-windows-private-storage.md) for native Windows hosting and private-storage admission.
-Amends [DR-002](002-desktop-app-architecture.md) for supported host platforms.
+Amends [DR-002](002-desktop-app-architecture.md).
+Amended by [DR-178](178-native-windows-private-storage.md).
 
 ## Context
 
@@ -16,14 +16,12 @@ Node's Windows permission API cannot enforce that boundary [[1]].
 
 ## Decision
 
-- Desktop and server hosts support macOS and Linux on filesystems that enforce these permissions.
-- Other native hosts refuse startup before creating or migrating config or storage.
-- Windows supports the scaffold CLI and browser access to a supported server.
-- CI builds every workspace on Windows and tests the scaffold CLI, browser UI, and native startup refusal; macOS and Linux retain the complete test suite.
+- Amends [DR-002](002-desktop-app-architecture.md) for supported host platforms.
+- Desktop and server hosts support macOS and Linux on filesystems that enforce these permissions, and native Windows on storage its own admission verifies ([DR-178](178-native-windows-private-storage.md)).
+- A host whose storage cannot be verified private refuses startup before creating or migrating config or storage.
 
 ## Consequences
 
-Native Windows hosting requires a separate storage-permission design before support can be added.
 Portable history may still contain paths recorded on other platforms.
 
 ## References

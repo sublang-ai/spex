@@ -5,20 +5,14 @@
 
 ## Status
 
-Accepted (2026-09-07) on the owner's two questions: why a session must be ended when a message continues it, and how settings can be changed once a session has started.
-Amends [DR-042](042-sessions-continue.md) (ending retires: a session is continued, never ended), [DR-029](029-session-history-home.md) (the ending control and the "ended" vocabulary), [DR-035](035-intent-ledger.md) (the lane Start reuses is the project's current conversation, not a live session), [DR-038](038-history-is-done-work.md) (the delete control waits only on a turn in flight), and [DR-002](002-desktop-app-architecture.md) (one working turn per project replaces one live session per project).
-
-Amended by [DR-067](067-tuning-for-one-conversation.md): a message opens the runtime on the current settings and the session's own tuning.
-The hold lasting a turn, the tuning-versus-structure line, and the refusal by name stand.
-Amended by [DR-074](074-a-parked-run-survives.md): the runtime is released at settlement whether or not unresolved repository effects stand.
-Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
-Amended by [DR-134](134-execution-ownership.md) in the project's lane: a session assigned to another runtime is never the lane.
-
-Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+Accepted (2026-09-07) on the owner's two questions.
+Amends [DR-002](002-desktop-app-architecture.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-038](038-history-is-done-work.md).
+Amended by [DR-067](067-tuning-for-one-conversation.md), [DR-074](074-a-parked-run-survives.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-134](134-execution-ownership.md), [DR-238](238-claude-resumes-keep-the-session-model.md).
 
 ## Context
 
-- Since [DR-042](042-sessions-continue.md) an ended session is a paused conversation a message continues, so "End" kept only two duties: releasing the project's one-live-session slot — a rule Spex enforces itself; Playbook claims a worktree per governed call only — and releasing the Playbook session lease so the terminal can continue the same session.
+- The owner asked why a session must be ended when a message continues it, and how settings can be changed once a session has started.
+- An ended session was already a paused conversation a message continues, so "End" kept only two duties: releasing the project's one-live-session slot — a rule Spex enforces itself; Playbook claims a worktree per governed call only — and releasing the Playbook session lease so the terminal can continue the same session.
   Both duties exist only because the runtime is held while the session is idle.
 - Holding the runtime while idle also freezes settings: the Playbook host takes its execution projection when it opens and offers no reconfiguration, so an edit in Settings reached a live session never.
   Playbook's own law is that a reopen reads current config, projected onto the session's stored playbooks and referenced players, applies compatible model, effort, and fast-mode changes on the next call, and fails closed on structural drift — adapter, instruction, permissions, roster, bindings, catalog membership.
@@ -31,19 +25,24 @@ Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Cla
 
 ## Decision
 
+- Amends [DR-029](029-session-history-home.md): the ending control and the "ended" vocabulary retire.
+- Amends [DR-035](035-intent-ledger.md): the lane Start reuses is the project's current conversation, not a live session.
+- Amends [DR-038](038-history-is-done-work.md): the delete control waits only on a turn in flight.
+- Amends [DR-002](002-desktop-app-architecture.md): one working turn per project replaces one live session per project.
+
 ### The runtime is held for a turn
 
 - A session is a durable conversation.
   The core holds its runtime — the Playbook lease, the Captain shell, the players — only for a Boss turn: acquired when a message arrives, through the continuation path that already existed, and released when the turn settles, fails, or aborts.
   "Live" means a turn is in flight or settling.
-- The one exception is a settled checkpoint the core could not continue from disk — unresolved repository effects: the runtime then stays held until a turn leaves the checkpoint continuable, because a conversation is never detached into a state it cannot re-enter.
+- The runtime is released at settlement whether or not unresolved repository effects stand ([DR-074](074-a-parked-run-survives.md)).
 - There is no ending control and no "ended" state in the interface; `session.dispose` stays as the protocol's abort-and-detach primitive for shells, drivers, and tests.
 
 ### Every message applies the current settings
 
-- A message opens the runtime with the settings the core holds when the message arrives, projected onto the session's stored members — its playbooks, and its referenced players in stored order — so an unrelated new playbook or player never invalidates a conversation.
-- Tuning changes — model, effort, fast mode of the Captain, a player, or a binding — apply on the next call.
-  Structural changes — adapter, instruction, permissions, a player's presence or place, a binding's player, a session playbook disabled or changed, its options — are refused before the runtime opens, naming the fields that changed and offering a new session.
+- A message opens the runtime with the settings the core holds when the message arrives and the session's own tuning ([DR-067](067-tuning-for-one-conversation.md)), projected onto the session's stored members — its playbooks, and its referenced players in stored order — so an unrelated new playbook or player never invalidates a conversation.
+- Tuning changes — model, effort, fast mode of the Captain, a player, or a binding — apply on the next call; an unpinned Claude primary is left to Claude Code's native resume selection ([DR-238](238-claude-resumes-keep-the-session-model.md)).
+  Structural changes — adapter, instruction, permissions, a player's presence or place, a binding's player, a session playbook removed or changed, its options — are refused before the runtime opens, naming the fields that changed and offering a new session.
 - A turn in flight keeps the settings it opened with; while the config is invalid, a message is refused naming the error.
 
 ### One working turn per project
@@ -53,7 +52,7 @@ Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Cla
 
 ### The current conversation
 
-- A project's current conversation is derived from stored state: the session with a turn in flight, else the most recently active session that continues and no other host owns.
+- A project's current conversation is derived from stored state: the session with a turn in flight, else the most recently active session assigned to this runtime ([DR-134](134-execution-ownership.md)) that continues, or whose recovery boundary stands ([DR-077](077-up-next-is-a-committed-queue.md)), and no other host owns.
   It is the lane the ledger folds for conditions and stand-ins, what the Now band shows, and where Start on an intent stages; the start tab is the fresh lane.
 - The host's dispose trace outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run: a parked question survives it and still summons.
 
@@ -66,9 +65,9 @@ Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Cla
 
 ## Consequences
 
-- The core detaches at settle behind the continuable guard, narrows the projection to stored members and names drift, derives current-conversation lanes, reads a dispose trace outside a turn as a pause, awaits a pending config reload before opening, and refuses by name.
+- The core detaches at settle, narrows the projection to stored members and names drift, derives current-conversation lanes, reads a dispose trace outside a turn as a pause, awaits a pending config reload before opening, and refuses by name.
 - The run view loses its End control, confirm, and ended notice; tabs, sidebar rows, and headers lose the word "ended"; the Now band and intent staging follow the current conversation; queued messages dispatch after the turn settles although the session is no longer live.
 - The terminal can continue any Spex conversation between turns, and the desktop refuses a message while the terminal holds a turn — the shared store's promise ([DR-045](045-unified-session-storage.md)) without a gesture.
 - Every message pays a reopen: sub-second today, growing with the replay's length through Playbook's three digest passes — an upstream cost to watch.
 - `run-view-47` retires with its ID reserved; items across core-service, run-view, dashboard, projects, and app-shell are reworded; four browser journeys and the release smoke driver change their ending steps.
-- Left open: reopening the last conversation at launch, and aligning Spex's unresolved-effects continuation gate with Playbook's own admission.
+- Left open: reopening the last conversation at launch.

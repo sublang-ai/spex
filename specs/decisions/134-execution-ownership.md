@@ -43,7 +43,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 - It reports the session as not continuable with the phrase below and offers no Restore, Discard or control on it; it never counts the session as the project's lane or as holding the project, so it may start sessions of its own.
 - It lists another runtime's sessions and intents in no attention and counts them in no badge.
 - It never derives another runtime's open dispatch as released into its own queue, never offers Start on another runtime's intent, never advances into one, and refuses a turn naming one as `conflict`; close, edit and drop on another runtime's intent are refused the same way, so no sync choice can drop the stamp of work that ran.
-- Deleting a session stays as [DR-042](042-sessions-continue.md) has it, and removing a closed intent stays allowed on any runtime, as that deletion is.
+- Deleting a session stays as [DR-045](045-unified-session-storage.md) has it, and removing a closed intent stays allowed on any runtime, as that deletion is.
 - The phrase, wherever it applies: "Runs on <label>".
 
 ### Bounded stop

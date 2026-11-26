@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-09-02) on the owner's ask for automated acceptance that simulates real users in typical scenarios.
-Extends [DR-020](020-desktop-live-smoke.md): the live desktop smoke keeps the Electron topology; the journeys take the interface.
-Extended by [DR-086](086-tests-in-tiers.md): the live lane becomes the regression that regular app releases run, walking the three fresh-user scenarios, and the hermetic lane runs in CI on macOS as well as Linux.
+Amends [DR-020](020-desktop-live-smoke.md).
+Amended by [DR-086](086-tests-in-tiers.md).
 
 ## Context
 
@@ -19,6 +19,8 @@ Extended by [DR-086](086-tests-in-tiers.md): the live lane becomes the regressio
 - The core already exposes the seams a hermetic run needs — adapter imports, the adapter runtime check, the Captain factory, environment, and home — and the fake dev core narrates a realistic run through them.
 
 ## Decision
+
+- Extends [DR-020](020-desktop-live-smoke.md): the live desktop smoke keeps the Electron topology; the journeys take the interface.
 
 ### One browser suite over the served interface
 
@@ -34,8 +36,8 @@ Extended by [DR-086](086-tests-in-tiers.md): the live lane becomes the regressio
 
 ### Two lanes
 
-- Hermetic lane, the default: the substituted agents, deterministic and fast, run in CI on every push and pull request and as a stage of the smoke suite.
-- Live lane, opt-in by environment: the same harness with the real adapters and the real Captain on the machine's sign-in, running only the journeys tagged live — a minimal no-change `/code` task observed to a player's live output, then aborted — under the wait budget and the retry-or-waive rule of [DR-020](020-desktop-live-smoke.md).
+- Hermetic lane, the default: the substituted agents, deterministic and fast, run in CI and as a stage of the smoke suite.
+- Live lane, opt-in by environment: the same harness with the real adapters and the real Captain on the machine's sign-in, running only the journeys tagged live under the wait budget and the retry-or-waive rule of [DR-020](020-desktop-live-smoke.md); it is the regression regular app releases run, walking the fresh-user scenarios ([DR-086](086-tests-in-tiers.md)).
 
 ### What stays
 
@@ -45,7 +47,7 @@ Extended by [DR-086](086-tests-in-tiers.md): the live lane becomes the regressio
 ## Consequences
 
 - Playwright, axe-core, and a Chromium download join the development dependencies in a new `e2e` workspace; CI gains one job; the smoke suite gains a stage; the tagging gate now includes the journeys.
-- Journeys run at the scripted Captain's pace — seconds, not an LLM's minutes — so the suite stays a per-commit gate; only the live lane pays for real agents.
+- Journeys run at the scripted Captain's pace — seconds, not an LLM's minutes — so the suite stays a CI gate; only the live lane pays for real agents.
 - Defects the journeys reveal are fixed in the packages they belong to; the suite itself carries no product rule.
 
 ## References

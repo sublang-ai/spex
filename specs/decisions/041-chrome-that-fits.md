@@ -5,20 +5,13 @@
 
 ## Status
 
-Extended by [DR-225](225-bounded-surfaces-and-attached-records.md) with centered 48rem content columns and full-width scrolling surfaces for global Playbooks and Space.
-
-Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
-
-Accepted (2026-09-02) on the owner's review: overlapping text in narrow panes, a composer whose buttons leave their box, a native resize grip inside a custom control, and button labels that run to sentences.
-Amends [DR-010](010-interface-craft.md) with a ninth principle and clarifies [DR-030](030-workspace-chrome.md): panes stacking under a container width is layout, not chrome that moves by itself.
-Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: a character budget counts the English text, and its translation fits the control the English text fits; every other fit rule stands.
-Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) on the project home: the resting slash hint stands below the composer; staged and acknowledgment captions remain inside it.
-Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the label budget: a menu's entry, and a row's act that record fixes as a whole phrase, may exceed fourteen characters and wraps within its row.
-
-Amended by [DR-209](209-a-project-row-with-one-menu.md) in the label budget for a project row's clickable standing phrase and code-status control: their informative status wording remains whole rather than becoming a shorter action label.
+Accepted (2026-09-02) on the owner's review.
+Amends [DR-010](010-interface-craft.md), [DR-030](030-workspace-chrome.md).
+Amended by [DR-078](078-the-interface-speaks-the-readers-language.md), [DR-085](085-boss-talks-through-captain.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-209](209-a-project-row-with-one-menu.md), [DR-225](225-bounded-surfaces-and-attached-records.md).
 
 ## Context
 
+- The owner's review (2026-09-02) found overlapping text in narrow panes, a composer whose buttons leave their box, a native resize grip inside a custom control, and button labels that run to sentences.
 - The same pane renders at many widths: the Captain column is set by a divider and the rail's state, the served page has no window floor, and the desktop window has none either.
   A row laid out for one width overlaps at another: the Specs outline's count chips paint over the package name below about 800px, and the composer's three buttons leave their box whenever a turn runs in a column narrower than about 530px.
 - Two idioms already point the way — the player pane hides its usage below a container width, and the settings requirement text wraps rather than truncates — but nothing names the rule, so each new row invents its own.
@@ -30,22 +23,26 @@ Amended by [DR-209](209-a-project-row-with-one-menu.md) in the label budget for 
 
 ### §9 Chrome that fits
 
+- This amends [DR-010](010-interface-craft.md) with a ninth principle and clarifies [DR-030](030-workspace-chrome.md): panes stacking under a container width is layout, not chrome that moves by itself.
 - The unit of fit is the pane, not the window: every row, toolbar, and header fits its own container, and width-dependent forms are container queries on the pane or row — never viewport media queries, never a JavaScript width hook.
 - Three named container steps serve the whole interface: `@xs` (20rem, the reflow floor: a pane at 320px still shows its duty and its primary control), `@md` (28rem: labels and hints return), `@2xl` (42rem: at-a-glance extras return).
   Literal steps normalize to these.
 - A control in constrained chrome — the tab strip, the rail, the composer's action row, row menus, list rows, pane and card headers — reads at most 14 characters, its busy form included, preferring two words; the busy form never widens the control; the longer truth lives in the title and, where it changes meaning, the accessible name.
   A control on a wide surface — forms, empty states, banners — may run to a sentence-case phrase, never a sentence.
   A product name ("Try the Academy example") is exempt on wide surfaces only.
+  A budget counts the English text, and its translation fits the control the English text fits ([DR-078](078-the-interface-speaks-the-readers-language.md)).
+  A menu's entry and a row's act fixed as a whole phrase ([DR-172](172-surfaces-a-fresh-user-reads.md)), and a project row's standing phrase and code-status control ([DR-209](209-a-project-row-with-one-menu.md)), keep their whole wording and wrap within their row.
 - In every row exactly one child owns the slack — minimum width zero, growing, truncating with the full text in its title; marks, chips, ages, and controls refuse to shrink only when narrower than about 6rem; no text child is both unshrinkable and unbounded.
 - The ladder, applied in order as the container narrows: the action row wraps, primary last and right; free text truncates with its title; at-a-glance duplicates hide first — usage, ages, rollups, the words beside counts — information the surface repeats elsewhere; a labelled control collapses to icon plus tooltip with its accessible name and its taxonomy unchanged; side-by-side panes stack; only canvases — a machine drawing, the graph, a table — scroll sideways, inside their own scrolling container with the fade mask.
   Overlap and clipping are never on the ladder, and the page body never scrolls sideways.
 - The shell fills the window at every size and every surface scrolls inside its own box: a surface root is height-constrained, so no surface can grow the shell, and every box that scrolls is a positioned box, so the content it holds — a screen-reader-only span, a popover, a badge — is contained by the box it belongs to rather than carried by the page.
   The page itself never scrolls, vertically any more than sideways, and a window made shorter or taller re-fits with no reload.
+  Global Playbooks and Space center their content in a 48rem column inside a full-width scrolling surface ([DR-225](225-bounded-surfaces-and-attached-records.md)).
 - Floors: every pane fits at 280px with nothing overlapping; the whole interface at a 320px viewport paints nothing over anything and nothing outside the viewport except inside a scrolling canvas.
   The open rail is 224px, so the 320px floor holds with the rail collapsed; the rail still moves only by the user's hand.
 - Native chrome stays out of custom controls: no resize grips, no native scrollbars in a composer box; a text field grows to a stated maximum, then scrolls.
   A positioned badge never covers a glyph; a count prints "9+".
-- The composer's shape: the field on top, growing with its text to a maximum; an action row beneath that wraps — secondary on the left, the primary last on the right; a placeholder of at most 24 characters; hints and acknowledgments share one caption line.
+- The composer's shape: the field on top, growing with its text to a maximum; an action row beneath that wraps — secondary on the left, the primary last on the right; a placeholder of at most 24 characters; hints and acknowledgments share one caption line, save on the project home, where the resting slash hint stands below the composer ([DR-141](141-project-start-explains-the-task-and-slash-discovery.md)).
 
 ### Verification
 
@@ -54,7 +51,7 @@ Amended by [DR-209](209-a-project-row-with-one-menu.md) in the label budget for 
 
 ## Consequences
 
-- Composer labels shorten ("Send" and "Send next"), the ended notice's control becomes "New session", busy forms keep their width, and the composer is rebuilt to the shape above.
+- Composer labels shorten, busy forms keep their width, and the composer is rebuilt to the shape above; what it offers while a turn runs is [DR-085](085-boss-talks-through-captain.md)'s.
 - The Specs outline's count chips keep their words above `@md` and print numbers alone below it, the words riding the accessible name.
 - Every surface root becomes a height-constrained box that scrolls its own content, and every scrolling box in the interface — a surface root, a transcript, the History frame, the outline, the sidebar — becomes a positioned box.
 - [DR-010](010-interface-craft.md)'s review list gains this principle: a new row or control is held to the label budget, the yield order, and the ladder.

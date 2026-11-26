@@ -5,12 +5,13 @@
 
 ## Status
 
-Accepted
+Accepted.
+Amends [DR-012](012-spec-package-files.md), [DR-017](017-intent-records.md).
 
 ## Context
 
 - Spec-generation migration requires judgment, so it cannot be reduced to CLI rewrites.
-- The installable migration skill chosen earlier duplicates an agent prompt while adding installation and agent-specific discovery steps.
+- The earlier mechanical migration of [DR-012](012-spec-package-files.md) and [DR-017](017-intent-records.md) restructured legacy trees in the CLI, and the installable migration skill chosen after it duplicates an agent prompt while adding installation and agent-specific discovery steps.
 - The published CLI does not ship the repository's `skills/` or `docs/` directories, so its guidance points installed users at files they do not have.
 
 ## Decision

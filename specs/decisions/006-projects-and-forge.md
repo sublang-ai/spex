@@ -5,11 +5,8 @@
 
 ## Status
 
-Accepted; amended by [DR-036](036-file-state-store.md): the project registry lives in the state root's registry file, not the app-local SQLite store.
-Amended by [DR-096](096-the-app-supplies-the-scaffold.md) in the create flow's scaffold step: the scaffold CLI is the checkout's own copy, the registry's only where none is built.
-Amended by [DR-100](100-new-project-specs-follow-the-readers-language.md) in new project scaffolding: the creating page supplies its resolved interface language.
-Amended by [DR-099](099-project-creation-preserves-existing-repositories.md) in the create flow's existing-repository refusal and failed-creation recovery.
-Amended by [DR-103](103-the-home-and-its-groups.md): a project's records live in its spex repository, cloned under the home's `workspace/` and pushed to its group on the Git host once you sign in; the code may be in any Git repository; the forge binding stands.
+Accepted.
+Amended by [DR-036](036-file-state-store.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-096](096-the-app-supplies-the-scaffold.md), [DR-099](099-project-creation-preserves-existing-repositories.md), [DR-100](100-new-project-specs-follow-the-readers-language.md), [DR-103](103-the-home-and-its-groups.md).
 
 ## Context
 
@@ -22,17 +19,17 @@ Amended by [DR-103](103-the-home-and-its-groups.md): a project's records live in
 
 ### Project model
 
-- A **Project** is a registered local git repository, identified by its repository root path.
+- A **Project** is a registered local Git working folder, identified by its repository root path; its records live apart from the code in a spex repository ([DR-103](103-the-home-and-its-groups.md)).
 - The project is the run environment: a playbook session launched for a project runs with its cwd at the project root (embedded runtime per [DR-003](003-runtime-reuse.md)).
-- At most one live session per project; several projects may run sessions concurrently ([DR-002](002-desktop-app-architecture.md)).
+- One working turn per project at a time; several projects may run turns concurrently ([DR-051](051-runtime-held-for-a-turn.md)).
 - Registration flows:
 
 | Flow | Steps |
 | --- | --- |
-| Pick existing | select a directory; it must be a git repository root |
-| Create new | `git init` in a chosen directory + optional spec scaffolding via the `@sublang/spex` scaffold CLI + an initial commit |
+| Pick existing | select a directory; it must be a Git repository root with an initial commit |
+| Create new | refuse a folder already holding a Git repository ([DR-099](099-project-creation-preserves-existing-repositories.md)); `git init` in a chosen directory + optional spec scaffolding in the creating page's language ([DR-100](100-new-project-specs-follow-the-readers-language.md)) via the app's own scaffold CLI ([DR-096](096-the-app-supplies-the-scaffold.md)) + a real initial commit |
 
-- Project registrations are app-only state in the app-local SQLite store ([DR-004](004-config-and-persistence.md)); nothing is written into the project repo except what the create flow commits.
+- Project registrations are app-only state in the home's registry file ([DR-036](036-file-state-store.md)); nothing is written into the project repo except what the create flow commits.
 
 ### Forge adapter interface
 

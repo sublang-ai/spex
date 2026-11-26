@@ -1511,7 +1511,7 @@ export function placementLine(page: Page, key: string, host: StandinHost | null)
  * (core-service-60): its captain-session record naming the demo
  * project as the working directory and a replay stream holding one
  * Boss turn. The core adopts it as a terminal-run session, served and
- * deletable (DR-042). Returns the session id.
+ * deletable (DR-045). Returns the session id.
  */
 export async function writeTerminalSession(
   app: App,

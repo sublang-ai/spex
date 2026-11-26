@@ -6,8 +6,8 @@
 ## Status
 
 Accepted.
-Extends [DR-009](009-at-hand-interaction.md) and [DR-026](026-data-graphics-craft.md); amends DR-026 §4 (the presentation may fill the pane within a stated bound) and §7 (inspection never takes the emphasis).
-The selection's voice under "One voice per axis", rule 3's reveal, the footer's place and the decisions branch are amended by [DR-158](158-a-legible-graph-and-outline.md): its isolation also hides the edges it does not touch and draws its own directed, the graph also pans a node the relationship panel covers and returns the camera after the selection, and `meta` and `map` stand in the outline pane's footer, joined there by the decision records, which leave the outline for a list of their own.
+Amends [DR-026](026-data-graphics-craft.md).
+Amended by [DR-030](030-workspace-chrome.md), [DR-158](158-a-legible-graph-and-outline.md).
 
 ## Context
 
@@ -27,7 +27,7 @@ Inspection (hover and keyboard focus) and the camera are per-view state, never s
 
 1. Selecting is its own gesture — a package row activated in the outline, a node in the graph — never a side effect of anything else.
 2. Arranging is its own gesture — the chevron and the arrow keys — and never selects, deselects, or moves the camera.
-3. A new selection reveals in both projections: the package and its ancestors open and scroll into view in the outline, and the graph pans only if the node sits off-viewport; reveal only opens, never closes, and never counts as the reader moving the camera.
+3. A new selection reveals in both projections: the package and its ancestors open and scroll into view in the outline, and the graph pans only if the node sits off-viewport or under the pinned card, returning the camera after the selection unless the reader moved it ([DR-158](158-a-legible-graph-and-outline.md)); reveal only opens, never closes, and never counts as the reader moving the camera.
 4. Query and lens change visibility alone: they never write the selection, the camera, or any arrangement beyond the search's transient overlay.
 5. The selected package is never dropped: a narrowing search retains it at full selection emphasis with the shown-despite grammar reveals already use [[7]].
 6. Inspection shows the details card and lifts the inspected mark to full strength; it never dims others, never isolates, never selects.
@@ -36,10 +36,10 @@ Inspection (hover and keyboard focus) and the camera are per-view state, never s
 An in-view citation jump is item navigation under rule 4's spirit: it reveals and flashes its target and never writes the package selection.
 
 **One voice per axis.**
-Selection speaks solid brand — the halo and neighborhood isolation in the graph, the highlighted row in the outline; the query speaks dashed brand marks and the narrowed outline; the lens speaks item visibility alone; inspection speaks the card and ring.
-Query marks count as interaction state under DR-026 §2's hue budget — a match mark is live feedback on the reader's own act, not a category — and composed brand voices hold full strength together, the match ring included while a selection isolates.
+Selection speaks ink — the halo and neighborhood isolation in the graph, hiding the edges it does not touch and drawing its own citations directed, and the highlighted row in the outline ([DR-158](158-a-legible-graph-and-outline.md)); the query speaks ink match rings and the narrowed outline; the lens speaks item visibility alone; inspection speaks the card and ring.
+Composed voices hold full strength together, the match ring included while a selection isolates.
 
-**Density is solved, not tuned** (amending DR-026 §4):
+**Density is solved, not tuned** (amending [DR-026](026-data-graphics-craft.md) §4; inspection never taking the emphasis amends its §7):
 
 - the settled arrangement stays a pure function of the tree and its label metrics — deterministic, pane-independent, holding a minimum separation between whole marks, names included, because an arrangement blind to names leaves the presentation a scale it cannot solve above the activation floor;
 - the rendered picture is a pure function of the arrangement and the pane: positions span the drawing area within a bounded aspect relaxation (axis-scale ratio at most ~1.25) — bounded fill, unlike the unbounded stretching §4 condemned [[8]];
@@ -52,8 +52,7 @@ Force constants return to topology duty; density never again lives in physics.
 **Records find their places.**
 
 - The outline drops its root row: collection directories and files list at the top level — the header already counts the packages.
-- Decisions join the outline as its last branch: count in the label, rows opening the records reader, present whenever decision records exist — file-less and legacy trees included — matched by search on ID and title, untouched by the lens.
-- The footer reduces to `meta` and `map`, direct reader links; links inside the reader follow the view's own link semantics instead of dying inert.
+- The outline pane's footer holds `map.md`, `meta.md` and the decision records as reference, the records opening their own list in place of the view ([DR-158](158-a-legible-graph-and-outline.md)), present whenever decision records exist — file-less and legacy trees included; links inside the reader follow the view's own link semantics instead of dying inert.
 - Intent records leave the view: they are work items, so the Dashboard's next-work lists carry each project's intents, and activating one opens that record in its project's Specs surface — reachable, in its home.
 
 **Considered and declined**, so the alternatives cannot re-enter piecemeal:
@@ -62,14 +61,12 @@ Force constants return to topology duty; density never again lives in physics.
 - selection-scoped search: a silently narrowed scope makes items vanish for reasons the reader cannot see [[6]];
 - multi-select and compare: one selection is what keeps the graph's isolation meaningful; comparison is a future decision with its own design;
 - hover or focus taking the emphasis: inspecting must never look like choosing;
-- an intents branch beside the decisions: intents are work, and the owner routed work to work surfaces.
+- intents in the spec view: intents are work, and the owner routed work to work surfaces.
 
 ## Consequences
 
-- The spec-view package amends to this contract: the projection and gesture split (spec-view-20), the emphasis and inspection model (spec-view-25), the camera (spec-view-27), the layout function (spec-view-28, spec-view-22), search narrowing with records matching and restore-then-re-reveal (spec-view-5), jumps and reader links (spec-view-6, spec-view-7), the root removal (spec-view-1), and voice composition (spec-view-29); the selection, reveal, and retention axes land as their own items, and verification re-pins the round trip, encodings, determinism, interaction, and records access.
-- spec-view-14 moves to the package's External Behavior: the records-listing contract gains an external user — the Dashboard — which cites it.
-- The dashboard package gains the intents next-work item and its coverage.
-- DR-026's status records the §4 and §7 amendments.
+- The spec-view package holds this contract: the projection and gesture split, the emphasis and inspection model, the camera, the layout function, search narrowing, jumps and reader links, the root removal and voice composition, each with its verification.
+- The records-listing contract has an external user — the Dashboard — which cites it.
 
 ## References
 

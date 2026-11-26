@@ -9,7 +9,7 @@ Done (2026-09-02)
 
 ## Intent
 
-Let a message continue an ended session and let every listed session be deleted, per [DR-042](../decisions/042-sessions-continue.md).
+Let a message continue an ended session and let every listed session be deleted, per [DR-045](../decisions/045-unified-session-storage.md).
 
 ## Deliverables
 

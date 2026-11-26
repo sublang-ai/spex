@@ -6,10 +6,8 @@
 ## Status
 
 Accepted (2026-09-05).
-Amends [DR-045](045-unified-session-storage.md) with desktop access to uncertain-turn recovery.
-Extended by [DR-060](060-failed-workflow-control.md) to the workflow parked in its recoverable failure state, a condition that never stands with uncertainty; the uncertain-turn decision below is unchanged.
-Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its two controls: Restore replaces Retry, restoring the saved position and reporting what was recorded without repeating it, and Discard is offered only where Playbook's discard predicate holds.
-Amended by [DR-134](134-execution-ownership.md) in "regardless of their originating host": Restore and Discard are offered on the assigned runtime alone.
+Amends [DR-045](045-unified-session-storage.md).
+Amended by [DR-060](060-failed-workflow-control.md), [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-134](134-execution-ownership.md).
 
 ## Context
 
@@ -18,14 +16,16 @@ Shared storage must make the same recovery available in desktop without making n
 
 ## Decision
 
-- Expose Retry and Discard for uncertain sessions, regardless of their originating host.
-- Retry uses the recorded input and attempted configuration after Playbook's reconciliation; it accepts no replacement input.
-- Discard restores the preceding settled checkpoint only if the effect ledger has not advanced; a never-settled fresh session may be removed under that same rule.
+- Amends [DR-045](045-unified-session-storage.md) with desktop access to uncertain-turn recovery.
+- Expose Restore and Discard for uncertain sessions on the session's assigned runtime alone ([DR-134](134-execution-ownership.md)), whichever interface wrote them.
+- Restore opens the session in Playbook's recover mode and runs one turn that restores the saved position and reports what was recorded, repeating nothing ([DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
+- Discard restores the preceding settled checkpoint, offered only where Playbook's discard predicate holds; a never-settled fresh session may be removed under that same rule.
 - Both operations use Playbook's exclusive session lease and recovery lifecycle. Discard loads no agents or configuration.
-- Show the saved input and action consequences before confirmation; preserve history and the refusal reason when recovery is unsafe.
+- Show the saved input, and Discard's consequences before its confirmation; preserve history and the refusal reason when recovery is unsafe.
 - Block normal submissions and queued sends until uncertainty is resolved.
+- A workflow parked in its recoverable failure state, which never stands with uncertainty, has its own control ([DR-060](060-failed-workflow-control.md)).
 
 ## Consequences
 
 Desktop and CLI share recovery decisions and effect evidence.
-Discard cannot undo external work, and Retry is not permission to repeat effects.
+Discard cannot undo external work, and Restore repeats no effects.

@@ -189,7 +189,7 @@ export async function seedHistorySession(
 /**
  * Another device's turn on an existing session: the records appended
  * through the shared store and the settled manifest re-checkpointed
- * on the longer replay, so the bundle stays continuable (DR-042) and
+ * on the longer replay, so the bundle stays continuable (DR-045) and
  * differs from the ancestor as one unit (space-33). Stands in for a
  * peer core running the session, so a sync journey can meet the same
  * session changed on both sides.

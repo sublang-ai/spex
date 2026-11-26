@@ -5,9 +5,9 @@
 
 ## Status
 
-Accepted; the logo recolor is reverted by owner decision (2026-07-23) — the Logo bullet below records the standing rule.
-Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: each type stack names the platforms' Simplified Chinese faces after its Latin faces; the brand faces stand.
-Amended by [DR-158](158-a-legible-graph-and-outline.md) on the spec view: its selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring there.
+Accepted; revised (2026-07-23).
+Amends [DR-010](010-interface-craft.md).
+Amended by [DR-078](078-the-interface-speaks-the-readers-language.md), [DR-158](158-a-legible-graph-and-outline.md).
 
 ## Context
 
@@ -19,16 +19,17 @@ Amended by [DR-158](158-a-legible-graph-and-outline.md) on the spec view: its se
 
 ## Decision
 
-- Fit in, don't rebuild: DR-010's grammar stands — status palette (emerald/amber/red/neutral), one icon language, small type scale, one button taxonomy — and DR-011's group hues (sky/fuchsia/teal) stand.
+- Fit in, don't rebuild: DR-010's grammar stands — status palette (emerald/amber/red/neutral), one icon language, small type scale, one button taxonomy — and the spec view's group hues stand.
 - **Interaction hue.** A brand-purple ramp anchored at the system's `--accent` `#890FBC` (step 600) and `--accent-dark` `#27063D` (step 950) replaces indigo everywhere indigo marked interaction.
   This amends DR-010 §8: *brand purple* is reserved for interaction.
+  On the spec view, the selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring ([DR-158](158-a-legible-graph-and-outline.md)).
 - **Warm light theme.** Light-theme neutrals shift to the system's warm paper values (page `#F7F4EF`, hover `#EFEAE2`, hairline `#E3DED5`, strong border `#D8D2C6`); panels stay white; text stays neutral ink.
 - **Derived dark theme.** The design system defines a single light theme; the app keeps its OS-driven dark theme (DR-010 §7), derived as stock dark neutrals plus lighter steps of the same brand ramp, with WCAG contrast holding in both themes.
 - **Bright purple is artwork-only.** The wordmark's `#A416EF` never appears as UI text, border, or fill.
-- **Type.** Sans stack prefers Euclid Circular A when installed and falls back to the platform sans.
+- **Type.** Sans stack prefers Euclid Circular A when installed and falls back to the platform sans; each type stack names the platforms' Simplified Chinese faces after its Latin faces ([DR-078](078-the-interface-speaks-the-readers-language.md)).
   The licensed font files are not bundled into this public repo.
 - **Logo.** The Spex product logo — the owner-supplied circular beach-rabbit badge — is the app icon, favicon, and the in-app mark beside the Spex name.
-  It keeps its original warm sunset palette (amended 2026-07-23; the initial release shipped a brand-ramp recolor that read as a night scene and lost the artwork's sunset story).
+  It keeps its original warm sunset palette: a brand-ramp recolor read as a night scene and lost the artwork's sunset story.
   The owner-supplied SVG is the vector master; the in-app mark renders it directly, and the raster assets — 480px PNG, favicon, app icon — derive from it.
   The warm palette is artwork-only, like the bright wordmark purple: it never appears as UI text, border, or fill, and brand purple stays the sole interaction hue.
   The SubLang monogram and wordmarks remain the Lab's marks; those assets come from the design-system project unmodified — never redrawn or re-typeset.
@@ -38,6 +39,5 @@ Amended by [DR-158](158-a-legible-graph-and-outline.md) on the spec view: its se
 
 ## Consequences
 
-- From this decision on, DR-010 §8 reads "brand purple reserved for interaction"; its other clauses are unchanged.
 - The app-shell package gains the packaged-app icon requirement [[app-shell-23](../packages/app-shell.md#app-shell-23)].
 - Most users see the platform sans until a font-license decision allows shipping Euclid with the app.

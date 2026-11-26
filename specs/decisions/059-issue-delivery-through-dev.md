@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-09-12).
-Amended by [DR-104](104-spec-package-format-and-client-environments.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
-Amends [DR-035](035-intent-ledger.md)'s issue capture seed and [DR-037](037-playbook-12-adoption.md)'s built-in catalog.
+Amends [DR-035](035-intent-ledger.md), [DR-037](037-playbook-12-adoption.md).
+Amended by [DR-104](104-spec-package-format-and-client-environments.md).
 
 ## Context
 
@@ -17,10 +17,11 @@ Amends [DR-035](035-intent-ledger.md)'s issue capture seed and [DR-037](037-play
 
 ## Decision
 
+- Amends [DR-035](035-intent-ledger.md)'s issue capture seed and [DR-037](037-playbook-12-adoption.md)'s built-in catalog.
 - An issue seed is `/dev Address #N: <title>`, a blank line, and the issue's canonical URL; it carries no delivery instructions, because the playbooks own them.
 - Delivery ends at the merged pull request and the restored default-branch checkout, or at a typed `pr` failure that leaves the pull request open; the Boss merges nothing by hand.
-- Spex requires Playbook 13.2 or later and adds `branch` and `pr` to the built-in catalog, seeded through the installed starter with their `coder` roles bound to `dev.coder`.
-- While `dev` is configured but `branch` or `pr` is not, the Library marks `dev`'s pull-request delivery unavailable and names the built-ins to enable; a plain `/dev` request keeps working.
+- `branch` and `pr` join the built-in playbooks the app ships as a spec package ([DR-104](104-spec-package-format-and-client-environments.md)), their `coder` roles played by `dev.coder`.
+- While `dev` runs and `branch` or `pr` does not, the Playbooks tab marks `dev`'s pull-request delivery unavailable, naming each missing built-in; a plain `/dev` request keeps working.
 
 ## Consequences
 
