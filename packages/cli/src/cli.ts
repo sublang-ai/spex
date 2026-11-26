@@ -29,6 +29,13 @@ const COMMANDS: Record<string, Command> = {
 /** The commands keeping their own contracts and exits. */
 const OWN: Record<string, (args: string[]) => void> = { scaffold, lint };
 
+/** The guard commands (guards-27), which also keep their own exits.
+ * Their code loads only when one of them runs. */
+const GUARDS: Record<string, (args: string[]) => Promise<number>> = {
+  verify: async (args) => (await import("./guards/commands.js")).verify(args),
+  approve: async (args) => (await import("./guards/commands.js")).approve(args),
+};
+
 /** Print what was asked on standard output and exit 0 (cli-21). */
 function say(text: string): void {
   process.stdout.write(`${text}\n`);
@@ -79,7 +86,8 @@ async function main(): Promise<void> {
     const help = commandHelp(asked);
     return help === undefined ? unknown(asked) : say(help);
   }
-  const named = Object.hasOwn(COMMANDS, command) || Object.hasOwn(OWN, command) ? commandNamed(command) : undefined;
+  const known = Object.hasOwn(COMMANDS, command) || Object.hasOwn(OWN, command) || Object.hasOwn(GUARDS, command);
+  const named = known ? commandNamed(command) : undefined;
   if (named === undefined) return unknown(command);
   if (asksHelp(args.slice(1))) return say(commandHelp(command)!);
 
@@ -90,6 +98,10 @@ async function main(): Promise<void> {
     // request it left pending (cli-13).
     if (code === 130) process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
     else process.exitCode = code;
+    return;
+  }
+  if (Object.hasOwn(GUARDS, command)) {
+    process.exitCode = await GUARDS[command]!(args.slice(1));
     return;
   }
   OWN[command]!(args.slice(1));

@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `spex verify` checks every guard under `guards/`, or the guards you
+  name, on a copy of your code, and exits `0` only when each one passes.
+  A guard protects one critical behavior on every change: one assertion
+  with permitted and forbidden examples kept as spec items, and beside
+  the code its readings, a binding to the code and a kept fault the
+  check must catch. It calls no model and needs Node.js 22.15 or newer.
+
+- `spex approve <guard>` prints a guard's examples and what changed
+  since the last approval, then writes `guards/<guard>/approval.json`
+  for you to commit. `spex verify` passes no guard whose items or files
+  changed since that record.
+
 ### Removed
 
 - The `@sublang/spex` library drops group and member operations, team-server discovery, tickets and seat sign-in. This breaking change targets the next CLI major release. Personal Space sign-in and registry commands remain available.

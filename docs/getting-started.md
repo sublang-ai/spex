@@ -167,6 +167,18 @@ are separate, and signing out of one keeps the other. See the
 [CLI guide](../packages/cli/README.md) for every command, sign-in and exit
 codes.
 
+Where a project keeps guards, which protect a critical behavior on every
+change:
+
+```sh
+spex verify             # check that each guard's protected behavior still holds
+spex approve <guard>    # record your approval of a guard's items and files
+```
+
+Both need no sign-in. The CLI guide's
+[Guards](../packages/cli/README.md#guards-protect-critical-behavior-on-every-change)
+section describes them.
+
 ## Try a spec-first task
 
 The built-in playbooks, `sublang/playbooks`, come with Spex as a global

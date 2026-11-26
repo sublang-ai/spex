@@ -226,6 +226,8 @@ const COMMAND_HELP: Record<string, { aliases?: string[]; options: string[] }> = 
   whoami: { options: ["--registry <url>", "--space <url>"] },
   scaffold: { options: ["--update", "--lang <code>", "--agents <names>"] },
   lint: { options: [] },
+  verify: { options: [] },
+  approve: { options: [] },
 };
 
 /** Run the CLI in an empty folder with a home not yet made, and check

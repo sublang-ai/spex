@@ -42,6 +42,10 @@ Specs
   scaffold [<path> | --update]                          Start specs/ and point your agents at it
   lint [<path>]                                         Check specs/ for structure, IDs and citations
 
+Guards
+  verify [<guard>…]                                     Check that each guard's protected behavior still holds
+  approve <guard>                                       Record your approval of a guard's items and files
+
 spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex`;
 
 /** An option of a command: its label, what it does, and, for one that
@@ -127,6 +131,15 @@ const HELP: Readonly<Record<string, Help>> = {
   lint: {
     usage: "spex lint [<path>]",
     options: [["<path>", "The folder holding specs/ (the Git repository's top level by default)"]],
+  },
+  verify: {
+    usage: "spex verify [<guard>…]",
+    options: [["<guard>…", "The guards to check, by name (every guard under guards/ by default)"]],
+  },
+  approve: {
+    usage: "spex approve <guard>",
+    words: "<guard>",
+    options: [["<guard>", "The guard to approve, by name"]],
   },
 };
 
