@@ -6,11 +6,8 @@
 ## Status
 
 Accepted (2026-10-30).
-Amends [DR-049](049-supported-app-hosts.md) for native Windows hosting and private-storage admission.
-
-Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md) to use the coordinated published runtime packages in place of temporary vendor archives.
-
-Amended by [DR-223](223-windows-storage-checks-what-macos-checks.md) in its admission: no existing entry is checked before a write or at start, the remaining check admits read grants to other principals, and environment files are ordinary working-folder files.
+Amends [DR-049](049-supported-app-hosts.md).
+Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md), [DR-223](223-windows-storage-checks-what-macos-checks.md).
 
 ## Context
 
@@ -19,9 +16,10 @@ Windows users need the desktop app without WSL or a separately operated server.
 
 ## Decision
 
-- Native Windows hosts admit only local, verified private storage; a missing capability or unsafe existing entry refuses rather than skipping permission checks.
+- Amends [DR-049](049-supported-app-hosts.md) in native Windows hosting and private-storage admission.
+- Native Windows hosts admit private storage only where it can be verified; a missing capability refuses rather than skipping the checks [DR-223](223-windows-storage-checks-what-macos-checks.md) keeps.
 - Windows descriptor inspection and private creation use `@openclaw/fs-safe`; Spex keeps its admission policy in the existing storage implementation and adds no general filesystem abstraction.
-- Windows private storage permits the current user, LocalSystem and built-in Administrators; unknown ownership, incomplete descriptors, null DACLs and grants to other principals refuse.
+- Windows private storage belongs to the current user, LocalSystem or built-in Administrators; unknown ownership, incomplete descriptors, null DACLs and another principal's right to change the entry refuse, while read grants are admitted ([DR-223](223-windows-storage-checks-what-macos-checks.md)).
 - Newly created private directories carry a protected inheritable DACL before application data is written.
 - Private file publication, version conflict checks, machine-bound leases and retained execution evidence keep their existing contracts.
 - POSIX storage retains its existing permission preparation and verification.

@@ -5,23 +5,13 @@
 
 ## Status
 
-Accepted (2026-11-01) on the owner's direction, after a design review of the package operations that started from one gap: a spec package's spec could reach a project's agents as knowledge, but never its `specs/` as law.
-Amends, under [DR-046](046-decision-record-evolution.md):
-
-- [DR-104](104-spec-package-format-and-client-environments.md) in its manifest, its selection and its exports: a manifest declares what it `provides`; an install places each provided artifact where its kind goes, a provided spec in the project's `specs/packages/`; a release cites another release by address, and the address never leaves a release.
-- [DR-115](115-a-spec-reaches-the-agents.md) in where a spec reaches the agents: in a project it stands in `specs/packages/`, read as any spec of the project; the generated skill stays the form for an environment whose root holds no `specs/`, your own group's.
-- [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in how a package under development is made: `spex export` builds `spex-packages/<org>/<pkg>/` from the project's own files, as often as the author likes; `spex new` retires.
-- [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in the environment's committed files: the specs an install places stand in the code beside `spex.yaml` and `spex.lock`, committed by the reader.
-- [DR-043](043-minimal-spec-editing.md) in what the spec view edits: a placed spec is read there, not edited.
-- [DR-012](012-spec-package-files.md) in the specs tree: a placed spec is a one-file package the linter reads as any other, whether or not the map lists it.
-- [DR-172](172-surfaces-a-fresh-user-reads.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`; a row's spec line says where the spec stands; the command line's `export` closes the "New package…" loss.
-
-Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
-
-Amended by [DR-200](200-publishing-names-need-registry-authority.md) in the unchecked publishing-rights guidance of export.
+Accepted (2026-11-01).
+Amends [DR-012](012-spec-package-files.md), [DR-043](043-minimal-spec-editing.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-113](113-a-projects-environment-lives-in-its-working-folder.md), [DR-115](115-a-spec-reaches-the-agents.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-172](172-surfaces-a-fresh-user-reads.md).
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-200](200-publishing-names-need-registry-authority.md).
 
 ## Context
 
+- A design review of the package operations started from one gap: a spec package's spec could reach a project's agents as knowledge, but never its `specs/` as law.
 - A release holds one spec. [DR-115](115-a-spec-reaches-the-agents.md) exports it to agents as a generated skill; nothing puts it into a project's `specs/`, where the project's own specs could cite it, the linter could check it and a reader would look for it. A package under development at `spex-packages/<org>/<pkg>/` has the same gap: its spec is never a spec of the project developing it.
 - A release's spec carries relative citations to peer files that exist only in its author's tree; outside that tree they resolve nowhere, and no step — publish, install, export — checks them.
 - `spex new` copies or moves files into a package folder once, requests the folder by path and cannot be run again; it reads like `scaffold`, and moving a file out of the tree surprises.
@@ -30,6 +20,14 @@ Amended by [DR-200](200-publishing-names-need-registry-authority.md) in the unch
 - The owner asked that `specs/` stay plain Markdown any editor or agent reads without extra knowledge, and that a citation export cannot carry be warned about and dropped, never refused.
 
 ## Decision
+
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in its manifest, its selection and its exports: a manifest declares what it `provides`; an install places each provided artifact where its kind goes, a provided spec in the project's `specs/packages/`; a release cites another release by address, and the address never leaves a release.
+- Amends [DR-115](115-a-spec-reaches-the-agents.md) in where a spec reaches the agents: in a project it stands in `specs/packages/`, read as any spec of the project; the generated skill stays the form for an environment whose root holds no `specs/`, the global environment.
+- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in how a package under development is made: `spex export` builds `spex-packages/<org>/<pkg>/` from the project's own files, as often as the author likes; `spex new` retires.
+- Amends [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in the environment's committed files: the specs an install places stand in the code beside `spex.yaml` and `spex.lock`, committed by the reader.
+- Amends [DR-043](043-minimal-spec-editing.md) in what the spec view edits: a placed spec is read there, not edited.
+- Amends [DR-012](012-spec-package-files.md) in the specs tree: a placed spec is a one-file package the linter reads as any other, whether or not the map lists it.
+- Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`; a row's spec line says where the spec stands; the command line's `export` closes the "New package…" loss.
 
 ### The author declares what the package provides
 
@@ -41,13 +39,13 @@ Amended by [DR-200](200-publishing-names-need-registry-authority.md) in the unch
 
 | Kind, when provided | Where an install places it |
 | --- | --- |
-| spec | in a project, `specs/packages/<pkg>.md` under a root holding `specs/`; in your own group's environment, whose root holds none, the generated skill of DR-115 in the user-level agent folders |
+| spec | in a project, `specs/packages/<pkg>.md` under a root holding `specs/`; in the global environment, whose root holds none, the generated skill of DR-115 in the user-level agent folders |
 | skill | the agent folders, as today |
-| playbook | available to enable, with its generated skill, as today |
+| playbook | with its generated skill; it runs with its roles bound by default ([DR-176](176-global-playbooks-and-a-placed-playbook-runs.md)) |
 | applet | its tab, as today |
 
 - An artifact not provided is installed and placed nowhere.
-- A request narrows what it takes with `select`, as today. No consumer verb is added: `add` is the import, and `enable`/`disable` stay the playbook's words in the Playbooks tab, since a playbook alone needs a choice no file can make — a player per role. The command line gets neither.
+- A request narrows what it takes with `select`, as today. No consumer verb is added: `add` is the import.
 
 ### A placed spec is Spex's copy, derived once per install
 
@@ -84,6 +82,6 @@ Amended by [DR-200](200-publishing-names-need-registry-authority.md) in the unch
 - The environments, command line, Playbooks and Packages, spec view and lint items are amended in one change with this record: the manifest's field, selection and placement, the install record, `environment.get`, the usage with `export` in `new`'s place, `list`'s spec lines, the causes, the row words, the read-only placed node, the map warning's exemption, and their verification; retired item ids are never reused.
 - Three implementation changes follow, each merged on green: the library and the command line; the core's state and the IDE's two tabs with their catalogs; the journeys.
 - A manifest without `provides` offers every kind it holds: a spec-only package's spec lands in each consumer's `specs/` at their next install, which is the change intended; a playbook compiled `from` its spec keeps that spec as its source.
-- In a project, the generated spec skill of DR-115 is no longer written; your own group's environment keeps it, so a spec added for yourself still reaches every session on this device.
+- In a project, the generated spec skill of DR-115 is no longer written; the global environment keeps it, so a spec added for yourself still reaches every session on this device.
 - The linter knows a placed spec by its first line, so a placed spec unlisted in `map.md` draws no warning on any checkout, and the project's own files draw it as before.
 - The registry checks a manifest's fields and refuses one it does not know, so its own check accepts `provides` in a change of its own before a manifest naming the field is published there; the stand-in registry shares the library's check and needs nothing.

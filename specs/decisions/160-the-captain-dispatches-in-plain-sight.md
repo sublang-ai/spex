@@ -5,14 +5,12 @@
 
 ## Status
 
-Accepted (2026-10-27) for the owner's P0-4.
-Amends [DR-155](155-players-named-delegated-and-recovered.md) in its delegation lines: every call puts its line, anchored at the call's traced start and naming its step; the model still shows only at a player's first call or a changed model.
-Amends [DR-032](032-session-players.md) in its per-call role labels: a lane's call names the playbook and step it runs.
-Amends [DR-031](031-machine-call-tree.md) in a card's active state: a run standing in a parallel state shows each of its active steps running, each with its own call.
-Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a failure the Boss's own stop caused reads aborted, not failed; the catalogue, its causes and the controls stand.
+Accepted (2026-10-27).
+Amends [DR-031](031-machine-call-tree.md), [DR-032](032-session-players.md), [DR-075](075-a-failure-says-what-and-what-now.md), [DR-155](155-players-named-delegated-and-recovered.md).
 
 ## Context
 
+- The owner's P0-4 asks that the Captain's dispatch of work be visible.
 - With players called and lanes standing ([DR-146](146-a-lane-appears-with-its-first-call.md), [DR-155](155-players-named-delegated-and-recovered.md)), nothing on screen says it is the Captain handing out work: a lane does not say which step of which playbook it is doing, the thread says "Handed to coder" once and never that the work came back, and only the Captain's prose ties the two together.
 - The surfaces disagree about one state: a run stopped by the Boss reads "failed" on its card, "running" on its badge, "needs attention" in the header and "stopped" once settled, and the lanes say "working".
 - A machine card follows one active state, so a parallel step — `decide`'s two proposals — loses both of its running steps and their players.
@@ -20,6 +18,11 @@ Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a
 - An outcome record carries no call id, and a call id counts within one runtime session only, so a call and its outcome have to be matched by rule.
 
 ## Decision
+
+- Amends [DR-155](155-players-named-delegated-and-recovered.md) in its delegation lines: every call puts its line, anchored at the call's traced start and naming its step; the model still shows only at a player's first call or a changed model.
+- Amends [DR-032](032-session-players.md) in its per-call role labels: a lane's call names the playbook and step it runs.
+- Amends [DR-031](031-machine-call-tree.md) in a card's active state: a run standing in a parallel state shows each of its active steps running, each with its own call.
+- Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a failure the Boss's own stop caused reads aborted, not failed; the catalogue, its causes and the controls stand.
 
 ### A call and what it came back with
 

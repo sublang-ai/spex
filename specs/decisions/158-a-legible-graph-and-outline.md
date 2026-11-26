@@ -6,12 +6,8 @@
 ## Status
 
 Accepted (2026-10-27).
-Amended by [DR-211](211-a-panel-carries-its-own-way-out.md) in the pinned selection card's visible Close and focus return.
-Amended by [DR-207](207-the-outline-gives-its-width-to-the-intent.md): the counts share one cell of labeled counts under no heading row, the rollup reads by labeled counts, a collapsed intent holds one line, and the graph starts at a third of the split.
-Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §2 (one hue outside the reserved sets, orange, joins the budget for the selection's own citations, and the internal group's hue is lime), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the threshold stands above the graph, the fit in its corner and the key below, with no gesture tips).
-Amends [DR-013](013-sublang-brand.md)'s interaction hue on the spec view: its selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring.
-Amends [DR-011](011-project-workspace.md) and [DR-015](015-reference-content.md) in the internal group's hue: lime rather than fuchsia.
-Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation hides the edges it does not touch and draws its own directed), rule 3 (the graph reveals a node the pinned package card covers, and the camera returns after the selection), the footer's place (in the outline pane) and the decisions branch (the decision records leave the outline for a list opened from the footer).
+Amends [DR-011](011-project-workspace.md), [DR-013](013-sublang-brand.md), [DR-015](015-reference-content.md), [DR-026](026-data-graphics-craft.md), [DR-027](027-linked-views-contract.md).
+Amended by [DR-207](207-the-outline-gives-its-width-to-the-intent.md), [DR-211](211-a-panel-carries-its-own-way-out.md).
 
 ## Context
 
@@ -35,6 +31,11 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
 - The stacked graph narrows with the window: with the 224px rail open it is 328px wide at a 600px window and 48px at 320px.
 
 ## Decision
+
+- Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §2 (one hue outside the reserved sets, orange, joins the budget for the selection's own citations, and the internal group's hue is lime), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the threshold stands above the graph, the fit in its corner and the key below, with no gesture tips).
+- Amends [DR-013](013-sublang-brand.md)'s interaction hue on the spec view: its selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring.
+- Amends [DR-011](011-project-workspace.md) and [DR-015](015-reference-content.md) in the internal group's hue: lime rather than fuchsia.
+- Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation hides the edges it does not touch and draws its own directed), rule 3 (the graph reveals a node the pinned package card covers, and the camera returns after the selection), the footer's place (in the outline pane) and the decisions branch (the decision records leave the outline for a list opened from the footer).
 
 1. **The overview draws the backbone; the reader sets how much.**
    At rest the graph draws one undirected line per package pair whose citations in both directions total at least a threshold, plus each package's heaviest pair — a tie going to the partner first by name — so no linked package looks unlinked; a node with no line therefore has no cross-package citation.
@@ -69,7 +70,7 @@ Amends [DR-027](027-linked-views-contract.md)'s selection voice (its isolation h
 7. **One citation index serves both projections.**
    Pair counts, the graph's in and out totals and the outline's file rollups come from one index keyed by item ID; a citation of an absent ID counts in no total and is carried as a neutral warning mark after the row's rollup at every width, its count in the mark's name — a quality warning, not a property every package has, so it holds no column.
 8. **The outline reads as a table.**
-   Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry numerals in aligned columns under one pinned heading row, a zero as a dash, an expanded package's row pinned beneath it while its contents scroll so its name stays in sight; a group filtered off hides its column with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
+   Group names read in full (External behavior, Internal behavior, Tests) with a one-line definition on each filter; package rows carry their counts as [DR-207](207-the-outline-gives-its-width-to-the-intent.md) states, an expanded package's header pinned at the outline's top while its contents scroll so its name stays in sight; a group filtered off leaves the rows' counts with a status line restoring it; section headings read as the localized group name with their count, topics keep their author's words as sub-headings, and the per-row group word retires.
    The filters lead with checkboxes, so they read as filters rather than tags; the graph's toggle is an icon at the graph's top right, beside the divider it folds toward, while it shows, and heading the outline's filter row while it is hidden, named for its act.
    An expanded package heads its items with a line under a rule above it alone, stating the item count and holding "Expand all items", marked by an expand-all glyph rather than a disclosure chevron, and "Edit spec file", so neither reads as acting on the intent above or on a row of its own.
    Every in-view jump records the place it left, a package's intent included, and the head of the outline offers the walk back, as do Alt+Left and the pointer's back button: a reader cannot tell an item citation, which jumps in place, from a record link, which opens the reader with its own Back, so both must come back; the record is one reading excursion — a repeated jump from one place counts once, it holds 20 places, the control states the steps it holds, and selecting a package, searching or collapsing a package clears it.
@@ -96,7 +97,7 @@ Considered and declined for now:
 
 ## Consequences
 
-- spec-view-1, 2, 3, 4, 7, 19, 20, 22, 23, 24, 25, 26, 27, 28, 43, 59 and 61 change; spec-view-60 adds the citation summary card and spec-view-66 the graph's threshold control; the tests spec-view-21, 37, 38, 39, 40, 41 and 56 follow, and spec-view-65 covers the outline's columns and filters.
+- spec-view-1, 2, 3, 4, 7, 19, 20, 22, 23, 24, 25, 26, 27, 28, 43, 59 and 61 change; spec-view-60 adds the citation summary card and spec-view-66 the graph's threshold control; the tests spec-view-21, 37, 38, 39, 40, 41 and 56 follow, and spec-view-65 covers the outline's counts and filters.
 - app-shell-40 holds the desktop window's minimum width, which the fresh-install smoke reads back.
 - DR-026's "arrows hidden at rest" refusal stands for directed drawing: the resting backbone draws no direction because it draws pairs, not citations; its refusal of density sliders stands, since the threshold never moves a node.
 - The localization catalogs gain the full group names, their short forms and definitions, and the new graph and outline wording.

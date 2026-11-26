@@ -5,35 +5,34 @@
 
 ## Status
 
-Accepted (2026-11-02) on the owner's direction to run no test a change cannot break and to make the merge gate faster.
-Amends [DR-145](145-merge-on-green.md) and [DR-166](166-pull-requests-run-without-macos.md) in the pull request's matrix and in what the suites run: the Linux test job on Node 22 alone, the journeys in three shards, and the test job running the suites the change reaches, the classifier naming that reach beside documentation alone; and DR-166 in documentation alone, which a Markdown file inside a workspace no longer is.
-
-Amended by [DR-199](199-release-gated-full-validation.md) in root tooling ownership, local untracked and documentation selection, validation timing and the merge gate: selected checks on pull requests, full channel checks at publication or on request, one required `checks` result, and no main or nightly run.
-Extended by [DR-229](229-the-cores-suite-in-four-parts.md): a Linux or macOS row reaching the core runs the core's suite in four parts beside one runner for the rest.
+Accepted (2026-11-02).
+Amends [DR-145](145-merge-on-green.md).
+Amended by [DR-199](199-release-gated-full-validation.md), [DR-229](229-the-cores-suite-in-four-parts.md).
 
 ## Context
 
-A pull request's run was bounded by its journeys job: thirty-five minutes for forty journey files on one worker, each booting a shell and a core.
-The test job ran every suite on Linux twice, on Node 22 and on Node 24, twenty-seven minutes each, twenty-three of them the core's.
-A change to the interface alone, to a shell or to the hub paid the core's suite, which nothing in the change could break; the classifier of DR-166 knew only documentation alone.
-Locally the same: `npm test` or a whole workspace's suite was the only command, so a developer or an agent waited on the core's twenty-three minutes before pushing an interface change.
-The workspaces declare their internal dependencies in their `package.json`, so what a change can reach is readable: the core depends on the CLI's library; the interface, the shells and the journeys on the core; the hub on nothing.
-Some Markdown files are test inputs — the CLI's legacy scaffold fixtures, the interface's fixture readmes, the journeys' compiled fixtures — so DR-166's rule that any Markdown file is documentation would let a change to one of them skip the suite that reads it.
+- The owner directed that no test a change cannot break should run, to make the merge gate faster without dropping a test.
+- A pull request's run was bounded by its slowest jobs: a macOS test job took sixty minutes against thirty-one on Linux for the same suites, and the journeys thirty-five minutes for forty journey files on one worker, each booting a shell and a core.
+- The test job ran every suite on Linux twice, on Node 22 and on Node 24, twenty-seven minutes each, twenty-three of them the core's.
+- A change to the interface alone or to a shell paid the core's suite, which nothing in the change could break, and a change to documentation alone paid the same as any other.
+- Locally the same: `npm test` or a whole workspace's suite was the only command, so a developer or an agent waited on the core's twenty-three minutes before pushing an interface change.
+- The workspaces declare their internal dependencies in their `package.json`, so what a change can reach is readable: the core depends on the CLI's library; the interface, the shells and the journeys on the core.
+- Some Markdown files are test inputs — the CLI's legacy scaffold fixtures, the interface's fixture readmes, the journeys' compiled fixtures — so a rule counting any Markdown file as documentation would let a change to one of them skip the suite that reads it.
+- The core's test runner ran two test files at once on runners with four cores; the suites use scratch homes and free ports, so files do not collide.
 
 ## Decision
 
+- Amends [DR-145](145-merge-on-green.md) in what a pull request's suites run: the suites its change reaches, on one Linux Node and no macOS row.
 - One script, `scripts/affected-tests.mjs`, reads the changed paths and the workspaces' internal dependency graph and names the reach of a change: a path under `docs/` or `specs/`, or a Markdown file outside every workspace, is documentation and reaches nothing; a path in a workspace, its Markdown included, reaches that workspace and, transitively, every workspace depending on it; any other path reaches everything; documentation alone is a change of documentation and nothing else.
-- The classifier job names the reach on every pull request beside documentation alone; the test job runs the scripts' tests and the suites of the reached workspaces, and everything for a push to `main` and the nightly; the journeys and desktop-browser jobs run for any change past documentation alone, as before, since the journeys cross every workspace.
-- A pull request's Linux test job runs on Node 22 alone; `main` and the nightly keep Node 24.
-- The journeys run in three shards, each a job, on a pull request and on `main`.
+- A classifier job names the reach on every pull request beside documentation alone: documentation alone runs the CLI's own tests and the spec lint and no suite; otherwise the test job runs the scripts' tests and the suites of the reached workspaces.
+- A pull request's Linux test job runs on Node 22 alone.
+- The journeys run in three shards, each a job.
 - `npm run test:affected` runs the same selection for the working tree against `main`, so the developer and the agents run before a push only what their change reaches.
-- The required checks follow the matrix: `changes`, `test (ubuntu-latest, 22)`, `test (windows-latest, 22)`, `journeys (ubuntu-latest, 1)`, `journeys (ubuntu-latest, 2)`, `journeys (ubuntu-latest, 3)` and `desktop-browser (ubuntu-latest)`; the stand-in reports these names.
-- Not taken: sharding the core's suite, whose twenty-three minutes now bound a core change's run; a later decision when it hurts.
+- The core's test runner runs three test files at once at most.
 
 ## Consequences
 
-- An interface-only pull request's test job falls from twenty-seven minutes to about four, the journeys from thirty-five to about fifteen; a core change stays bounded by its own suite.
-- The repository's required status checks drop `test (ubuntu-latest, 24)` and `journeys (ubuntu-latest)` and add the three shards; an open pull request reports the new names once its head moves after this lands.
-- A Node 24-only difference is found on `main` and nightly, as DR-166 accepted for macOS.
-- A dependency a workspace uses without declaring it in its `package.json` is unseen by the selection; the journeys, which import the server shell undeclared, run regardless; from here a workspace declares every workspace it imports.
+- An interface-only pull request's test job falls from twenty-seven minutes to about four, and a documentation-only pull request merges in minutes; a core change stays bounded by its own suite.
+- A Node 24-only or macOS-only difference is found by full validation before publication ([DR-199](199-release-gated-full-validation.md)), and the owner's own machine runs the suites on macOS before a push.
+- A dependency a workspace uses without declaring it in its `package.json` is unseen by the selection; from here a workspace declares every workspace it imports.
 - `release-34` names the reach, the one Node and the shards; `release-43` the local command; `release-33` the audit's assertions; the workflow audit and the script's own tests change in the same commit as the workflow.
