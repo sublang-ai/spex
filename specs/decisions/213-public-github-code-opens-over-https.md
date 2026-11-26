@@ -22,7 +22,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
   Identity normalization is syntactic and probes no repository's visibility.
 - Existing working folders keep their Git remotes; a public GitHub project's code clones over HTTPS with no credential setup.
   Existing credential behavior remains; no private-access, push or submodule flow is added.
-- A failed code clone requests a missing credential only where Git reports that authentication is required; other failures keep their actual cause.
+- A failed code clone keeps its actual cause and requests no credential.
 
 ## Consequences
 

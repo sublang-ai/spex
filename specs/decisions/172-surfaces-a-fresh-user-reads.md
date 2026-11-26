@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-31) on the owner's direction to make every package and Space operation easy to understand for a person who installed Spex today, favoring simple and reliable over complete.
-Amends [DR-010](010-interface-craft.md), [DR-011](011-project-workspace.md), [DR-041](041-chrome-that-fits.md), [DR-057](057-space-surface.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-065](065-repairs-the-reader-answers.md), [DR-069](069-key-phrases-not-sentences.md), [DR-078](078-the-interface-speaks-the-readers-language.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-120](120-the-instance-is-the-space.md), [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-151](151-publish-local-spec-packages.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-168](168-independent-package-registry.md).
+Amends [DR-010](010-interface-craft.md), [DR-011](011-project-workspace.md), [DR-041](041-chrome-that-fits.md), [DR-057](057-space-surface.md), [DR-058](058-chat-assisted-playbook-authoring.md), [DR-069](069-key-phrases-not-sentences.md), [DR-078](078-the-interface-speaks-the-readers-language.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-120](120-the-instance-is-the-space.md), [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-151](151-publish-local-spec-packages.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-168](168-independent-package-registry.md).
 Amended by [DR-173](173-the-registry-is-no-face-of-a-space.md), [DR-174](174-what-a-package-provides-is-placed.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-189](189-repairs-explain-the-next-step.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-209](209-a-project-row-with-one-menu.md), [DR-218](218-write-a-playbook-before-publishing.md), [DR-225](225-bounded-surfaces-and-attached-records.md), [DR-226](226-project-names-align-with-their-actions.md), [DR-227](227-remove-the-storage-footer-from-space.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -55,7 +55,7 @@ A sync's conflict read "Needs your choice" on the row, its picker in a tab the r
 | Changed here and at ⟨Space⟩ — Resolve | — |
 | Code: ⟨where⟩ | on a remote, on this instance |
 
-- Amends [DR-078](078-the-interface-speaks-the-readers-language.md) and [DR-120](120-the-instance-is-the-space.md): the Chinese catalog follows one glossary — Space as a product name, 项目, 记录, 本机, 规约包, 注册中心, 更新, 安装, 添加, 移除, 发布, 同步, 解决, 合并 — and 实例, 托管平台, 注册表, 软件包 and 此设备 retire.
+- Amends [DR-078](078-the-interface-speaks-the-readers-language.md) and [DR-120](120-the-instance-is-the-space.md): the Chinese catalog follows one glossary — Space as a product name, 项目, 记录, 本机, 规约包, 注册中心, 更新, 安装, 添加, 移除, 发布, 同步, 解决, 合并 — and 实例, 托管平台, 注册表, 软件包, 放置 and 此设备 retire.
 
 ### The map
 
@@ -74,7 +74,6 @@ A sync's conflict read "Needs your choice" on the row, its picker in a tab the r
 - Amends [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its presentation alone: a placement's lines stand in the row's Sync tab, and its acts behind the row's overflow, their meanings standing.
 - A unit changed on both sides reads "Changed here and at ⟨Space⟩" on its row with Resolve, which opens the picker in place beneath the row, the choices reading "Keep this computer's" and "Take ⟨Space⟩'s"; histories that started apart read "Started separately at ⟨Space⟩" with "Combine…", never Join.
 - The Sync tab names the Space by its display name and the steps as Saving, Checking, Comparing, Merging, Reloading and Sending.
-- Amends [DR-065](065-repairs-the-reader-answers.md) in a repair's naming: a repair names the project, the folder it remembers secondary.
 - Amends [DR-041](041-chrome-that-fits.md) in its label budget: a menu's entry, and a row's act a decision fixes as a whole phrase, may exceed fourteen characters and wraps within its row.
 
 ### Opening and syncing a project

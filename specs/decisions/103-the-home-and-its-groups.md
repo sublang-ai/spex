@@ -27,7 +27,7 @@ Amended by [DR-108](108-the-root-lease-names-the-machine.md), [DR-111](111-the-c
 Every project, and the home's global settings, keep what is not code in a repository of their own.
 What is not code is its sessions, the conversations with agents; its intents, instructions to run; the global spec packages, each a GEARS contract with the skills and playbooks made from it ([DR-104](104-spec-package-format-and-client-environments.md)); and the settings naming which player plays each role.
 These are its records, and they live on the `spex` branch of a spex repository named `<name>-spex`: one per project, and the **global records repository** for the home's personal sessions, global configuration and global environment.
-Each lives on this device under `~/.spex/workspace/` and, once you sign in and choose to sync it, in your own namespace at a Space, where Spex creates it and pushes ([DR-246](246-remove-groups-and-team-servers-from-the-clients.md)).
+Each lives on this device under `~/.spex/workspace/` and, once you sign in, in your own namespace at a Space, where Spex creates or joins it and pushes: the global records repository at every Space you sign in to ([DR-128](128-a-spex-repository-placed-at-several-instances.md)), a project's once you choose to sync it ([DR-246](246-remove-groups-and-team-servers-from-the-clients.md)).
 A project's code lives in any Git repository you choose, and Spex pushes nothing to it.
 The Space decides who reads a spex repository; Spex adds no access control, roles or member lists of its own.
 
@@ -110,7 +110,7 @@ Everything else stays with the Space.
 ### Projects on this device
 
 - Adding a working folder: Spex creates its spex repository locally in the personal records folder, named after the working folder, with no remote until you choose a Space to sync it to; `home.yaml` pairs the two.
-- Opening a personal project on another device: Spex clones its spex repository under `workspace/`, then clones the code from the remote its `project.json` names, with this device's own Git and its credentials, or takes a working folder you already have.
+- Opening a personal project on another device: Spex clones its spex repository under `workspace/`, then clones the code from the remote its `project.json` names, through a placement's Space where the code lies at that Space's Git origin ([DR-128](128-a-spex-repository-placed-at-several-instances.md)), else with this device's own Git and its credentials, or takes a working folder you already have.
 - Two working folders paired with one spex repository are one project, checked out twice; each runs its own sessions and uses the spec packages its environment installs ([DR-104](104-spec-package-format-and-client-environments.md)). A fork of a spex repository is another project.
 - Removing a project from this device forgets its working folder and deletes its spex repository's clone. Removal refuses while anything in the clone has not reached the Space, unless you confirm. Nothing at the Space changes.
 

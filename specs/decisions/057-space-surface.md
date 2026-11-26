@@ -38,7 +38,7 @@ Amended by [DR-064](064-honest-remote-failure.md), [DR-065](065-repairs-the-read
   The working tree only ever holds validated, selected bytes; `MERGE_HEAD` never exists; a unit changed under the apply restarts the sync once from Save; an apply interrupted by a crash is repaired from its recorded selection before anything reopens.
 - Every tracked path belongs to exactly one unit — a session bundle, an intent, an authoring session, a spec package folder, the environment pair, or a single file — chosen whole; the app performs no text merge.
 - Histories that share no ancestor join only by an explicit act, comparing against the empty tree, so a mistyped remote never silently imports foreign sessions; a placement holding no records branch is filled by the first push.
-- Git runs non-interactively: `GIT_TERMINAL_PROMPT=0`, `ssh -oBatchMode=yes` where no `GIT_SSH_COMMAND` is set, `LC_ALL=C`, umask 077 around tree-writing steps, signing and hooks disabled for commits it writes, and a bounded and cancelable transport.
+- Git runs non-interactively: `GIT_TERMINAL_PROMPT=0`, `ssh -oBatchMode=yes` where no `GIT_SSH_COMMAND` is set, `LC_ALL=C`, umask 077 around tree-writing steps, signing and hooks disabled for commits it writes, a bounded and cancelable transport, and, where the clone's Space is not signed in and Git has no identity, a committer identity of `Spex <spex@<hostname>>`.
 - Authentication at a remote outside a Space is the computer's — SSH keys, agents, credential helpers; the app prompts for and stores no credential for it and refuses a remote URL embedding one.
 
 ### What the user sees

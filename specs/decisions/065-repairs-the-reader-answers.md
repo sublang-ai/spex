@@ -7,7 +7,7 @@
 
 Accepted (2026-09-15) on the owner's report of an issue count reading zero over three repairs he had not handled.
 Amends [DR-011](011-project-workspace.md), [DR-057](057-space-surface.md).
-Amended by [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-189](189-repairs-explain-the-next-step.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amended by [DR-189](189-repairs-explain-the-next-step.md), [DR-194](194-saved-work-is-a-choice-not-setup-debt.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -30,7 +30,7 @@ Asking him to type a path the app could verify is work the app should have done.
 
 ### A folder repaired in place
 
-- Amends [DR-057](057-space-surface.md): Space carries one project control, pointing a project whose records are on this computer at its folder here, in place, never creating an identity and never editing one.
+- Amends [DR-057](057-space-surface.md): Space repairs a project's folder in place, pointing a project whose records are on this computer at its folder here, never creating an identity and never editing one.
 - The repair preserves the project's identity, so its synced sessions, queue and history resolve to the project the records carry rather than to a new one.
 - Every diagnostic a folder would repair folds into one task per project's records, and the task that resolves a project resolves every session recorded under it; a fault no folder repairs is not folded.
 - A pairing is never silent: it is shown in the repair and can be changed before it is saved.
@@ -48,7 +48,7 @@ Asking him to type a path the app could verify is work the app should have done.
 
 ### Checked, never searched
 
-- The core may check a path a repair already names, or one named by joining the folder this computer's projects most share to that repair's own last segment; it shall check nothing else, list no directory, and descend none.
+- The core may check a path a repair already names, or one named by joining the parent this computer's working folders most share to the project's records repository name without `-spex`; it shall check nothing else, list no directory, and descend none.
 - Every path checked is a path reported, and what was found is rendered before any gesture can accept it.
 - Where exactly one checked folder is present, a Git work tree, and claimed by no project, the core proposes it, and accepting it takes one gesture; where two qualify, the repair proposes nothing and the reader chooses.
 - A check is bounded, and one that cannot complete reports as unknown and proposes nothing, so an unreachable folder never delays the surface.

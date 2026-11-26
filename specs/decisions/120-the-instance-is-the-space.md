@@ -19,8 +19,8 @@ Amended by [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-128](128-
 ## Decision
 
 - The instance is the space: Spex names only the instance — its URL and display name — on every surface, in every protocol reply, key and workspace folder, and in every Git line a report carries; never the Git system behind it, its container, its paths or its pages. The client has no naming exception.
-- Keys and workspace folders are the paths the instance answers, under the instance's own folder ([DR-127](127-a-home-signed-in-to-several-instances.md)).
-- No door to the host's pages: no "Open at <host>" and no host page link anywhere; no repository, account or page URL crosses the protocol.
+- Keys and workspace folders of placed clones are the paths the instance answers, under the instance's own folder ([DR-127](127-a-home-signed-in-to-several-instances.md)); the personal records folder, holding the global records repository and local-only clones, lies outside every instance's folder and is named after the account login ([DR-127](127-a-home-signed-in-to-several-instances.md), [DR-221](221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md)).
+- No door to the host's pages: no "Open at <host>" and no host page link anywhere; no page URL of the instance or its Git system, and no URL under the instance's Git origin, crosses the protocol: a records remote there travels as its path in the instance, and a remote outside every instance's origin crosses only with its embedded user removed.
 - Amends [DR-064](064-honest-remote-failure.md) in what a report prints: no URL under the Git host's origin is printed, and any other remote URL only with its embedded user removed.
 
 ### Git's lines
@@ -31,7 +31,7 @@ Amended by [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-128](128-
 
 ## Consequences
 
-- `space` (Git's lines and the instance's naming), `git-host` (the read and the stand-in), `storage` (folder names) and `environments` (source labels and failures) follow this boundary; the protocol carries no repository or page URL.
+- `space` (Git's lines and the instance's naming), `git-host` (the read and the stand-in), `storage` (folder names) and `environments` (source labels and failures) follow this boundary; the protocol carries no page URL and no URL under an instance's Git origin.
 - The stand-in host keeps no group of its own, answers paths in the instance, and hides a scripted service identity.
 
 ## References
