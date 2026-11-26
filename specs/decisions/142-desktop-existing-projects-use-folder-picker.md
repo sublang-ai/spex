@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-10-22) for the owner's P0-0 project-add review.
-Amends [DR-136](136-the-first-project-picker-leads-with-a-folder.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) for existing-repository entry on desktop.
+Accepted (2026-10-22).
+Amends [DR-136](136-the-first-project-picker-leads-with-a-folder.md), [DR-137](137-specs-first-welcome-and-distinct-project-paths.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Amends [DR-136](136-the-first-project-picker-leads-with-a-folder.md) and [DR-137
 
 ## Decision
 
+- Amends [DR-136](136-the-first-project-picker-leads-with-a-folder.md) and [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) for existing-repository entry on desktop.
 - Where the native folder picker exists, both the local-project add form and the ordinary project switcher add an existing repository only through that picker. The add form keeps its separate new-project path and optional specs scaffold.
 - The desktop switcher keeps project search, Academy, and the folder action; creating a new project remains available in the local-project add form from the sidebar.
 - Where no native picker exists, the add form and ordinary palette keep path entry for existing repositories. The add form keeps existing and new path entry distinct.

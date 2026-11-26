@@ -6,8 +6,7 @@
 ## Status
 
 Accepted.
-
-Amends [DR-066](066-every-summons-has-a-door.md), which remains accepted: actual live native approval requests gain answer controls and their own ephemeral attention inbox; historical permission telemetry still summons nobody.
+Amends [DR-066](066-every-summons-has-a-door.md).
 
 ## Context
 
@@ -19,6 +18,8 @@ Managed headless browser screenshots do not require desktop Accessibility, Autom
 An external desktop tool may require those grants from its own operating-system identity, which Spex cannot grant on its behalf.
 
 ## Decision
+
+Amends [DR-066](066-every-summons-has-a-door.md): actual live native approval requests gain answer controls and their own ephemeral attention inbox; historical permission telemetry still summons nobody.
 
 The core owns an ephemeral broker for actual native requests forwarded by Cligent and Playbook on visible working calls.
 Each request binds a fresh host identity and core generation to its session or draft, turn, actor, native request, and invocation.

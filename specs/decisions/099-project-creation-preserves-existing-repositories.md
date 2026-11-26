@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-02).
-Amends [DR-006](006-projects-and-forge.md) in the create flow's treatment of an existing repository.
+Amends [DR-006](006-projects-and-forge.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Amends [DR-006](006-projects-and-forge.md) in the create flow's treatment of an 
 
 ## Decision
 
+- Amends [DR-006](006-projects-and-forge.md) in the create flow's treatment of an existing repository.
 - Create refuses a folder already containing its own Git repository before changing its files, index, or history.
 - A repository with an initial commit is registered through Add.
 - An unborn repository is completed in a terminal before Add; the refusal names both steps.

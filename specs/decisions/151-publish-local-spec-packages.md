@@ -5,17 +5,13 @@
 
 ## Status
 
-Accepted (2026-10-25), under the owner's fresh-user publishing and installation goal.
-Extends [DR-104](104-spec-package-format-and-client-environments.md) in the publishing surface for packages without an authoring session.
-Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package is published from: by its name, from `spex-packages/<org>/<name>/`.
-
-Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
-Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where Publish stands.
-
-Amended by [DR-200](200-publishing-names-need-registry-authority.md) in checked publication previews and the unchecked signed-out case.
+Accepted (2026-10-25).
+Amends [DR-104](104-spec-package-format-and-client-environments.md).
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-168](168-independent-package-registry.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-200](200-publishing-names-need-registry-authority.md).
 
 ## Context
 
+The owner's goal is that a fresh user publishes and installs spec packages.
 A spec package may contain only a spec or an ordinary skill.
 The core can publish these packages, but the IDE offers publishing only inside a compiled playbook's authoring workspace.
 Requiring an HTTP client and a separate API token makes the ordinary package workflow unnecessarily difficult.
@@ -23,8 +19,9 @@ The existing publish display can also mistake a retained success for the result 
 
 ## Decision
 
-- A directly requested local folder has Publish beside its package in Playbooks, using the same preview and confirmation as playbook authoring.
-- This publishes the current folder through the environment's existing instance and account rules; neither a playbook nor a compilation is required.
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in the publishing surface for packages without an authoring session.
+- A directly requested local folder has Publish beside its package in the project's Packages tab ([DR-172](172-surfaces-a-fresh-user-reads.md)), using the same preview and confirmation as playbook authoring.
+- This publishes the package by its name, from the folder its path request names ([DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md)) to the environment's registry with the registry account ([DR-168](168-independent-package-registry.md)), the preview checking that account's authority over the name ([DR-200](200-publishing-names-need-registry-authority.md)); neither a playbook nor a compilation is required.
 - Registry and Git requests do not offer publication of their installed copies.
 - Publishing remains an explicit upload of the declared release files; adding a folder, installing it, or opening a preview publishes nothing.
 - A retained successful receipt does not establish success of a later attempt, and a repeated refusal remains visible.

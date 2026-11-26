@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-10-02).
-Amends [DR-001](001-scaffold-localization.md) in translation coverage and source pins for the added seed overlays.
-[DR-234](234-translation-source-pins-stay-in-the-overlay.md) moves the source pins out of the translated Markdown.
+Amends [DR-001](001-scaffold-localization.md).
+Amended by [DR-234](234-translation-source-pins-stay-in-the-overlay.md).
 
 ## Context
 
@@ -17,11 +17,12 @@ Amends [DR-001](001-scaffold-localization.md) in translation coverage and source
 
 ## Decision
 
+- Amends [DR-001](001-scaffold-localization.md) in translation coverage and source pins for the added seed overlays.
 - The Chinese overlay translates the complete bundled spec tree: the meta rules, structure decision, index, Git and licensing packages, and starter intent.
 - Requirement meanings, item and record IDs, filenames, machine-readable markers, code syntax, and citation targets retain their canonical roles.
 - The existing Chinese GEARS forms and authoritative reference remain in use.
-- Meta keeps its per-item and whole-file source pins; the index keeps its existing whole-file pin and link parity.
-- Each additional translated spec file carries one whole-file source pin naming its path relative to `scaffold/`, and preserves its canonical item IDs and citation targets.
+- Meta keeps its per-item and whole-file source pins, and every other translated spec file one whole-file source pin naming its path relative to `scaffold/`; the pins stand in the language's manifest, not in the translated Markdown ([DR-234](234-translation-source-pins-stay-in-the-overlay.md)).
+- The index keeps its link parity, and each translated file preserves its canonical item IDs and citation targets.
 - The root license text, managed agent-instruction marker and body, and tool-facing support prompts retain their current language.
 - Existing update, pristine-file detection, and preservation of customized seeds apply to the expanded overlays unchanged.
 

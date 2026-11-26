@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-10-22) for the owner's P0-0 Academy entry.
-Amends [DR-015](015-reference-content.md) only when the example's former working folder remains after project removal.
+Accepted (2026-10-22).
+Amends [DR-015](015-reference-content.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Amends [DR-015](015-reference-content.md) only when the example's former working
 
 ## Decision
 
+- Amends [DR-015](015-reference-content.md) only when the example's former working folder remains after project removal.
 - When the Academy target is an unregistered Git work tree whose root history identifies Spex's Academy seed, the example action shall register and open that existing project without reseeding or overwriting its working files or Git history.
 - A different nonempty target remains a refusal; an absent or empty target is seeded as before, and an already registered target is opened.
 

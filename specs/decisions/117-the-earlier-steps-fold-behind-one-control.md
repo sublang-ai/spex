@@ -5,17 +5,18 @@
 
 ## Status
 
-Accepted (2026-10-11) on the 2026-10-11 workshop's finding that a run interrupted by a core restart offered seven near-identical rows.
-Amends [DR-075](075-a-failure-says-what-and-what-now.md) in the parked-run notice's layout alone: the actions resuming from an earlier step fold behind one secondary control; one control per advertised action, each with its own label and standing, the no-op rule, Drop and the card stand.
+Accepted (2026-10-11).
+Amends [DR-075](075-a-failure-says-what-and-what-now.md).
 
 ## Context
 
-- After the core restarted under a running `/shape`, the notice drew one Retry, six "Resume from: …" controls and Drop, each label ellipsed at its control's width.
+- At the 2026-10-11 workshop, after the core restarted under a running `/shape`, the notice drew one Retry, six "Resume from: …" controls and Drop, each label ellipsed at its control's width.
 - Retry was the right act and stood first, but six resumes reading alike asked a participant to understand the machine before continuing.
 - Playbook advertises a resume, `jump:<stateId>`, for every earlier step the parked run can re-enter, labelled with that step's description, so their count follows the machine rather than the failure.
 
 ## Decision
 
+- Amends [DR-075](075-a-failure-says-what-and-what-now.md) in the parked-run notice's layout alone: the actions resuming from an earlier step fold behind one secondary control; one control per advertised action, each with its own label and standing, the no-op rule, Drop and the card stand.
 - **The row keeps the failure's own acts.**
   Every advertised action that is not a resume — a retry, a reconciliation, an abandonment — stands in the notice's row in the order advertised, with Drop beside it.
 - **The resumes fold.**

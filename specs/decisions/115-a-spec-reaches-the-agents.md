@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-10-11).
-Amends [DR-104](104-spec-package-format-and-client-environments.md) in its exports: a selected spec is exported as a generated skill beside the skills and the playbooks' skills, and `alias` names a spec's id as well.
-Amended by [DR-174](174-what-a-package-provides-is-placed.md) in where a spec reaches the agents: in a project it stands in `specs/packages/`, read as any spec of the project; the generated skill stays the form for your own group's environment, whose root holds no `specs/`.
+Amends [DR-104](104-spec-package-format-and-client-environments.md).
+Amended by [DR-174](174-what-a-package-provides-is-placed.md).
 
 ## Context
 
@@ -17,13 +17,15 @@ Amended by [DR-174](174-what-a-package-provides-is-placed.md) in where a spec re
 
 ## Decision
 
-- For every selected spec, Spex writes a skill, as it does for a playbook: the spec file in its chosen language, copied byte for byte as `<pkg>.md`, beside a `SKILL.md` saying what the spec package is — its org, name, version and description.
+- Amends [DR-104](104-spec-package-format-and-client-environments.md) in its exports: a selected spec of the global environment is exported as a generated skill beside the skills and the playbooks' skills, and `alias` names a spec's id as well.
+- In a project a provided spec is placed in `specs/packages/` instead, read as any spec of the project ([DR-174](174-what-a-package-provides-is-placed.md)); the generated skill is the form for the global environment, whose root holds no `specs/`.
+- For every spec the global environment provides, Spex writes a skill, as it does for a playbook: the spec file in its chosen language, copied byte for byte as `<pkg>.md`, beside a `SKILL.md` saying what the spec package is — its org, name, version and description.
 - The skill is named `<org>-<pkg>`, so it takes no name the spec package's own skills and playbooks export under their ids; where that is longer than an Agent Skills name allows [[1]], `<pkg>`; `alias` renames it like any other export.
 - It goes where the other exports go, is bound like them to the environment whose lock exported it, counts among the skill names whose clash is refused, and leaves when the lock no longer selects it.
 
 ## Consequences
 
-- A request can name a spec package, and an agent in the working folder reads its spec; your own group's specs reach every session on this device.
+- A global request can name a spec package, and its spec reaches every agent session on this device.
 - A lock resolved before this records no spec export, so its spec reaches no agent until it is resolved again.
 - An agent reads a copy: an edit to it changes nothing installed, and the next export writes it again.
 

@@ -5,8 +5,8 @@
 
 ## Status
 
-Accepted (2026-10-22) on the owner's copy review.
-Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome explanation and [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) in the project-start guidance and playbook definition.
+Accepted (2026-10-22).
+Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md).
 
 ## Context
 
@@ -16,6 +16,7 @@ Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the we
 
 ## Decision
 
+- Amends [DR-137](137-specs-first-welcome-and-distinct-project-paths.md) in the welcome explanation and [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) in the project-start guidance and playbook definition.
 - The welcome and project start explain that specs describe how the system should work and how to check it.
 - The task prompt invites a goal; its guidance explains that AI helps develop the specs before implementing and reviewing changes.
 - A playbook is explained as a workflow written in plain language that Spex can run to coordinate AI implementation and review.
