@@ -16,7 +16,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) for 
 
 ## Context
 
-- Skills reach agents only through environments: Spex refuses a `skills` list in its configuration ([DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)) and exports each environment's skills into the agents' folders ([DR-124](124-skills-reach-every-agent.md)).
+- Skills reach agents only through environments: Spex refuses a `skills` list in its configuration ([DR-105](105-playbook-17-5-0-adoption.md)) and exports each environment's skills into the agents' folders ([DR-124](124-skills-reach-every-agent.md)).
 - Your own group's environment is the one that reaches your own agents on every device, and its spex repository is the one place that follows you there ([DR-103](103-the-home-and-its-groups.md)).
 - A request there comes from the registry, from Git at a commit, or by a path relative to a working folder.
 - Your own group usually has no working folder on a device, so a path request is refused; where one is paired, the path names a folder only that device has, while the request syncs to every device.

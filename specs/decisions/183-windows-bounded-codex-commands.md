@@ -4,7 +4,7 @@
 
 Accepted (2026-10-31). Extends [DR-178](178-native-windows-private-storage.md) in the supplied Agent runtime, without adding application business rules.
 
-Superseded by [DR-182](182-published-desktop-runtime-adoption.md) for runtime launch and platform hints: the published adapter uses the official SDK directly without forced MXC or fixed shell instructions.
+Superseded by [DR-167](167-the-compiler-shares-the-apps-engine.md) for runtime launch and platform hints: the published adapter uses the official SDK directly without forced MXC or fixed shell instructions.
 
 ## Context
 

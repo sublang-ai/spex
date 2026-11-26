@@ -9,10 +9,10 @@ Accepted (2026-10-01) on the owner's review of the field [DR-093](093-a-players-
 
 Amends [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
 Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices are "Same as agent" and the adapter's models, with "Same as agent" the default; a fifth tuning field, the subagent effort, joins it; the two pair on one row; and in its floors: Cligent `^0.30.0`, Playbook `^17.3.0`.
-Amends [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in its floors alone: Cligent `^0.30.0`, Playbook `^17.3.0`, slc `^0.15.0`.
+Amends [DR-167](167-the-compiler-shares-the-apps-engine.md) in its floors alone: Cligent `^0.30.0`, Playbook `^17.3.0`, slc `^0.15.0`.
 Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-players.md) in their field count alone: five tuning fields.
 Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
-Amended by [DR-102](102-playbook-17-4-1-adoption.md) in its floors alone: Playbook `^17.4.1`, Cligent `^0.33.3`, slc `^0.15.1`.
+Amended by [DR-241](241-reviewable-builtin-gears.md) in its floors alone: Playbook `^17.4.1`, Cligent `^0.33.3`, slc `^0.15.1`.
 
 Amended by [DR-232](232-codex-subagent-selection.md) for Codex, where the subagent selection requests native spawn defaults.
 

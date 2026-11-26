@@ -52,7 +52,7 @@ Considered and declined:
 - **The former layout's `.lock/`** is read by the same rule before [DR-103](103-the-home-and-its-groups.md)'s migration: a live owner, another machine's, or one the rule cannot verify keeps the core out; a dead owner of this machine is left for the migration.
 - **The desktop quits on `SIGINT` and `SIGTERM`** through its ordinary shutdown, without the active-turn confirmation, exiting 130 or 143 once the core has stopped or after a bounded wait; the source runner, having signalled the launch stage, waits a bounded time for it and then ends its process group, so the Node ABI restore is never held by a hung app.
 - **Coordinated upgrade**: every writer sharing the home — the CLI and every Spex shell — stops before the first new writer runs, after the home snapshot of [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md); an old binary reads a tagged owner as foreign and refuses takeover, and a legacy record whose host name has since changed still needs its lock directory moved aside by hand.
-- **The Playbook floor** rises to `^17.6.0`, 17.6.0 being the first release publishing the facade [[2]]; the lock is regenerated from the public registry as [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) requires, holding one Playbook, 17.6.0, and the merge gate runs against that release, not a local checkout.
+- **The Playbook floor** rises to `^17.6.0`, 17.6.0 being the first release publishing the facade [[2]]; the lock is regenerated from the public registry as [DR-241](241-reviewable-builtin-gears.md) requires, holding one Playbook, 17.6.0, and the merge gate runs against that release, not a local checkout.
 
 ## Consequences
 
