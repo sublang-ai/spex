@@ -6772,7 +6772,7 @@ export class SpaceManager {
     // A host id the instance's last read lacks is looked up in a fresh
     // read of it — the read Refresh makes, held and published — before
     // the open is refused, so a project shared since that read opens
-    // without a Refresh (space-63, DR-159).
+    // without a Refresh (space-63, DR-172).
     if (!found && held) {
       atView = await read();
       found = atView.listings.find((entry) => entry.repository.id === hostId);

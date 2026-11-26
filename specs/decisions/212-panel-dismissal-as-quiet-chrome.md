@@ -6,30 +6,27 @@
 ## Status
 
 Accepted (2026-11-03) following the owner's review of the wide and narrow application screenshots and approval to merge and push.
-Amends [DR-211](211-a-panel-carries-its-own-way-out.md) in header dismissal presentation.
-The dismissal, focus, pending-operation and attention-preservation behavior of [DR-211](211-a-panel-carries-its-own-way-out.md) remains.
-Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: the Playbooks place selector and the group-specific panels and dismissal controls. Player bindings still resolve by name.
+Amends [DR-211](211-a-panel-carries-its-own-way-out.md).
+Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
 A bordered text Close gave temporary-view dismissal the weight of a task action.
-A close-only strip and a narrow Members header also separated the control from the visible edge of the surface it closes.
-The refinement needs evaluation with the owning group and neighboring content visible, not only as an isolated card.
+A close-only strip also separated the control from the visible edge of the surface it closes.
+The refinement needs evaluation with the owning row and neighboring content visible, not only as an isolated card.
 
 ## Decision
 
+- Amends [DR-211](211-a-panel-carries-its-own-way-out.md) in header dismissal presentation; its dismissal, focus, pending-operation and attention-preservation rules stand.
 - Header dismissal uses the app's existing cross icon as quiet, borderless chrome with a neutral resting tone, hover feedback, a visible keyboard-focus indicator and a target at least 24 by 24 pixels.
   Its localized accessible name and tooltip say Close, including the target where context helps; browser preparation retains the tooltip explaining that closing cancels setup while it runs.
   Cancel for an unfinished form and Close beside a completed result remain text actions.
 - The cross sits inside the visible panel frame at the trailing edge of its header, without an otherwise empty close-only strip.
-  The project palette integrates it with its title or search row, including the existing group-chooser title.
+  The project palette integrates it with its title or search row.
   Browser setup has a named, fixed header; only its body scrolls.
-- An attached Members header spans its owning expansion, with the title and count on the leading side, Invite members before an independent trailing cross.
-  The title and invitation action can wrap within their own region at narrow widths while the cross retains its corner position; the editor and roster below keep their bounded reading width.
-  The standalone Members view remains bounded with its own frame.
-  A dismissed-only review places its cross inside the Dismissed card, outside that disclosure's summary control.
+- A dismissed-only review places its cross inside the Dismissed card, outside that disclosure's summary control.
 - Visual review covers the complete containing surface at a wide viewport and the 320-pixel floor in English and Chinese, in light and dark themes.
-  Space evidence includes the owning group and neighboring groups or project rows so header alignment and expansion width can be assessed in context.
+  Space evidence includes the owning project row and its neighboring rows so header alignment and expansion width can be assessed in context.
 
 ## Consequences
 

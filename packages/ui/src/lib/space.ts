@@ -375,7 +375,7 @@ export function toSendPhrase(units: readonly SpaceUnit[]): { text: string; title
   };
 }
 
-/** The phrase a row reads (space-120, DR-159): its words, the fuller
+/** The phrase a row reads (space-120, DR-172): its words, the fuller
  * reading for its title, its tone, and the way forward beside it —
  * Resolve for choices owed, "Combine…" for records started separately,
  * Retry for a stop retrying can help — with the placement it is for. */

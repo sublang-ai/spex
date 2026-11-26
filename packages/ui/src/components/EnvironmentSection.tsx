@@ -17,7 +17,7 @@
 // spec's waiting links' Add requesting the package they wait for, as
 // Add… does, with its receipt. The built-in spec package is one row
 // among the rest. No heading names the spex repository behind it
-// (DR-159). A sync, an update or an install running beside it refuses
+// (DR-172). A sync, an update or an install running beside it refuses
 // nothing (DR-111): its progress shows by the heading, and a change the
 // core refuses shows its cause in place.
 

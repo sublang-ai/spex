@@ -1499,7 +1499,7 @@ export function instanceSection(page: Page, host: StandinHost) {
 }
 
 /** A spex repository's line for its placement at a stand-in instance,
- * or its path placement's for null, in its Sync tab (space-87, DR-159):
+ * or its path placement's for null, in its Sync tab (space-87, DR-172):
  * found by the instance's origin, as stand-ins share their host name.
  * The lines stand only while the row's name has opened its tabs. */
 export function placementLine(page: Page, key: string, host: StandinHost | null) {

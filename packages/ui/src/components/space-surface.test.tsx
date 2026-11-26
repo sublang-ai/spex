@@ -58,7 +58,7 @@ import {
 } from "../fixtures/space.js";
 
 /** The opened row's one overflow control, "More", opened where it
- * stands closed (space-1, DR-159). */
+ * stands closed (space-1, DR-172). */
 function openMore(key: string = KEY): HTMLElement {
   const id = `space-row-more-${key}`;
   if (!screen.queryByTestId(`${id}-menu`)) fireEvent.click(screen.getByTestId(id));
@@ -982,7 +982,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(syncControl().disabled).toBe(true);
     // Ahead, behind and the check time update on the placement's line,
     // in the Sync tab; the row carries no count of the records' Git
-    // (space-8, space-87, DR-159).
+    // (space-8, space-87, DR-172).
     deliver(repoState({ branch: { ...BRANCH, ahead: 0, behind: 3, checkedAt: NOW } }));
     expect(within(lineAt()).getByTestId("space-line-state").getAttribute("title")).toContain("0 commits ahead, 3 commits behind");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
@@ -1287,7 +1287,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     expect(screen.getByRole("heading", { name: "Choose for 2 conflicts" })).toBeTruthy();
     // The row reads the placement's outcome, with Resolve showing the
     // same picker beneath the row, its choices the Sync tab's (space-14,
-    // space-87, DR-159).
+    // space-87, DR-172).
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Changed here and at Spex Example");
     fireEvent.click(screen.getByTestId(`space-row-resolve-${KEY}`));
     const beneath = screen.getByTestId(`space-row-resolve-picker-${KEY}`);
