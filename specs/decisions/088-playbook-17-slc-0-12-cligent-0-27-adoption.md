@@ -6,8 +6,7 @@
 ## Status
 
 Accepted (2026-09-28).
-Amends [DR-047](047-explicit-session-recovery.md), [DR-062](062-ending-a-failed-workflow.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-080](080-the-config-directory-is-named-config.md), [DR-085](085-boss-talks-through-captain.md).
-Amended by [DR-090](090-readiness-names-what-cligent-finds-missing.md).
+Amends [DR-047](047-explicit-session-recovery.md), [DR-062](062-ending-a-failed-workflow.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-085](085-boss-talks-through-captain.md).
 
 ## Context
 

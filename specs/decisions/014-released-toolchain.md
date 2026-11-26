@@ -6,7 +6,7 @@
 ## Status
 
 Accepted.
-Amended by [DR-019](019-inline-agent-configuration.md), [DR-023](023-runtime-compatibility-from-cligent.md), [DR-032](032-session-players.md).
+Amended by [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md).
 
 ## Context
 

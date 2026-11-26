@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-14).
-Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player and [DR-237](237-published-agent-runtime-floors.md) in the model lineup.
+Amends [DR-019](019-inline-agent-configuration.md) in the initial block for adding a new player.
 Amends [DR-205](205-agent-cards-read-alike.md) in the models omitted from a third-party Claude seed, and [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the fields supplied to the compiler.
 
 Amended by [DR-237](237-published-agent-runtime-floors.md) in model ownership and the shared runtime floor.

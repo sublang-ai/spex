@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-10-20) on the owner's direction to adopt the native-skill releases and read the agent folders from Cligent.
+Accepted (2026-10-20).
 Amends [DR-124](124-skills-reach-every-agent.md).
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md).
 

@@ -6,8 +6,7 @@
 ## Status
 
 Accepted (2026-10-06); revised (2026-11-26).
-Amends [DR-104](104-spec-package-format-and-client-environments.md).
-Amended by [DR-108](108-the-root-lease-names-the-machine.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md).
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md).
 
 ## Context
 

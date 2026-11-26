@@ -6,8 +6,7 @@
 ## Status
 
 Accepted.
-Amends [DR-014](014-released-toolchain.md).
-Amended by [DR-024](024-app-supplied-agent-runtimes.md), [DR-025](025-playbook-7-adoption.md), [DR-032](032-session-players.md).
+Amended by [DR-024](024-app-supplied-agent-runtimes.md).
 
 ## Context
 

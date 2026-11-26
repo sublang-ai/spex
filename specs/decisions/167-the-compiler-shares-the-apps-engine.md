@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-29) on the owner's direction to publish a shared-engine dependency contract and enforce it in Spex; revised (2026-11-26).
-Amends [DR-081](081-the-app-supplies-the-compiler.md), [DR-093](093-a-players-subagent-model.md), [DR-178](178-native-windows-private-storage.md), [DR-183](183-windows-bounded-codex-commands.md), [DR-184](184-native-desktop-tag-packages.md).
+Amends [DR-081](081-the-app-supplies-the-compiler.md), [DR-093](093-a-players-subagent-model.md), [DR-178](178-native-windows-private-storage.md), [DR-183](183-windows-bounded-codex-commands.md).
 
 ## Context
 

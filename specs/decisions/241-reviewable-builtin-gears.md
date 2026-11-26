@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-16) on the owner's direction to release the latest built-in GEARS and select the app's shipped release automatically; revised (2026-11-26).
-Amends [DR-075](075-a-failure-says-what-and-what-now.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md), [DR-223](223-windows-storage-checks-what-macos-checks.md).
+Amends [DR-104](104-spec-package-format-and-client-environments.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md).
 
 ## Context
 

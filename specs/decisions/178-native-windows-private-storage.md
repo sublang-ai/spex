@@ -28,12 +28,11 @@ Windows users need the desktop app without WSL or a separately operated server.
 - Windows uses its inherited launch environment; POSIX desktop hosts retain login-shell capture.
 - The Windows launch PATH includes the installed MinGit root `usr/bin` as well as its command directory; the packaged helper layout, not an assumed ucrt64 subdirectory, determines helper discovery.
 - Native runtime components and Git required by the desktop are installation responsibilities, never an end-user compiler or WSL prerequisite.
-- The desktop declares the same patched Playbook dependency as its embedded core so a compiler-private older runtime cannot replace the application engine during packaging.
+- The desktop declares the same published Playbook dependency as its embedded core ([DR-167](167-the-compiler-shares-the-apps-engine.md)) so a compiler-private older runtime cannot replace the application engine during packaging.
 - Windows reads legacy SQLite through the bundled Node SQLite API in read-only mode, keeping the source database unchanged and avoiding an Electron-ABI-specific SQLite addon.
 
 ## Consequences
 
 The shared Playbook storage implementation must be upgraded with the host.
-Until a coordinated registry release exists, the validation build pins a vendored patched archive with its source patch, upstream commit and checksums; it must never silently fall back to the unpatched registry bytes.
 Windows acceptance must exercise real Windows storage and the packaged Electron runtime; changing `process.platform` does not establish native support.
 File synchronization remains mandatory; Windows does not claim POSIX directory-fsync durability.

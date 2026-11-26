@@ -35,7 +35,7 @@ Amended by [DR-075](075-a-failure-says-what-and-what-now.md): the notice says wh
 - The destination is deterministic.
   When Playbook publishes the leaf's advertised runtime actions and accepts a host-submitted runtime selection — one that enters with its decision already made, as a parsed command does — Spex renders each advertised action as its own control and executes the chosen one with no model call on the recovery path.
   The core gains one command for that selection and the session report gains the advertised list; the notice, its placement, its label and its busy and disabled forms do not change.
-- The interim ends at that adoption, recorded as a floor bump like every other ([DR-237](237-published-agent-runtime-floors.md)).
+- The interim ends at that adoption, recorded as a floor bump like every other ([DR-241](241-reviewable-builtin-gears.md)).
   Spex requests the Playbook change rather than working around it: no prompt is parsed, no internal record is scraped, and no reconstructed request text is delivered in a retry's name.
 
 ## Consequences

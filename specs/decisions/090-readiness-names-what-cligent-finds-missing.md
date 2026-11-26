@@ -7,8 +7,6 @@
 
 Accepted (2026-09-28).
 Extends [DR-024](024-app-supplied-agent-runtimes.md): the runtime half's diagnosis gains cligent's executable lookup; the probe, the targets and the repairs per install tree stand.
-Amends [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its Cligent floor alone: the core requires `^0.27.1`; everything else DR-088 decided stands.
-Amended by [DR-241](241-reviewable-builtin-gears.md) in its Cligent floor alone, now `^0.28.0`.
 
 ## Context
 

@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-09-01).
-Amends [DR-025](025-playbook-7-adoption.md), [DR-032](032-session-players.md), [DR-036](036-file-state-store.md).
-Amended by [DR-045](045-unified-session-storage.md), [DR-080](080-the-config-directory-is-named-config.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-154](154-the-seed-follows-playbooks-rule.md).
+Amends [DR-025](025-playbook-7-adoption.md), [DR-036](036-file-state-store.md).
+Amended by [DR-045](045-unified-session-storage.md), [DR-059](059-issue-delivery-through-dev.md), [DR-080](080-the-config-directory-is-named-config.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-154](154-the-seed-follows-playbooks-rule.md).
 
 ## Context
 
