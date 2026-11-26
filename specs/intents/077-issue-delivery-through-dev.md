@@ -14,7 +14,7 @@ A GitHub issue handed to `/dev` becomes a branch, the planned `decide` and/or `c
 ## Deliverables
 
 - [x] Spex requires the playbook release that ships `branch` and `pr` and the issue-aware `dev`; the built-in catalog offers both new playbooks with `dev.coder` bindings.
-- [x] A new DR supersedes DR-054's "the Boss merges": an issue seed dispatches `/dev` with the issue, and delivery ends at the merged pull request and the restored default-branch checkout.
+- [x] A new DR replaces the earlier decision that "the Boss merges": an issue seed dispatches `/dev` with the issue, and delivery ends at the merged pull request and the restored default-branch checkout.
 - [x] The Dashboard's issue seed and its coverage follow the new DR.
 - [x] A real `/dev` run on a throwaway repository's issue produces a branch, a pull request, a green check, a merge commit on the default branch, and the issue closed.
 

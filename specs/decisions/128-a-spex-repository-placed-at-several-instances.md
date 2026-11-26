@@ -16,7 +16,6 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-122](122-a-sync-reads-its-destination.md) in the read before a sync and at admission: each placement's destination is read at that placement's turn, and admission reads only the placements owing the notice, a failed read stopping that placement alone.
 - [DR-114](114-groups-and-sharing-from-spex.md) in a spex repository's Members, Share and removing a member: each acts on one placement at its instance.
 - [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md) in Spex's own paths: `placements/` joins them.
-Amended by [DR-132](132-team-servers.md) in placing your own group at every instance: not on a seat.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in its presentation alone: a placement's line, "Place at…", "Leave…" and Attach move behind one overflow control per row, their meanings standing.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the acts offered.
 

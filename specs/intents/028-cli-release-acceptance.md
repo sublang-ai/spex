@@ -9,7 +9,7 @@ Done
 
 ## Intent
 
-Gate the 1.0 CLI release on what its users actually experience: an automated end-user pass over the published README journeys, a live acceptance run of the skill-based migration ([DR-021](../decisions/021-skill-based-migration.md)) driven by real coding agents, and READMEs regenerated for both a fresh user and a spex 0.x user upgrading across the generation change.
+Gate the 1.0 CLI release on what its users actually experience: an automated end-user pass over the published README journeys, a live acceptance run of the skill-based migration (since replaced by [DR-022](../decisions/022-prompt-based-migration.md)) driven by real coding agents, and READMEs regenerated for both a fresh user and a spex 0.x user upgrading across the generation change.
 
 ## Deliverables
 

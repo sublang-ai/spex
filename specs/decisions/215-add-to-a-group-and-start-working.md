@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's request to remove the remaining sharing confirmation and complete adding, uploading and server opening without another click, with a checklist of real progress.
-Amends [DR-103](103-the-home-and-its-groups.md) and [DR-128](128-a-spex-repository-placed-at-several-instances.md) in first-send acknowledgement, [DR-192](192-choose-a-group-before-adding.md) in the destination review and committing action, and [DR-159](159-projects-in-groups-opened-where-you-work.md) and [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in opening the group's server as part of adding the project.
+Amends [DR-103](103-the-home-and-its-groups.md) and [DR-128](128-a-spex-repository-placed-at-several-instances.md) in first-send acknowledgement, and [DR-159](159-projects-in-groups-opened-where-you-work.md) in opening the group's server as part of adding the project.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group actions, alternate opening destinations and automatic server opening. Explicit personal sync and code matching across devices continue.
 
 ## Context

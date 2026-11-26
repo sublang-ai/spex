@@ -8,13 +8,11 @@
 Accepted (2026-10-11).
 Amends [DR-103](103-the-home-and-its-groups.md) in "What Spex does on a Git host": creating a group and adding a member join the list, leaving the Git host's pages for what remains.
 Amends [DR-064](064-honest-remote-failure.md) in its guidance: where membership decides, the failure now names Share beside the host's members page.
-Amended by [DR-118](118-the-host-page-a-first-group-is-made-on.md) in "where the host does not let this person act, nothing is shown": where the host's read says the person may not create a group, the list's head carries a link "New group at <site>" to the host's site in place of "New group".
 Amended by [DR-120](120-the-instance-is-the-space.md) in its amendment of [DR-064](064-honest-remote-failure.md) and in "Everything else stays on the Git host … reached through the "Open at <host>" link a members panel keeps": no door to the host's pages stands anywhere; renaming a group, deleting an empty group and moving a spex repository to another group are done in Spex; roles, visibility, archive and group transfer are not offered; where membership decides, a failure names Share, or a member who may share, in Spex.
 Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in "New group" at the head of the groups list: at the head of each instance's groups, a root group made at that instance.
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in a spex repository's Members, Share and removing a member: each acts on one placement at its instance.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
-Amended by [DR-190](190-membership-with-a-clear-scope.md) in the members panel and editor: Invite members names the group or project, Username and Role carry visible guidance, and Add member grants an existing account access immediately.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context

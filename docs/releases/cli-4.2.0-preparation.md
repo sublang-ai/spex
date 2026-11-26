@@ -10,9 +10,9 @@ The version change alters no dependency resolution: npm's own lockfile pass over
 
 ## What the release ships
 
-- `spex package init <org>/<name>` makes `spex-packages/<name>/` from `--skill` folders and/or a `--spec` file, with a format 2 manifest, a README and the project's LICENSE, and needs no running app ([DR-162](../../specs/decisions/162-a-package-folder-from-what-you-already-have.md)).
+- `spex package init <org>/<name>` makes `spex-packages/<name>/` from `--skill` folders and/or a `--spec` file, with a format 2 manifest, a README and the project's LICENSE, and needs no running app (a decision since replaced by [DR-165](../../specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
 - Every rule is checked before anything is written, including the refusal of a `SKILL.md` behind a byte order mark, which the release readers would not read.
-- Attached commands find the running app — desktop or server shell — through the `local/endpoint.json` file its core keeps under `SPEX_HOME` or `~/.spex`, after `--server` and `SPEX_SERVER_URL` ([DR-163](../../specs/decisions/163-the-cli-finds-the-running-app.md)).
+- Attached commands find the running app — desktop or server shell — through the `local/endpoint.json` file its core keeps under `SPEX_HOME` or `~/.spex`, after `--server` and `SPEX_SERVER_URL` (a decision since replaced by [DR-165](../../specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
 - No released app keeps that file yet: against app 0.9.0-beta.18, the latest app tag, the CLI still needs `--server` or `SPEX_SERVER_URL`, as the CLI README and the getting-started guide say.
 - The package-init suite asserts the executable bit only where the platform keeps one, so the Windows CI job passes; this is a test change, ships nothing in the tarball and carries no changelog entry.
 

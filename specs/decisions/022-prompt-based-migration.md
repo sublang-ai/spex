@@ -10,7 +10,7 @@ Accepted
 ## Context
 
 - Spec-generation migration requires judgment, so it cannot be reduced to CLI rewrites.
-- The installable skill chosen in [DR-021](021-skill-based-migration.md) duplicates an agent prompt while adding installation and agent-specific discovery steps.
+- The installable migration skill chosen earlier duplicates an agent prompt while adding installation and agent-specific discovery steps.
 - The published CLI does not ship the repository's `skills/` or `docs/` directories, so its guidance points installed users at files they do not have.
 
 ## Decision

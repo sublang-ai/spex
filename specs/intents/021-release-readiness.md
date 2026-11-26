@@ -9,7 +9,7 @@ Done
 
 ## Intent
 
-Land the branch on main release-ready: the classified relationship presentation per [DR-016](../decisions/016-relationship-presentation.md), a pre-release smoke suite (automated script plus manual checklist), re-vendored layout-agnostic playbook sources, and the mainline merge.
+Land the branch on main release-ready: the classified relationship presentation (a decision since replaced by [DR-000](../decisions/000-spec-structure-format.md)), a pre-release smoke suite (automated script plus manual checklist), re-vendored layout-agnostic playbook sources, and the mainline merge.
 
 ## Deliverables
 

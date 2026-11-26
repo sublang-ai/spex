@@ -8,7 +8,6 @@
 Product naming clarified by [DR-150](150-spex-space-product-and-destination.md): the server product is Spex Space, and the IDE destination is Space; the instance and group boundaries are unchanged.
 
 Accepted (2026-10-12) on the owner's correction of that day: "End users should only see the workshop group, their own personal groups, and projects."
-Supersedes [DR-118](118-the-host-page-a-first-group-is-made-on.md) whole: no link to the Git host's site stands at the groups list's head.
 Amended by [DR-129](129-content-size-is-not-permission.md) for explicit content-size rejections: their public report carries the instance-only cause and reported limit rather than raw transport words, with access unchanged and no membership guidance.
 Amends [DR-114](114-groups-and-sharing-from-spex.md) in its amendment of [DR-064](064-honest-remote-failure.md) and in "Everything else stays on the Git host … reached through the "Open at <host>" link a members panel keeps": no door to the host's pages stands anywhere; renaming a group, deleting an empty group and moving a spex repository to another group are done in Spex; roles, visibility, archive and group transfer are not offered; where membership decides, a failure names Share, or a member who may share, in Spex.
 Amends [DR-064](064-honest-remote-failure.md) in what a report prints and in its guidance: no URL under the Git host's origin is printed, the clone's own remote reading as the repository's path in the instance and any other as the host's display name; any other remote URL is printed only with its embedded user removed; a host transport that reaches no rule is classified as the host's error, never shown as Git's words; where membership decides, a failure names Share, or a member who may share, in Spex, never the host's members page.
@@ -20,14 +19,12 @@ Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the grou
 Amended by [DR-171](171-personal-names-are-space-logins.md) in member presentation: a member is labelled by Space login alone.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
-Amended by [DR-190](190-membership-with-a-clear-scope.md) in membership guidance and empty-group deletion: guidance names Invite members, and the permission-gated Delete group action states its scope and acknowledges a deletion request.
-Amended by [DR-193](193-group-deletion-follows-the-space-policy.md) in the deletion check and outcome: the empty-group restriction remains, a fresh check names blocking contents, and the Space's scheduling and restoration policy governs the confirmed request.
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in this scope: group work destinations, member labels and client listings. Personal account setup, attribution and second-device sync continue.
 
 ## Context
 
 - A spex.pub deployment, an **instance**, keeps every group its people make inside one group of its own, its container, on the Git system behind it, run by a service identity of its own; that system is its storage [[1]].
-- In the 2026-10-11 workshop simulation the organizer was sent to the Git system's own site to make the workshop group ([DR-118](118-the-host-page-a-first-group-is-made-on.md), workshop issue W-20), made it outside the instance, and moved eleven projects back through the protocol, the surface offering no move (W-39); New playbook's Org default read the container's path off the keys (W-36).
+- In the 2026-10-11 workshop simulation the organizer was sent to the Git system's own site to make the workshop group (workshop issue W-20), made it outside the instance, and moved eleven projects back through the protocol, the surface offering no move (W-39); New playbook's Org default read the container's path off the keys (W-36).
 - An unreleased first draft of this record modelled the instance's own group in the client — a heading "this host's group", "ask its owner to share it with you", its path in every key — and so built the storage into the person's model.
 - The owner's correction: a person sees the instance alone, by its URL; the Git system's top-level group is storage.
 - spex.pub now answers every group and repository path relative to the instance's root, lists only the groups inside it and each person's own, makes a group at the root with its service identity and adds the person as Owner, leaves that identity out of every member list, says whether the instance makes groups, and answers no page URL [[1]].

@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-10-21) on the owner's direction: before a project's records run on more than one runtime at once — a laptop and a seat on a team server ([DR-132](132-team-servers.md)) — each session, and each intent captured from this change on, is assigned to one runtime, and only that runtime executes it.
+Accepted (2026-10-21) on the owner's direction: before a project's records run on more than one runtime at once — a laptop and a seat on a team server — each session, and each intent captured from this change on, is assigned to one runtime, and only that runtime executes it.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-103](103-the-home-and-its-groups.md) in "you can continue it only on a device where the project's working folder is the one it ran in": a session continues only on the runtime it is assigned to, the folder rule standing beneath.
@@ -48,7 +48,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md) in t
 
 ### Bounded stop
 
-- When a runtime stops — on a signal, or at the end of an execution lease on a seat ([DR-132](132-team-servers.md)) — the core closes admission and aborts every active turn with the core-stop reason, as today; when every turn has settled, or after ten seconds, it sends every agent process it started that is still alive SIGTERM, and SIGKILL five seconds later, releases its leases and exits.
+- When a runtime stops — on a signal, or at the end of an execution lease on a seat — the core closes admission and aborts every active turn with the core-stop reason, as today; when every turn has settled, or after ten seconds, it sends every agent process it started that is still alive SIGTERM, and SIGKILL five seconds later, releases its leases and exits.
 - On a seat the service manager's kill of the control group reaches the agents' descendants; elsewhere reaching them needs each agent child in a process group of its own, a change in the adapters.
 - A stop writes nothing into a working folder and reverts no file; a turn cut before settlement stands `uncertain`, for Restore on its own runtime.
 
