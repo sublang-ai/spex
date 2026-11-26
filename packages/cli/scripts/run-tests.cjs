@@ -8,6 +8,7 @@
 const { readdirSync } = require("fs");
 const { join } = require("path");
 const { execFileSync } = require("child_process");
+const { pathToFileURL } = require("url");
 
 const pattern = process.argv[2] || "\\.test\\.js$";
 const regex = new RegExp(pattern);
@@ -23,12 +24,16 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-// --test-timeout turns a hung test into a named failure. The packed-command
-// integration file starts many native CLI processes; Windows private-storage
-// checks make its cumulative run exceed three minutes on native hosts.
+// --test-timeout turns a hung test into a named failure, and the exit
+// guard does the same for a file that outlives its tests; no
+// --test-force-exit, which loses the results a file has not yet reported
+// (DR-253). The packed-command integration file starts many native CLI
+// processes; Windows private-storage checks make its cumulative run exceed
+// three minutes on native hosts.
 const timeoutMs = process.platform === "win32" ? 600000 : 180000;
+const guard = pathToFileURL(join(__dirname, "test-exit-guard.mjs")).href;
 execFileSync(
   process.execPath,
-  ["--test", `--test-timeout=${timeoutMs}`, ...files],
+  ["--test", `--test-timeout=${timeoutMs}`, `--import=${guard}`, ...files],
   { stdio: "inherit" },
 );
