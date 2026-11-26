@@ -215,6 +215,7 @@ meta.md       The spec of specs
 | [DR-251](decisions/251-installs-copy-from-the-store.md) | 251-installs-copy-from-the-store.md | The store stays a cache of verified bytes; an install copies each file out of it, checked again, as an ordinary writable file; a former linked tree is replaced at its next install |
 | [DR-252](decisions/252-a-guard-is-kept-beside-the-code.md) | 252-a-guard-is-kept-beside-the-code.md | A guard's items in `specs/` and other files in `guards/`, approval as committed digests with `spex approve`, fast-check alone through `spex verify` in this repository's checks, drafting with the `guard` skill |
 | [DR-253](decisions/253-a-test-file-that-outlives-its-tests-fails-by-name.md) | 253-a-test-file-that-outlives-its-tests-fails-by-name.md | The CLI's and the core's test runners force no file's exit; a file still running 60 seconds after its tests fails by name with what holds it open |
+| [DR-254](decisions/254-sessions-are-a-manifest-and-a-replay-log.md) | 254-sessions-are-a-manifest-and-a-replay-log.md | Proposed: sessions as Playbook's manifest and replay log (schema 9) — a unit of every path named for the session synced whole; earlier formats a `session-upgrade` notice and unsyncable until converted by the documented `playbook sessions upgrade`; the root `sessions/` import takes schema 9; the XDG and sidecar imports removed; adopted once Playbook 20 and slc are published |
 
 ## Packages
 
