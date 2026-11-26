@@ -6,18 +6,13 @@
 ## Status
 
 Accepted.
-Amends [DR-060](060-failed-workflow-control.md)'s single-control notice: Drop stands beside Retry, and Retry becomes the deterministic selection that record deferred; the notice's placement, its plain wording, and its busy and disabled forms stand.
-Amends [DR-061](061-run-state-from-frames.md)'s failure attention: the divergence that record scoped as a consequence closes, the ledger now holding a parked failure on the same terms the frames do; reading a leaf's state from its own frames stands.
-Amends [DR-035](035-intent-ledger.md)'s failure acknowledgment: a later Boss turn no longer clears a failure that parked a run; the verdict acts, the two-band queue, and every other fold contract stand.
-Amended by [DR-073](073-letting-go-ends-the-parked-run.md) in scope: dropping interrupted work is the whole ruling rather than a verdict alone, and the run's own control covers any run parked on the Boss, a question park included; the deterministic Retry, the model-free give-up, the one-ruling gesture and the History tag stand.
-Amended by [DR-074](074-a-parked-run-survives.md): a session whose run ended with unresolved effects recorded is continuable, and every advertised action is published rather than the first taken.
-Amended by [DR-075](075-a-failure-says-what-and-what-now.md): one control per advertised action, each with its standing, replaces the single Retry.
-Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its last consequence alone: a session holding an uncertain turn is restored first, and Discard stands only where nothing was recorded.
+Amends [DR-035](035-intent-ledger.md), [DR-060](060-failed-workflow-control.md), [DR-061](061-run-state-from-frames.md).
+Amended by [DR-066](066-every-summons-has-a-door.md), [DR-073](073-letting-go-ends-the-parked-run.md), [DR-074](074-a-parked-run-survives.md), [DR-075](075-a-failure-says-what-and-what-now.md), [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md).
 
 ## Context
 
 [DR-060](060-failed-workflow-control.md) gave a parked workflow a Retry and said it would stop being a request and start being a call once Playbook advertised its runtime actions to hosts.
-Playbook 13.3 advertises them, and advertises one control of its own besides: a give-up that spends no model call.
+Playbook advertises them, and advertises one control of its own besides: a give-up that spends no model call.
 
 Retry answers "make it work".
 Nothing answered "I am letting this go".
@@ -33,18 +28,20 @@ Without an exit, holding the summons would have meant holding it forever, which 
 
 ## Decision
 
-- The failed-workflow notice carries two controls, Retry and Drop, and says what each does.
-- Retry selects the run's own advertised recovery action through the runtime rather than asking the Captain in prose.
-  Where the run advertises none, Retry is absent rather than offered and refused.
+- The failed-workflow notice carries the run's recovery controls and Drop, and says what each does.
+- A recovery control selects one of the run's own advertised runtime actions through the runtime rather than asking the Captain in prose, one control per advertised action ([DR-075](075-a-failure-says-what-and-what-now.md)).
+  Where the run advertises none, none is offered.
 - Drop ends the run through the shell's own give-up, which spends no model call, so the exit works when the provider is what failed.
   It is the Boss's ruling, so it stands behind an inline confirm.
 - Where the session serves an open intent, Drop takes the ledger's Drop verdict in the same gesture: one ruling, not two.
-- A failure that parked a run summons until that run leaves its failure state, whether Retry recovered it or Drop ended it.
+- A failure that parked a run summons until that run leaves its failure state, whether a recovery control recovered it or Drop ended it.
   A later Boss turn no longer acknowledges it.
 - A failure that parked no run keeps the rule it has: nothing is stuck, so moving on is acknowledgment.
 - Dropping records nothing of its own. Ending the run is what clears the attention, on every surface, because every surface already asks the same question — is that run still parked.
 - The run's machine card keeps its failure emphasis and its History row keeps the dropped tag it already has ([DR-038](038-history-is-done-work.md)): the work did fail, and the record says so after the summons stops.
-- Spex requires Playbook 13.3 or later.
+- Amends [DR-060](060-failed-workflow-control.md): Drop stands beside the recovery controls, which become the deterministic selection that record deferred; the notice's placement, its plain wording, and its busy and disabled forms stand.
+- Amends [DR-061](061-run-state-from-frames.md): the ledger holds a parked failure on the terms the frames do, closing the divergence that record left; reading a leaf's state from its own frames stands.
+- Amends [DR-035](035-intent-ledger.md): a later Boss turn no longer clears a failure that parked a run; the verdict acts, the two-band queue, and every other fold contract stand.
 
 ## Consequences
 
@@ -53,4 +50,4 @@ Without an exit, holding the summons would have meant holding it forever, which 
 - A parked failure can now stand indefinitely, which is correct only because Drop exists; the two halves of this record are not separable.
 - Dropping is not resumable — Playbook clears the run's retained generation — so a Boss who wants the work back runs the command again.
 - Nothing durable records the drop itself, so a drop on a session serving no intent leaves only the conversation and the run's own history as its account.
-- A session already holding an uncertain turn shows the interrupted-turn controls instead [[run-view-110](../packages/run-view.md#run-view-110)], so the route there stays Discard first.
+- A session already holding an uncertain turn shows the interrupted-turn controls instead [[run-view-110](../packages/run-view.md#run-view-110)]: it is restored first, and Discard stands only where nothing was recorded ([DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).

@@ -5,17 +5,13 @@
 
 ## Status
 
-Accepted (2026-09-16) on the owner's review of the surface [DR-067](067-tuning-for-one-conversation.md) shipped: one agent's control opened every agent's settings, and a scope was given a name of its own.
-
-Amends [DR-067](067-tuning-for-one-conversation.md), which remains accepted, in its §"Where it is shown and changed" alone.
-That record's scope, precedence, storage, application at the three projection sites, validation without discovery, and its rule that a chip is a setting rather than a receipt all stand unchanged; this record replaces only what the reader sees and what it is called.
-Amended by [DR-069](069-key-phrases-not-sentences.md) in §"One agent's control opens one agent's settings" alone: the editor's two sentences become the phrase "This conversation only".
-Amended by [DR-091](091-models-named-by-the-runtime.md) in the reading an agent's chip carries alone: the model the runtime reported for the agent's latest call, while the adapter and model setting that call began under still stand, with what is set kept in the chip's title and accessible name.
-
-Amended by [DR-238](238-claude-resumes-keep-the-session-model.md) in omitted Claude primary selection: native resume policy and launch/provider exceptions, without changing the configuration format.
+Accepted (2026-09-16).
+Amends [DR-067](067-tuning-for-one-conversation.md).
+Amended by [DR-069](069-key-phrases-not-sentences.md), [DR-091](091-models-named-by-the-runtime.md), [DR-238](238-claude-resumes-keep-the-session-model.md).
 
 ## Context
 
+The owner reviewed the surface [DR-067](067-tuning-for-one-conversation.md) shipped: one agent's control opened every agent's settings, and a scope was given a name of its own.
 [DR-067](067-tuning-for-one-conversation.md) put one panel behind two kinds of door: an agent's own chip, and a control on the session header carrying a count of changed agents.
 Both opened the same list of every agent in the session.
 It also named the act — "Tune", "Tuning · 2", "This session's tuning".
@@ -44,8 +40,8 @@ Nobody compares their coder against their reviewer in the middle of a turn.
 
 ### One agent's control opens one agent's settings
 
-An agent's chip — in the Captain pane's header, and in each player pane's header — opens that agent's own editor and no one else's: its model, its effort, its fast mode, in the tri-state the product already uses ([DR-032](032-session-players.md)).
-Three fields, the sentence that says where the change lands, and the sentence that says what lives in Settings instead.
+An agent's chip — in the Captain pane's header, and in each player pane's header — opens that agent's own editor and no one else's: its tuning fields, in the tri-state the product already uses ([DR-032](032-session-players.md)), under the agent's name with "This conversation only" as its subtitle ([DR-069](069-key-phrases-not-sentences.md)).
+The chip reads as [DR-091](091-models-named-by-the-runtime.md) decides: the model the runtime reported while the settings of that call stand, with what is set kept in its title and accessible name.
 
 There is no session-wide panel, no roster, and no count anywhere.
 Where an agent's settings are wanted, the agent is on screen; where the agent is folded to a rail ([DR-030](030-workspace-chrome.md)), its rail carries its reading and unfolding is the reader's own gesture away — a lane the reader folded is not a duty hidden from him.
@@ -53,17 +49,19 @@ Where an agent's settings are wanted, the agent is on screen; where the agent is
 ### The act has no name
 
 Nothing in the interface is called tuning, and nothing offers to tune.
-The chip is the agent's settings; opening it edits them; a line says they apply to this conversation only and that Settings is unchanged.
+The chip is the agent's settings; opening it edits them; a phrase says they apply to this conversation only.
 The same word the rest of the product uses for this — settings — is the word used here.
 
 The wire follows: a session-scoped change to an agent is `session.agent.set`, beside the configuration's own `captain.set` and `player.set`, because it is the same act at a different scope rather than a different act.
-"Tuning" survives only where [DR-032](032-session-players.md) already put it — as the spec's word for model, effort and fast mode taken together — and reaches no reader.
+"Tuning" survives only where [DR-032](032-session-players.md) already put it — as the spec's word for the tuning fields taken together — and reaches no reader.
 
 ### What stays
 
-Each field offers the configured value by name, the provider's current default, and a pinned value.
+Each field offers the configured value by name, the provider's current default, and a pinned value; for Claude's primary model the provider's default reads "Provider default" alone, naming no catalog model ([DR-238](238-claude-resumes-keep-the-session-model.md)).
 An agent whose bindings tune it of their own accord says so on its own editor, because one choice here runs those roles alike and silence would be a lie.
 The way back is each field's own first option, with one control that returns the whole agent to its configured values while any of them stands.
+
+This amends [DR-067](067-tuning-for-one-conversation.md) in §"Where it is shown and changed" alone: its scope, precedence, storage, application at the three projection sites and validation without discovery stand; this record replaces only what the reader sees and what it is called.
 
 ## Consequences
 

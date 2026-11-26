@@ -5,18 +5,13 @@
 
 ## Status
 
-Accepted (2026-09-30) on the owner's request that a player's subagents run on a model of the reader's choosing, and that the player be told to offload well-defined, fine-grained work to them while keeping the deep thinking, reasoning and design work itself.
-
-Amends [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
-Amends [DR-032](032-session-players.md): a role binding's tuning is four fields, not three.
-Amends [DR-067](067-tuning-for-one-conversation.md) §"Why this is affordable at all" and §"The scope is one session and one agent": the runtime now erases four tuning fields, and a session's own tuning of an agent may hold a subagent model.
-Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md) in its one-Cligent consequence alone: slc 0.14 declares the app's Cligent, and the override retires.
-Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md): the field's choices are "Same as agent" and the adapter's models, "Same as agent" by default; a subagent effort joins it; the two pair on one row; and in its floors: Cligent `^0.30.0`, Playbook `^17.3.0`.
-Cites [DR-052](052-runtime-model-options.md) for where the choices come from and [DR-041](041-chrome-that-fits.md) for why the chip does not read it.
-
-Amended by [DR-232](232-codex-subagent-selection.md) for Codex, where the subagent selection requests native spawn defaults.
+Accepted (2026-09-30).
+Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), [DR-067](067-tuning-for-one-conversation.md).
+Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-167](167-the-compiler-shares-the-apps-engine.md), [DR-232](232-codex-subagent-selection.md), [DR-236](236-primary-and-subagent-model-defaults.md).
 
 ## Context
+
+The owner asked that a player's subagents run on a model of the reader's choosing, and that the player be told to offload well-defined, fine-grained work to them while keeping the deep thinking, reasoning and design work itself.
 
 A conversation that puts a strong, slow model on a player pays that model for every file read and every small edit.
 Claude Code can hand bounded work to subagents, and its runtime lets a host name the model those subagents use; what it does not do is tell the main agent to delegate deliberately — left alone, a player delegates as it always did, or not at all.
@@ -31,8 +26,8 @@ Measured against the installed toolchain:
 - The words belong to the layer that reaches the runtime.
   Only Cligent's Claude adapter reaches both the process environment that fixes the subagent model and the system prompt of the run; Playbook composes compiled prompt relays, and Spex composes nothing an agent reads.
 
-So the choice is a model, and the directive follows from it, composed once in Cligent 0.29: on Claude, `subagentModel` makes every subagent of a run use the named model and puts one delegation directive naming it into the run's system prompt, re-sent with every message, so a change lands from the next message.
-Playbook 17.2 carries the field as tuning: an agent block's and a role binding's fourth tuning field beside model, effort and fast mode, erased from the structural projection like them, and delivered in every call's complete settings.
+So the choice is a model, and the directive follows from it, composed once in Cligent: on Claude, `subagentModel` makes every subagent of a run use the named model and puts one delegation directive naming it into the run's system prompt, re-sent with every message, so a change lands from the next message.
+Playbook carries the field as tuning: an agent block's and a role binding's fourth tuning field beside model, effort and fast mode, erased from the structural projection like them, and delivered in every call's complete settings.
 
 ### What the reader sees today
 
@@ -46,10 +41,10 @@ A fourth field that behaved otherwise in any of those homes would be the irregul
 
 `subagentModel` joins model, effort and fast mode as a tuning field:
 
-- in the shared config, on the Captain's block and each player's block, as a merge-patched key like `model`, and in a role binding as a pin, `false` for the provider's default, or omission to inherit the player's value;
+- in the shared config, on the Captain's block and each player's block, as a merge-patched key like `model`, and in a role binding as a pin, `false` switching delegation off ([DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), or omission to inherit the player's value;
 - in a session, as a fourth key of the session's own agent settings, applied at the Captain's block, each tuned player's block, and every role binding naming a tuned player — the three sites of [DR-067](067-tuning-for-one-conversation.md) — because a role's provider call is built from its binding.
 
-Its choices are the adapter's own model list from discovery, with the provider's default and a custom entry, as the model field offers them ([DR-052](052-runtime-model-options.md)); the provider's default means the runtime's own order of choosing a subagent's model.
+Its choices are "Same as agent", the default ([DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), then the adapter's own models from discovery and a custom entry, as the model field offers them ([DR-052](052-runtime-model-options.md)); on Codex a choice requests the runtime's native spawn defaults ([DR-232](232-codex-subagent-selection.md)).
 Validation is launcher parity: the shared validator delegates support to Cligent's capability, so a subagent model on an adapter Cligent does not serve is refused with Cligent's own wording, and discovery gates no save.
 
 ### Where it is shown
@@ -62,10 +57,10 @@ The chip does not read it.
 A chip reads adapter, model and effort within its 14-character budget ([DR-041](041-chrome-that-fits.md)); the subagent model is a second model, and a chip carrying two would fit neither.
 The editor the chip opens shows the field, and a session's own choice of it counts the chip as changed, as any other tuned field does.
 
-### Not carried to the compiler
+### Carried to the compiler
 
-The compile's agent runs on its block's model, effort and fast mode ([DR-081](081-the-app-supplies-the-compiler.md)); the compiler defines no subagent-model variable, and a compile has no work to hand a subagent.
-The draft conversation's Captain, run through Cligent directly, carries the block's subagent model like its model, so a Captain tuned to delegate delegates while authoring too.
+The compile's agent receives the block's subagent model beside its model ([DR-236](236-primary-and-subagent-model-defaults.md)).
+The authoring conversation's Captain, run through Cligent directly, carries the block's subagent model like its model, so a Captain tuned to delegate delegates while authoring too.
 
 ### Verification by layer
 
@@ -76,18 +71,20 @@ Each layer proves its own claim once, and no layer repeats another's:
 - Spex proves the interface to the projection: the editors write the key, `session.agent.set` validates and persists it, the projection the next message opens on carries it at the three sites, and `agent.options` reports where it is offered.
   No Spex test runs a real subagent.
 
+### Amended decisions
+
+- [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
+- [DR-032](032-session-players.md): a role binding's tuning gains the subagent model.
+- [DR-067](067-tuning-for-one-conversation.md) §"Why this is affordable at all" and §"The scope is one session and one agent": the runtime erases the subagent model as a tuning field, and a session's own tuning of an agent may hold one.
+
 ### Considered and declined
 
 - **A free-text prompt field per agent.** Unenforceable as to the model, a second feature beyond the ask, and words the reader would have to write in every configuration; the directive is Cligent's and follows the choice.
 - **A field on the player only, not the binding or the session.** A tuning field that stops at one tier breaks the grammar the reader learned from the other three, and DR-067's application at the binding exists because the binding builds the call.
 - **The chip reading the subagent model.** Two models do not fit the chip's budget; the editor is one click away and the changed mark already says a choice stands.
-- **Carrying it to the compiler.** slc has no such variable, and a compile has nothing to delegate.
 
 ## Consequences
 
 - The core's agent block, patch, resolved agent, session agent settings, projection application, config summary, `agent.options` capability, and the protocol schemas each gain one optional field; the protocol version rises and the shells move together.
 - The shared agent editor, the role-binding editor and the session agent editor each gain one field; the tuning-field control learns a third label; both catalogs gain its strings.
-- The floors rise to Cligent `^0.29.0` and Playbook `^17.2.0`, installed from the public registry; both are additive releases.
-- slc 0.13 still declares Cligent `^0.28.0`, which a `0.x` caret closes below 0.29; left to itself the lock hoists that 0.28 to the root and nests two 0.29 copies, so the root's `overrides` entry points slc's Cligent at `^0.29.0` — an additive release whose one compatibility note, a type-level narrowing, reaches slc's own TypeScript build and no running code — and one Cligent serves the app and its compiler; the override retires when slc adopts 0.29.
 - A session tuned with a subagent model is recorded, like any tuning, in the projection each turn opens on; the playbook CLI continuing the conversation runs the config's value, as it does for the model.
-- This ships in the next beta of the 0.9.0 line.

@@ -5,12 +5,12 @@
 
 ## Status
 
-Accepted (2026-09-28) on an audit of [DR-086](086-tests-in-tiers.md)'s delivery, which found each of the three fresh-user scenarios short of a real walk.
-Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smoke and the regression walk and how their failures are judged: the live smoke also runs in the installed shape, the regression compiles the app's own example and starts its project where a fresh user does, the regression's observed-and-aborted `/code` leaves, CI runs a compiled playbook on substitute agents, and a compiler refusal is judged by whose source it refused.
-Amends [DR-015](015-reference-content.md), which remains accepted, in the example's text: slc's demo adapted, its two open limits settled and its normalized text kept by hand beside the source, rather than vendored as it stands.
+Accepted (2026-09-28).
+Amends [DR-015](015-reference-content.md), [DR-086](086-tests-in-tiers.md).
 
 ## Context
 
+- An audit of [DR-086](086-tests-in-tiers.md)'s delivery found each of the three fresh-user scenarios short of a real walk.
 - The owner's scenarios ([DR-086](086-tests-in-tiers.md)): (a) compile a new simple playbook and run it, by chatting or by pasting its source; (b) start from a new project and develop through a few typical cycles with the existing playbooks; (c) install in a brand-new environment and check that all is working.
 - (c): the fresh install launches both shells from a fresh clone but calls no agent; the live smoke calls one, but only from the developer tree, whose modules, build outputs and native module a fresh user never has.
 - (a): the only real compile is of a source a model authored in chat; on the first regression the bundled compiler refused that machine three times after the bounded relay, a model outcome that says nothing of the app's compile, registration or run, and no run of a compiled playbook has passed anywhere, live or hermetic.
@@ -35,13 +35,13 @@ Amends [DR-015](015-reference-content.md), which remains accepted, in the exampl
 - The Library credits slc's demo as the example's source; its normalized text, which the Prefill places and the compile reads, is kept by hand beside the source in slc's normalized form, and its displayed gears and state machine come from the same capture as the compiled fixture.
 - The chat-authored two-role changelog journey stays, as the harder case.
 - A player's question in either run, if one is asked, is answered through the Captain, as in (b).
-- CI proves the run path of a compiled playbook on every commit: a fixture compiled by the real `slc` is committed, regenerated whenever the playbook engine changes generation, and registered and run on substitute agents in the hermetic journeys.
+- The checks prove the run path of a compiled playbook: a fixture compiled by the real `slc` is committed, regenerated whenever the playbook engine changes generation, and registered and run on substitute agents in the hermetic journeys.
 
 ### (b) The project a fresh user starts
 
 - The regression creates its project from the palette with specs scaffolded, captures a first intent `/decide` and a `/code` queued behind it, and sees each settle after its review, the queue hand off between them, and History list both.
 - A player's question, if one is asked, is answered through the Captain, as the Boss would.
-- CI proves the handoff on every commit: a hermetic journey settles one intent on substitute agents and sees the queued second dispatched.
+- The checks prove the handoff: a hermetic journey settles one intent on substitute agents and sees the queued second dispatched.
 
 ### What leaves
 
@@ -57,6 +57,11 @@ For the live smoke and the regression:
 | The bundled compiler refusing the app's own example on its first compile — the relay then lets the agent change the source, so a later compile is not of the example | blocks the tag |
 | The compiler refusing the chat-authored source after the bounded relay — a model outcome | may be waived, the compiler's output attached and an issue filed against `slc` |
 | Any other app-side failure | blocks the tag |
+
+### Amended decisions
+
+- [DR-086](086-tests-in-tiers.md), in what the smoke and the regression walk and how their failures are judged.
+- [DR-015](015-reference-content.md), in the example's text: slc's demo adapted, its two open limits settled and its normalized text kept by hand beside the source, rather than vendored as it stands.
 
 ### Considered and declined
 

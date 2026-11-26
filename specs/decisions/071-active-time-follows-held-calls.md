@@ -5,14 +5,13 @@
 
 ## Status
 
-Accepted (2026-09-17) on review of the sibling tmux-play shell's existing per-agent timer.
-
-Amends [DR-070](070-agent-active-time.md) in its measurement and publication timing alone.
-That record's agent-local placement, independent overlap, silence for an incomplete stream, compact reading, and lack of a run-view rollup stand unchanged.
-Amended by [DR-072](072-backward-call-time-is-zero.md) for a matched call whose finite finish timestamp precedes its prompt: the pair closes and contributes measured zero.
+Accepted (2026-09-17).
+Amends [DR-070](070-agent-active-time.md).
+Amended by [DR-072](072-backward-call-time-is-zero.md).
 
 ## Context
 
+- A review of the sibling tmux-play shell's existing per-agent timer prompted this record.
 - [DR-070](070-agent-active-time.md) chose an agent's terminal reported invocation durations as the durable measure.
 - The sibling tmux-play shell that Spex adopts as its behavioral twin already times an agent from its prompt record to its finished record ([DR-003](003-runtime-reuse.md)) [[1]].
   The run view's live player reading begins at that same prompt, so changing to the terminal duration at rest gives one call two meanings.
@@ -29,7 +28,7 @@ Amended by [DR-072](072-backward-call-time-is-zero.md) for a matched call whose 
 
 ### A held call is the measure
 
-- An agent's completed active time is the sum of the non-negative wall-clock spans from each of its prompt records to the corresponding finished record in the same turn, paired in record order.
+- An agent's completed active time is the sum of the wall-clock spans from each of its prompt records to the corresponding finished record in the same turn, paired in record order, a span whose finish precedes its prompt counting as zero ([DR-072](072-backward-call-time-is-zero.md)).
 - A player span belongs to its player across every role that player serves; a Captain span belongs to the Captain, including a hidden routing or playbook call ([DR-032](032-session-players.md)).
 - Every closed call counts regardless of outcome.
   Terminal event durations, tool durations, turn spans, and gaps between calls are not added.
@@ -48,6 +47,8 @@ Amended by [DR-072](072-backward-call-time-is-zero.md) for a matched call whose 
 - The core derives the completed fold from stored records so reload and foreign-session discovery produce the same resting figures.
 - Publication is order-neutral: when a stored finish changes the fold, subscribers receive the revised summary without any required position relative to that finished record.
   Until it arrives, the view keeps the last published resting figure or silence.
+
+This amends [DR-070](070-agent-active-time.md) in its measurement and publication timing alone; its agent-local placement, independent overlap, silence for an incomplete stream, compact reading and lack of a run-view rollup stand.
 
 Considered and declined:
 
