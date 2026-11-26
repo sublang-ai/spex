@@ -9,7 +9,7 @@ Done
 
 ## Intent
 
-Rebuild the session start as the IM-style Captain conversation of the revised [DR-007](../decisions/007-conversational-session-start.md) after the owner's second review.
+Rebuild the session start as the IM-style Captain conversation of [DR-141](../decisions/141-project-start-explains-the-task-and-slash-discovery.md) after the owner's second review.
 
 ## Deliverables
 

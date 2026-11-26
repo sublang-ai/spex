@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-12) on the owner's direction.
-Amends [DR-005](005-compilation-integration.md), [DR-015](015-reference-content.md).
+Amends [DR-015](015-reference-content.md).
 Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md), [DR-097](097-media-and-browser-tools-across-hosts.md), [DR-103](103-the-home-and-its-groups.md), [DR-104](104-spec-package-format-and-client-environments.md), [DR-111](111-the-core-coordinates-as-git-does.md), [DR-112](112-authoring-permissions-use-the-package-working-directory.md), [DR-172](172-surfaces-a-fresh-user-reads.md), [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md).
 
 ## Context
@@ -23,7 +23,7 @@ Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md), [DR-097](097-me
 
 ## Decision
 
-- Amends [DR-005](005-compilation-integration.md): compile inputs may come from a directory an agent writes, and compilation and its addition become two steps, the addition confirmed by the user after the compile derives the roles.
+- Compile inputs may come from a directory an agent writes, and compilation and its addition are two steps, the addition confirmed by the user after the compile derives the roles.
 - Amends [DR-015](015-reference-content.md): the slc example's prefill opens an authoring session in paste mode instead of filling a form.
 
 ### The workspace

@@ -6,8 +6,8 @@
 ## Status
 
 Accepted.
-Amends [DR-002](002-desktop-app-architecture.md), [DR-004](004-config-and-persistence.md), [DR-007](007-conversational-session-start.md), [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md), [DR-014](014-released-toolchain.md).
-Amended by [DR-032](032-session-players.md), [DR-052](052-runtime-model-options.md), [DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-097](097-media-and-browser-tools-across-hosts.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-235](235-independent-ultracode.md), [DR-236](236-primary-and-subagent-model-defaults.md).
+Amends [DR-002](002-desktop-app-architecture.md), [DR-004](004-config-and-persistence.md), [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md), [DR-014](014-released-toolchain.md).
+Amended by [DR-032](032-session-players.md), [DR-052](052-runtime-model-options.md), [DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md), [DR-097](097-media-and-browser-tools-across-hosts.md), [DR-141](141-project-start-explains-the-task-and-slash-discovery.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-235](235-independent-ultracode.md), [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 
@@ -49,7 +49,7 @@ Amended by [DR-032](032-session-players.md), [DR-052](052-runtime-model-options.
 - One shared editor grammar — adapter with readiness dot, model and effort from the runtime's choices ([DR-052](052-runtime-model-options.md)), subagent model and effort on one row with them ([DR-093](093-a-players-subagent-model.md), [DR-095](095-a-subagents-effort-and-the-agents-own-model.md)), Claude's independent Ultracode ([DR-235](235-independent-ultracode.md)), permission mode and writable paths, and the browser execution setting ([DR-097](097-media-and-browser-tools-across-hosts.md)) — and one agent chip (adapter · model @ effort, readiness dot) everywhere an agent is shown or edited; players and role bindings fork the editor by what each owns ([DR-032](032-session-players.md)).
 - Settings carries the Captain's editor and a per-adapter readiness panel; player editing lives with the playbooks, opened in place per [DR-009](009-at-hand-interaction.md).
 - The Captain's chip beside the task composer opens its full editor in place ([DR-141](141-project-start-explains-the-task-and-slash-discovery.md)).
-- Adding a new player starts with the model pair for the chosen adapter ([DR-236](236-primary-and-subagent-model-defaults.md)), with an explicit "same as Captain" action copying adapter, model, effort, and permissions only.
+- Adding a new player starts with the model pair for the chosen adapter ([DR-237](237-published-agent-runtime-floors.md)), with an explicit "same as Captain" action copying adapter, model, effort, and permissions only.
 - The shorthand concept does not appear in the product: no shorthand options, no shorthand labels; a scalar read from a hand-edited config displays as its adapter's defaults and becomes a block on the next edit.
 
 ### Compiles

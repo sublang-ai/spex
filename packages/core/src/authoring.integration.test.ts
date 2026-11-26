@@ -348,7 +348,7 @@ function assertAuthoringPermissions(runs: FakeAdapterStats["runs"], packageDir: 
     assert.doesNotThrow(() => mapPermissionsToGeminiToolConfig(policy));
     assert.doesNotThrow(() => mapPermissionsToOpenCodeOptions(policy));
     // Cligent explicitly refuses Codex permission isolation on native
-    // Windows; Spex app hosts are macOS and Linux (DR-049).
+    // Windows, so the mapping is checked on the macOS and Linux hosts (DR-178).
     if (process.platform !== "win32") {
       assert.doesNotThrow(() => mapPermissionsToCodexOptions(policy));
     }

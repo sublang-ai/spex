@@ -5,24 +5,30 @@
 
 ## Status
 
-Accepted (2026-10-22); revised (2026-10-22).
-Amends [DR-007](007-conversational-session-start.md), [DR-019](019-inline-agent-configuration.md), [DR-038](038-history-is-done-work.md), [DR-041](041-chrome-that-fits.md).
-Amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md).
+Accepted (2026-10-22); revised (2026-11-26).
+Amends [DR-019](019-inline-agent-configuration.md), [DR-038](038-history-is-done-work.md), [DR-041](041-chrome-that-fits.md).
+Amended by [DR-135](135-a-welcome-page-before-the-first-project.md), [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md).
 
 ## Context
 
+- The owner's reviews asked for a Captain conversation front and center, where the user sees and invokes playbooks and sees or changes the Captain's agent, the Captain showing up like a human chatting in an IM app, and discovery in a `/` menu rather than in chips that do not scale.
+- The needed capabilities already exist on the protocol; this is presentation only ([DR-003](003-runtime-reuse.md)).
 - After a project is added, a chat greeting and an unexplained Captain/model label make Spex look like a general agent.
 - The quick-start card presents selected slash commands as the expected starting point, even though Captain can choose a configured playbook from a described project task.
 - The hint below the text field looks like another place to type, while the list of four commands plus a remainder obscures the full set.
 
 ## Decision
 
-- Amends [DR-007](007-conversational-session-start.md) in the project home before a session starts, [DR-019](019-inline-agent-configuration.md) and [DR-038](038-history-is-done-work.md) in that home's Captain identity, and [DR-041](041-chrome-that-fits.md) in that home's composer hint.
+- A project's start tab is where its next session begins: its first task opens the conversation, with no form in the way; before any project is registered, the welcome page shows instead ([DR-135](135-a-welcome-page-before-the-first-project.md)).
+- With projects registered but none current, the home greets the reader with a client-rendered line directing them to pick a project.
+- Playbook runs read as an IM conversation everywhere: the user's messages appear as their own chat bubbles, Captain speech as counterpart bubbles, and shell status lines as small system lines between them.
+- Typing `/` at the start of any composer opens a slash menu: the configured playbooks filtered as the user types, each with its intent as the hint; selecting inserts the command.
+- Amends [DR-019](019-inline-agent-configuration.md) and [DR-038](038-history-is-done-work.md) in that home's Captain identity, and [DR-041](041-chrome-that-fits.md) in that home's composer hint.
 - Before a session starts, the project home leads with a project-specific task heading and concise guidance: the task field invites a goal, and AI helps develop the specs, which describe how the system should work and how to check it, before implementing and reviewing changes ([DR-143](143-start-with-a-goal-and-explain-specs-plainly.md)). The guidance neither promises that submitting a task automatically creates specs nor claims unrestricted agent capabilities; it aligns with the full width of the composer and does not force a balanced line break.
 - Below the guidance, a quiet project-specific status shows the known count of spec packages and items with a link to the pinned Specs tab. A project without `specs/`, an empty packages collection, a legacy tree, and a read failure each get accurate distinct wording and a link to the relevant Specs guidance; loading never masquerades as zero. This status remains secondary to the task composer.
 - The new-task tab retains its plus icon but names the destination visibly, so returning from Specs or Overview to the task composer is clear. It does not create or submit a task until the owner uses the composer.
 - The pinned Specs tab stays in its current place and displays a plain spec-item count when the current project's tree is known and contains items; the count is spoken with its unit, is not an attention badge, and is omitted while loading, empty, legacy, or unreadable. The tab remains available throughout the project workspace.
-- Immediately above the composer, a compact Captain identity uses the same avatar and name as the running Captain pane. Its current adapter, model, effort, fast-mode mark, and readiness appear in one clickable chip that opens the in-place editor; a missing Captain reads as unconfigured. Blocking readiness remains visible at the composer.
+- Immediately above the composer, a compact Captain identity uses the same avatar and name as the running Captain pane. Its current adapter, model, effort, fast-mode mark, and readiness appear in one clickable chip that opens the in-place editor ([DR-009](009-at-hand-interaction.md)), so the agent and its tuning change without leaving the conversation; a missing Captain reads as unconfigured. Blocking readiness remains visible at the composer.
 - The home separates the task introduction from the Captain identity and composer with a larger interval than the gaps inside either group. The heading asks in plain language what to change in the named project; the guidance asks for the goal. Below the composer, a compact, borderless, low-emphasis paragraph explains a playbook as a workflow written in plain language that Spex can run to coordinate AI implementation and review ([DR-143](143-start-with-a-goal-and-explain-specs-plainly.md)), and previews at most two actually configured examples, preferring `/code` and `/review`. Its final line, at the same muted contrast, explicitly teaches the single discovery gesture: type `/` in the task field to see all configured playbooks and states their live count. Slash commands and the hint's `/` share code typography. The preview neither preselects a command nor offers a second route to run one. Slash selection remains optional, and an ordinary task can be sent without a command. The preview yields to the primary task when an Up next card is present.
 - The home composer's "Add to Up next" keeps its queued-intent capture and inline acknowledgment, but reads visually as a secondary text action beside the primary Start task control.
 - The project's task field has an accessible label but no separate visible label. The resting slash/Enter caption is absent inside the empty composer; submission keys remain in the primary control's tooltip, while staged-intent and acknowledgment captions still appear when needed.
@@ -30,5 +36,7 @@ Amended by [DR-143](143-start-with-a-goal-and-explain-specs-plainly.md).
 
 ## Consequences
 
+- Zero-to-first-turn happens inside one conversation; Projects is a management view rather than a required doorway.
+- The home's guidance is client-side, with no model call, so it is instant and free; the Captain's first real reply comes from the runtime.
 - A new reader sees what kind of work to describe, who coordinates it, and what a playbook does, without having to read or choose commands first.
 - The seven built-in playbooks remain discoverable when configured, through the same slash menu used by every composer.

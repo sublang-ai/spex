@@ -216,7 +216,7 @@ export interface AppOptions {
    * a state-by-state walk then asserts the running state and scans it
    * at its own pace, however slow the machine, and releases the run
    * when done. The stub runs under the running Node, which stands in
-   * for the system Node the compile floor checks (DR-005: >= 23.6), so
+   * for the system Node the compile floor checks (DR-081: >= 23.6), so
    * `startApp` refuses an older Node up front rather than letting
    * every compile fail "at toolchain".
    */
@@ -330,7 +330,7 @@ function compilerConfig(compiler: NonNullable<AppOptions["compiler"]>): string {
   return doc.toString();
 }
 
-/** The compile floor of DR-005 (`MIN_NODE_MAJOR.MIN_NODE_MINOR` in the
+/** The compile floor of DR-081 (`MIN_NODE_MAJOR.MIN_NODE_MINOR` in the
  * core's compile module): slc's dynamic import of `.ts` artifacts needs
  * Node's type stripping. */
 const COMPILE_NODE_FLOOR = { major: 23, minor: 6 };
@@ -346,7 +346,7 @@ function assertCompileNode(): void {
     || (major === COMPILE_NODE_FLOOR.major && minor >= COMPILE_NODE_FLOOR.minor);
   if (!ok) {
     throw new Error(
-      `the authoring journeys compile with the stub slc under the running Node (${process.version}), below the compile floor ${COMPILE_NODE_FLOOR.major}.${COMPILE_NODE_FLOOR.minor} (DR-005); run the journeys on a newer Node`,
+      `the authoring journeys compile with the stub slc under the running Node (${process.version}), below the compile floor ${COMPILE_NODE_FLOOR.major}.${COMPILE_NODE_FLOOR.minor} (DR-081); run the journeys on a newer Node`,
     );
   }
 }

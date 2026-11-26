@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The parked-run notice (run-view-128..130, run-view-112, DR-060,
+// The parked-run notice (run-view-128..130, run-view-112, DR-075,
 // DR-062, DR-073, DR-075): a run standing parked on the Boss used to
 // offer nothing to activate — the only way back was prose the Boss
 // invented. The notice stands between the Captain pane and the

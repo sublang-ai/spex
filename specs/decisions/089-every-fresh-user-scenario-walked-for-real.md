@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-28).
-Amends [DR-015](015-reference-content.md), [DR-086](086-tests-in-tiers.md).
+Amends [DR-015](015-reference-content.md), [DR-020](020-desktop-live-smoke.md), [DR-086](086-tests-in-tiers.md).
 
 ## Context
 
@@ -61,6 +61,7 @@ For the live smoke and the regression:
 ### Amended decisions
 
 - [DR-086](086-tests-in-tiers.md), in what the smoke and the regression walk and how their failures are judged.
+- [DR-020](020-desktop-live-smoke.md), in where the live desktop smoke runs: also inside the fresh install's clone.
 - [DR-015](015-reference-content.md), in the example's text: slc's demo adapted, its two open limits settled and its normalized text kept by hand beside the source, rather than vendored as it stands.
 
 ### Considered and declined

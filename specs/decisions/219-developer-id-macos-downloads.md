@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's request.
-Amends [DR-177](177-native-desktop-installers.md), [DR-184](184-native-desktop-tag-packages.md).
+Amends [DR-184](184-native-desktop-tag-packages.md).
 
 ## Context
 
@@ -16,7 +16,7 @@ That acceptance required a fresh temporary keychain to sign the DMG after packag
 
 ## Decision
 
-- Amends [DR-177](177-native-desktop-installers.md) and [DR-184](184-native-desktop-tag-packages.md) for macOS signing and notarization; their architectures, Windows signing status and publication gates remain.
+- Amends [DR-184](184-native-desktop-tag-packages.md) for macOS signing and notarization; its architectures, Windows signing status and publication gates remain.
 - Keep Spex and `ai.sublang.spex`, using the configured Developer ID Application identity and team independently of the product name.
 - Require signing credentials for the distribution command and the native Mac tag job; never fall back silently to unsigned or pending-notarization downloads.
 - Sign the App with hardened runtime and Electron's required entitlements, preserving its Electron-as-Node compiler and native dependencies.

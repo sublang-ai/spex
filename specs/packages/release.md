@@ -93,7 +93,7 @@ Where the repo hosts multiple release channels ([DR-002](../decisions/002-deskto
 
 #### release-39
 
-When an app tag passes the existing CI, prepared-version, notes and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)) only after both native packaging jobs succeed ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
+When an app tag passes the existing CI, prepared-version, notes and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer only after both native packaging jobs succeed ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
 
 - each job prepares the tag version, installs the tagged tree's locked dependencies, builds it on the target OS and uploads its verified versioned download, failing on a missing file;
 - packaging commands do not publish; only the final job has release-write permission;

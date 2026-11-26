@@ -5,15 +5,16 @@
 
 ## Status
 
-Accepted (2026-09-17).
-Amends [DR-035](035-intent-ledger.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-055](055-queue-advancement.md).
+Accepted (2026-09-17); revised (2026-11-26).
+Amends [DR-035](035-intent-ledger.md), [DR-051](051-runtime-held-for-a-turn.md).
 Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-103](103-the-home-and-its-groups.md), [DR-134](134-execution-ownership.md).
 
 ## Context
 
+- The owner asked that completed queued work start the next intent automatically while its finish confirmation stays visible: waiting to send the next intent is unnecessary once work has completed, and reviewing the delivery remains a separate human responsibility.
 - The ledger calls every open, unbound intent Queued, but Up next shows Start on one row, disabled Start on blocked rows, and no state on the rest.
   A row that will advance automatically therefore looks like work waiting for a click, while rows behind it do not say that they are committed at all.
-- [DR-055](055-queue-advancement.md) authorizes advancement only from a typed successful governed-root terminal.
+- Advancement first required a typed successful governed-root terminal.
   The Boss instead rules that a normal Captain reply and a clean turn answering a question advance without that proof, and that only failure, abort, or a run still waiting on him holds an otherwise eligible handoff.
 - A passive record and an executable queue row would need two capture choices, two ordering meanings, and a new state to groom.
   Issues, pull requests, and intent records already remain records until the Boss queues them.
@@ -53,6 +54,8 @@ After a locally owned intent-attributed turn completes full settlement and publi
 - no run of the conversation remains parked on the Boss;
 - the turn, dispatch boundary, project lane — counting only this runtime's own sessions ([DR-134](134-execution-ownership.md)) — and conversation remain current and normal admission accepts the submission.
 
+The dispatch uses the intent's current text and identity, and attribution changes only when the turn starts.
+Settlement alone triggers advancement; no runner state is retained.
 A Done or Drop racing an eligible settlement neither authorizes nor cancels its handoff, and a verdict or later removal never initiates advancement.
 An ordinary Captain reply qualifies without playbook trace evidence.
 A reply that merely sounds like a question also qualifies unless the runtime actually parks a run; Spex does not classify prose.
@@ -69,11 +72,12 @@ Capture during attributed queued work joins its next eligible handoff; capture d
 **Verdict and dispatch remain independent.**
 A finished intent continues to owe Confirm or Drop while later work runs.
 A verdict may reveal a different next standing, but it neither starts, cancels, nor attributes an otherwise eligible turn.
+The prior intent remains finished and unconfirmed, with its delivery card and attention entry retained until a human verdict ([DR-038](038-history-is-done-work.md)).
+An older delivery does not hide newer work in the Running band, and its follow-up promise appears only while that intent still owns the conversation.
 
 **Amended decisions.**
 
-- [DR-035](035-intent-ledger.md): every Up next row is visibly queued work, only the next row is next, Start is its manual-kickoff doorway rather than a queued state, and capture offers one queueing gesture; the stored acts, lifecycle states and verdicts stand.
-- [DR-055](055-queue-advancement.md): a clean settled turn and a free conversation replace typed governed-root success as the advancement gate; verdict independence, settlement-only triggering, actual-start attribution, normal admission and the absence of a retained runner or automatic retry stand.
+- [DR-035](035-intent-ledger.md): its manual-only successor dispatch and confirmation-pulls-next policy give way to advancement on settlement; every Up next row is visibly queued work, only the next row is next, Start is its manual-kickoff doorway rather than a queued state, and capture offers one queueing gesture; the stored acts, lifecycle states and verdicts stand.
 - [DR-051](051-runtime-held-for-a-turn.md): the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
 
 **Considered and declined:**
@@ -87,6 +91,8 @@ A verdict may reveal a different next standing, but it neither starts, cancels, 
 
 ## Consequences
 
+- Completed work can accumulate pending confirmations while later queued work runs; only verdicts close intents and enter them into History.
+- Follow-up messages belong to the newest dispatched intent, and confirming an older delivery neither dispatches work nor changes that attribution.
 - The core ledger read publishes each project's next intent and its derived standing so every surface uses one answer.
 - Dashboard rows gain the `Queued` mark, the next standing, conditional Start, and an explicit Queue action in the inline add row; Sources retain their single Queue action.
 - Delivery and Captain-home next cards use the same standing instead of manufacturing an unconditional Start.

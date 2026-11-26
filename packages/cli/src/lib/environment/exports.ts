@@ -3,7 +3,7 @@
 
 // Exports (environments-6, environments-8, environments-9,
 // environments-14, environments-16, environments-30, environments-41,
-// DR-104, DR-115, DR-124, DR-174). Only what a release provides is
+// DR-104, DR-124, DR-174). Only what a release provides is
 // placed, a support artifact installed and placed nowhere: each provided
 // skill is copied — its `name` rewritten where aliased — and one skill
 // is generated per provided playbook, into `<root>/.spex/skills/<name>/`;
@@ -872,7 +872,7 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           // (environments-41); in a project holding no `specs/`, nowhere,
           // reported waiting for it; for the global environment, a generated
           // skill, the spec file in its chosen language byte for byte
-          // beside a SKILL.md saying what spec package it is (DR-115).
+          // beside a SKILL.md saying what spec package it is (DR-174).
           if (mode === "files") { specSources.push({ name, id, version, file }); continue; }
           if (mode === "no-specs") { report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] }); continue; }
           mkdirSync(target, { recursive: true });

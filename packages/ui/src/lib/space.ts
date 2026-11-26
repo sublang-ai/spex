@@ -33,7 +33,7 @@ import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
  * the full path rides the title. Only the two POSIX layouts the app
- * runs on are known (DR-049). */
+ * runs on are known (DR-178). */
 export function tildify(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)(?=\/|$)/, "~");
 }

@@ -7,7 +7,7 @@
 
 Accepted (2026-10-01).
 Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), [DR-067](067-tuning-for-one-conversation.md), [DR-093](093-a-players-subagent-model.md).
-Amended by [DR-232](232-codex-subagent-selection.md).
+Amended by [DR-237](237-published-agent-runtime-floors.md).
 
 ## Context
 

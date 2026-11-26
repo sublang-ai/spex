@@ -488,7 +488,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       : [];
     // 4. Exports: one skill per provided skill and playbook under its
-    // id, and per provided spec under `<org>-<pkg>` (DR-115), or alias;
+    // id, and per provided spec under `<org>-<pkg>` (DR-174), or alias;
     // a selected artifact its release does not provide — a sibling's
     // support, or of a kind `provides` leaves out — is installed with the
     // rest and placed nowhere, so its name clashes with none.

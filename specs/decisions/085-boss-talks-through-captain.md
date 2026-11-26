@@ -6,7 +6,7 @@
 ## Status
 
 Accepted.
-Amends [DR-010](010-interface-craft.md), [DR-035](035-intent-ledger.md), [DR-041](041-chrome-that-fits.md).
+Amends [DR-003](003-runtime-reuse.md), [DR-010](010-interface-craft.md), [DR-035](035-intent-ledger.md), [DR-041](041-chrome-that-fits.md).
 Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), [DR-097](097-media-and-browser-tools-across-hosts.md).
 
 ## Context
@@ -23,7 +23,7 @@ While a turn runs, the composer and Send are disabled, with drafts preserved and
 Between turns Boss may answer or ask Captain for clarification; neither a submission nor Captain's reply clears the wait.
 Only a runtime report that the question is gone clears it, the parked run's ending within a turn ([DR-073](073-letting-go-ends-the-parked-run.md)) among them.
 
-This amends question presentation in [DR-010](010-interface-craft.md), active-turn input in [DR-041](041-chrome-that-fits.md), and what clears a session question in [DR-035](035-intent-ledger.md): the runtime's report, never the next Boss turn.
+This amends question presentation in [DR-003](003-runtime-reuse.md) and [DR-010](010-interface-craft.md), active-turn input in [DR-041](041-chrome-that-fits.md), and what clears a session question in [DR-035](035-intent-ledger.md): the runtime's report, never the next Boss turn.
 
 ## Consequences
 

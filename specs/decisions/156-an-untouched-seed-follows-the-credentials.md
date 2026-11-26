@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-26).
-Amends [DR-154](154-the-seed-follows-playbooks-rule.md).
+Amends [DR-004](004-config-and-persistence.md), [DR-154](154-the-seed-follows-playbooks-rule.md).
 Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -16,7 +16,7 @@ Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-246](246-remov
 
 ## Decision
 
-- Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "nothing rewrites a seeded file afterwards": a seeded file no one has changed is rewritten when the credentials it was chosen from may have changed; a file changed in any byte is never rewritten again.
+- Amends [DR-004](004-config-and-persistence.md) in an existing config never overwritten by seeding, and [DR-154](154-the-seed-follows-playbooks-rule.md) in "nothing rewrites a seeded file afterwards": a seeded file no one has changed is rewritten when the credentials it was chosen from may have changed; a file changed in any byte is never rewritten again.
   The exclusive first create, the seed's text and its agreement with the `playbook` CLI under the same credentials and home stand.
 - When the core seeds a config, it records on this device, outside every tracked file, the config's path and the version of the bytes it wrote.
 - While the file stands at exactly the recorded version, the core reseeds it when the credentials may have changed — at its start and on each readiness request ([DR-206](206-the-workshop-points-to-its-guide.md)) — writing Playbook's seed for the environment and home then, where that text differs, as a versioned write, and recording the new version.

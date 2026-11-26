@@ -6,7 +6,7 @@
 ## Status
 
 Accepted.
-Amends [DR-007](007-conversational-session-start.md), [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md).
+Amends [DR-009](009-at-hand-interaction.md), [DR-011](011-project-workspace.md).
 Amended by [DR-038](038-history-is-done-work.md), [DR-044](044-no-money-in-the-interface.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-057](057-space-surface.md), [DR-066](066-every-summons-has-a-door.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context

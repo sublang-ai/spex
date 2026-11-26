@@ -123,7 +123,7 @@ When the Boss opens the Source tab's paste mode [[playbook-library-56](#playbook
 
 #### playbook-library-6
 
-While a compile is running, the Playbooks tab shall display each phase of the compile pipeline ([DR-005](../decisions/005-compilation-integration.md)) with its name and live status — running, succeeded, or failed — updating as phases complete.
+While a compile is running, the Playbooks tab shall display each phase of the compile pipeline ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) with its name and live status — running, succeeded, or failed — updating as phases complete.
 
 #### playbook-library-7
 
@@ -435,7 +435,7 @@ When an install places a spec package's files or finds them installed already [[
 
 #### playbook-library-11
 
-When toolchain resolution is requested, the toolchain resolver shall locate the compiler and the Node.js it runs on in this order, probing each Node.js candidate with `--version` in the caller's environment, and shall verify that the Node.js chosen satisfies the version floor `slc` requires ([DR-005](../decisions/005-compilation-integration.md), [DR-081](../decisions/081-the-app-supplies-the-compiler.md)):
+When toolchain resolution is requested, the toolchain resolver shall locate the compiler and the Node.js it runs on in this order, probing each Node.js candidate with `--version` in the caller's environment, and shall verify that the Node.js chosen satisfies the version floor `slc` requires ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)):
 
 | Prerequisite | Order |
 | --- | --- |
@@ -450,7 +450,7 @@ When toolchain resolution is requested, the toolchain resolver shall locate the 
 
 #### playbook-library-12
 
-When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in the playbook artifact's folder `<working folder>/<package path>/playbooks/<language>/<id>/` of the spec package under development [[environments-10](environments.md#environments-10)] — materializing in-app source text or a picked file's bytes as `<id>.md` there, linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)), and provisioning that folder's `node_modules` with links to the app's own `xstate` and `@sublang/playbook`, listed in the working folder's `.git/info/exclude`, which the compiler's machine check and the entry it emits resolve from there ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
+When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in the playbook artifact's folder `<working folder>/<package path>/playbooks/<language>/<id>/` of the spec package under development [[environments-10](environments.md#environments-10)] — materializing in-app source text or a picked file's bytes as `<id>.md` there, linking the app-bundled runtime contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), and provisioning that folder's `node_modules` with links to the app's own `xstate` and `@sublang/playbook`, listed in the working folder's `.git/info/exclude`, which the compiler's machine check and the entry it emits resolve from there ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
 
 - `<language>` is the authoring session's [[playbook-library-70](#playbook-library-70)]; a one-shot compile decides it by the same rule as a session's creation.
 - The runner grants `slc` a stall budget of 2400 seconds through `SLC_STALL_TIMEOUT` unless the environment already sets that variable, because agent-driven phases stay silent longer than `slc`'s ten-minute default.
@@ -474,7 +474,7 @@ When a compile is started, the compile runner shall hand `slc` the block the com
 
 #### playbook-library-13
 
-When `slc` completes successfully, the registry generator shall derive `idleStateId`, `finalStateId`, and `parkStateIds` by introspecting the emitted machine definition ([DR-005](../decisions/005-compilation-integration.md)), each derived id naming a state present in that machine, and shall report them as compile metadata for display [[playbook-library-22](#playbook-library-22)] — never as registry-entry fields ([DR-014](../decisions/014-released-toolchain.md)):
+When `slc` completes successfully, the registry generator shall derive `idleStateId`, `finalStateId`, and `parkStateIds` by introspecting the emitted machine definition ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), each derived id naming a state present in that machine, and shall report them as compile metadata for display [[playbook-library-22](#playbook-library-22)] — never as registry-entry fields ([DR-014](../decisions/014-released-toolchain.md)):
 
 - Ambiguous derivation: the registry generator surfaces the candidate state ids for user selection in the Add form [[playbook-library-7](#playbook-library-7)] instead of choosing silently.
 

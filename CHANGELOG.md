@@ -145,7 +145,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   also after a restart. Settings or environment edits made before sign-in,
   preexisting or migrated state and missing proof use ordinary comparison,
   with the choices that differing shared units require.
-- Each selected spec reaches the agents as a generated skill ([DR-115](specs/decisions/115-a-spec-reaches-the-agents.md)).
+- Each selected spec reaches the agents as a generated skill ([DR-174](specs/decisions/174-what-a-package-provides-is-placed.md)).
   The lock holds one export per selected spec, named `<org>-<pkg>`, or
   `<pkg>` past 64 characters, or its alias; the exporter writes the
   spec file byte for byte as `<pkg>.md` beside a SKILL.md naming the

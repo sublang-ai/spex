@@ -6,7 +6,6 @@
 ## Status
 
 Accepted (2026-09-13).
-Amends [DR-060](060-failed-workflow-control.md).
 Amended by [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons-has-a-door.md).
 
 ## Context
@@ -39,7 +38,7 @@ Amended by [DR-062](062-ending-a-failed-workflow.md), [DR-066](066-every-summons
 - The interface's own attention derivation reads those same frames, so a parked failure keeps summoning until the run leaves that state — the answer the notice already gives.
   The last turn's error keeps covering failures that parked no machine, and the quieter historical mark for a failure that no longer summons is untouched.
 - The project palette reads the core's one published attention fold rather than deriving a count of its own; a run's frames still answer for its state inside that fold ([DR-066](066-every-summons-has-a-door.md)).
-- Amends [DR-060](060-failed-workflow-control.md): the frames its notice reads also drive the state chip and the interface's attention derivation; the notice is unchanged.
+- The frames the parked-run notice reads ([DR-075](075-a-failure-says-what-and-what-now.md)) also drive the state chip and the interface's attention derivation.
 
 ## Consequences
 

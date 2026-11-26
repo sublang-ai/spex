@@ -6,7 +6,7 @@
 ## Status
 
 Accepted.
-Amended by [DR-019](019-inline-agent-configuration.md), [DR-029](029-session-history-home.md), [DR-066](066-every-summons-has-a-door.md), [DR-067](067-tuning-for-one-conversation.md).
+Amended by [DR-019](019-inline-agent-configuration.md), [DR-029](029-session-history-home.md), [DR-035](035-intent-ledger.md), [DR-066](066-every-summons-has-a-door.md), [DR-067](067-tuning-for-one-conversation.md).
 
 ## Context
 

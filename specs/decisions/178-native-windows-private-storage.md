@@ -5,18 +5,21 @@
 
 ## Status
 
-Accepted (2026-10-30).
-Amends [DR-049](049-supported-app-hosts.md).
+Accepted (2026-10-30); revised (2026-11-26).
+Amends [DR-002](002-desktop-app-architecture.md).
 Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md), [DR-223](223-windows-storage-checks-what-macos-checks.md).
 
 ## Context
 
-Node's Windows mode bits do not express the user boundary that private POSIX storage enforces.
+Shared session storage requires private POSIX permissions: directories `0700`, files `0600` ([DR-045](045-unified-session-storage.md)).
+Node's Windows mode bits do not express that user boundary [[1]].
 Windows users need the desktop app without WSL or a separately operated server.
 
 ## Decision
 
-- Amends [DR-049](049-supported-app-hosts.md) in native Windows hosting and private-storage admission.
+- Amends [DR-002](002-desktop-app-architecture.md) in its supported host platforms.
+- Desktop and server hosts support macOS and Linux on filesystems that enforce these permissions, and native Windows on storage its own admission verifies.
+- A host whose storage cannot be verified private refuses startup before creating or migrating config or storage.
 - Native Windows hosts admit private storage only where it can be verified; a missing capability refuses rather than skipping the checks [DR-223](223-windows-storage-checks-what-macos-checks.md) keeps.
 - Windows descriptor inspection and private creation use `@openclaw/fs-safe`; Spex keeps its admission policy in the existing storage implementation and adds no general filesystem abstraction.
 - Windows private storage belongs to the current user, LocalSystem or built-in Administrators; unknown ownership, incomplete descriptors, null DACLs and another principal's right to change the entry refuse, while read grants are admitted ([DR-223](223-windows-storage-checks-what-macos-checks.md)).
@@ -34,3 +37,8 @@ Windows users need the desktop app without WSL or a separately operated server.
 The shared Playbook storage implementation must be upgraded with the host.
 Windows acceptance must exercise real Windows storage and the packaged Electron runtime; changing `process.platform` does not establish native support.
 File synchronization remains mandatory; Windows does not claim POSIX directory-fsync durability.
+Portable history may still contain paths recorded on other platforms.
+
+## References
+
+[1]: https://nodejs.org/api/fs.html#fschmodpath-mode-callback "Node.js filesystem permissions on Windows"

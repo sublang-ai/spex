@@ -22,7 +22,7 @@ Amended by [DR-205](205-agent-cards-read-alike.md), [DR-206](206-the-workshop-po
 - The first-run config pins `claude-opus-5-5` or `gpt-6-sol` on the Captain and every player; a third-party Anthropic-compatible service maps such a name by its own rule — DeepSeek runs `claude-opus*` as its Pro model and bills it so — so an attendee who chose another model silently runs and pays for a different one.
 - Cligent's Claude discovery reports `ANTHROPIC_MODEL` as the default model where it is set, and reads nothing from `~/.claude/settings.json`.
 - `config.edit` changes one object per command; making every agent use one model is many objects that must change together or not at all, against the config the reader saw.
-- The core then refused to start on native Windows ([DR-049](049-supported-app-hosts.md)) and read the login shell's environment at start ([DR-004](004-config-and-persistence.md)); a Windows host was another piece of work.
+- The core then refused to start on native Windows and read the login shell's environment at start ([DR-004](004-config-and-persistence.md)); a Windows host was another piece of work.
 
 ## Decision
 

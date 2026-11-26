@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-20) on the owner's direction.
-Amends [DR-057](057-space-surface.md), [DR-103](103-the-home-and-its-groups.md), [DR-120](120-the-instance-is-the-space.md).
+Amends [DR-008](008-native-shell-bridge.md), [DR-057](057-space-surface.md), [DR-103](103-the-home-and-its-groups.md), [DR-120](120-the-instance-is-the-space.md).
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-150](150-spex-space-product-and-destination.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-168](168-independent-package-registry.md), [DR-171](171-personal-names-are-space-logins.md), [DR-188](188-registry-sign-in-opens-the-browser.md), [DR-216](216-registry-and-space-accounts-stay-apart.md), [DR-221](221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -23,6 +23,8 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md), [DR-1
 - `home.yaml` marks an instance signed out with a boolean that every Spex reading the file validates, so a richer value would make an older Spex refuse the home.
 
 ## Decision
+
+- Amends [DR-008](008-native-shell-bridge.md): the desktop's browser opener opens a sign-in URL at any instance being signed in to.
 
 ### Instances by their origin
 

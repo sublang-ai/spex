@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-02).
-Amends [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-168](168-independent-package-registry.md).
+Amends [DR-008](008-native-shell-bridge.md), [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-168](168-independent-package-registry.md).
 
 ## Context
 
@@ -17,7 +17,7 @@ Amends [DR-127](127-a-home-signed-in-to-several-instances.md), [DR-168](168-inde
 
 ## Decision
 
-- Amends [DR-127](127-a-home-signed-in-to-several-instances.md) in the desktop's permitted sign-in origins, and [DR-168](168-independent-package-registry.md) in independent registry sign-in from the app.
+- Amends [DR-008](008-native-shell-bridge.md) and [DR-127](127-a-home-signed-in-to-several-instances.md) in the desktop's permitted sign-in origins, and [DR-168](168-independent-package-registry.md) in independent registry sign-in from the app.
 - The native browser opener also permits the origin of each registry sign-in currently running.
   A registry's configuration, cached metadata or saved account alone grants no permission to open it automatically.
   Ending one flow removes only its permission; another running flow or a listed Space can still permit that origin.

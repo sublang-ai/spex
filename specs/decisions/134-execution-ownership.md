@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-21).
-Amends [DR-035](035-intent-ledger.md), [DR-036](036-file-state-store.md), [DR-047](047-explicit-session-recovery.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-055](055-queue-advancement.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-103](103-the-home-and-its-groups.md).
+Amends [DR-035](035-intent-ledger.md), [DR-036](036-file-state-store.md), [DR-047](047-explicit-session-recovery.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-077](077-up-next-is-a-committed-queue.md), [DR-103](103-the-home-and-its-groups.md).
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -22,7 +22,7 @@ Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 - Amends [DR-103](103-the-home-and-its-groups.md) in "you can continue it only on a device where the project's working folder is the one it ran in": a session continues only on the runtime it is assigned to, the folder rule standing beneath.
 - Amends [DR-047](047-explicit-session-recovery.md) in "regardless of their originating host": Restore and Discard are offered on the assigned runtime alone.
-- Amends [DR-055](055-queue-advancement.md) and [DR-077](077-up-next-is-a-committed-queue.md) in which intent is next: a runtime advances into, and offers to start, only the intents assigned to it.
+- Amends [DR-077](077-up-next-is-a-committed-queue.md) in which intent is next: a runtime advances into, and offers to start, only the intents assigned to it.
 - Amends [DR-035](035-intent-ledger.md) in its attention queue and verdicts, and [DR-051](051-runtime-held-for-a-turn.md) and [DR-077](077-up-next-is-a-committed-queue.md) in the project's lane: attention, verdicts and the lane count only the runtime's own records.
 - Amends [DR-036](036-file-state-store.md) in "resumability stays machine-local": it stays with the assigned runtime, named in the records.
 

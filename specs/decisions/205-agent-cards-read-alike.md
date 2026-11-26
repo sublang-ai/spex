@@ -7,7 +7,7 @@
 
 Accepted (2026-11-02) on the owner's direction.
 Amends [DR-091](091-models-named-by-the-runtime.md), [DR-154](154-the-seed-follows-playbooks-rule.md), [DR-204](204-workshop-agents-in-one-pass.md).
-Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-236](236-primary-and-subagent-model-defaults.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-237](237-published-agent-runtime-floors.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -61,7 +61,7 @@ Amended by [DR-206](206-the-workshop-points-to-its-guide.md), [DR-236](236-prima
 
 ### A third-party seed
 
-- Where Claude's base URL — read as a run reads it, Claude Code's user settings over the environment — names a third-party host, the seed leaves out each Claude agent's official primary and child models ([DR-236](236-primary-and-subagent-model-defaults.md)), so it runs on the provider's defaults; other agents, other fields and the template's comments stand.
+- Where Claude's base URL — read as a run reads it, Claude Code's user settings over the environment — names a third-party host, the seed leaves out each Claude agent's official primary and child models ([DR-237](237-published-agent-runtime-floors.md)), so it runs on the provider's defaults; other agents, other fields and the template's comments stand.
 - An untouched seed is reseeded on that rule like any other, so an attendee who set the key after the first start needs no fix; a file changed in any byte is left to the official-name list.
 
 ### A folder is no credential

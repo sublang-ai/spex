@@ -6,7 +6,7 @@
 ## Status
 
 Accepted.
-Amended by [DR-019](019-inline-agent-configuration.md), [DR-040](040-source-only-app-releases.md), [DR-049](049-supported-app-hosts.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-056](056-release-naming.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
+Amended by [DR-019](019-inline-agent-configuration.md), [DR-040](040-source-only-app-releases.md), [DR-051](051-runtime-held-for-a-turn.md), [DR-056](056-release-naming.md), [DR-178](178-native-windows-private-storage.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
 
@@ -23,7 +23,7 @@ Amended by [DR-019](019-inline-agent-configuration.md), [DR-040](040-source-only
 
 - The app is named **Spex**: a desktop app to compile, configure, run, and monitor playbooks over local projects.
 - Distribution is via GitHub Releases, as source with native downloads ([DR-040](040-source-only-app-releases.md), [DR-184](184-native-desktop-tag-packages.md)); the app itself is not published to npm.
-- Supported hosts follow [DR-049](049-supported-app-hosts.md).
+- Supported hosts follow [DR-178](178-native-windows-private-storage.md).
 
 ### Three-layer, web-first architecture
 

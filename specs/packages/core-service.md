@@ -649,7 +649,7 @@ When the core service starts against a state root, the core service shall take t
 
 Where the host shell names a legacy SQLite store that neither the state root's own record nor a `<store>.imported` marker beside the file shows imported, when the core service starts, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], the legacy file left in place, and the marker written beside it on success so that no state root created later imports it again ([DR-036](../decisions/036-file-state-store.md)):
 
-- The same import relocates a legacy library directory into the state root, rewriting the shared config's `from` paths that point into it with the comment-preserving targeted edit ([DR-005](../decisions/005-compilation-integration.md)).
+- The same import relocates a legacy library directory into the state root, rewriting the shared config's `from` paths that point into it with the comment-preserving targeted edit ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
 - A marker that cannot be written is reported and the root's own record alone stands; a root whose record lists a store the file does not yet mark writes the marker at its next start.
 
 ### Shutdown

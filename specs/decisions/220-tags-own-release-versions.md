@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's request.
-Amends [DR-087](087-beta-app-releases.md), [DR-184](184-native-desktop-tag-packages.md), [DR-199](199-release-gated-full-validation.md).
+Amends [DR-040](040-source-only-app-releases.md), [DR-087](087-beta-app-releases.md), [DR-184](184-native-desktop-tag-packages.md), [DR-199](199-release-gated-full-validation.md).
 Amended by [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
 ## Context
@@ -17,7 +17,7 @@ Tag workflows already own validation, native packaging and publication, but sour
 
 ## Decision
 
-- Amends [DR-087](087-beta-app-releases.md) and [DR-184](184-native-desktop-tag-packages.md) in version and notes preparation, and [DR-199](199-release-gated-full-validation.md) only in deterministic metadata preparation before full validation.
+- Amends [DR-040](040-source-only-app-releases.md), [DR-087](087-beta-app-releases.md) and [DR-184](184-native-desktop-tag-packages.md) in version and notes preparation, and [DR-199](199-release-gated-full-validation.md) only in deterministic metadata preparation before full validation.
 - Keep disjoint `app-vX.Y.Z[-beta.N]` and stable `cli-vX.Y.Z` channels, deriving the released version exclusively from the tag.
 - Before installation, prepare only that channel's workspace manifest and lockfile version fields in every validation/build checkout. Preserve dependencies and development defaults in Git; do not commit or push generated metadata.
 - Validate and package the same tagged source plus that deterministic version metadata. Preserve full channel validation, OIDC/provenance, both native builds, strict packaged compilation and signed/notarized Mac distribution.
