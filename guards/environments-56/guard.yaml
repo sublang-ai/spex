@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The cases of environments-56 as steps. A step states an effect field
+# only where the case's plain words speak of it, and `providing` lists
+# only the packages those words speak of.
+format: 1
+binding: installs
+limits: { seconds: 300 }
+cases:
+  - case: a later arrival is blocked
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { standing: zeta/kit, blocked: [acme/kit] }
+  - case: a later arrival takes the path
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { standing: acme/kit, blocked: [zeta/kit] }
+  - case: the standing package is reported blocked
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { standing: zeta/kit, blocked: [acme/kit, zeta/kit] }
+  - case: a package not selected is reported blocked
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit, zeta/kit] }
+        effect: { standing: zeta/kit, blocked: [acme/kit, mid/kit] }
+  - case: a copy no longer selected leaves
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit], providing: [acme/kit, zeta/kit] }
+        effect: { standing: acme/kit, blocked: [] }
+  - case: a copy no longer provided leaves
+    steps:
+      - event: install
+        params: { selected: [zeta/kit], providing: [zeta/kit] }
+        effect: { standing: zeta/kit }
+      - event: install
+        params: { selected: [acme/kit, zeta/kit], providing: [acme/kit] }
+        effect: { standing: acme/kit, blocked: [] }

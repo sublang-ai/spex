@@ -5,15 +5,18 @@
 # through the library's exportEnvironment.
 format: 1
 values:
+  # Listed in order of <org>, the order in which packages claim a path:
+  # the declaration in TLA+ gives it as PackageRank and PackageFirst.
   package: [acme/kit, mid/kit, zeta/kit]
 events:
-  # One install: `selected` are the packages the lock holds, `providing`
-  # the packages whose release provides a `kit` spec.
+  # One install. `selected`: the packages the lock holds. `providing`:
+  # the packages whose release provides a `kit` spec. Listing a package
+  # that is not selected changes nothing.
   install:
     params: { selected: set of package, providing: set of package }
-    # `placed`: whose copy stands at specs/packages/kit.md afterwards.
+    # `standing`: whose copy stands at specs/packages/kit.md afterwards.
     # `blocked`: the packages the install reported blocked.
-    effect: { placed: package?, blocked: set of package }
+    effect: { standing: package?, blocked: set of package }
 files:
   - packages/cli/src
   - packages/cli/tsconfig.json

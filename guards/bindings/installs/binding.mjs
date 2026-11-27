@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The binding `exports` (DR-252): installs into a scratch project through
+// The binding `installs` (DR-252): installs into a scratch project through
 // the library's exportEnvironment, as built in the copy. Three packages
 // each hold a spec `kit`, so all three want specs/packages/kit.md
 // (environments-41). It reports what the install did and holds no
@@ -20,7 +20,7 @@ const MARKER = /^<!-- Placed by Spex from (\S+) \S+; an edit makes this file you
 // temp folder. The empty .git folder keeps an install from writing the
 // exclude file of a repository above the temp folder.
 export function start() {
-  const root = mkdtempSync(join(tmpdir(), 'spex-guard-exports-'));
+  const root = mkdtempSync(join(tmpdir(), 'spex-guard-installs-'));
   mkdirSync(join(root, 'specs', 'packages'), { recursive: true });
   mkdirSync(join(root, '.git'));
   return { root };
@@ -63,6 +63,7 @@ function release(root, name, provides) {
 export const events = {
   // One install: the lock holds the selected packages, each at the
   // release that provides its spec or at the one that does not.
+  // Listing a package in `providing` that is not selected changes nothing.
   async install({ root }, { selected, providing }) {
     const packages = {};
     for (const name of PACKAGES) {
@@ -77,7 +78,7 @@ export const events = {
       agents: [],
     });
     return {
-      placed: standing(root),
+      standing: standing(root),
       blocked: report.specs.filter((spec) => spec.state === 'blocked').map((spec) => spec.name),
     };
   },
