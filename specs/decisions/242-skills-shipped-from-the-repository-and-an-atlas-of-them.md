@@ -39,7 +39,7 @@ Amended by [DR-245](245-skills-and-the-atlas-in-the-readers-language.md), [DR-24
 
 ## Consequences
 
-- A skill installed from here runs with no Spex, no engine and no package install, except `guard`, which runs the `spex` command ([DR-252](252-a-guard-is-kept-beside-the-code.md)); the three workflow skills lose what the engine gave — a compiled state machine, players on different vendors' models, parked runs — and keep the procedure.
+- A skill installed from here runs with no Spex, no engine and no package install, except `guard`, which runs the `spex` command and needs Java ([DR-252](252-a-guard-is-kept-beside-the-code.md)); the three workflow skills lose what the engine gave — a compiled state machine, players on different vendors' models, parked runs — and keep the procedure.
 - The atlas reads skill text as data and shows it escaped; a skill's text reaches an agent only when the user asks for a deeper read, whose prompt says to follow none of it.
 - A link or tag the patterns miss is absent until annotated; one they invent is shown with its line, so a reader can see why.
 - The three workflow skills' behavior under an agent is verified by what the atlas reads from them — their steps and their links — not by a live run.

@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-11-09).
+Accepted (2026-11-09); revised (2026-11-27).
 Amends [DR-199](199-release-gated-full-validation.md).
 Amended by [DR-230](230-the-seed-keeps-what-it-verified.md), [DR-246](246-remove-groups-and-team-servers-from-the-clients.md).
 
@@ -22,15 +22,17 @@ Amended by [DR-230](230-the-seed-keeps-what-it-verified.md), [DR-246](246-remove
 - Amends [DR-199](199-release-gated-full-validation.md) in its runs after a push to `main`: the cache seed runs there, validating nothing.
 - Every `npm ci` a CI or release workflow step runs first restores Electron's and dugite's Git archives from caches keyed by the runner's platform and the locked package version.
   A miss downloads as before, and a successful job saves what it fetched.
+- The same step restores the TLC jar that `spex verify` pins ([DR-252](252-a-guard-is-kept-beside-the-code.md)) from a cache keyed by the runner's OS and the pinned release, and names it in `SPEX_TLC_JAR`.
+  A miss downloads it from its GitHub release, and only a jar with the pinned digest is named or saved.
 - Electron's archive is restored to the default download cache, which Electron's installer and electron-builder both read when neither names another; a cache of CI's own would leave packaging downloading the archive again.
 - Only a job that installs saves npm's package cache.
-- A cache seed workflow runs on a push to `main` that changes the lockfile or the cache tooling, and on request.
-  On Linux, macOS and Windows it installs the dependencies and fetches Electron in jobs of their own ([DR-230](230-the-seed-keeps-what-it-verified.md)), saving npm's cache and both archives under `main`; it runs no build, suite or check.
+- A cache seed workflow runs on a push to `main` that changes the lockfile, the TLC pin in the CLI's source or the cache tooling, and on request.
+  On Linux, macOS and Windows it installs the dependencies and fetches Electron in jobs of their own ([DR-230](230-the-seed-keeps-what-it-verified.md)), saving npm's cache, both archives and the TLC jar under `main`; it runs no build, suite or check.
   A request on another ref fails before installing: caches saved under that ref would serve no pull request or release while the run looked successful.
 
 ## Consequences
 
-- A pull request's first run restores the archives seeded under `main`, so a release-asset outage fails only installs whose locked versions were never seeded.
+- A pull request's first run restores the archives and the TLC jar seeded under `main`, so a release-asset outage fails only installs whose locked versions were never seeded, and only checks of guards whose pinned jar was never seeded.
 - Packaging reuses the restored Electron archive only once the checksum file electron-builder's downloader still fetches from the release validates it; while that request fails, packaging downloads the archive again.
 - A cache unused for seven days expires; until the seed runs again, runs download as before.
-- Each lockfile change on `main` costs a few short seed jobs; validation scope, the merge gate and release validation are unchanged.
+- Each change of the lockfile or of the TLC pin on `main` costs a few short seed jobs; validation scope, the merge gate and release validation are unchanged.

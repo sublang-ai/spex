@@ -5,33 +5,36 @@
 
 ## Status
 
-In progress (2026-11-26); every deliverable is on the branch, and CI on its pull request is still to run.
+In progress (2026-11-27).
 
 ## Intent
 
-Give a project guards it can keep beside its code and check from the command line with fast-check alone — `spex verify` and `spex approve`, the `guard` skill that drafts a guard with a person, and a first guard on Spex itself run in this repository's checks — under [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
+Give a project guards it can keep beside its code and check from the command line on TLA+ and TLC — `spex verify` and `spex approve`, the `guard` skill that drafts a guard with a person, and a first guard on Spex itself run in this repository's checks — under [DR-243](../decisions/243-guards-protect-critical-behavior-on-every-change.md), [DR-244](../decisions/244-a-guard-is-checked-on-the-implementation.md) and [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
 
 ## Deliverables
 
-- [x] DR-252 accepted with DR-243 and DR-244, the `guards` spec package, and the amended `cli` and `agent-skills` packages, map and reciprocal Status lines [[guards-1](../packages/guards.md#guards-1)] [[cli-21](../packages/cli.md#cli-21)] [[agent-skills-13](../packages/agent-skills.md#agent-skills-13)].
-- [x] The checking library in the CLI: a guard's files and items, the binding's declaration and module, readings and their language, the patch applier, the copy and its process, a failing binding, and approval inputs [[guards-2](../packages/guards.md#guards-2)] [[guards-3](../packages/guards.md#guards-3)] [[guards-7](../packages/guards.md#guards-7)] [[guards-9](../packages/guards.md#guards-9)] [[guards-11](../packages/guards.md#guards-11)] [[guards-12](../packages/guards.md#guards-12)] [[guards-36](../packages/guards.md#guards-36)] [[guards-14](../packages/guards.md#guards-14)].
-- [x] `spex approve` and `spex verify` with their report and exit statuses, in the usage and each command's help, with the integration suite on fixture projects [[guards-16](../packages/guards.md#guards-16)] [[guards-17](../packages/guards.md#guards-17)] [[guards-26](../packages/guards.md#guards-26)] [[guards-27](../packages/guards.md#guards-27)] [[guards-29](../packages/guards.md#guards-29)] [[cli-21](../packages/cli.md#cli-21)].
-- [x] The `guard` skill under `skills/guard/` with its `references/`, its `zh-CN` translations and its version, read by the atlas scan [[agent-skills-13](../packages/agent-skills.md#agent-skills-13)] [[agent-skills-14](../packages/agent-skills.md#agent-skills-14)] [[agent-skills-10](../packages/agent-skills.md#agent-skills-10)].
-- [x] The first guard on Spex, protecting a placed spec's standing copy [[environments-41](../packages/environments.md#environments-41)]: its assertion and example items in `environments.md`, its binding, readings, kept fault and approval record under `guards/`, passing `spex verify`.
-- [x] `spex verify` in this repository's pull-request checks and before a push, with `guards/` owned in the selection of suites [[release-34](../packages/release.md#release-34)] [[release-35](../packages/release.md#release-35)].
-- [x] The CLI's README and changelog, and the skills' guide.
+- [ ] DR-243, DR-244 and DR-252 and the `guards` spec package, with the `cli`, `agent-skills`, `environments` and `release` packages, DR-228, DR-242 and the map in line with them.
+- [ ] The checking library in the CLI: a guard's files and the cases of its guard item, each case's steps mapped to it by label, the binding's declaration and module, the declaration in TLA+, the form of a translation, the TLA+ files generated for TLC with its runs and what is read from them, Java and the pinned TLC jar, the patch applier, the copy and its process, the test of the code on every step of the model, a failing binding, and approval inputs; nothing random, and no dependency added for guards.
+- [ ] `spex approve` and `spex verify` with `--keep`, their report and exit statuses, in the usage and each command's help, with the integration suite running real TLC on fixture projects.
+- [ ] The `guard` skill under `skills/guard/` with its `references/`, its `zh-CN` translations and its version, read by the atlas scan.
+- [ ] The first guard on Spex: its rule as a behavior item [[environments-55](../packages/environments.md#environments-55)], the guard item with its six cases, three permitted and three forbidden [[environments-56](../packages/environments.md#environments-56)], and under `guards/` the `installs` binding, the guard file, translations drafted independently in TLA+ that agree, and the kept fault.
+- [ ] The first guard's approval record, written by the owner with `spex approve` and by no agent.
+- [ ] `spex verify` in this repository's pull-request checks and before a push, with `guards/` owned in the selection of suites and the pinned TLC jar in CI's download caches.
+- [ ] The CLI's README and changelog, the skills' guide, and the first guard's measurement in DR-252 from its final run.
 
 ## Tasks
 
-1. Specs: DR-252 accepted with DR-243 and DR-244, `guards.md`, the amendments to `cli.md`, `agent-skills.md`, `environments.md` and `release.md`, the map and the reciprocal Status lines; `spex lint` clean.
-2. The checking library and the two commands: `packages/cli/src/guards/` with the language, readings, files, items, approval, patch applier, copy, the copy's process with fast-check, the report and the `verify` and `approve` commands in the usage and help; unit tests and the integration suite `guards-29` to `guards-35` green.
-3. The `guard` skill: `skills/guard/` with its prompts and file forms under `references/`, its translations pinned and its version, the atlas test for it and the skills' guide; `npm run test:scripts` green.
-4. The first guard on Spex and the checks: the items in `environments.md`, `guards/bindings/` and the guard's folder with its kept fault and approval record, `spex verify` in the pull-request checks and the pre-push check, `guards/` in the selection of suites, the README and changelog; every suite the change reaches green.
+1. Specs: DR-243, DR-244 and DR-252, `guards.md`, then `cli.md`, `agent-skills.md`, `environments.md`, `release.md`, DR-228, DR-242 and the map in line; `spex lint` clean.
+2. The checking library and the two commands: `packages/cli/src/guards/` with the guard's files and items and the mapping of steps to cases, the declaration in TLA+, the form of a translation, the generated TLA+ files and the runs of TLC, Java and the jar, approval, the patch applier, the copy and its process with the test of the code, the report, and the `verify` and `approve` commands in the usage and help; unit tests and the `guards` package's integration suite green on real TLC.
+3. The `guard` skill: `skills/guard/` with its prompts and file forms under `references/`, its `zh-CN` translations pinned and its version, the atlas test for it and the skills' guide; `npm run test:scripts` green.
+4. The first guard on Spex and the checks: the items in `environments.md`, `guards/bindings/installs/` and the guard's folder with its guard file, translations and kept fault, `spex verify` in the pull-request checks and the pre-push check with the jar restored from CI's download caches, `guards/` in the selection of suites, the README and changelog, and the measurement in DR-252; every suite the change reaches green.
 
 ## Verification
 
 - `spex lint` clean after each spec change.
-- `npm test -w packages/cli` green, the integration suite running the built CLI on fixture projects written to a temp folder.
-- `npm run test:scripts` green, with the `guard` skill's form, translations, version and atlas scan.
-- `spex verify` in this repository exits `0`, reports **Sampled on the implementation** for the first guard on today's code, and catches its kept fault.
+- `npm test -w packages/cli` green on a machine with Java, the integration suite running the built CLI and real TLC on fixture projects written to a temp folder.
+- `npm run test:scripts` green, with the `guard` skill's form, `zh-CN` translations, version and atlas scan.
+- `spex verify` in this repository reports, for the first guard, every translation allowing each permitted case and forbidding each forbidden case, the translations in agreement, **Model checked, code tested** on today's code and the kept fault caught.
+- Until the owner has run `spex approve`, the guard does not pass for want of approval alone; after it, `spex verify` exits `0`.
+- The CLI declares no dependency for guards.
 - CI green on the pull request before merge.

@@ -11,7 +11,6 @@ A **spec package** is one GEARS contract with the sources, spec, skills, playboo
 An **environment** records the packages installed globally or for one project: `spex.yaml` says which spec packages it wants, `spex.lock` records exactly what it got, and `.spex/` holds what was installed, all at the environment's **root** — a project's working folder, or the global records repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)].
 An **instance** is a deployment of Spex Space known by its origin; an environment's instance is the `space` its `spex.yaml` names, else the home's default instance [[storage-2](storage.md#storage-2)], independent of the registry selected by `registry` ([DR-168](../decisions/168-independent-package-registry.md)).
 A **working folder** is where a project's sessions run; the app pairs it with the spex repository holding its records [[storage-6](storage.md#storage-6)], which the environment in it does not need.
-Items environments-55 to environments-59 are the assertion and the examples of the guard `environments-55`: on every change, `spex verify` checks on the code that the behavior they describe still holds [[guards-17](guards.md#guards-17)].
 
 ## External Behavior
 
@@ -211,9 +210,13 @@ When an install runs in a project's environment, the core shall place each provi
 - an address `spex:<org>/<pkg>#<id>` [[environments-42](#environments-42)] whose package's spec stands in this `specs/` becomes the relative link to that file's anchor; one whose package's spec does not is removed with its brackets, the phrase it annotated kept, and the install reports each such package with the count of links waiting for it; a same-file citation and a relative link to `meta.md` stay; the placed files are derived again whenever the set of placed specs changes, so a package added later makes its links appear;
 - a file at that path whose bytes equal the derivation is this package's copy, recorded as such with or without an earlier record, so a fresh clone installs to no diff; one whose bytes equal the hash last recorded is rewritten by the derivation; any other is edited: the install leaves it standing, places nothing over it and reports it with the newer release's version waiting under `.spex/`;
 - a copy whose package the lock no longer holds, or whose release no longer provides its spec, leaves, unless edited, when it stays as the project's own and the install reports so;
-- a file of that basename under `specs/` that is neither the derivation nor this package's copy by the record or its marker line blocks the placement, reported naming the file; of two selected packages of one `<pkg>`, the one whose copy stands there is placed, else the first by `<org>`, and the other reported blocked;
+- a file of that basename under `specs/` that is neither the derivation nor this package's copy by the record or its marker line blocks the placement, reported naming the file; of the selected packages whose releases provide a `<pkg>` spec, where no copy of theirs stands there, the first by `<org>` is placed and each other reported blocked, and where one's copy stands there the standing copy's rule decides [[environments-55](#environments-55)];
 - a root holding no `specs/` places no spec, reported naming `spex scaffold`;
 - `specs/` holds no address: a placed file's links are relative or absent, as the project's own files' are.
+
+#### environments-55
+
+While a package's copy stands at `specs/packages/<pkg>.md` [[environments-41](#environments-41)], with that package still selected and its release still providing the spec, when an install runs in a project's environment, the core shall leave that copy in place as that package's and report exactly the other selected packages whose releases provide a `<pkg>` spec as blocked at that path ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 #### environments-42
 
@@ -557,7 +560,7 @@ When a real package-library integration uses an HTTP fixture with separate grant
 
 #### environments-43
 
-When an integration suite installs, into a scratch project holding a scaffolded `specs/`, a stand-in registry package providing a spec whose release cites a second package's spec and a third's by address, it shall assert: the spec placed at `specs/packages/<pkg>.md` with the second's citation as a relative link once the second is installed too, and the third's removed with the install reporting the third and one link waiting [[environments-41](#environments-41)]; a hand-edited copy left standing and reported edited across an update to a newer release, whose file stands under `.spex/` [[environments-41](#environments-41)]; a project file of the same basename blocking the placement, reported [[environments-41](#environments-41)]; a removal taking an unedited copy and keeping an edited one, reported [[environments-41](#environments-41)]; a root without `specs/` reporting `spex scaffold` and placing no spec [[environments-41](#environments-41)]; two selected packages of one `<pkg>`, the first by `<org>` placed and the second reported blocked [[environments-41](#environments-41)]; the placed file opening with the marker line naming the package and version [[environments-41](#environments-41)]; the project's `.gitattributes` holding the three LF rules [[environments-44](#environments-44)]; a second scratch clone holding the committed copy, `spex.yaml` and `spex.lock`, whose first install rewrites nothing and records the copy as the package's, and a copy committed at a newer release's version read as the package's, not edited, on a device whose record held the older hash [[environments-41](#environments-41)]; a citation of `meta.md` kept as it is in both directions [[environments-41](#environments-41)] [[environments-42](#environments-42)]; a release listing `provides: [skill]`, and one whose playbook is `from` its spec, placing no spec and no support skill [[environments-1](#environments-1)] [[environments-6](#environments-6)]; the global environment writing the generated skill instead [[environments-8](#environments-8)]; and a project's spec file built into a release with its same-file citation kept, an installed package's spec cited by address, a local spec's citation removed and a decision record's link reduced to its text, each reported, the project's file unchanged [[environments-42](#environments-42)].
+When an integration suite installs, into a scratch project holding a scaffolded `specs/`, a stand-in registry package providing a spec whose release cites a second package's spec and a third's by address, it shall assert: the spec placed at `specs/packages/<pkg>.md` with the second's citation as a relative link once the second is installed too, and the third's removed with the install reporting the third and one link waiting [[environments-41](#environments-41)]; a hand-edited copy left standing and reported edited across an update to a newer release, whose file stands under `.spex/` [[environments-41](#environments-41)]; a project file of the same basename blocking the placement, reported [[environments-41](#environments-41)]; a removal taking an unedited copy and keeping an edited one, reported [[environments-41](#environments-41)]; a root without `specs/` reporting `spex scaffold` and placing no spec [[environments-41](#environments-41)]; two selected packages of one `<pkg>`, neither's copy standing there, the first by `<org>` placed and the second reported blocked [[environments-41](#environments-41)]; the placed file opening with the marker line naming the package and version [[environments-41](#environments-41)]; the project's `.gitattributes` holding the three LF rules [[environments-44](#environments-44)]; a second scratch clone holding the committed copy, `spex.yaml` and `spex.lock`, whose first install rewrites nothing and records the copy as the package's, and a copy committed at a newer release's version read as the package's, not edited, on a device whose record held the older hash [[environments-41](#environments-41)]; a citation of `meta.md` kept as it is in both directions [[environments-41](#environments-41)] [[environments-42](#environments-42)]; a release listing `provides: [skill]`, and one whose playbook is `from` its spec, placing no spec and no support skill [[environments-1](#environments-1)] [[environments-6](#environments-6)]; the global environment writing the generated skill instead [[environments-8](#environments-8)]; and a project's spec file built into a release with its same-file citation kept, an installed package's spec cited by address, a local spec's citation removed and a decision record's link reduced to its text, each reported, the project's file unchanged [[environments-42](#environments-42)].
 
 #### environments-46
 
@@ -585,25 +588,16 @@ When the command line adds and installs a stand-in registry package in a project
 
 When a real core's environment migration moves a project's environment into its working folder and rewrites the project and global manifests and locks on POSIX, the integration suite shall assert that each rewritten `spex.yaml` and `spex.lock` keeps the mode a reader set, `0664` or `0600`, and each moved file is new at `0644` [[environments-49](#environments-49)].
 
-#### environments-55
-
-While a package's spec stays selected and its release still provides it, the guard's check shall find that an install never replaces its standing copy with another package's [[environments-41](#environments-41)].
-
 #### environments-56
 
-When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, both releases providing a `kit` spec, the guard's check shall find `zeta/kit`'s copy still standing after the second install and `acme/kit` reported blocked [[environments-41](#environments-41)].
+When `spex verify` checks installs into a project in which several packages provide a spec of one name, it shall find that the code keeps the rule that a standing copy keeps its path [[environments-55](#environments-55)] at every step it tries, reading the rule by these cases:
 
-#### environments-57
-
-When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, both releases providing a `kit` spec, the guard's check shall find forbidden a second install that ends with `acme/kit`'s copy standing there and `zeta/kit` reported blocked [[environments-41](#environments-41)].
-
-#### environments-58
-
-When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` alone, both releases providing a `kit` spec, the guard's check shall find `zeta/kit`'s unedited copy gone and `acme/kit`'s standing in its place after the second install, with no package reported blocked [[environments-41](#environments-41)].
-
-#### environments-59
-
-When an install selects `zeta/kit` alone and places its copy at `specs/packages/kit.md`, and a second install selects `acme/kit` with it, `zeta/kit`'s release by then no longer providing a spec, the guard's check shall find `zeta/kit`'s unedited copy gone and `acme/kit`'s standing in its place after the second install, with no package reported blocked [[environments-41](#environments-41)].
+- permitted — a later arrival is blocked: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` too, both releases providing a `kit` spec; `zeta/kit`'s copy still stands and `acme/kit` alone is reported blocked;
+- forbidden — a later arrival takes the path: the same two installs, ending with `acme/kit`'s copy standing and `zeta/kit` reported blocked;
+- forbidden — the standing package is reported blocked: the same two installs, ending with `zeta/kit`'s copy still standing and both packages reported blocked;
+- forbidden — a package not selected is reported blocked: the same two installs, ending with `zeta/kit`'s copy still standing and `acme/kit` and `mid/kit` reported blocked;
+- permitted — a copy no longer selected leaves: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` alone, each release providing a `kit` spec; `acme/kit`'s copy stands and no package is reported blocked;
+- permitted — a copy no longer provided leaves: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` too, when only `acme/kit`'s release still provides a `kit` spec; `acme/kit`'s copy stands and no package is reported blocked.
 
 ## References
 

@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md), and the `guard` skill, which drafts a guard with a person, per [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
+This package defines the Agent Skills the repository ships from `skills/` and the three workflow skills among them, per [DR-242](../decisions/242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), their `zh-CN` translations per [DR-245](../decisions/245-skills-and-the-atlas-in-the-readers-language.md), their versions per [DR-249](../decisions/249-a-skills-version-rises-with-its-content.md), and the `guard` skill, which drafts a guard with a person, per [DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md).
 It owns their form and procedure, not the atlas that reads them and not the guard a draft becomes [[guards-1](guards.md#guards-1)].
 
 ## External Behavior
@@ -18,7 +18,7 @@ Each folder under `skills/` shall be one Agent Skill [[1]] a person installs on 
 
 - its `SKILL.md` opens with frontmatter whose `name` equals the folder's name and whose `description`, of at most 1024 characters, says what the skill does and when to use it;
 - the body of `SKILL.md` is at most 500 lines;
-- every relative link in `SKILL.md` names a file in the skill's folder, and every file under `references/` that is no translation is linked from `SKILL.md`.
+- every relative link in `SKILL.md` names a file in the skill's folder, and every file under `references/` that is no `zh-CN` translation is linked from `SKILL.md`.
 
 #### agent-skills-2
 
@@ -28,12 +28,12 @@ Where a skill relays a prompt to a role or applies a rule a user may tune, the s
 
 Each Markdown file of a skill under `skills/`, and each file under its `references/` holding labels a reader sees, shall have beside it a `zh-CN` translation, named with the tag before the extension, recording its source's digest and, where Markdown, its own:
 
-- a translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the translations of the files its source links, and opens with a quoted note saying that agents load `SKILL.md`;
-- a translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
+- a `zh-CN` translation of `SKILL.md` keeps the `name`, translates the `description`, holds as many steps as its source, links the `zh-CN` translations of the files its source links, and opens with a quoted note saying that agents load `SKILL.md`;
+- a `zh-CN` translation keeps every code span, command, file name, identifier and placeholder of its source unchanged.
 
 #### agent-skills-11
 
-Each skill under `skills/` shall declare a semantic version [[2]] as the string `metadata.version` in the frontmatter of its `SKILL.md` and the same string in that of each translation of `SKILL.md`.
+Each skill under `skills/` shall declare a semantic version [[2]] as the string `metadata.version` in the frontmatter of its `SKILL.md` and the same string in that of each `zh-CN` translation of `SKILL.md`.
 
 #### agent-skills-12
 
@@ -43,7 +43,7 @@ When a change alters any file of a skill's folder, the change shall raise that s
 | --- | --- |
 | something a user, their saved state or a calling skill relied on removed or changed incompatibly | major |
 | behavior added, with what was relied on still holding | minor |
-| anything else, such as a fix, a wording or a translation | patch |
+| anything else, such as a fix, a wording or a `zh-CN` translation | patch |
 
 - A folder absent at the merge base is new, and its first version is not compared.
 
@@ -87,24 +87,35 @@ While the `code`, `review` or `decide` skill runs, the loading agent shall read 
 
 #### agent-skills-13
 
-When the `guard` skill is asked to protect a behavior, the loading agent shall draft a guard with the person in these five steps, running `spex approve` [[guards-16](guards.md#guards-16)] only when the person says so ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
+When the `guard` skill is asked to protect a behavior, the loading agent shall draft a guard with the person in these five steps ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)):
 
-1. write the assertion and the examples as test items that cite the behavior item [[guards-2](guards.md#guards-2)], and the binding's events and effects from those items [[guards-3](guards.md#guards-3)];
-2. have independent agents each draft a reading [[guards-6](guards.md#guards-6)] from the items and that declaration alone, before any agent reads the code;
-3. where readings disagree, show the person one distinguishing sequence at a time, which the person marks permitted or forbidden and which then becomes an example [[guards-10](guards.md#guards-10)], and drop the readings it contradicts;
-4. read the code only then, to write the binding's module, files and commands [[guards-5](guards.md#guards-5)], and plant a fault or restore a past defect as a kept fault [[guards-11](guards.md#guards-11)];
-5. run `spex verify` [[guards-17](guards.md#guards-17)] and tell the person what it found.
+1. with the person, write the rule as a behavior item, splitting a broader item where needed, and the guard item with its cases in plain words [[guards-2](guards.md#guards-2)] [[guards-37](guards.md#guards-37)], then from those items the binding's declaration [[guards-3](guards.md#guards-3)] and the guard file with its time limit and each case's steps [[guards-10](guards.md#guards-10)];
+2. have independent agents, two at the least as a guard needs to pass [[guards-25](guards.md#guards-25)], each draft a translation, saved as `<name>.tla`, from the items, that declaration, the declaration in TLA+ [[guards-8](guards.md#guards-8)] as `spex verify --keep` leaves it for a guard with no translation yet [[guards-41](guards.md#guards-41)], and the form of a translation [[guards-6](guards.md#guards-6)] alone, before any agent reads the code;
+3. run `spex verify` [[guards-17](guards.md#guards-17)] and, where translations differ [[guards-39](guards.md#guards-39)], have the person answer the one question printed with the distinguishing sequence, add a case where a case can show the answer and reword the item where none can, as the table below says, have fresh agents draft all the translations again as in step 2, and repeat until they agree, settling a Conflict in the items [[guards-38](guards.md#guards-38)] with the person in this step too;
+4. read the code only then, to write the binding's module [[guards-5](guards.md#guards-5)] and the declaration's files and commands [[guards-3](guards.md#guards-3)], and plant a defect or restore a past one as a kept fault [[guards-11](guards.md#guards-11)];
+5. run `spex verify` [[guards-17](guards.md#guards-17)], tell the person what it found, run `spex approve` [[guards-16](guards.md#guards-16)] only when the person says so, and after any later change to an item of the guard have the translations drafted again before asking for approval.
 
-- without subagents, the loading agent drafts the readings in separate passes from the items and the declaration alone, and says in its result that the readings were not independent;
-- when an item of a guard changes, the skill drafts the readings again before it asks for approval;
-- the skill needs the `spex` command and says so in its `compatibility`;
+| Question in step 3 | What the person's answer becomes |
+| --- | --- |
+| Is step n legal? | legal: a permitted case that holds the step; not legal: no case can show it, so the item is reworded with the person |
+| What must step n give? | a permitted case that states the effect; where no item says it, the item is reworded with the person too |
+| Does the rule apply at step n? | it applies: a forbidden case that ends at the step; it does not: no case can show it, so the rule's item is reworded with the person |
+| Is this effect forbidden at step n? | forbidden: a forbidden case; permitted, and the model's effect: a permitted case; permitted, and not the model's effect: no case can show it, so the rule's item is reworded with the person |
+
+- a case is added as its plain words in the guard item [[guards-37](guards.md#guards-37)] and its steps in the guard file [[guards-10](guards.md#guards-10)], and every translation the answer contradicts then fails the check of cases [[guards-20](guards.md#guards-20)];
+- no translation is edited to agree;
+- without subagents, the loading agent drafts the translations in separate passes from the same inputs alone, and says in its result that the translations were not independent;
 - the prompts it relays and the forms of the files it writes stand under its `references/` [[agent-skills-2](#agent-skills-2)].
+
+#### agent-skills-15
+
+The `guard` skill shall say in the `compatibility` of its `SKILL.md` that it needs the `spex` command and Java ([DR-252](../decisions/252-a-guard-is-kept-beside-the-code.md)).
 
 ## Verification
 
 #### agent-skills-7
 
-When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each translation present with its source's digest and, where Markdown, its own, its `SKILL.md`'s name and step count, and its links to translations [[agent-skills-10](#agent-skills-10)], and its version a semantic version equal in `SKILL.md` and each translation [[agent-skills-11](#agent-skills-11)] and, where the folder's files differ from those at its merge base with `origin/main`, higher than the version there [[agent-skills-12](#agent-skills-12)].
+When every folder under `skills/` is checked, the test shall assert its name, description, body length and links, and each linked `references/` file present [[agent-skills-1](#agent-skills-1)] [[agent-skills-2](#agent-skills-2)], and each `zh-CN` translation present with its source's digest and, where Markdown, its own, its `SKILL.md`'s name and step count, and its links to `zh-CN` translations [[agent-skills-10](#agent-skills-10)], and its version a semantic version equal in `SKILL.md` and each `zh-CN` translation [[agent-skills-11](#agent-skills-11)] and, where the folder's files differ from those at its merge base with `origin/main`, higher than the version there [[agent-skills-12](#agent-skills-12)].
 
 #### agent-skills-8
 
@@ -120,11 +131,12 @@ When the repository's `skills/` alone is scanned by the atlas, the test shall as
 
 When the repository's `skills/` alone is scanned by the atlas, the test shall assert the `guard` skill reported and what the scan reads from it [[agent-skills-13](#agent-skills-13)]:
 
-- its five steps in order: the items and the declaration, the readings, the distinguishing sequence, the binding and the kept fault, and the check;
-- its second step naming independent agents, the items and the declaration alone and "before any agent reads the code", and the fallback without subagents saying that the readings were not independent;
-- its third step tagged as asking the user;
+- its five steps in order: the items, the declaration and the guard file, the translations, the distinguishing sequence, the binding and the kept fault, and the check;
+- its second step naming independent agents, `<name>.tla`, the items, the declaration, the declaration in TLA+ and the form of a translation as all a drafter is given and "before any agent reads the code", and the fallback without subagents saying that the translations were not independent;
+- its third step running `spex verify`, asking the one question printed with the distinguishing sequence, naming the four questions and what each answer becomes, saying that no translation is edited, settling a Conflict in the items, and tagged as asking the user;
+- its fourth step reading the code only then and naming the binding's module;
 - `spex verify` and `spex approve` named, with `spex approve` run only when the person says so;
-- that an item's change has the readings drafted again, and that the skill needs the `spex` command.
+- that an item's change has the translations drafted again, and its `compatibility` naming the `spex` command and Java [[agent-skills-15](#agent-skills-15)].
 
 ## References
 

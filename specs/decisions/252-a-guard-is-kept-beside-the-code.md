@@ -5,169 +5,189 @@
 
 ## Status
 
-Accepted (2026-11-25).
+Accepted (2026-11-25); revised (2026-11-27).
 Amends [DR-145](145-merge-on-green.md), [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md), [DR-199](199-release-gated-full-validation.md), [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md), [DR-243](243-guards-protect-critical-behavior-on-every-change.md), [DR-244](244-a-guard-is-checked-on-the-implementation.md).
 
 ## Context
 
-[DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md) leave open where a project keeps a guard, how a person's approval is recorded and who drafts the readings.
-The command line has no model to call, and a project may have no IDE, running app or account.
-A prototype of this stage ran one guard on Spex's package library and a second rule on the core's ledger, and what it found is in the choices below.
+[DR-243](243-guards-protect-critical-behavior-on-every-change.md) says what a guard is, and [DR-244](244-a-guard-is-checked-on-the-implementation.md) says how one is checked.
+They leave open where a project keeps a guard, how a person's approval is recorded, where TLC comes from, who drafts the translations and which guard comes first.
+The command line has no language model to call, and a project may have no IDE, running app or account.
 
 Considered and declined:
 
-- a guard's files under `specs/`: the assertion and examples are already there as items, while a binding, a patch and an approval record name code and change with it; `spex lint` warns of any other entry under `specs/`, and a release carries one spec file, so nothing kept there would travel with a package;
-- a rule in `meta.md` marking guard items: the guard's folder and file name them by ID, so `meta.md`, the scaffold and `spex lint` do not change;
-- a model called from the command line: a check would depend on an agent's sign-in, and [DR-244](244-a-guard-is-checked-on-the-implementation.md) allows no agent in a verification run;
-- JavaScript as a reading's stored form: no fixed rule translates arbitrary code for TLC or Z3, and code could read the implementation or the clock;
-- an existing expression language: each has values TLC or Z3 cannot take, so Spex would still define a subset;
+- a guard's other files under `specs/`: the rule and the cases are already there as items, while a binding, a patch and an approval record name code and change with it; `spex lint` warns of any other entry under `specs/`, and a release carries one spec file, so nothing kept there would travel with a package;
+- a case's steps in its item: typed events and effects are not for a reader of the specs, so the item holds the case in plain words and the guard file holds its steps under the same label;
+- a rule in `meta.md` marking guard items: the guard's folder names its item by ID, so `meta.md`, the scaffold and `spex lint` do not change;
+- a language model called from the command line: a check would depend on an agent's sign-in, and [DR-243](243-guards-protect-critical-behavior-on-every-change.md) allows no agent in a run;
+- JavaScript as a translation's stored form: TLC could not check it, and code could read the project's code or the clock;
 - a signed approval, or asking who is at the keyboard: a project may have no account, and a committed record shows in every review of the change;
+- an approval record written by an agent on its own: approval is a person's act, so the skill runs `spex approve` only when the person says so;
 - checking the code where it stands: a build older than its sources would be checked as if it were current;
-- a new seed on every run: a result would change with no input changing, and a long-hidden violation would land on an unrelated change;
 - a stored result that lets a run skip a guard: to be trusted it would have to name every installed dependency and tool, and CI stores none;
-- tool versions in the approval: a tool is installed with the command line and not kept in the repository, so a record would hold on one machine and fail on another with nothing to review.
+- tool versions in the approval: Java is the machine's and TLC is pinned by the version of Spex, so a record would hold on one machine and fail on another with nothing to review.
 
 ## Decision
 
-- This is the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): fast-check alone, the command line and one skill, no IDE; it reads those two records narrowly where "Where this stage is narrower" lists.
-- Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`, [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need — the `guard` skill needs the `spex` command — and [DR-145](145-merge-on-green.md) and [DR-199](199-release-gated-full-validation.md) with `spex verify` in this repository's checks.
+This record is the first stage of [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md): the command line and one skill, no IDE.
+It extends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) with `spex approve`.
+It amends [DR-242](242-skills-shipped-from-the-repository-and-an-atlas-of-them.md) in what a shipped skill may need: the `guard` skill needs the `spex` command and Java.
+It extends [DR-145](145-merge-on-green.md) and [DR-199](199-release-gated-full-validation.md) with `spex verify` in this repository's checks.
 
 ### Where a guard is kept
 
-A guard's assertion and examples are GEARS test items in the package that holds the behavior item, and each cites that item [[meta-20](../meta.md#meta-20)].
-A guard is named by its assertion item's ID.
-Its other files are committed under `guards/`, beside `specs/`.
+A guard's rule and its guard item, with the cases, stand in the package that holds the behavior.
+Its files are committed under `guards/`, beside `specs/`, in a folder named by the guard item's ID.
+A binding has a folder of its own there.
 
 | Kept | Where |
 | --- | --- |
-| The guard file: its binding, its bounds and each example's sequence | `guards/<assertion>/guard.yaml` |
-| The surviving readings | `guards/<assertion>/readings/` |
-| Each kept fault, as a patch | `guards/<assertion>/faults/` |
-| The approval record | `guards/<assertion>/approval.json` |
+| The guard file: its binding, its limits and each case's steps | `guards/<guard>/guard.yaml` |
+| Each translation | `guards/<guard>/translations/<name>.tla` |
+| Each kept fault, as a patch | `guards/<guard>/faults/` |
+| The approval record | `guards/<guard>/approval.json` |
 | A binding: its declaration and its module | `guards/bindings/<name>/` |
 
-The guard file names each example item as permitted or forbidden and holds it again as the sequence of events and stated effects the item describes.
-A run keeps nothing: no result and no copy.
+The **guard file** holds each case a second time, as its steps in the binding's vocabulary ([DR-244](244-a-guard-is-checked-on-the-implementation.md)).
+It names the case by its label in the guard item.
+Whether the case is permitted or forbidden is read from the item and never repeated.
+Spex checks this mapping whenever it loads a guard: every case of the item has exactly one entry of steps, and every entry names a case of the item.
+A reader of the spec therefore sees every case a run carries out, and a run carries out none the spec does not show.
+
+The guard file's **limits** are one time limit in seconds.
+It bounds each run of TLC and each command separately, and a run it stops makes the result Inconclusive.
+The `guards` package holds the exact form of each file.
 
 ### What is stored
 
-A reading is data, not code.
-It holds its own state and, for each event, when the event is legal and how the state changes with the observed effect.
-It holds the assertion as when it applies and what must then hold of the observed effect.
-Its conditions are written in one small language that Spex defines, over finite values, with no loops, definitions, input or output, so that every condition has a value and fixed rules can later translate it for TLC and Z3.
+A translation is stored as one `.tla` file, and its name in TLA+ is its file's name.
+A guard has two translations or more; with one it is still checked and tested, and does not pass ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)).
+Translations are read in name order, and the first is the one whose model TLC checks and the code is tested against.
+The declaration in TLA+ is not stored: Spex generates it on every run, and the same declaration always gives the same bytes.
 
-### The binding
+### The binding and the copy
 
-A binding's declaration names the events it can cause, the effects it can observe, the files a run copies and the commands that build the copy.
-Its module is JavaScript, with one function for each event.
-In this stage a binding controls every condition a check uses.
-Each sequence starts from a fresh state, and a clock or a restart, where a behavior depends on one, is an event the binding causes.
+Beside its values and events, a binding's declaration names the files a run copies and the commands that build the copy.
+Its module is JavaScript: it starts a fresh state and has one function for each event, which causes the event and returns the observed effect.
+A guard loads before its binding has a module, so the translations can be compared and the model checked before the module is written.
+The tests on the code then find a failing binding.
 
 Every run uses a copy outside the project.
-Spex copies the declared files and the binding, applies a kept fault's patch where there is one, runs the commands, and runs the module in a process of its own, each command and that process stopped at the time limit.
+Spex copies the declared files and the binding, applies a kept fault's patch where there is one, runs the commands, and runs the module in a process of its own.
+Each command and that process are stopped at the time limit.
 A kept fault's patch changes existing files among the declared files only, never the binding.
 The copy uses the project's installed dependencies.
-A run whose process loads, in its main thread, a module of the project from outside the copy is Inconclusive, naming the file.
-What a worker thread or a process the code starts loads, and a file read as data, is not seen in this stage.
-A binding that fails, by an error, an effect outside its declaration or a failed command, makes the check Inconclusive and never counts as catching a fault.
+A run whose process loads, in its main thread, a file of the project from outside the copy is Inconclusive, naming the file.
+In this stage Spex does not see files loaded by a worker thread or by a process the code starts, or files read as data.
+A binding that fails, by an error, an effect outside its declaration or a failed command, makes the check Inconclusive and never counts as catching a kept fault.
+The cause it prints names a file of the copy by its path in the copy, never by the copy's own folder, so two runs print the same cause.
 The declared files are the code the guard reaches, and a result names their digest.
 
 ### Approval
 
-`spex approve <guard>` prints each example's item beside its stored sequence and names what changed since the last record.
-It then writes the approval record, one digest for each of these inputs.
+`spex approve <guard>` prints the guard item's statement, the rule, then each case with its steps.
+For a case it prints the label, whether the case is permitted or forbidden, its plain words from the item and, under them, its steps from the guard file.
+So a person can check that the steps say what the words say.
+It lists the other inputs by name, says what changed since the last record, and writes the approval record, one digest for each of these **inputs**.
 
-- the assertion, the behavior item, the examples and the items those cite directly
-- the guard file, the readings, the kept faults and the binding
+- the guard item, the rule and every item either cites directly
+- the guard file, each translation, each kept fault and every file of the binding
 
+`spex approve` needs neither Java nor TLC.
 `spex verify` names each input that changed, was added or is gone, and the guard cannot pass until it is approved again.
 Spex does not try to tell a person from an agent.
 The record is a committed file, so an approval shows as a change in any review.
 A guard is removed by deleting its folder, which shows the same way.
 
-### What a run checks
+The approval covers the items that the guard item and the rule cite directly, and no further.
+To any depth the first guard would cover more than a third of this tree's items.
 
-`spex verify` checks every guard, or the ones it is given, and calls no model.
-A guard whose files or items hold an error cannot be checked and does not pass.
+### What a run does
 
-1. It compares the inputs with the approval record.
-2. It checks every example against every reading, without the code.
-3. It runs each permitted example on a copy.
-4. It runs the sampled check on that copy.
-5. It runs the same check at the same bounds on a copy with each kept fault.
+`spex verify` checks every guard, or the ones it is given.
 
-In the sampled check fast-check generates sequences of the declared events, each continuing the start of a permitted example.
-Spex causes an event only when every reading finds it legal, and skips it when every reading finds it not legal.
-An event the readings disagree on is not caused, is named in the result, and the sequence goes on without it.
-Spex judges each caused step by every reading and has fast-check shrink a failing sequence.
-The guard file fixes the bounds: the number of sequences, the most events in one, the seed and the time limit.
+1. It loads the guard's files and items, and a guard with an error in them cannot be checked and does not pass.
+2. It compares the inputs with the approval record.
+3. It finds Java and TLC, and a guard cannot be checked without them.
+4. TLC reads each translation alone. Every error of every translation is printed with its file and, where it has one, its place, before any other check, and the guard cannot be checked.
+5. Without the code, TLC evaluates the cases under every translation, compares the translations with each other and checks the model. The three runs may start together.
+6. On a copy of the project's code, Spex causes each permitted case's steps and every step of the model, and TLC judges each observed effect that differs.
+7. It does the same on a copy with each kept fault.
 
-| Finding on the project's code | Result |
-| --- | --- |
-| An observed effect every reading forbids | Violated on the implementation |
-| A permitted example whose stated effect the code does not produce, or which shows the protected behavior against the readings and not on the code | Disagreement with the model |
-| A permitted example a reading rejects, a forbidden one in which a reading finds a step not legal or does not forbid the last effect, a timeout, no sequence in which the assertion applied, or a failing binding | Inconclusive |
-| An event some readings find legal and others not, or a step on which they differ whether the assertion applies or the effect is forbidden | Inconclusive |
-| None of these, with every sequence run | Sampled on the implementation |
-
-A violation comes before any other finding.
-The other four results wait for the tools that can establish them.
-The check of the examples against the readings is reported apart from the checks on the code.
-A result names the versions of fast-check and Spex, the Git revision and the digest of the copied files, the bounds, and each reading's conditions for an event being legal.
-
-A guard passes only when all of these hold.
-
-- Its inputs are approved.
-- It has a forbidden example and a permitted one that shows the protected behavior happening.
-- The sampled check on the project's code is **Sampled on the implementation**.
-- It has a kept fault, and every kept fault is caught: on its copy the sampled check finds an effect every reading forbids.
-
-A patch that no longer applies, or that changes none of the copied files, is not caught, and the guard waits for an approved replacement.
+Steps 4 to 7 and the result they give are those of [DR-244](244-a-guard-is-checked-on-the-implementation.md), and the pass rule is that of [DR-243](243-guards-protect-critical-behavior-on-every-change.md).
+The code is tested only where the cases are as marked under every translation, the translations agree or there is one alone, and the model was checked to its end with no conflict and the rule applying at some step.
+A translation TLC cannot evaluate, or a model's effect outside the declared effects, leaves the guard not checkable, with the place in the translation and the sequence that reached it; it is never a result.
+A kept fault whose patch no longer applies, or changes none of the copied files, is not caught.
+A kept fault that was not tried is reported so with the reason.
 `spex verify` exits `0` only when every guard it checked passes.
 
-### Where this stage is narrower
+### Where TLC comes from
 
-| DR-243 or DR-244 | This stage |
+`spex verify` needs Java 11 or later, from `JAVA_HOME` or else the `java` on the path.
+The rest of the command line does not.
+
+Spex pins one TLC: TLC 2.19, the `tla2tools.jar` of TLA+ tools v1.7.4 [[1]], with SHA-256 `936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88`.
+Spex does not ship the jar.
+
+| Where Spex looks, in order | What it does |
 | --- | --- |
-| A person approves every input change except code and fresh evidence | The versions of fast-check and Spex need no approval. Every run checks every example and must catch every kept fault again with the versions it has. |
-| The inputs include every item a guard's meaning depends on through citations | The approval covers the guard's items, the behavior item and the items those cite directly. To any depth the first guard would cover more than 460 of this tree's roughly 1,300 items. |
-| `spex verify` runs for every guard a change reaches | It runs every guard and keeps no result, so none can be stale. |
-| A violation keeps its sequence and replay command, and is closed by a replay or a person | A violation is printed with its shrunk sequence and not recorded. The same command prints it again while nothing the run uses changes, the versions of fast-check and Spex included. A run reports only what it found, and an earlier violation blocks no later run. Whether it was corrected waits for its record and a replay of its sequence. |
-| A binding declares which conditions it controls | A binding controls them all. |
-| Spex derives the readings, and again when their inputs change | The skill's agents draft them, and `spex verify` only names the input that changed. |
-| Spex finds a distinguishing sequence where readings disagree | The skill's agents find one by reading, and Spex compares readings only on the examples and on the sequences it runs. |
-| Disagreement with the model covers any effect the model excludes | A reading states no expected effects yet, so only an example's stated effect can disagree. |
+| The file `SPEX_TLC_JAR` names | Uses it, and names it in the result as not the pinned copy unless its digest is the pinned one. |
+| Its copy under the Spex home | Uses it where its digest is the pinned one. |
+| The pinned release | Downloads it once, checks the digest and keeps it under the Spex home. |
+
+Without Java, or without a jar it can use, a guard cannot be checked, and Spex says what to install or set.
+
+Every run of TLC is made the same way.
+
+- It has a fresh folder of its own under the run's temporary folder, never under the project.
+- It uses one worker and fixed options, and takes no Java option from the environment.
+- It counts as complete only by TLC's exit status and messages, with no state left.
+
+The CLI's tests of guards use real TLC and the machine's Java, and a missing Java fails them by name.
+CI restores the pinned jar through its download caches ([DR-228](228-ci-keeps-its-downloads.md)), names it in `SPEX_TLC_JAR`, and runs TLC on the runner's Java 21.
+This repository runs `spex verify` on its own guards in its pull-request checks and before a push.
+In CI that is one step on Linux alone, because once per change is enough.
 
 ### Drafting
 
 One shipped skill, `guard`, drafts a guard with a person.
 
-1. It writes the assertion and the examples as items, and the binding's events and effects from those items.
-2. It has independent agents each draft a reading from the items and that declaration alone, before any agent reads the code.
-3. Where readings disagree, it shows the person one distinguishing sequence, the person marks it permitted or forbidden, it becomes an example, and the readings it contradicts are dropped.
-4. It then reads the code to write the binding's module, files and commands, and plants a fault or restores a past defect.
-5. It runs `spex verify`, and runs `spex approve` only when the person says so.
+1. With the person, it writes the rule as a behavior item, splitting a broader item where needed, and the guard item with its cases in plain words. From those items it writes the binding's declaration and the guard file, with its time limit and each case's steps.
+2. It has independent agents, two at the least, each draft a translation, saved as `<name>.tla`, before any agent reads the code. A drafter is given the items, the declaration, the declaration in TLA+ and the form of a translation, and nothing else. The declaration in TLA+ is the file `spex verify --keep` leaves for a guard that has no translation yet.
+3. It runs `spex verify`. Where translations differ, the person answers the one question printed. The skill adds a case where a case can show the answer and rewords the item where none can ([DR-244](244-a-guard-is-checked-on-the-implementation.md)), has fresh drafters draft all the translations again, and repeats until they agree. A Conflict in the items is settled with the person here too.
+4. Only then does it read the code, to write the binding's module, the files and the commands, and to plant a defect or restore a past one as a kept fault.
+5. It runs `spex verify`, tells the person what it found, and runs `spex approve` only when the person says so.
 
-When an item changes, the skill drafts the readings again before it asks for approval.
+When an item of a guard changes later, the skill has the translations drafted again before it asks for approval.
 
 ### The first guard
 
-The first guard is on Spex itself: while a package's spec stays selected and its release still provides it, an install never replaces its standing copy with another package's [[environments-41](../packages/environments.md#environments-41)].
-Where the spec is no longer selected or provided, its unedited copy leaves and another package may take the path, which a permitted example shows.
-Its kept fault restores the behavior changed on 2026-11-01 in `6000e8c`, where the path went to the first package by `<org>` even over a standing copy.
-The item of that day required that behavior, and the tests tried a later arrival only where the standing package also came first by `<org>`.
-The defect was in the requirement, and the guard's forbidden example is what would have exposed it.
-In the prototype the sampled check passed on today's code and caught the restored fault.
-This repository runs `spex verify` in its pull-request checks and before a push.
+The first guard's rule and guard item are [[environments-55](../packages/environments.md#environments-55)] and [[environments-56](../packages/environments.md#environments-56)] ([DR-243](243-guards-protect-critical-behavior-on-every-change.md)).
+Its binding, `installs` ([DR-244](244-a-guard-is-checked-on-the-implementation.md)), drives the package library's install into a scratch project.
+Its declaration gives `install` 64 combinations of params and 32 declared effects.
+Its time limit is 300 seconds.
+Its kept fault restores the behavior changed on 2026-11-01 in `6000e8c`, where the path went to the first package by `<org>` even over a standing spec.
+
+On the code of 2026-11-27 the guard's run shows this.
+Three independently drafted translations each allow the three permitted cases and forbid the three forbidden cases, and they agree at every step TLC reached.
+The model has 4 states and 256 steps, and the rule applies at 48 of them.
+All 256 steps and the three permitted cases were tested on the code, and the code gave the model's effect each time.
+The run took 13.7 seconds on a four-core Linux machine, with Java 21.0.13.1 and Node 22.23.5.
+
+On the run's copy with the kept fault, the case “a later arrival is blocked” fails at its second install.
+The code gives the path to `acme/kit` and reports `zeta/kit` blocked, which is the effect the case “a later arrival takes the path” forbids, and the kept fault is caught there.
 
 ## Consequences
 
-A project adds a guard with two commands and one skill, and a second guard on the same interface reuses the binding.
-A binding is a JavaScript module until other kinds follow, so only code it can drive is reachable.
+A project adds a guard with two commands and one skill.
+A binding's module is JavaScript until other kinds follow, so only code it can drive is reachable.
 `spex verify` needs Node 22.15 or newer, which it uses to see what a copy's process loads.
+Checking guards adds no dependency to `@sublang/spex`.
+The first `spex verify` on a machine downloads TLC, so a machine that cannot reach the release needs `SPEX_TLC_JAR`.
 An approval rests on the project's review, and a project that merges without one has only the record's history.
-The seed is fixed, so the same sequences are generated on every change until the version of fast-check or Spex or the guard's inputs change, and a wider search is a separate, later check.
-Starting each sequence from an example matters: on the prototype's second rule, sequences generated without one caught the restored fault on none of twenty seeds at the same bounds, and with one on all twenty.
-Refactoring the lines a kept fault patches stops the guard until a replacement is approved.
-fast-check becomes a dependency of `@sublang/spex` and of the apps that host its library.
-Violation records, uncontrolled conditions, a model's expected effects, TLC, Z3, recorded runs, imported proofs and the IDE follow on the same stored form.
+A guard that passed can fail later only because an input, the code or a version changed, a sequence caused again gave another effect, or a slower machine reached the time limit.
+The IDE, and what [DR-243](243-guards-protect-critical-behavior-on-every-change.md) and [DR-244](244-a-guard-is-checked-on-the-implementation.md) leave for later, follow on the same stored form.
+
+## References
+
+[1]: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar "TLA+ tools v1.7.4 — tla2tools.jar"
