@@ -1366,6 +1366,10 @@ const STATUS_RELATION_FORMS: { kind: "amends" | "amendedBy"; re: RegExp }[] = [
 // as displayed — link destinations and emphasis marks removed — so a
 // file name cannot match and `**Superseded**` or `已被 … 取代` does.
 const STATUS_SUPERSEDED_RE = /^(?:superseded\b|已?被.*取代)/i;
+// A superseded state naming a partial replacement: the record keeps
+// what remains in force and stays accepted (meta-35), so it is not
+// deleted.
+const STATUS_PARTIAL_RE = /\b(?:in part|partly|partially)\b|部分/i;
 // Every DR citation a relation line spells, parsed as a link or not.
 const STATUS_CITATION_RE = /\[DR-\d+\]\(/g;
 const DECISION_PATH_RE = /^specs\/decisions\/(\d+)-[^/]+\.md$/;
@@ -1455,7 +1459,16 @@ function lintDrStatus(ctx: LintContext): void {
     // meta-35: a wholly replaced DR is merged into its successor and
     // deleted, never kept with a superseded state.
     const displayed = lines[0].text.replace(/\]\([^)]*\)/g, "]").replace(/[*_`]/g, "");
-    if (STATUS_SUPERSEDED_RE.test(displayed)) {
+    if (STATUS_SUPERSEDED_RE.test(displayed) && STATUS_PARTIAL_RE.test(displayed)) {
+      report(
+        ctx,
+        entry.relPath,
+        lines[0].line,
+        "error",
+        "record/status-form",
+        `a partly replaced DR stays accepted without what was replaced, listing the replacing DR under "Amended by" (meta-35, meta-36)`,
+      );
+    } else if (STATUS_SUPERSEDED_RE.test(displayed)) {
       report(
         ctx,
         entry.relPath,

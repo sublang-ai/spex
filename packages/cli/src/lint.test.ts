@@ -743,6 +743,9 @@ describe("lintSpecs", () => {
       // Superseded states as displayed, emphasized and in zh wording.
       "specs/decisions/009-i.md": statusDr("**Superseded** by [DR-001](001-a.md)."),
       "specs/decisions/010-j.md": statusDr("已被 [DR-001](001-a.md) 取代。"),
+      // A partial replacement keeps the record: a form finding, not deletion.
+      "specs/decisions/011-k.md": statusDr("Superseded in part by [DR-001](001-a.md)."),
+      "specs/decisions/012-l.md": statusDr("已被 [DR-001](001-a.md) 部分取代。"),
     });
     const by = (rule: string) => findings.filter((f) => f.rule === rule).map((f) => [f.path, f.line]);
     assert.deepEqual(by("record/status-length"), [["specs/decisions/001-a.md", 8]], JSON.stringify(findings));
@@ -756,6 +759,8 @@ describe("lintSpecs", () => {
         ["specs/decisions/006-f.md", 6],
         ["specs/decisions/007-g.md", 6],
         ["specs/decisions/008-h.md", 5],
+        ["specs/decisions/011-k.md", 5],
+        ["specs/decisions/012-l.md", 5],
       ],
       JSON.stringify(findings),
     );
