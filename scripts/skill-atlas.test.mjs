@@ -3604,23 +3604,34 @@ describe('the repository\'s skills', () => {
   test('what the scan reads from guard (agent-skills-14)', () => {
     const guard = byName('guard');
     assert.ok(guard, 'the guard skill is reported');
-    assert.deepEqual(guard.steps.map((st) => st.title), ['Write the items and the declaration', 'Have the readings drafted', 'Settle each disagreement by an example', 'Write the binding and a kept fault', 'Check, then ask for approval']);
+    assert.deepEqual(guard.steps.map((st) => st.title), ['Write the items and the declaration', 'Have the translations drafted', 'Settle each distinguishing sequence', 'Write the binding and a kept fault', 'Check, then ask for approval']);
     assert.ok(!atlas.edges.some((e) => e.from === guard.id && e.kind === 'calls'), 'guard calls no other skill');
 
-    const [, readings, disagreement, , check] = guard.steps.map((st) => stepText(guard, st));
-    assert.match(readings, /\bindependent agents\b/, 'the readings come from independent agents');
-    assert.match(readings, /\bfrom the items and the declaration alone\b/, 'a reading is drafted from the items and the declaration alone');
-    assert.match(readings, /\bbefore any agent reads the code\b/, 'the readings are drafted before any agent reads the code');
-    assert.match(readings, /\bthe readings were not independent\b/, 'the second step says when the report names the readings as not independent');
+    const [, translations, sequence, binding, check] = guard.steps.map((st) => stepText(guard, st));
+    assert.match(translations, /\bindependent agents\b/, 'the translations come from independent agents');
+    assert.match(translations, /`guards\/<guard>\/translations\/<name>\.tla`/, 'a translation is saved as <name>.tla');
+    assert.match(translations, /\bis given the items, the declaration, the declaration in TLA\+ and the form of a translation, and nothing else\b/, 'a drafter is given the items, the declaration and the declaration in TLA+ and nothing else');
+    assert.match(translations, /\bbefore any agent reads the code\b/, 'the translations are drafted before any agent reads the code');
+    assert.match(translations, /\bthe translations were not independent\b/, 'the second step says when the report names the translations as not independent');
+    assert.match(sequence, /`spex verify <guard>`/, 'the third step runs spex verify');
+    assert.match(sequence, /\bdistinguishing sequence\b/, 'which prints the distinguishing sequence');
+    assert.match(sequence, /\bthe one question that step puts\b/, 'with the one question its last step puts');
     assert.ok(guard.steps[2].tags.some((tg) => tg.id === 'human.question'), 'the third step asks the user');
-    assert.match(disagreement, /\bpermitted or forbidden\b/, 'the person marks the sequence permitted or forbidden');
-    assert.match(disagreement, /\bNever edit a reading\b/, 'a contradicted reading is dropped, never edited');
+    for (const question of ['is step <k> legal?', 'does the rule apply at step <k>?', 'what must step <k> give?', 'is this effect forbidden at step <k>?']) {
+      assert.ok(sequence.includes(`\`${question}\``), `the third step names the question ${question}`);
+    }
+    assert.match(sequence, /\| The question printed \| The person's answer becomes \|/, 'and what each answer becomes');
+    assert.match(sequence, /\bNever edit a translation\b/, 'a contradicted translation is dropped, never edited');
+    assert.match(sequence, /\*\*Conflict in the items\*\* is settled in this step too, before any agent reads the code\b/, 'a Conflict in the items is settled with the person in the third step');
+    assert.match(binding, /^Only now read the code\.$/m, 'the fourth step reads the code only then');
+    assert.match(binding, /\bthe module, `guards\/bindings\/<binding>\/binding\.mjs`/, 'and names the binding\'s module');
     assert.match(check, /`spex verify <guard>`/, 'the last step runs spex verify');
     assert.match(check, /`spex approve <guard>` only when the person says so\b/, 'spex approve runs only when the person says so');
 
     const text = fs.readFileSync(guard.file, 'utf8');
-    assert.match(text, /\bWithout subagents\b[^.]*\bthe readings were not independent\b/, 'guard names the fallback without subagents');
-    assert.match(text, /\bWhen an item of the guard changes\b[^\n]*\bDraft the readings again\b[^\n]*\bbefore you ask for approval\b/, 'a changed item has the readings drafted again');
+    assert.match(text, /\bWithout subagents\b[^.]*\bthe translations were not independent\b/, 'guard names the fallback without subagents');
+    assert.match(text, /\bWhen an item of the guard changes\b[^\n]*\bDraft the translations again\b[^\n]*\bbefore you ask for approval\b/, 'a changed item has the translations drafted again');
     assert.match(String(guard.frontmatter.compatibility), /\bRequires the spex command\b/, 'the compatibility field says the skill needs the spex command');
+    assert.match(String(guard.frontmatter.compatibility), /\bJava 11 or later\b/, 'and Java');
   });
 });

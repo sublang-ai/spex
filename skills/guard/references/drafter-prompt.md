@@ -3,77 +3,90 @@
 
 # Drafter prompts
 
-The lead sends every Drafter the same first prompt, in one turn.
+The lead sends every Drafter the same first prompt, in one turn, with a name of its own in it.
 Text in angle brackets is filled in by the lead.
 
 ## Contents
 
 - [What the lead fills in](#what-the-lead-fills-in)
-- [Draft a reading](#draft-a-reading)
-- [Correct a reading's form](#correct-a-readings-form)
+- [Draft a translation](#draft-a-translation)
+- [Correct a translation's form](#correct-a-translations-form)
 
 ## What the lead fills in
 
 | Placeholder | Holds |
 | --- | --- |
-| `<behavior-item>` | The behavior item's whole text, from its heading |
-| `<assertion-item>` | The assertion item's whole text, from its heading |
-| `<example-items>` | Every example item's whole text, from its heading |
-| `<cited-items>` | The whole text of every other item those items cite, or `none` |
+| `<name>` | The translation's name, which is its file's and the one its opening line, `---- MODULE <name> ----`, gives: `a`, `b`, `c` and so on, another for each Drafter |
+| `<rule-item>` | The rule's whole text, from its heading |
+| `<guard-item>` | The guard item's whole text, from its heading, with every case |
+| `<cited-items>` | The whole text of every other item those two cite, or `none` |
 | `<declaration>` | The `values` and `events` of `binding.yaml` with their comments, and nothing else of that file |
-| `<format>` | The sections *Types and values*, *A reading* and *The expression language* of [formats.md](formats.md), word for word |
-| `<reading>` | The Drafter's reading as it was saved |
-| `<cause>` | The cause `spex verify` printed after `Cannot be checked` |
+| `<declaration-in-tla>` | The declaration in TLA+: the whole file `Declaration.tla` that `spex verify --keep` left, as [formats.md](formats.md) says |
+| `<format>` | The section *A translation* of [formats.md](formats.md), word for word |
+| `<translation>` | The Drafter's translation as it was saved |
+| `<cause>` | Every `Cannot be checked` line `spex verify` printed that names this translation, each with the lines printed under it |
 
-Give a Drafter nothing else: no code, no path into the code, no guard file, no other reading, and no word of what you expect.
+Give a Drafter nothing else: no code, no path into the code, no guard file, no other translation, and no word of what you expect.
+A Drafter is an independent agent: it drafts from the items, the declaration and the declaration in TLA+ alone.
 
-## Draft a reading
+## Draft a translation
 
 Quote first:
 
-> Behavior item: <behavior-item>
-> Assertion: <assertion-item>
-> Examples: <example-items>
+> Rule: <rule-item>
+> Guard item, with its cases: <guard-item>
 > Items they cite: <cited-items>
 > Declaration: <declaration>
+> Declaration in TLA+: <declaration-in-tla>
 > Format: <format>
 
 Then the instruction:
 
 ```markdown
-Draft one reading of the assertion quoted above, as one YAML document in the format quoted.
+Draft one translation of the items quoted above: one TLA+ file in the format quoted, opened by the line `---- MODULE <name> ----`.
+A translation is the items written in TLA+: the rule, clause by clause, and the model, which is what the items say each event gives.
 
-Work from the quoted items and the declaration alone.
-Do not read the project's code, its tests, its history or any file under guards/, and do not look for another reading.
-Take what must hold from the items' words, not from how you expect software to behave.
-Where the items leave a case open, choose what you find most faithful to their words and go on; do not ask.
+Work from the quoted items, the declaration and the declaration in TLA+ alone.
+Do not read the project's code, its tests, its history or any file under guards/, and do not look for another translation.
+Take what must hold, and what each event gives, from the items' words, not from how you expect software to behave.
+The cases show what the items' author means: your translation must allow each permitted case and forbid each forbidden case.
+Where the items leave something open, choose what you find most faithful to their words and go on; do not ask.
 
-The reading says:
-- the state it must remember, and no more than the assertion needs;
-- for each event, when it is legal and how the state changes;
-- as rules, when the assertion applies and what must then hold of the observed effect.
+Define the seven operators, under these names and with these parameters:
+- `Start`, `Legal(s, e)`, `Effect(s, e)` and `After(s, e)`, the model: its starting state, when the event `e` can happen in the state `s` at all, the one effect the items require it to give there, and the state after it;
+- `When(e)`, `While(s, e)` and `Shall(s, e, f)`, the rule, clause by clause as its item reads: its trigger, its conditions in the state before the event, and whether the effect `f` is what it requires.
 
-Give an event a legal condition only where the items say when it can happen.
-State the assertion alone: add no rule for other behavior, even where the items imply one.
-Use only the declared values, events, params and effect fields, and only the forms of the expression language.
+Let the model say only what the quoted items say.
+Say that an event is not legal only where it cannot happen in that state at all; what the rule forbids belongs in `Shall`, never in `Legal`.
+Write `Shall` to judge every declared effect of the event, not only the one your model gives.
+Keep in the state only what the items make a later event depend on, so that the model reaches finitely many states.
+Put the ID of the item a branch translates in a TLA+ comment above it.
+Use only the declared values, events, params and effect fields, under the names the declaration in TLA+ gives them.
+Never write `CHOOSE`: choose among declared values with the declaration's `First` and `Rank` operators.
+Never write a prime, `ENABLED` or `UNCHANGED`: a translation speaks of the state it is given, never of the next.
+Extend `Declaration` and, where you need them, `Naturals`, `Integers`, `FiniteSets` and `Sequences`, and nothing else.
 
-Reply with the YAML document in one fenced block.
-After it, list in plain words each case the items left open and what you chose.
+Reply with the whole TLA+ file in one fenced block.
+After it, list in plain words each point the items left open and what you chose.
 ```
 
-The lead saves the fenced document unchanged, under any header comment lines the project requires, and keeps the list for Step 3.
+The lead saves the fenced file unchanged as `<name>.tla`, with any header comment lines the project requires under its first line.
+The points a Drafter lists are for the lead to read: where two Drafters chose differently, `spex verify` will print a sequence that tells their translations apart.
 
-## Correct a reading's form
+## Correct a translation's form
 
-Sent to the Drafter of a reading that `spex verify` cannot read.
+Sent to the Drafter of a translation that `spex verify` cannot check.
 Continue the same Drafter where the host allows it; otherwise send a fresh one the first prompt with these two quotes added.
 
-> Your reading: <reading>
+> Your translation, saved as <name>.tla: <translation>
 > Cause: <cause>
 
 ```markdown
-The reading quoted above cannot be read, for the cause quoted.
-Correct its form so that it says what you meant, and change nothing else.
-Do not read the project's code or another reading.
-Reply with the whole YAML document in one fenced block.
+The translation quoted above cannot be checked, for the cause quoted.
+A place in the cause is a line and a column of the file as it was saved; a sequence under it is the events after which the cause was met.
+Correct the file's form so that it says what you meant, and change nothing else.
+Work from the cause alone: do not read the project's code or another translation.
+Reply with the whole TLA+ file in one fenced block.
 ```
+
+The lead gives the Drafter no reading of the cause and no suggestion of its own.
