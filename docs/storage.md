@@ -38,6 +38,7 @@ Ignored files can contain durable local state.
 | `<clone>/.spex/` | The global environment's installed spec packages, generated skills and install record, rebuilt from `spex.lock`. A project's stand under its working folder's `.spex/`, which Git ignores. | Ignored |
 | `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
 | `store/`, `cache/` | A cache of verified spec package files by content digest, which every environment on the device copies its installed files from, and rebuildable caches such as fetched Git sources. | Outside any clone |
+| `tools/` | The pinned TLC jar, `tla2tools-1.7.4.jar`, which `spex verify` downloads once, checks by its digest and keeps for later runs. | Outside any clone |
 | `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
 | `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
 | `local/credentials.yaml` | The app token each instance issued to this device, by the instance's origin, owner-only; removed at sign-out. | Never leaves the device |

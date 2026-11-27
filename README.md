@@ -163,14 +163,31 @@ ships Agent Skills for any coding agent: `skill-atlas` maps the skills
 you have installed — which call which, what each step reads, writes,
 runs and asks — and lets you sort them into pipeline phases on a local
 page; `code`, `review` and `decide` carry the built-in playbooks'
-procedure as plain skills; `guard` drafts a guard with you — one
-assertion about a behavior, its examples and a kept fault it must
-catch — for `spex verify` to check on every change. Each ships in
+procedure as plain skills; `guard` drafts a guard with you — one rule
+about a behavior, its permitted and forbidden cases in plain words,
+translations of them into TLA+ and a kept fault it must catch — for
+`spex verify` to check on every change. Each ships in
 English and Simplified Chinese, and the atlas's page shows a skill in
-the reader's language wherever it has a translation.
+the reader's language wherever the skill ships in it.
 Install one with
 `npx skills add sublang-ai/spex --skill skill-atlas`
 ([about the skills](docs/skills.md)).
+
+**Guards protect a behavior you cannot afford to break.** A guard is a
+test item that `spex verify` carries out, together with the files under
+`guards/<its ID>/` that say how. The item lists permitted and forbidden
+cases of one rule in plain words, and two or more translations, drafted
+independently and compared, write the guard's items in TLA+.
+`spex verify` rests on tools people already trust: it has
+TLC, the TLA+ model checker, check a model of what the items require,
+completely for the values the guard declares, and then tests your real
+code on every step of that model. `spex approve <guard>` records your
+approval of what a guard means. A passing guard reads
+`Model checked, code tested`, and its report says what that rests on:
+the values the guard declares, code whose next act depends only on the
+model's state, and a binding that causes and observes truly.
+`spex verify` needs Java 11 or later; nothing else in Spex does
+([guards in the CLI guide](packages/cli/README.md#guards-protect-critical-behavior-on-every-change)).
 
 **Playbooks come in packages.** A project's `spex.yaml` lists the
 packages it adds — specs with the skills and playbooks made from them —
@@ -313,8 +330,9 @@ permissions, workflow questions, Codex's access-to-Spex prompt, and OS grants.
 For development: `npm ci`, `npm run build`, then `npm run test:affected` runs
 the suites reached by your changes, including untracked files. Run
 `npm run prepush` before pushing for build, type, catalog, spec and guard
-checks. Pull requests use the same affected-suite selection; full platform
-checks, browser journeys and native browser acceptance gate
+checks. The guard check and the CLI's guard tests run TLC, so they need
+Java 11 or later. Pull requests use the same affected-suite selection;
+full platform checks, browser journeys and native browser acceptance gate
 app releases or run on explicit request. There are no nightly checks or
 duplicate runs after merging. CLI releases validate the CLI across platforms.
 For a focused browser investigation, `npm run e2e` drives the served UI in

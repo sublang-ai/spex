@@ -130,7 +130,7 @@ same.
 ## Use the CLI
 
 Spex CLI 5.0 manages the same package files as the IDE without a running
-app. Install it with Node.js 22 or later, then run `spex` in your
+app. Install it with Node.js 22.15 or later, then run `spex` in your
 project's folder:
 
 ```sh
@@ -175,7 +175,24 @@ spex verify             # check that each guard's protected behavior still holds
 spex approve <guard>    # record your approval of a guard's items and files
 ```
 
-Both need no sign-in. The CLI guide's
+A guard is a test item that `spex verify` carries out, together with
+the files under `guards/<its ID>/` that say how. The item lists
+permitted and forbidden cases of one rule in plain words, and the
+guard's translations, two or more drafted independently, write its
+items in TLA+: the rule, and a model of what the items say each event
+gives. `spex verify` has TLC, the model
+checker of the TLA+ tools, check that model completely for the values
+the guard declares. It then tests your real code on a copy: it causes
+every step of the model once, and your code must give the model's
+effect each time. A passing guard reads `Model checked, code tested`,
+and the report's `assumes` lines say what that result rests on.
+
+`spex verify` needs Java 11 or later, from `JAVA_HOME` or else the
+`java` on your path, and downloads the one TLC it pins on its first
+run; no other command needs Java. `spex verify --keep <folder>` leaves
+every file it gave TLC, with the command lines, so you can run each
+step again without Spex. Both commands need no sign-in and call no
+language model. The CLI guide's
 [Guards](../packages/cli/README.md#guards-protect-critical-behavior-on-every-change)
 section describes them.
 
