@@ -21,7 +21,7 @@ This record holds the choice of services and its tradeoffs.
 
 ## Consequences
 
-- No package other than platform-services names a vendor; swapping a service is a new DR plus rewritten supply items in the platform-services package, with other packages' items unchanged.
+- No package other than platform-services names a vendor; when swapping a service, revise this DR and update the affected supply items in the platform-services package, with other packages' items unchanged.
 - Supabase's signed-URL expiry bounds the access-grant lifetime of [[video-library-13](../packages/catalog/video-library.md#video-library-13)] [[platform-services-3](../packages/platform-services.md#platform-services-3)].
 - Preview deployments use a non-production Supabase project [[platform-services-4](../packages/platform-services.md#platform-services-4)], satisfying [[delivery-5](../packages/ops/delivery.md#delivery-5)].
 - Supabase's SSR session model keeps its tokens readable to the browser client [[1]], so [[github-login-11](../packages/identity/github-login.md#github-login-11)] constrains cookie scope and credential lifetime rather than mandating HTTP-only.

@@ -102,7 +102,7 @@ Where files bundled under `scaffold/specs/` are concerned, each file shall be cl
 Where `--update` targets a tree whose `specs/` carries a legacy generation — a legacy directory (`user/`, `dev/`, `test/`, `items/`, `interactions/`, `compositions/`, `iterations/`) or an old-generation marker — the CLI shall complete the template refresh ([[scaffold-11](#scaffold-11)]) and print the bundled `scaffold/spec-migration-prompt.md` after the completion message instead of the ordinary merge prompt:
 
 - structural migration is AI-agent judgment work, not CLI code ([DR-022](../decisions/022-prompt-based-migration.md)): the run moves, merges, rewrites, and deletes no legacy content;
-- the prompt directs the agent to read the refreshed law, preserve existing meaning and record state, migrate every spec tree, and use `spex lint` as the sole mechanical gate;
+- the prompt directs the agent to read the refreshed law, preserve existing meaning and every record state but superseded — a superseded DR merges what remains in force into its successor and is deleted [[meta-35](../meta.md#meta-35)] — migrate every spec tree, and use `spex lint` as the sole mechanical gate;
 - an old-generation marker is target content the bundled histories recognize as a retired generation — a `specs/meta.md` matching a pre-packages bundled version in its chronological history ([[scaffold-21](#scaffold-21)]), or content matching a retired bundled seed in the legacy manifest ([[scaffold-47](#scaffold-47)]).
 
 #### scaffold-52

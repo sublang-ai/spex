@@ -688,6 +688,129 @@ describe("lintSpecs", () => {
     );
   });
 
+  // lint-15: a DR Status holds its state and date and at most the
+  // two relation lines of DR links; a superseded DR is deleted.
+  const statusDr = (lines: string, heading = "## Status") =>
+    `# DR-00X: X\n\n${heading}\n\n${lines}\n\n## Context\n\nC.\n\n## Decision\n\nD.\n\n## Consequences\n\nN.\n`;
+  const statusRules = (findings: LintFinding[]) =>
+    findings.filter((f) =>
+      ["record/status-length", "record/status-form", "record/superseded", "record/reciprocity"].includes(f.rule),
+    );
+
+  it("accepts full three-line Statuses in English and zh wording", () => {
+    const findings = findingsFor({
+      "specs/decisions/001-a.md": statusDr(
+        "Accepted (2026-09-05); revised (2026-11-26).\nAmends [DR-002](002-b.md).\nAmended by [DR-003](003-c.md).",
+      ),
+      "specs/decisions/002-b.md": statusDr(
+        "Accepted (2026-09-01).\nAmended by [DR-001](001-a.md).",
+      ),
+      "specs/decisions/003-c.md": statusDr(
+        "Accepted (2026-09-09).\nAmends [DR-001](001-a.md), [DR-004](004-superseded-wording.md).",
+      ),
+      "specs/decisions/004-superseded-wording.md": statusDr(
+        "已接受（2026-09-01）；已修订（2026-11-26）。\n修订 [DR-005](005-e.md)。\n被 [DR-003](003-c.md) 修订。",
+      ),
+      "specs/decisions/005-e.md": statusDr(
+        "已接受（2026-08-01）。\n被 [DR-004](004-superseded-wording.md) 修订。",
+      ),
+      // A setext heading's underline is not Status content.
+      "specs/decisions/006-f.md": statusDr("Accepted (2026-09-05).", "Status\n------"),
+    });
+    assert.deepEqual(statusRules(findings), [], JSON.stringify(findings));
+  });
+
+  it("checks DR Status length, relation lines and superseded records", () => {
+    const findings = findingsFor({
+      "specs/decisions/001-a.md": statusDr(
+        "Accepted (2026-09-05).\nAmends [DR-002](002-b.md) in its floor alone, now `^1.2.0`.\nExtended by [DR-002](002-b.md).\nAmended by [DR-002](002-b.md).",
+      ),
+      "specs/decisions/002-b.md": statusDr("Superseded by [DR-001](001-a.md)."),
+      // A relation naming a superseded record leaves this record's
+      // own state alone; only its wording is a form finding.
+      "specs/decisions/003-c.md": statusDr(
+        "Accepted (2026-09-12).\nSupersedes [DR-002](002-b.md): the Boss no longer merges.",
+      ),
+      // A label pointing anywhere but that DR's own file.
+      "specs/decisions/004-d.md": statusDr("Accepted.\nAmends [DR-005](../map.md)."),
+      "specs/decisions/005-e.md": statusDr("Accepted.\nAmended by [DR-004](004-d.md)."),
+      // A citation Markdown does not parse as a link, alone and after a
+      // valid one.
+      "specs/decisions/006-f.md": statusDr("Accepted.\nAmends [DR-005](<005-e.md)."),
+      "specs/decisions/007-g.md": statusDr("Accepted.\nAmends [DR-005](005-e.md), [DR-006](<006-f.md)."),
+      // A relation in place of the state on the first line.
+      "specs/decisions/008-h.md": statusDr("Amends [DR-005](005-e.md)."),
+      // Superseded states as displayed, emphasized and in zh wording.
+      "specs/decisions/009-i.md": statusDr("**Superseded** by [DR-001](001-a.md)."),
+      "specs/decisions/010-j.md": statusDr("已被 [DR-001](001-a.md) 取代。"),
+      // A partial replacement keeps the record: a form finding, not deletion.
+      "specs/decisions/011-k.md": statusDr("Superseded in part by [DR-001](001-a.md)."),
+      "specs/decisions/012-l.md": statusDr("已被 [DR-001](001-a.md) 部分取代。"),
+      // Qualified after or before the word, without a listed qualifier.
+      "specs/decisions/013-m.md": statusDr("Superseded by [DR-001](001-a.md) for the version floor only."),
+      "specs/decisions/014-n.md": statusDr("Partially superseded by [DR-001](001-a.md)."),
+      "specs/decisions/015-o.md": statusDr("Partly superseded by [DR-001](001-a.md)."),
+    });
+    const by = (rule: string) => findings.filter((f) => f.rule === rule).map((f) => [f.path, f.line]);
+    assert.deepEqual(by("record/status-length"), [["specs/decisions/001-a.md", 8]], JSON.stringify(findings));
+    assert.deepEqual(
+      by("record/status-form"),
+      [
+        ["specs/decisions/001-a.md", 6],
+        ["specs/decisions/001-a.md", 7],
+        ["specs/decisions/003-c.md", 6],
+        ["specs/decisions/004-d.md", 6],
+        ["specs/decisions/006-f.md", 6],
+        ["specs/decisions/007-g.md", 6],
+        ["specs/decisions/008-h.md", 5],
+        ["specs/decisions/011-k.md", 5],
+        ["specs/decisions/012-l.md", 5],
+        ["specs/decisions/013-m.md", 5],
+        ["specs/decisions/014-n.md", 5],
+        ["specs/decisions/015-o.md", 5],
+      ],
+      JSON.stringify(findings),
+    );
+    assert.deepEqual(
+      by("record/superseded"),
+      [
+        ["specs/decisions/002-b.md", 5],
+        ["specs/decisions/009-i.md", 5],
+        ["specs/decisions/010-j.md", 5],
+      ],
+      JSON.stringify(findings),
+    );
+    assert.ok(statusRules(findings).every((f) => f.severity === "error"));
+  });
+
+  // lint-16: Amends and Amended by are stated on both sides.
+  it("reports amendment relations stated on one side only", () => {
+    const findings = findingsFor({
+      // Two Amends lines: the finding sits on the line naming the target.
+      "specs/decisions/001-a.md": statusDr(
+        "Accepted.\nAmends [DR-002](002-b.md).\nAmends [DR-007](007-g.md).",
+      ),
+      "specs/decisions/002-b.md": statusDr("Accepted."),
+      "specs/decisions/007-g.md": statusDr("Accepted.\nAmended by [DR-001](001-a.md)."),
+      "specs/decisions/003-c.md": statusDr("Accepted.\nAmended by [DR-004](004-d.md)."),
+      "specs/decisions/004-d.md": statusDr("Accepted."),
+      // A target with no Status at all lists no relation.
+      "specs/decisions/005-e.md": statusDr("Accepted.\nAmends [DR-006](006-f.md)."),
+      "specs/decisions/006-f.md": "# DR-006: F\n\n## Context\n\nC.\n",
+    });
+    assert.deepEqual(
+      findings
+        .filter((f) => f.rule === "record/reciprocity")
+        .map((f) => [f.path, f.line, f.severity]),
+      [
+        ["specs/decisions/001-a.md", 6, "error"],
+        ["specs/decisions/003-c.md", 6, "error"],
+        ["specs/decisions/005-e.md", 6, "error"],
+      ],
+      JSON.stringify(findings),
+    );
+  });
+
   // lint-9: the map indexes decisions and packages (DR-000), so an
   // unlisted file of either kind warns.
   it("warns when a package or decision is missing from the map", () => {

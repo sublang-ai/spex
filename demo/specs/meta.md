@@ -52,11 +52,12 @@ A DR shall record design decisions and constraints, not implementation details, 
 
 ### meta-35
 
-When a change to an accepted decision is accepted, the specs shall keep each DR stating only decisions in force, leaving earlier text to Git history [[meta-24](#meta-24)]:
+When a change to an accepted decision is accepted, that same change shall leave each DR stating only decisions in force, leaving earlier text to Git history [[meta-24](#meta-24)]:
 
-- Partial replacement: the new DR records the change, and the earlier DR is rewritten without what was replaced.
-- Change within one DR's concern: that DR may instead be revised in place, its status noting the revision date.
-- Little or nothing of the earlier DR left in force: its remaining decisions merge into the new DR, the earlier DR is deleted with every citation of it repointed, and its ID is never reused.
+- Change within one DR's concern, including a value it decides such as a version floor, a default or a limit, other than retiring its subject: that DR is revised in place, its status noting the revision date, and no new DR is added.
+- Partial replacement of a DR by a change beyond its concern: the new DR records the change, and the earlier DR is rewritten without what was replaced.
+- Little of the earlier DR left in force — what remains would fit as a few bullets of the new DR: its remaining decisions merge into the new DR, the earlier DR is deleted with every citation of it repointed to the new DR, and its ID is never reused.
+- Subject retired with no decision surviving: the retiring change deletes the DR, removes or rewords every citation of it so the citing text stays true, and states its reason in the commit message; its ID is never reused.
 
 ### meta-36
 
@@ -64,13 +65,17 @@ A DR's Status section shall hold at most three lines — its state with its date
 
 ```text
 Accepted (2026-09-05); revised (2026-11-26).
-Amends DR-036.
-Amended by DR-103, DR-111.
+Amends [DR-036](036-storage.md).
+Amended by [DR-103](103-sync.md), [DR-111](111-coordination.md).
 ```
 
 ### meta-37
 
 A DR's `map.md` summary shall state its decisions in force in one line, without amendment history.
+
+### meta-38
+
+A DR shall list another under `Amends` exactly when that DR lists it under `Amended by`, and only where it changes a decision the other still states — completing, implementing or applying a DR is not amending it [[meta-36](#meta-36)].
 
 ### meta-28
 
