@@ -139,7 +139,7 @@ test("release-33: fast gates precede selected suites, once per row; Windows reta
   const guardsAt = steps.findIndex((step) => step.name === "Guards");
   assert.equal(guardsAt, gateAt + 1);
   assert.equal(steps[guardsAt].run, "node packages/cli/dist/cli.js verify");
-  assert.equal(steps[guardsAt].if, "${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}", "once per change, on Linux, is enough, and verify has not been run on Windows or macOS; no core part repeats the check");
+  assert.equal(steps[guardsAt].if, "${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}", "the repository's own guards run once per change, on Linux; no core part repeats the check");
   assert.equal(steps.filter((step) => /cli\.js verify/.test(step.run ?? "")).length, 1, "one step runs the guards");
   const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
   assert.ok(reachAt > guardsAt);
@@ -250,8 +250,11 @@ test("release-33: the Linux parity script names the runners' Node and Git (relea
   assert.match(dockerfile, /FROM ubuntu:24\.04/);
   assert.match(dockerfile, /ppa:git-core\/ppa/, "the runners' current Git line");
   assert.match(dockerfile, /setup_22\.x/, "Node 22, the first matrix version");
+  assert.match(dockerfile, /openjdk-21-jre-headless/, "Java for TLC, which the CLI's guard tests run");
   const script = readFileSync(join(root, "scripts/test-linux.sh"), "utf8");
   assert.match(script, /Node 22 and Git 2\.55/);
+  // The pinned TLC jar is downloaded once: the container's Spex home keeps it in a volume (DR-252).
+  assert.match(script, /-v spex-ci-parity-tlc:\/root\/\.spex\/tools /);
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["test:linux"], "bash scripts/test-linux.sh");
 });
 
@@ -521,10 +524,118 @@ test("release-33: the download caches key each archive by platform and locked ve
   assert.match(readFileSync(join(root, "node_modules/dugite/script/config.js"), "utf8"), /process\.env\.DUGITE_CACHE_DIR/);
 });
 
-test("release-33: the cache seed runs on main's lockfile and cache-tooling changes or on request on main, refusing any other ref, installing and fetching Electron in jobs of their own on every platform, each retried, and running nothing else (release-50)", () => {
+test("release-33: the download caches restore the pinned TLC jar, name it only with the pinned digest and leave no empty folder to save (release-49)", () => {
+  const action = parse(readFileSync(join(root, ".github/actions/download-caches/action.yml"), "utf8"));
+  const [pin, cache, fetch] = action.runs.steps.slice(3);
+  assert.equal(action.runs.steps.length, 6);
+  assert.equal(pin.id, "tlc");
+  assert.equal(cache.uses, "actions/cache@v4");
+  assert.deepEqual(cache.with, { path: "${{ runner.temp }}/tlc", key: "tlc-${{ runner.os }}-${{ steps.tlc.outputs.release }}" });
+  assert.deepEqual(fetch.env, { TLC_URL: "${{ steps.tlc.outputs.url }}", TLC_SHA256: "${{ steps.tlc.outputs.sha256 }}" });
+
+  // The pin is the one the CLI's source holds.
+  const dir = mkdtempSync(join(tmpdir(), "spex-tlc-cache-"));
+  const output = join(dir, "output");
+  writeFileSync(output, "");
+  const read = spawnSync("bash", ["-e", "-c", pin.run], { cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: output } });
+  assert.equal(read.status, 0, read.stderr);
+  const pinned = Object.fromEntries(readFileSync(output, "utf8").trim().split("\n").map((line) => line.split("=")));
+  assert.deepEqual(Object.keys(pinned), ["release", "url", "sha256"]);
+  assert.match(pinned.release, /^v\d+\.\d+\.\d+$/);
+  assert.equal(pinned.url, `https://github.com/tlaplus/tlaplus/releases/download/${pinned.release}/tla2tools.jar`);
+  assert.match(pinned.sha256, /^[0-9a-f]{64}$/);
+  const source = readFileSync(join(root, "packages/cli/src/guards/tlc.ts"), "utf8");
+  for (const value of Object.values(pinned)) assert.ok(source.includes(`"${value}"`), value);
+
+  // The fetch step itself, over a stand-in jar: no network.
+  const jarBytes = "a stand-in for tla2tools.jar\n";
+  const digest = createHash("sha256").update(jarBytes).digest("hex");
+  const source0 = join(dir, "release.jar");
+  writeFileSync(source0, jarBytes);
+  const run = (name, { restored, url }) => {
+    const temp = join(dir, name);
+    mkdirSync(temp);
+    const env = join(temp, "env");
+    writeFileSync(env, "");
+    if (restored !== undefined) {
+      mkdirSync(join(temp, "tlc"));
+      writeFileSync(join(temp, "tlc", "tla2tools.jar"), restored);
+    }
+    const ran = spawnSync("bash", ["-e", "-c", fetch.run], {
+      encoding: "utf8", env: { ...process.env, RUNNER_TEMP: temp, GITHUB_ENV: env, TLC_URL: url, TLC_SHA256: digest },
+    });
+    assert.equal(ran.status, 0, `${name}: ${ran.stderr}`);
+    return { temp, env: readFileSync(env, "utf8"), stdout: ran.stdout };
+  };
+  const nowhere = pathToFileURL(join(dir, "no-such.jar")).href;
+  const kept = (ran, name) => {
+    assert.equal(ran.env, `SPEX_TLC_JAR=${ran.temp}/tlc/tla2tools.jar\n`, name);
+    assert.equal(readFileSync(join(ran.temp, "tlc", "tla2tools.jar"), "utf8"), jarBytes, name);
+    assert.doesNotMatch(ran.stdout, /::warning::/, name);
+  };
+  // A folder left behind would be saved, empty, under the jar's key, and
+  // every later job would restore it and download again.
+  const dropped = (ran, name, found) => {
+    assert.equal(ran.env, "", `${name}: SPEX_TLC_JAR is not set`);
+    assert.equal(existsSync(join(ran.temp, "tlc")), false, `${name}: no folder is left for the cache to save`);
+    assert.ok(ran.stdout.includes(`::warning::The pinned TLC jar was not restored or downloaded intact (sha256: ${found}); SPEX_TLC_JAR is not set.`), name);
+  };
+  // A restored jar is used as it is: the URL is never asked.
+  kept(run("restored", { restored: jarBytes, url: nowhere }), "restored");
+  const other = "not the pinned jar\n";
+  dropped(run("restored-other", { restored: other, url: nowhere }), "restored-other", createHash("sha256").update(other).digest("hex"));
+  // A miss downloads; a download that fails or gives other bytes keeps nothing.
+  if (spawnSync("curl", ["--version"]).status === 0) {
+    kept(run("downloaded", { url: pathToFileURL(source0).href }), "downloaded");
+    dropped(run("download-failed", { url: nowhere }), "download-failed", "no file");
+    const wrong = join(dir, "wrong.jar");
+    writeFileSync(wrong, other);
+    dropped(run("downloaded-other", { url: pathToFileURL(wrong).href }), "downloaded-other", createHash("sha256").update(other).digest("hex"));
+  }
+});
+
+test("release-33: every job that runs the CLI's tests or the guards names the runner's Java 21 before it installs (release-34, release-49)", () => {
+  const JAVA = "Java 21 for TLC";
+  const jobs = [
+    [workflow.jobs.test.steps, undefined],
+    [workflow.jobs.changes.steps, "steps.classify.outputs.docs-only == 'true'"],
+  ];
+  for (const [steps, condition] of jobs) {
+    const at = steps.findIndex((step) => step.name === JAVA);
+    assert.ok(at > 0);
+    assert.equal(steps[at].if, condition);
+    assert.equal(steps[at].shell, "bash");
+    assert.equal(steps[at - 1].uses, DOWNLOAD_CACHES, "the pinned jar is restored and named first");
+    assert.equal(steps[at - 1].if, condition);
+    const next = steps.slice(at + 1).findIndex(installs);
+    assert.ok(next >= 0, "Java is named before the install and every later step");
+    assert.equal(steps[at].run, workflow.jobs.test.steps.find((step) => step.name === JAVA).run);
+  }
+  const { run } = workflow.jobs.test.steps.find((step) => step.name === JAVA);
+  const { JAVA_HOME_21_X64: _x64, JAVA_HOME_21_ARM64: _arm, JAVA_HOME_21_arm64: _arm2, ...base } = process.env;
+  const named = (vars) => {
+    const dir = mkdtempSync(join(tmpdir(), "spex-java-"));
+    const env = join(dir, "env");
+    writeFileSync(env, "");
+    const ran = spawnSync("bash", ["-e", "-c", run], { encoding: "utf8", env: { ...base, ...vars, GITHUB_ENV: env } });
+    assert.equal(ran.status, 0, ran.stderr);
+    return { env: readFileSync(env, "utf8"), stdout: ran.stdout };
+  };
+  assert.equal(named({ JAVA_HOME_21_X64: "/opt/java/21-x64" }).env, "JAVA_HOME=/opt/java/21-x64\n");
+  assert.equal(named({ JAVA_HOME_21_ARM64: "/opt/java/21-arm64" }).env, "JAVA_HOME=/opt/java/21-arm64\n");
+  assert.equal(named({ JAVA_HOME_21_arm64: "/opt/java/21-arm" }).env, "JAVA_HOME=/opt/java/21-arm\n");
+  // A runner that names none keeps the Java it has, and says so.
+  const none = named({});
+  assert.equal(none.env, "");
+  assert.match(none.stdout, /::warning::This runner names no preinstalled Java 21; TLC runs on the Java it finds\./);
+});
+
+test("release-33: the cache seed runs on main's lockfile, TLC-pin and cache-tooling changes or on request on main, refusing any other ref, installing and fetching Electron in jobs of their own on every platform, each retried, and running nothing else (release-50)", () => {
   const seed = workflowsByName.caches;
   assert.deepEqual(Object.keys(seed.on).sort(), ["push", "workflow_dispatch"]);
-  assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml"] });
+  assert.deepEqual(seed.on.push, { branches: ["main"], paths: ["package-lock.json", ".github/workflows/caches.yml", ".github/actions/download-caches/action.yml", "packages/cli/src/guards/tlc.ts"] });
+  // The jar's key is its pinned release, which the action reads from that last file.
+  assert.match(readFileSync(join(root, ".github/actions/download-caches/action.yml"), "utf8"), /readFileSync\("packages\/cli\/src\/guards\/tlc\.ts", "utf8"\)/);
   assert.deepEqual(seed.permissions, { contents: "read" });
   assert.deepEqual(Object.keys(seed.jobs), ["ref", "install", "electron"]);
   // A request on any other ref would save caches no pull request or release reads.

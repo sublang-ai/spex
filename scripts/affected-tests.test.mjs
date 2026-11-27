@@ -121,14 +121,14 @@ test("a shipped skill's files select script tests alone, the atlas's also its jo
 });
 
 test("a guard's files select script tests alone; Markdown there is the guard's, not documentation", () => {
-  for (const path of ["guards/environments-55/guard.yaml", "guards/environments-55/readings/a.yaml", "guards/environments-55/faults/first-by-org.patch", "guards/environments-55/approval.json", "guards/bindings/exports/binding.mjs", "guards/README.md", "guards/bindings/exports/notes.md"]) {
+  for (const path of ["guards/environments-56/guard.yaml", "guards/environments-56/translations/a.tla", "guards/environments-56/faults/first-by-org.patch", "guards/environments-56/approval.json", "guards/bindings/installs/binding.mjs", "guards/README.md", "guards/bindings/installs/notes.md"]) {
     assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: [] }, path);
     assert.deepEqual(reach(fixture(), [path]), { docsOnly: false, all: false, workspaces: [] }, `${path} in any repository`);
   }
   // Beside a spec change the guard's file still ends documentation alone; beside code it adds nothing.
-  assert.deepEqual(reach(root, ["guards/environments-55/approval.json", "specs/packages/environments.md"]), { docsOnly: false, all: false, workspaces: [] });
-  assert.deepEqual(reach(root, ["guards/environments-55/guard.yaml", "packages/ui/src/App.tsx"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
-  assert.deepEqual(reach(root, ["guards/environments-55/guard.yaml"], "--github-output"), ["docs-only=false", "affected="]);
+  assert.deepEqual(reach(root, ["guards/environments-56/approval.json", "specs/packages/environments.md"]), { docsOnly: false, all: false, workspaces: [] });
+  assert.deepEqual(reach(root, ["guards/environments-56/guard.yaml", "packages/ui/src/App.tsx"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
+  assert.deepEqual(reach(root, ["guards/environments-56/guard.yaml"], "--github-output"), ["docs-only=false", "affected="]);
   // The folder is matched whole, never as a name prefix.
   for (const path of ["guards", "guards.yaml", "guards-extra/x.yaml"]) assert.equal(reach(root, [path]).all, true, path);
 });

@@ -93,6 +93,18 @@ jobs:
         run: node scripts/dependency-closure.mjs --registry-only
       - uses: ./.github/actions/download-caches
         if: steps.classify.outputs.docs-only == 'true'
+      # The gates below run the CLI's tests and `spex verify`, which run
+      # TLC on Java (DR-252): the runner's preinstalled Java 21.
+      - name: Java 21 for TLC
+        if: steps.classify.outputs.docs-only == 'true'
+        shell: bash
+        run: |
+          home="${JAVA_HOME_21_X64:-${JAVA_HOME_21_ARM64:-${JAVA_HOME_21_arm64:-}}}"
+          if [ -n "$home" ]; then
+            printf '%s\n' "JAVA_HOME=$home" >> "$GITHUB_ENV"
+          else
+            echo "::warning::This runner names no preinstalled Java 21; TLC runs on the Java it finds."
+          fi
       - name: Documentation alone keeps the spec gates
         if: steps.classify.outputs.docs-only == 'true'
         env:
@@ -124,6 +136,18 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: node scripts/release-version.mjs prepare
       - uses: ./.github/actions/download-caches
+      # TLC, which `spex verify` and the CLI's guard tests run, needs Java
+      # (DR-252): the runner's preinstalled Java 21. The pinned jar is the
+      # one the download caches restored and named in SPEX_TLC_JAR.
+      - name: Java 21 for TLC
+        shell: bash
+        run: |
+          home="${JAVA_HOME_21_X64:-${JAVA_HOME_21_ARM64:-${JAVA_HOME_21_arm64:-}}}"
+          if [ -n "$home" ]; then
+            printf '%s\n' "JAVA_HOME=$home" >> "$GITHUB_ENV"
+          else
+            echo "::warning::This runner names no preinstalled Java 21; TLC runs on the Java it finds."
+          fi
       - run: npm ci
       - name: Build and catalogs
         run: npm run build
@@ -134,8 +158,10 @@ jobs:
         run: |
           node packages/cli/dist/cli.js lint
           npm run typecheck -w e2e
-      # Linux alone: once per change is enough, and `spex verify` has not
-      # been run on Windows or macOS (DR-252).
+      # The repository's own guards, on Linux alone: once per change is
+      # enough (DR-252). It runs TLC on the Java and the pinned jar set
+      # above. The CLI's guard tests run `spex verify` with real TLC on
+      # every row that runs the CLI's suite, Windows and macOS included.
       - name: Guards
         if: ${{ runner.os == 'Linux' && !startsWith(matrix.part, 'core') }}
         run: node packages/cli/dist/cli.js verify

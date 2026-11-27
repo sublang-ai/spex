@@ -6,6 +6,8 @@
 #   npm run test:linux -- packages/core --test-name-pattern=space-60
 # The working tree is copied into the container (node_modules, dist and
 # .git excluded) and installed there, so the host's install stays as it is.
+# The CLI's guard tests run TLC: the pinned jar they download is kept in
+# a volume, as npm's cache is, so only the first run fetches it (DR-252).
 set -euo pipefail
 workspace="${1:-packages/core}"
 shift || true
@@ -16,6 +18,7 @@ echo "Running $workspace tests on Node 22 and Git 2.55 (Ubuntu 24.04)"
 docker run --rm -t \
   -v "$root:/src:ro" \
   -v spex-ci-parity-npm:/root/.npm \
+  -v spex-ci-parity-tlc:/root/.spex/tools \
   -e WORKSPACE="$workspace" \
   -e EXTRA="$*" \
   "$image" bash -lc '

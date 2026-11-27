@@ -8,8 +8,15 @@
 # `npm ci`: dugite's install script reads DUGITE_CACHE_DIR. Electron's
 # archive is restored to @electron/get's default cache, which Electron's
 # installer and electron-builder both read when neither names a cache.
+#
+# The TLC jar that `spex verify` pins (DR-252) is restored the same way,
+# keyed by the pinned release, and named in SPEX_TLC_JAR for every later
+# step of the job. A miss downloads it from its GitHub release. Only a
+# jar with the pinned digest is named or saved: any other is removed
+# with its folder, so no job saves an empty folder under the jar's key,
+# and a warning says so; `spex verify` then fetches the jar itself.
 name: Download caches
-description: Restore Electron's and dugite's Git archives keyed by platform and locked version
+description: Restore Electron's and dugite's Git archives keyed by platform and locked version, and the pinned TLC jar
 runs:
   using: composite
   steps:
@@ -40,3 +47,41 @@ runs:
       with:
         path: ${{ runner.temp }}/dugite-cache
         key: dugite-${{ runner.os }}-${{ runner.arch }}-${{ steps.locked.outputs.dugite }}
+    # The pin is read from the CLI's source, so the two cannot part.
+    - id: tlc
+      shell: bash
+      run: |
+        node -e '
+          const source = require("node:fs").readFileSync("packages/cli/src/guards/tlc.ts", "utf8");
+          const pin = /\bTLC_PIN\s*=\s*\{([^}]*)\}/.exec(source)?.[1] ?? "";
+          for (const key of ["release", "url", "sha256"]) {
+            const value = new RegExp(`\\b${key}:\\s*"([^"\\s]+)"`).exec(pin)?.[1];
+            if (!value) throw new Error(`packages/cli/src/guards/tlc.ts pins no ${key} for TLC`);
+            console.log(`${key}=${value}`);
+          }' >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/tlc
+        key: tlc-${{ runner.os }}-${{ steps.tlc.outputs.release }}
+    - shell: bash
+      env:
+        TLC_URL: ${{ steps.tlc.outputs.url }}
+        TLC_SHA256: ${{ steps.tlc.outputs.sha256 }}
+      run: |
+        jar="$RUNNER_TEMP/tlc/tla2tools.jar"
+        mkdir -p "$RUNNER_TEMP/tlc"
+        if [ ! -f "$jar" ]; then
+          curl -fsSL --retry 3 --retry-delay 5 -o "$jar" "$TLC_URL" || rm -f "$jar"
+        fi
+        found=$(node -e '
+          const { createHash } = require("node:crypto");
+          const { existsSync, readFileSync } = require("node:fs");
+          const jar = process.argv[1];
+          console.log(existsSync(jar) ? createHash("sha256").update(readFileSync(jar)).digest("hex") : "no file");' "$jar")
+        if [ "$found" = "$TLC_SHA256" ]; then
+          printf '%s\n' "SPEX_TLC_JAR=$jar" >> "$GITHUB_ENV"
+        else
+          # The folder too: the cache would save it empty under this key.
+          rm -rf "$RUNNER_TEMP/tlc"
+          echo "::warning::The pinned TLC jar was not restored or downloaded intact (sha256: $found); SPEX_TLC_JAR is not set."
+        fi

@@ -4,9 +4,9 @@
 # The cache seed (release-50, DR-228, DR-230). A pull request restores
 # caches saved under its own merge ref or under `main`, never another
 # pull request's, and CI runs on no push to `main` (DR-199), so this is
-# what saves npm's package cache and Electron's and dugite's archives
-# under `main` for every pull request and release to restore. It
-# installs and fetches only: no build, no suite, no check.
+# what saves npm's package cache, Electron's and dugite's archives and
+# the pinned TLC jar under `main` for every pull request and release to
+# restore. It installs and fetches only: no build, no suite, no check.
 #
 # A job saves its caches only when it succeeds, and only what a
 # successful step verified belongs in a cache. So the install and
@@ -14,6 +14,11 @@
 # verified dugite's archive, saves npm's cache and that archive; the
 # fetch's success, which verified Electron's archive, saves that one.
 # Neither waits on the other's downloads, and each retries its own.
+#
+# The TLC jar needs no job of its own: the download-caches step, which
+# both jobs run, keeps the jar only with the pinned digest, so the first
+# of them to succeed saves it. A change of the pin in the CLI's source
+# changes the jar's key, so it seeds too.
 name: Caches
 
 on:
@@ -23,6 +28,7 @@ on:
       - package-lock.json
       - .github/workflows/caches.yml
       - .github/actions/download-caches/action.yml
+      - packages/cli/src/guards/tlc.ts
   workflow_dispatch:
 
 # A newer push supersedes a seed still running; its own seed saves.
