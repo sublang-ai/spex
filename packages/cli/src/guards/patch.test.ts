@@ -67,10 +67,9 @@ function failedAt(text: string, patch: string): number {
 }
 
 describe("guards-11: patch: reading a patch", () => {
-  it("reads the description, the files and their changes", () => {
+  it("reads the files and their changes, passing over the description before them", () => {
     const patch = parsePatch(TWO_HUNKS);
-    assert.equal(patch.title, "Restore the old order.");
-    assert.equal(patch.description, "Restore the old order.\n\nIt went to the first by name.");
+    assert.ok(TWO_HUNKS.startsWith("Restore the old order.\n\nIt went to the first by name."));
     assert.deepEqual(patch.files.map((file) => file.path), ["src/a.txt"]);
     assert.deepEqual(patch.files[0].hunks.map((hunk) => hunk.line), [2, 8]);
     assert.deepEqual(patch.files[0].hunks[0].lines, [
@@ -85,7 +84,6 @@ describe("guards-11: patch: reading a patch", () => {
     const patch = parsePatch(
       "--- a/one.txt\n+++ b/one.txt\n@@ -1 +1 @@\n-a\n+b\n--- two.txt\t2026-11-01 10:00:00\n+++ two.txt\t2026-11-01 10:00:01\n@@ -1,0 +2 @@\n+c\n",
     );
-    assert.equal(patch.title, "");
     assert.deepEqual(patch.files.map((file) => file.path), ["one.txt", "two.txt"]);
     assert.deepEqual(patch.files[1].hunks[0], { line: 1, lines: [{ kind: "+", text: "c", noNewline: false }] });
   });

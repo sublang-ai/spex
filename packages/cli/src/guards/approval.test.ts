@@ -44,8 +44,8 @@ function message(work: () => unknown): string {
 describe("guards-14: approval: labels and digests", () => {
   it("labels an item by its ID and a file by its path from the root", () => {
     assert.equal(itemLabel("environments-55"), "item environments-55");
-    assert.equal(fileLabel("guards/environments-55/guard.yaml"), "file guards/environments-55/guard.yaml");
-    assert.equal(approvalPath("environments-55"), "guards/environments-55/approval.json");
+    assert.equal(fileLabel("guards/environments-56/guard.yaml"), "file guards/environments-56/guard.yaml");
+    assert.equal(approvalPath("environments-56"), "guards/environments-56/approval.json");
   });
 
   it("digests text as SHA-256 of its LF form", () => {
@@ -69,7 +69,7 @@ describe("guards-14: approval: labels and digests", () => {
 });
 
 describe("guards-19: approval: comparing with the record", () => {
-  const inputs = { "item e-1": A, "file guards/e-1/guard.yaml": B, "file guards/e-1/readings/a.yaml": C };
+  const inputs = { "item e-1": A, "file guards/e-1/guard.yaml": B, "file guards/e-1/translations/a.tla": C };
 
   it("is approved when every input has its recorded digest", () => {
     assert.deepEqual(compareApproval(inputs, { ...inputs }), {
@@ -86,7 +86,7 @@ describe("guards-19: approval: comparing with the record", () => {
       approved: false,
       recorded: false,
       changed: [],
-      added: ["file guards/e-1/guard.yaml", "file guards/e-1/readings/a.yaml", "item e-1"],
+      added: ["file guards/e-1/guard.yaml", "file guards/e-1/translations/a.tla", "item e-1"],
       gone: [],
     });
   });
@@ -102,7 +102,7 @@ describe("guards-19: approval: comparing with the record", () => {
       approved: false,
       recorded: true,
       changed: ["item e-1"],
-      added: ["file guards/e-1/readings/a.yaml"],
+      added: ["file guards/e-1/translations/a.tla"],
       gone: ["file guards/e-1/faults/x.patch", "item e-0"],
     });
   });
@@ -153,8 +153,9 @@ describe("guards-15: approval: the record's file", () => {
     try {
       mkdirSync(join(root, "guards", "e-1"), { recursive: true });
       assert.equal(readApproval(root, "e-1"), null);
-      assert.equal(writeApproval(root, "e-1", inputs), "guards/e-1/approval.json");
+      assert.deepEqual(writeApproval(root, "e-1", inputs), { path: "guards/e-1/approval.json", written: true });
       assert.equal(readFileSync(join(root, "guards", "e-1", "approval.json"), "utf8"), approvalText(inputs));
+      assert.deepEqual(writeApproval(root, "e-1", inputs), { path: "guards/e-1/approval.json", written: false }, "a record that holds these bytes stands as it was");
       assert.deepEqual(readApproval(root, "e-1"), inputs);
       assert.equal(compareApproval(inputs, readApproval(root, "e-1")).approved, true);
 

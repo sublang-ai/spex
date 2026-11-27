@@ -13,7 +13,8 @@ Scaffolds a `specs/` directory so AI coding agents can read and follow
 your project's requirements and design. It also manages spec packages:
 it adds, installs and publishes specs, skills and playbooks in a
 folder, with no running app. And it checks guards, which protect a
-critical behavior on every change. Requires Node.js 22.15 or later.
+critical behavior on every change. Requires Node.js 22.15 or later;
+`spex verify` alone also needs Java 11 or later.
 
 ## Install
 
@@ -229,7 +230,7 @@ them in full.
 
 | Command | What it does |
 | --- | --- |
-| `spex verify [<guard>…]` | Check that each guard's protected behavior still holds |
+| `spex verify [--keep <folder>] [<guard>…]` | Check that each guard's protected behavior still holds; `--keep` leaves every file generated for TLC, with its command lines, in a folder outside the project |
 | `spex approve <guard>` | Record your approval of a guard's items and files |
 
 [Guards](#guards-protect-critical-behavior-on-every-change) describes
@@ -534,76 +535,253 @@ The command prints a per-file indicator for every framework and seed path, plus 
 
 ## Guards: protect critical behavior on every change
 
-A guard protects one behavior you cannot afford to break. It states the
-behavior as one assertion, and `spex verify` checks that assertion on
-your real code on every change. Spex calls no model for this, and needs
-no app and no account.
+A guard protects one behavior you cannot afford to break. A guard is a
+test item that `spex verify` carries out, together with the files under
+`guards/<its ID>/` that say how; other test items are carried out by
+tests you write. Spex has no checking engine of its own for this: the
+judging is done by TLA+ and its model checker TLC, tools people already
+trust, and your code is then tested against what TLC checked. No agent
+and no language model takes part in a run and nothing is drawn at
+random, so the same files and code give the same run. It needs no app
+and no account.
 
-A guard is named by the ID of its assertion item. Its items live in
+The guard item cites one behavior item, the rule, and lists cases in
+plain words, each marked permitted or forbidden: something the code does
+and the rule allows, or something the code must never do. A permitted
+case may show where the rule stops applying; what the code does there is
+still tested as the case states it.
+
+```markdown
+#### environments-56
+
+When `spex verify` checks installs into a project in which several packages provide a spec of one name, it shall find that the code keeps the rule that a standing copy keeps its path [[environments-55](#environments-55)] at every step it tries, reading the rule by these cases:
+
+- permitted — a later arrival is blocked: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` too, both releases providing a `kit` spec; `zeta/kit`'s copy still stands and `acme/kit` alone is reported blocked;
+- forbidden — a later arrival takes the path: the same two installs, ending with `acme/kit`'s copy standing and `zeta/kit` reported blocked;
+- forbidden — the standing package is reported blocked: the same two installs, ending with `zeta/kit`'s copy still standing and both packages reported blocked;
+- forbidden — a package not selected is reported blocked: the same two installs, ending with `zeta/kit`'s copy still standing and `acme/kit` and `mid/kit` reported blocked;
+- permitted — a copy no longer selected leaves: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` alone, each release providing a `kit` spec; `acme/kit`'s copy stands and no package is reported blocked;
+- permitted — a copy no longer provided leaves: an install selects `zeta/kit` alone and its copy stands, and a second selects `acme/kit` too, when only `acme/kit`'s release still provides a `kit` spec; `acme/kit`'s copy stands and no package is reported blocked.
+```
+
+A guard is named by the ID of its guard item. Its items live in
 `specs/` and its other files beside the code, all committed:
 
 | Kept | Where |
 | --- | --- |
-| The assertion and its permitted and forbidden examples, as test items that cite the behavior item | `specs/packages/<pkg>.md` |
-| The guard file: its binding, its bounds and each example as a sequence of events and effects | `guards/<assertion>/guard.yaml` |
-| The readings: what the assertion means, as data Spex can check | `guards/<assertion>/readings/` |
-| Each kept fault: a patch to files the binding copies that breaks the behavior, which the check must catch | `guards/<assertion>/faults/` |
-| The approval record | `guards/<assertion>/approval.json` |
-| A binding: the events it can cause in your code and the effects it can observe, with its JavaScript module | `guards/bindings/<name>/` |
+| The rule, a behavior item, and the guard item with its cases | `specs/packages/<pkg>.md` |
+| The guard file: its binding, its time limit and each case again as steps, each an event with its params and an effect | `guards/<guard>/guard.yaml` |
+| The translations: each is the guard's items written in TLA+, one file holding the rule, clause by clause, and the model, which is what the items say each event gives | `guards/<guard>/translations/<name>.tla` |
+| Each kept fault: a patch to files the binding copies that makes the code do what the rule forbids, which the guard must catch | `guards/<guard>/faults/` |
+| The approval record | `guards/<guard>/approval.json` |
+| A binding: the events it can cause in your code and the effects it can observe, with the JavaScript module that causes them | `guards/bindings/<name>/` |
 
 Every folder directly under `guards/` other than `bindings` is a guard.
 
 ```sh
 spex verify                    # check every guard under guards/
-spex verify environments-55    # check the guards you name
-spex approve environments-55   # record your approval
+spex verify environments-56    # check the guards you name
+spex verify --keep ../kept     # also leave every file TLC ran on
+spex approve environments-56   # record your approval
 ```
 
-Both read `specs/` and `guards/` at the top level of the Git work tree,
-else in the current folder. `spex verify` copies the files the binding
-names to a temporary folder and runs your code there, writing nothing in
-your project. It compares the guard's items and files with the approval
-record, checks every example against every reading, runs each permitted
-example on the code, then runs the sampled check: sequences of events
-that fast-check generates from the guard file's seed and bounds. Last,
-it runs the same check on a copy with each kept fault. The guard file's
-time limit stops each of the binding's commands and each check, along
-with every process they started.
+`spex verify` needs Java 11 or later, from `JAVA_HOME` or else the
+`java` on your path; no other command does. It pins one TLC, TLC 2.19,
+the `tla2tools.jar` of TLA+ tools v1.7.4. The first run downloads it
+into the Spex home, `~/.spex` unless `SPEX_HOME` names another, and
+keeps it only if its SHA-256 is the pinned one. Set `SPEX_TLC_JAR` to a
+`tla2tools.jar` to use that file instead, as on a machine that cannot
+reach the download; the report then says whether it is the pinned copy.
+Without Java or the jar a guard is reported as `Cannot be checked`, with
+what to install or set.
 
-The check on your code ends in one of four results:
+Both commands read `specs/` and `guards/` at the top level of the Git
+work tree, else in the current folder. `spex verify` writes nothing in
+your project. For each guard it compares the items and files with the
+approval record, and then:
 
-| Result | What it means |
+Without your code, by TLC:
+
+1. reads each translation alone, and prints every error of form with its
+   file and, where it has one, its line and column;
+2. checks that every translation allows each permitted case and forbids
+   each forbidden case;
+3. checks the translations side by side: at every step any of them
+   reaches, they must answer alike on whether the event is legal, what
+   it gives, whether the rule applies and which effects the rule
+   forbids. A guard needs two translations or more for this: with one
+   the run still goes on in full, the report says there is nothing to
+   compare the translation with, and the guard does not pass;
+4. checks the model of the first translation in name order: in every
+   state the model reaches, for every legal event, the model's effect is
+   one the binding declares and the rule does not forbid it. TLC ends
+   only when no state is left, so this check is complete for that model
+   and the declared values.
+
+On a copy of the files the binding names, in a temporary folder, which
+is testing:
+
+5. causes each permitted case's steps and compares each effect a step
+   states;
+6. causes every step of the model once: a fresh start, a shortest
+   sequence to its state, then its event. The effect your code gives
+   must equal the model's. Where it differs, TLC says whether the rule
+   forbids it; a step TLC is stopped at the time limit before judging
+   is counted as not judged;
+7. does 5 and 6 again on a copy with each kept fault, which is caught
+   only where your code then gives an effect the rule forbids.
+
+A step is one event with its params and an effect: stated in a case,
+given by the model, judged by the rule, observed on the code. An event
+is legal where the event can happen in this state at all, as a refund
+cannot before a charge. An event that is not legal is not tried on the
+code; it is never a violation. The guard file sets one limit,
+`limits.seconds`, which stops each run of TLC and each of the binding's
+commands, along with every process they started.
+
+A translation is drafted from the items and the binding's declaration
+alone, before its drafter sees your code, and two or more are drafted
+independently. Where translations differ,
+the report prints TLC's shortest sequence to the difference, with the
+one question its last step puts and each translation's answer. That
+sequence is not run on your code: the effects of its earlier steps are
+the model's, on which the translations agree. You answer the one
+question:
+
+| Question | Your answer becomes |
 | --- | --- |
-| `Violated on the implementation` | The code produced an effect every reading forbids. The shortest sequence found is printed. |
-| `Disagreement with the model` | A permitted example does not happen on the code as its item states. |
-| `Inconclusive` | The check could not decide: the readings disagree, an example does not fit a reading, the binding failed, the code loaded a project file from outside the copy, time ran out, or the assertion never applied. |
-| `Sampled on the implementation` | Every sequence ran and none broke the assertion. Sampled, since the check tries the sequences its bounds allow, not every one. |
+| Is step n legal? | Legal: a permitted case that holds the step. Not legal: no case can show it, so the item is reworded |
+| What must step n give? | You name the effect, and a permitted case states it. Where no item says it, the item is reworded too |
+| Does the rule apply at step n? | It applies: a forbidden case that ends at the step. It does not: no case can show it, so the rule's item is reworded |
+| Is this effect forbidden at step n? | Forbidden: a forbidden case. Permitted, and the model's effect: a permitted case. Permitted, and not the model's effect: no case can show it, so the rule's item is reworded |
+
+Where a case can show your answer, the answer becomes a case; where
+none can, the item is reworded to say it. Either way an item has
+changed, and all the translations are then drafted again by fresh
+drafters, from the changed items. No translation is edited to agree. Agreement shows that
+the drafters read the items alike, not that the reading is right; the
+cases and your approval carry that.
+
+This is the report `spex verify` printed for the first guard of this
+repository, `environments-56`, whose guard item is shown above. It ran
+in a copy of the repository that is no Git repository, which is why its
+revision line reads `no Git revision`, and the guard was approved in
+that copy:
+
+```text
+Protect critical behavior on every change
+
+environments-56 — checks the rule environments-55:
+  While a package's copy stands at `specs/packages/<pkg>.md` [environments-41], with that package
+  still selected and its release still providing the spec, when an install runs in a project's
+  environment, the core shall leave that copy in place as that package's and report exactly the
+  other selected packages whose releases provide a `<pkg>` spec as blocked at that path (DR-174).
+  Approval: approved
+  Cases, without the code: each of 3 translations allows the 3 permitted cases and forbids the 3 forbidden cases
+  Translations against each other: 3 translations, in agreement at every step TLC reached
+  On the model: TLC 2.19 checked every state the model of translation a reaches: 4 states, 256 steps; the rule applied at 48 steps
+    TLC's own estimate of the chance it missed a state: 3.6E-15
+  On the code: 256 steps tested, each after a shortest sequence from a fresh start: each gave the model's effect
+    the 3 permitted cases went as their steps state
+  Result: Model checked, code tested
+    assumes: the declared values are the ones that matter (package = acme/kit, mid/kit, zeta/kit)
+             what the code does next depends only on the model's state, each step being tried from one sequence
+             the binding causes and observes truly
+    Spex 5.0.0, Node 22.23.5, TLC 2.19 (the pinned copy), Java 21.0.13.1
+    no Git revision, copied files sha256 0effb5a1e429
+    limits: 300 seconds for each run of TLC and each command
+  Kept fault first-by-org: caught at step 2 of the permitted case "a later arrival is blocked"
+    1. install selected={zeta/kit} providing={zeta/kit} -> standing=zeta/kit blocked={}
+    2. install selected={acme/kit, zeta/kit} providing={acme/kit, zeta/kit}
+       the model gives standing=zeta/kit blocked={acme/kit}
+       the code gave   standing=acme/kit blocked={zeta/kit}
+       forbidden by the rule
+  Passes
+
+1 of 1 guards pass.
+```
+
+In this repository itself the guard is not approved yet: approval is the
+owner's act and has not been given. Until it is, the same run here reads
+`Approval: not approved — no approval record`, ends the guard's block
+`Does not pass — not approved`, counts `0 of 1 guards pass.` and exits
+`1`. The checks and the result between those lines are as above.
+
+A guard gets one result, the highest row found:
+
+| Result | What it establishes |
+| --- | --- |
+| `Conflict in the items` | TLC found a sequence after which the items, as translated, require an effect the rule forbids. |
+| `Violated on the code` | The code did what the rule forbids. The sequence that shows it is printed. |
+| `Code differs from the model` | The code gave an effect the model does not give and the rule does not forbid. The rule was not seen broken, and the check cannot go on from there. |
+| `Case failed` | A permitted case did not go on the code as its steps state. |
+| `Inconclusive` | The check could not settle, as when time ran out, a case did not hold without your code, the translations differ, the rule applied at no step, a sequence did not repeat, or the binding failed. |
+| `Model checked, code tested` | TLC checked every state the model reaches, complete for the declared values, and the model never gives an effect the rule forbids. Every step of the model was then caused on the code once, and the code gave the model's effect each time. |
+
+Spex gives no one-word verdict on your code. `Model checked, code
+tested` is two things. The model is checked: that half is formal, done
+by TLC, and complete for the model and the declared values. The code is
+tested: every step of the model is caused on your code once, nothing
+drawn at random, but Spex does not explore your code's own states. The
+result rests on what the report's three `assumes` lines say:
+
+- the declared values are the ones that matter: only the events the
+  binding declares were tried, with only the values it declares, such as
+  three packages standing for all packages;
+- what your code does next depends only on the model's state. Each step
+  is tried from one sequence, so code that keeps something the model
+  does not could behave differently after another;
+- the binding causes and observes truly.
+
+The translation says what the items mean; the cases you approved are
+what tie it to the items' words. Where the same sequence gives another
+effect when caused a second time, the result is `Inconclusive`.
 
 Spex sees a project file loaded from outside the copy only in the main
 thread of the check's process, not in worker threads or in processes
-your code starts.
+your code starts. Where the binding fails, the cause names a file of the
+copy by its path in the copy, so two runs print the same report.
 
-A guard passes only when its items and files are approved, its examples
-agree with the readings, the result on your code is
-`Sampled on the implementation`, and it has a kept fault and every kept
-fault is caught. A guard with an error in its files, or with no reading,
-no permitted example or no forbidden example, is reported as
+A guard passes only when all of these hold:
+
+- its approval is current;
+- every translation allows each permitted case and forbids each
+  forbidden case;
+- it has two translations or more, and they agree;
+- the result is `Model checked, code tested`;
+- it has at least one kept fault, and every one is caught.
+
+A guard with an error in its files, with no translation, or whose
+guard item lacks a permitted or a forbidden case, is reported as
 `Cannot be checked` and does not pass. `spex verify` exits `0` when
 every guard it checked passes, `1` otherwise, and `130` when
-interrupted, after it stops its processes and removes its copies.
+interrupted, after it stops its processes and removes its temporary
+folders.
 
-`spex approve <guard>` prints each example beside its stored sequence
-and what changed since the last record, then writes `approval.json`.
-Commit it, so an approval shows as a change in review. After a change to
-an item, the guard file, a reading, a kept fault or the binding,
-`spex verify` names what changed and the guard cannot pass until you
-approve it again. Changes to your code need no approval.
+`spex verify --keep <folder>` leaves, for each guard, the declaration
+in TLA+ that Spex generates from the binding, the translations, the
+TLA+ file and configuration of each run of TLC, TLC's output and the
+exact command line of each run. Anyone can then run each step again
+with the standard TLA+ tools, without Spex. The folder must lie outside
+your project, or be one Git ignores. For a guard that has no translation
+yet, the run needs no Java and leaves `spex-verify.txt` and the
+declaration in TLA+, `Declaration.tla`, in `<folder>/<guard>/`, for the
+drafters to write over.
+
+`spex approve <guard>` prints the guard item's statement, the rule,
+then each case with its steps, then the name of every other file and
+item it records, and what changed since the last record. It then writes
+`approval.json`, or leaves the file as it is where nothing changed. It
+needs no Java. Commit the record, so an approval shows as a change in
+review. After a change to an item, the
+guard file, a translation, a kept fault or the binding, `spex verify`
+names what changed and the guard cannot pass until you approve it again.
+Changes to your code need no approval.
 
 Draft a guard with the `guard` skill
 (`npx skills add sublang-ai/spex --skill guard`), then ask your agent to
-guard a behavior. `spex verify` needs Node.js 22.15 or newer, and a
-binding is a JavaScript module, so a guard reaches only code such a
-module can drive.
+guard a behavior. A binding is a JavaScript module, so a guard reaches
+only code such a module can drive.
 
 ## Upgrading from an earlier release
 
@@ -718,8 +896,9 @@ Then loop back to the next decision or intent.
 
 ## Requirements
 
-- Node.js >= 22 (`spex verify` needs 22.15 or newer)
+- Node.js 22.15 or later
 - Git (optional, used for repo root detection)
+- Java 11 or later, for `spex verify` only, which runs TLC; the first run downloads the TLC it pins
 
 ## Contributing
 

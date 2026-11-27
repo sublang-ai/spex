@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-252: binding.yaml and guard.yaml, and loading one
- * whole guard with every error naming the file or item and the cause.
+ * Guards package (guards-1, guards-3, guards-10, guards-18), DR-252:
+ * binding.yaml and guard.yaml, and loading one whole guard with every
+ * error naming the file or item and the cause.
  */
 
 import { describe, it } from "node:test";
@@ -12,7 +13,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { digest } from "./approval.js";
-import { listGuards, loadBinding, loadGuard, parseBinding, parseGuardFile } from "./files.js";
+import { caseSteps, listGuards, loadBinding, loadGuard, parseBinding, parseGuardFile } from "./files.js";
 import { GuardError, parseType, type Declaration } from "./types.js";
 
 const BINDING = `# SPDX-License-Identifier: Apache-2.0
@@ -36,43 +37,31 @@ commands:
 
 const GUARD = `format: 1
 binding: ents
-sample: { sequences: 50, events: 8, seed: 1, seconds: 30 }
-examples:
-  - item: entitlements-4
-    kind: permitted
-    steps:
-      - { event: grant, params: { who: ann } }
-      - { event: use, params: { who: ann }, effect: { ok: true } }
-  - item: entitlements-5
-    kind: forbidden
+limits: { seconds: 30 }
+cases:
+  - case: a granted use fails
     steps:
       - { event: grant, params: { who: ann } }
       - { event: use, params: { who: ann }, effect: { ok: false } }
+  - case: a granted user uses
+    steps:
+      - { event: grant, params: { who: ann } }
+      - { event: use, params: { who: ann }, effect: { ok: true } }
 `;
 
-const READING_A = `format: 1
-state:
-  held: { type: set of user, start: [] }
-events:
-  grant: { then: { held: "held union {who}" } }
-  revoke: { then: { held: "held minus {who}" } }
-assertion:
-  - on: use
-    when: "who in held"
-    shall: "effect.ok"
+const TRANSLATION_A = `---- MODULE a ----
+EXTENDS Declaration
+Start == {}
+Legal(s, e) == TRUE
+Effect(s, e) == IF e.event = "use" THEN [ok |-> e.who \\in s] ELSE <<>>
+After(s, e) == IF e.event = "grant" THEN s \\cup {e.who} ELSE IF e.event = "revoke" THEN s \\ {e.who} ELSE s
+When(e) == e.event = "use"
+While(s, e) == e.who \\in s
+Shall(s, e, f) == f.ok
+====
 `;
 
-const READING_B = `format: 1
-state:
-  has: { type: map user to bool, start: { ann: false, bob: false } }
-events:
-  grant: { then: { has: "map u in user: has[u] or u == who" } }
-  revoke: { then: { has: "map u in user: has[u] and u != who" } }
-assertion:
-  - on: use
-    when: "has[who]"
-    shall: "effect.ok"
-`;
+const TRANSLATION_B = TRANSLATION_A.replace("MODULE a", "MODULE b").replace("Start == {}", "\\* The users who hold a grant.\nStart == {}");
 
 const FAULT = `Uses fail for everyone.
 --- a/src/ents.mjs
@@ -103,15 +92,14 @@ A grant shall last until it is revoked.
 
 ### entitlements-3
 
-While a user holds a grant, each use by that user shall succeed [[entitlements-1](#entitlements-1)].
+When \`spex verify\` checks uses, it shall find that each use by a user who holds a grant succeeds [[entitlements-1](#entitlements-1)], in these cases:
+
+- permitted \u2014 a granted user uses: ann is granted and then uses, and the use succeeds;
+- forbidden \u2014 a granted use fails: ann is granted and then uses, and the use fails.
 
 ### entitlements-4
 
-When ann is granted and then uses, the use shall succeed [[entitlements-1](#entitlements-1)].
-
-### entitlements-5
-
-When ann is granted and then uses, the use shall never fail [[entitlements-1](#entitlements-1)].
+Another test shall pass [[entitlements-2](#entitlements-2)].
 `;
 
 const PROJECT: Record<string, string> = {
@@ -123,8 +111,8 @@ const PROJECT: Record<string, string> = {
   "guards/bindings/ents/lib/helper.mjs": "export const help = 1;\n",
   "guards/bindings/ents/node_modules/dep/index.js": "module.exports = 1;\n",
   "guards/entitlements-3/guard.yaml": GUARD,
-  "guards/entitlements-3/readings/a.yaml": READING_A,
-  "guards/entitlements-3/readings/b.yaml": READING_B,
+  "guards/entitlements-3/translations/a.tla": TRANSLATION_A,
+  "guards/entitlements-3/translations/b.tla": TRANSLATION_B,
   "guards/entitlements-3/faults/always-false.patch": FAULT,
 };
 
@@ -180,6 +168,11 @@ describe("guards-3: files: binding.yaml", () => {
     assert.deepEqual(binding.commands, []);
   });
 
+  it("takes a declaration that names no files", () => {
+    assert.deepEqual(parseBinding("format: 1\nevents:\n  tick:\n").files, []);
+    assert.deepEqual(parseBinding("format: 1\nevents:\n  tick:\nfiles: []\n").files, []);
+  });
+
   const HEAD = "format: 1\nvalues: { user: [ann] }\n";
   const TAIL = "files: [src]\n";
   const cases: [string, string, string][] = [
@@ -189,13 +182,16 @@ describe("guards-3: files: binding.yaml", () => {
     ["an empty events", `${HEAD}events: {}\n${TAIL}`, "events: a binding declares at least one event"],
     ["values that are no list", `format: 1\nvalues: { user: ann }\nevents: { tick: }\n${TAIL}`, `values user: expected a list of values, found "ann"`],
     ["a value in two sets", `format: 1\nvalues: { a: [x], b: [x] }\nevents: { tick: }\n${TAIL}`, "values b: 'x' is also in values a; a value belongs to one set"],
-    ["an event named by a word", `${HEAD}events: { size: }\n${TAIL}`, "event size: 'size' is a word of the condition language"],
+    ["an event that is no name", `${HEAD}events: { "a b": }\n${TAIL}`, "event a b: 'a b' is not a name (a letter, then letters, digits and _)"],
     ["an unknown key in an event", `${HEAD}events: { tick: { state: {} } }\n${TAIL}`, "event tick: unknown key 'state'"],
     ["an unknown type", `${HEAD}events: { tick: { params: { at: time } } }\n${TAIL}`, `event tick: params: at: 'time' is not a type or a values name in type "time"`],
     ["a type that is not text", `${HEAD}events: { tick: { effect: { ok: [bool] } } }\n${TAIL}`, `event tick: effect: ok: write the type as text, found ["bool"]`],
-    ["a param named as a values set", `${HEAD}events: { tick: { params: { user: user } } }\n${TAIL}`, "event tick: params: user: this is also a values name; pick another"],
-    ["an effect field named by a word", `${HEAD}events: { tick: { effect: { min: bool } } }\n${TAIL}`, "event tick: effect: min: 'min' is a word of the condition language"],
-    ["no files", `${HEAD}events: { tick: }\n`, "files: expected a list of one or more paths to copy"],
+    ["a param named event", `${HEAD}events: { tick: { params: { event: user } } }\n${TAIL}`, "event tick: params: 'event' names the event itself; pick another name"],
+    ["an effect field that is no name", `${HEAD}events: { tick: { effect: { Ok: bool } } }\n${TAIL}`, "event tick: effect: Ok: 'Ok' is not a name (a lowercase letter, then letters and digits)"],
+    ["a values set TLA+ could not name", `format: 1\nvalues: { seq: [x] }\nevents: { tick: }\n${TAIL}`, "values: 'seq' cannot name a values set: the declaration in TLA+ would define Seq, which is taken"],
+    ["a values set whose names another takes", `format: 1\nvalues: { user: [x], userRank: [y] }\nevents: { tick: }\n${TAIL}`, "values: 'userRank' cannot name a values set: the declaration in TLA+ would define UserRank, as values user does"],
+    ["a value that is not printable ASCII", `format: 1\nvalues: { user: ["an\u00e9"] }\nevents: { tick: }\n${TAIL}`, `values user: "an\u00e9" cannot be a value (printable ASCII, no space at either end)`],
+    ["files that are no list", `${HEAD}events: { tick: }\nfiles: src\n`, "files: expected a list of paths to copy"],
     ["a path out of the project", `${HEAD}events: { tick: }\nfiles: [../other]\n`, "files: '../other' must be a path inside the project, written with '/'"],
     ["a path from the top of the disk", `${HEAD}events: { tick: }\nfiles: [/etc]\n`, "files: '/etc' must be a path inside the project, written with '/'"],
     ["the whole project", `${HEAD}events: { tick: }\nfiles: [.]\n`, "files: '.' must be a path inside the project, written with '/'"],
@@ -227,7 +223,7 @@ describe("guards-10: files: guard.yaml", () => {
   const declaration: Declaration = parseBinding(BINDING);
   const parse = (text: string) => parseGuardFile(text, () => declaration);
 
-  it("reads the binding's name, the bounds and each example's steps", () => {
+  it("reads the binding's name, the limits and each entry's steps, in the file's order", () => {
     const seen: string[] = [];
     const file = parseGuardFile(GUARD, (name) => {
       seen.push(name);
@@ -235,63 +231,81 @@ describe("guards-10: files: guard.yaml", () => {
     });
     assert.deepEqual(seen, ["ents"]);
     assert.equal(file.binding, "ents");
-    assert.deepEqual(file.sample, { sequences: 50, events: 8, seed: 1, seconds: 30 });
-    assert.deepEqual(file.examples, [
+    assert.deepEqual(file.limits, { seconds: 30 });
+    assert.deepEqual(file.entries, [
       {
-        item: "entitlements-4",
-        kind: "permitted",
-        steps: [
-          { event: "grant", params: { who: "ann" }, effect: {} },
-          { event: "use", params: { who: "ann" }, effect: { ok: true } },
-        ],
-      },
-      {
-        item: "entitlements-5",
-        kind: "forbidden",
+        label: "a granted use fails",
         steps: [
           { event: "grant", params: { who: "ann" }, effect: {} },
           { event: "use", params: { who: "ann" }, effect: { ok: false } },
         ],
       },
+      {
+        label: "a granted user uses",
+        steps: [
+          { event: "grant", params: { who: "ann" }, effect: {} },
+          { event: "use", params: { who: "ann" }, effect: { ok: true } },
+        ],
+      },
     ]);
   });
 
-  const SAMPLE = "sample: { sequences: 50, events: 2, seed: 0, seconds: 30 }\n";
-  const HEAD = `format: 1\nbinding: ents\n${SAMPLE}`;
-  const PERMITTED = "  - { item: e-1, kind: permitted, steps: [{ event: grant, params: { who: ann } }] }\n";
-  const FORBIDDEN = "  - { item: e-2, kind: forbidden, steps: [{ event: use, params: { who: ann }, effect: { ok: false } }] }\n";
+  it("gives each case of the item its steps, in the item's order and with the item's kind", () => {
+    const file = parse(GUARD);
+    const cases = caseSteps(
+      [
+        { kind: "permitted", label: "a granted user uses", words: "it succeeds" },
+        { kind: "forbidden", label: "a granted use fails", words: "it fails" },
+      ],
+      file.entries,
+    );
+    assert.deepEqual(cases.map((entry) => [entry.label, entry.kind, entry.words, entry.steps[1].effect.ok]), [
+      ["a granted user uses", "permitted", "it succeeds", true],
+      ["a granted use fails", "forbidden", "it fails", false],
+    ]);
+  });
+
+  it("names a case with no entry and an entry for no case by its label", () => {
+    const file = parse(GUARD);
+    const one = { kind: "permitted" as const, label: "a granted user uses", words: "it succeeds" };
+    const two = { kind: "forbidden" as const, label: "a granted use fails", words: "it fails" };
+    const three = { kind: "forbidden" as const, label: "a third", words: "it fails" };
+    assert.equal(message(() => caseSteps([one, two, three], file.entries)), "a case with no entry: a third");
+    assert.equal(message(() => caseSteps([one], file.entries)), "an entry for no case: a granted use fails");
+    assert.equal(
+      message(() => caseSteps([one, { ...two, label: "A granted use fails" }], file.entries)),
+      "an entry for no case: a granted use fails",
+      "a label is compared as written",
+    );
+  });
+
+  const LIMITS = "limits: { seconds: 30 }\n";
+  const HEAD = `format: 1\nbinding: ents\n${LIMITS}`;
+  const ONE = "  - { case: one, steps: [{ event: grant, params: { who: ann } }] }\n";
   const cases: [string, string, string][] = [
-    ["another format", `format: 0\nbinding: ents\n${SAMPLE}examples: []\n`, "format must be 1"],
-    ["an unknown key", `${HEAD}checks: []\nexamples: []\n`, "unknown key 'checks'"],
-    ["no binding", `format: 1\n${SAMPLE}examples: []\n`, "binding must be a binding's name, found nothing"],
-    ["no sample", "format: 1\nbinding: ents\nexamples: []\n", "sample: expected a mapping, found nothing"],
-    ["a sample with an unknown key", "format: 1\nbinding: ents\nsample: { sequences: 1, events: 1, seed: 1, seconds: 1, steps: 8 }\nexamples: []\n", "sample: unknown key 'steps'"],
-    ["a sample with no seed", "format: 1\nbinding: ents\nsample: { sequences: 1, events: 1, seconds: 1 }\nexamples: []\n", "sample.seed must be a whole number, 0 to 2147483647, found nothing"],
-    ["no sequences", "format: 1\nbinding: ents\nsample: { sequences: 0, events: 1, seed: 1, seconds: 1 }\nexamples: []\n", "sample.sequences must be a whole number, 1 or more, found 0"],
-    ["a part of an event", "format: 1\nbinding: ents\nsample: { sequences: 1, events: 1.5, seed: 1, seconds: 1 }\nexamples: []\n", "sample.events must be a whole number, 1 or more, found 1.5"],
-    ["a seed below 0", "format: 1\nbinding: ents\nsample: { sequences: 1, events: 1, seed: -1, seconds: 1 }\nexamples: []\n", "sample.seed must be a whole number, 0 to 2147483647, found -1"],
-    ["seconds as text", "format: 1\nbinding: ents\nsample: { sequences: 1, events: 1, seed: 1, seconds: '30' }\nexamples: []\n", `sample.seconds must be a whole number, 1 or more, found "30"`],
-    ["examples that are no list", `${HEAD}examples: {}\n`, "examples must be a list"],
-    ["no forbidden example", `${HEAD}examples:\n${PERMITTED}`, "no forbidden example; a guard needs at least one"],
-    ["no permitted example", `${HEAD}examples:\n${FORBIDDEN}`, "no permitted example; a guard needs at least one"],
-    ["an example with an unknown key", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [], note: x }\n`, "example 1: unknown key 'note'"],
-    ["an example with no item", `${HEAD}examples:\n  - { kind: permitted, steps: [] }\n`, "example 1: item must be a spec item's ID, found nothing"],
-    ["an example listed twice", `${HEAD}examples:\n${PERMITTED}${PERMITTED}`, "example e-1: listed twice"],
-    ["an example of no kind", `${HEAD}examples:\n  - { item: e-1, kind: allowed, steps: [] }\n`, `example e-1: kind must be permitted or forbidden, found "allowed"`],
-    ["an example with no steps", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [] }\n`, "example e-1: steps must be a list of one or more steps"],
-    [
-      "an example longer than a sequence may be",
-      `${HEAD}examples:\n  - item: e-1\n    kind: permitted\n    steps:\n      - { event: grant, params: { who: ann } }\n      - { event: grant, params: { who: bob } }\n      - { event: use, params: { who: bob } }\n`,
-      "example e-1: it has 3 steps, more than sample.events allows (2)",
-    ],
-    ["a step with an unknown key", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: grant, params: { who: ann }, expect: {} }] }\n`, "example e-1: step 1: unknown key 'expect'"],
-    ["a step of an undeclared event", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: renew }] }\n`, `example e-1: step 1: the binding declares no event "renew"`],
-    ["a step with no event", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ params: {} }] }\n`, "example e-1: step 1: the binding declares no event nothing"],
-    ["a step that leaves out a param", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: grant }] }\n`, "example e-1: step 1: params: no value for 'who'"],
-    ["a step with a param of the wrong type", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: grant, params: { who: cat } }] }\n`, `example e-1: step 1: params: who: expected user, found "cat"`],
-    ["a step with an undeclared param", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: grant, params: { who: ann, until: 3 } }] }\n`, "example e-1: step 1: params: 'until' is not declared"],
-    ["a step with an effect field of the wrong type", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: use, params: { who: ann }, effect: { ok: yes } }] }\n`, `example e-1: step 1: effect: ok: expected bool, found "yes"`],
-    ["a step with an undeclared effect field", `${HEAD}examples:\n  - { item: e-1, kind: permitted, steps: [{ event: grant, params: { who: ann }, effect: { ok: true } }] }\n`, "example e-1: step 1: effect: 'ok' is not declared"],
+    ["another format", `format: 0\nbinding: ents\n${LIMITS}cases: []\n`, "format must be 1"],
+    ["an unknown key", `${HEAD}checks: []\ncases: []\n`, "unknown key 'checks'"],
+    ["no binding", `format: 1\n${LIMITS}cases: []\n`, "binding must be a binding's name, found nothing"],
+    ["no limits", "format: 1\nbinding: ents\ncases: []\n", "limits: expected a mapping, found nothing"],
+    ["limits with an unknown key", "format: 1\nbinding: ents\nlimits: { seconds: 1, runs: 8 }\ncases: []\n", "limits: unknown key 'runs'"],
+    ["no time limit", "format: 1\nbinding: ents\nlimits: {}\ncases: []\n", "limits.seconds must be a whole number from 1 to 2147483, found nothing"],
+    ["no second at all", "format: 1\nbinding: ents\nlimits: { seconds: 0 }\ncases: []\n", "limits.seconds must be a whole number from 1 to 2147483, found 0"],
+    ["a part of a second", "format: 1\nbinding: ents\nlimits: { seconds: 1.5 }\ncases: []\n", "limits.seconds must be a whole number from 1 to 2147483, found 1.5"],
+    ["more seconds than a timer runs", "format: 1\nbinding: ents\nlimits: { seconds: 2147484 }\ncases: []\n", "limits.seconds must be a whole number from 1 to 2147483, found 2147484"],
+    ["seconds as text", "format: 1\nbinding: ents\nlimits: { seconds: '30' }\ncases: []\n", `limits.seconds must be a whole number from 1 to 2147483, found "30"`],
+    ["cases that are no list", `${HEAD}cases: {}\n`, "cases must be a list"],
+    ["an entry with an unknown key", `${HEAD}cases:\n  - { case: one, kind: permitted, steps: [] }\n`, "cases entry 1: unknown key 'kind'"],
+    ["an entry with no label", `${HEAD}cases:\n  - { steps: [] }\n`, "cases entry 1: case must be the label of a case of the guard item, found nothing"],
+    ["a case entered twice", `${HEAD}cases:\n${ONE}${ONE}`, "a case entered twice: one"],
+    ["a case with no steps", `${HEAD}cases:\n  - { case: one, steps: [] }\n`, "case 'one': steps must be a list of one or more steps"],
+    ["a step with an unknown key", `${HEAD}cases:\n  - { case: one, steps: [{ event: grant, params: { who: ann }, expect: {} }] }\n`, "case 'one': step 1: unknown key 'expect'"],
+    ["a step of an undeclared event", `${HEAD}cases:\n  - { case: one, steps: [{ event: renew }] }\n`, `case 'one': step 1: the binding declares no event "renew"`],
+    ["a step with no event", `${HEAD}cases:\n  - { case: one, steps: [{ params: {} }] }\n`, "case 'one': step 1: the binding declares no event nothing"],
+    ["a step that leaves out a param", `${HEAD}cases:\n  - { case: one, steps: [{ event: grant }] }\n`, "case 'one': step 1: params: no value for 'who'"],
+    ["a step with a param of the wrong type", `${HEAD}cases:\n  - { case: one, steps: [{ event: grant, params: { who: cat } }] }\n`, `case 'one': step 1: params: who: expected user, found "cat"`],
+    ["a step with an undeclared param", `${HEAD}cases:\n  - { case: one, steps: [{ event: grant, params: { who: ann, until: 3 } }] }\n`, "case 'one': step 1: params: 'until' is not declared"],
+    ["a step with an effect field of the wrong type", `${HEAD}cases:\n  - { case: one, steps: [{ event: use, params: { who: ann }, effect: { ok: yes } }] }\n`, `case 'one': step 1: effect: ok: expected bool, found "yes"`],
+    ["a step with an undeclared effect field", `${HEAD}cases:\n  - { case: one, steps: [{ event: grant, params: { who: ann }, effect: { ok: true } }] }\n`, "case 'one': step 1: effect: 'ok' is not declared"],
   ];
   for (const [name, text, expected] of cases) {
     it(`refuses ${name}`, () => {
@@ -301,15 +315,14 @@ describe("guards-10: files: guard.yaml", () => {
 });
 
 describe("guards-18: files: one whole guard", () => {
-  it("loads the items, the binding, the bounds, the examples, the readings and the kept faults", () => {
+  it("loads the items, the binding, the limits, the cases, the translations and the kept faults", () => {
     withProject({}, (root) => {
       const guard = loadGuard(root, "entitlements-3");
       assert.equal(guard.name, "entitlements-3");
       assert.equal(guard.root, root);
       assert.equal(guard.folder, "guards/entitlements-3");
-      assert.equal(guard.items.assertion.id, "entitlements-3");
+      assert.equal(guard.items.guard.id, "entitlements-3");
       assert.equal(guard.items.behavior.id, "entitlements-1");
-      assert.deepEqual(guard.items.examples.map((item) => item.id), ["entitlements-4", "entitlements-5"]);
       assert.deepEqual(guard.items.cited.map((item) => item.id), ["entitlements-2"]);
       assert.equal(guard.binding.name, "ents");
       assert.equal(guard.binding.folder, "guards/bindings/ents");
@@ -319,18 +332,23 @@ describe("guards-18: files: one whole guard", () => {
         "guards/bindings/ents/binding.yaml",
         "guards/bindings/ents/lib/helper.mjs",
       ]);
-      assert.deepEqual(guard.sample, { sequences: 50, events: 8, seed: 1, seconds: 30 });
-      assert.deepEqual(guard.examples.map((example) => [example.item, example.kind, example.steps.length]), [
-        ["entitlements-4", "permitted", 2],
-        ["entitlements-5", "forbidden", 2],
+      assert.equal(guard.binding.module, true);
+      assert.deepEqual(guard.limits, { seconds: 30 });
+      assert.deepEqual(
+        guard.cases.map((entry) => [entry.label, entry.kind, entry.words, entry.steps.length]),
+        [
+          ["a granted user uses", "permitted", "ann is granted and then uses, and the use succeeds", 2],
+          ["a granted use fails", "forbidden", "ann is granted and then uses, and the use fails", 2],
+        ],
+        "in the item's order, though the guard file enters them in another",
+      );
+      assert.deepEqual(guard.translations.map((translation) => [translation.name, translation.file]), [
+        ["a", "guards/entitlements-3/translations/a.tla"],
+        ["b", "guards/entitlements-3/translations/b.tla"],
       ]);
-      assert.deepEqual(guard.readings.map((reading) => [reading.name, reading.file]), [
-        ["a", "guards/entitlements-3/readings/a.yaml"],
-        ["b", "guards/entitlements-3/readings/b.yaml"],
-      ]);
-      assert.equal(guard.readings[0].events.grant.legal.source, "true");
-      assert.deepEqual(guard.faults.map((fault) => [fault.name, fault.file, fault.title]), [
-        ["always-false", "guards/entitlements-3/faults/always-false.patch", "Uses fail for everyone."],
+      assert.equal(guard.translations[0].text, TRANSLATION_A, "a translation's text is kept as written");
+      assert.deepEqual(guard.faults.map((fault) => [fault.name, fault.file]), [
+        ["always-false", "guards/entitlements-3/faults/always-false.patch"],
       ]);
       assert.deepEqual(guard.faults[0].patch.files.map((file) => file.path), ["src/ents.mjs"]);
     });
@@ -345,17 +363,15 @@ describe("guards-18: files: one whole guard", () => {
         "file guards/bindings/ents/lib/helper.mjs",
         "file guards/entitlements-3/faults/always-false.patch",
         "file guards/entitlements-3/guard.yaml",
-        "file guards/entitlements-3/readings/a.yaml",
-        "file guards/entitlements-3/readings/b.yaml",
+        "file guards/entitlements-3/translations/a.tla",
+        "file guards/entitlements-3/translations/b.tla",
         "item entitlements-1",
         "item entitlements-2",
         "item entitlements-3",
-        "item entitlements-4",
-        "item entitlements-5",
       ]);
       assert.equal(guard.inputs["file guards/entitlements-3/guard.yaml"], digest(GUARD));
       assert.equal(guard.inputs["file guards/bindings/ents/lib/helper.mjs"], digest("export const help = 1;\n"));
-      assert.equal(guard.inputs["item entitlements-3"], digest(guard.items.assertion.text));
+      assert.equal(guard.inputs["item entitlements-3"], digest(guard.items.guard.text));
       assert.equal(
         guard.inputs["item entitlements-2"],
         digest("### entitlements-2\n\nA grant shall last until it is revoked."),
@@ -392,6 +408,72 @@ describe("guards-18: files: one whole guard", () => {
     });
   });
 
+  it("changes the guard item's digest with one word of a case's plain words", () => {
+    const before = withProject({}, (root) => loadGuard(root, "entitlements-3").inputs);
+    const edited = withProject(
+      { "specs/packages/entitlements.md": SPEC.replace("and the use fails.", "and the use is refused.") },
+      (root) => loadGuard(root, "entitlements-3").inputs,
+    );
+    assert.deepEqual(
+      Object.keys(before).filter((label) => before[label] !== edited[label]),
+      ["item entitlements-3"],
+    );
+  });
+
+  it("loads a guard whose binding's folder holds no binding.mjs", () => {
+    withProject({ "guards/bindings/ents/binding.mjs": null }, (root) => {
+      const guard = loadGuard(root, "entitlements-3");
+      assert.equal(guard.binding.module, false);
+      assert.ok(!Object.hasOwn(guard.inputs, "file guards/bindings/ents/binding.mjs"));
+    });
+  });
+
+  it("loads a guard whose declaration names no files, with or without a kept fault", () => {
+    const noFiles = BINDING.replace("files:\n  - src\n  - ./package.json\n", "");
+    withProject({ "guards/bindings/ents/binding.yaml": noFiles }, (root) => {
+      const guard = loadGuard(root, "entitlements-3");
+      assert.deepEqual(guard.binding.files, []);
+      assert.equal(guard.faults.length, 1);
+    });
+    withProject(
+      { "guards/bindings/ents/binding.yaml": noFiles, "guards/entitlements-3/faults/always-false.patch": null },
+      (root) => assert.deepEqual(loadGuard(root, "entitlements-3").faults, []),
+    );
+  });
+
+  it("refuses, with a declaration that names no files, a kept fault under guards/ or node_modules alone", () => {
+    const noFiles = BINDING.replace("files:\n  - src\n  - ./package.json\n", "");
+    for (const path of ["guards/bindings/ents/binding.mjs", "src/node_modules/dep/index.js"]) {
+      withProject(
+        {
+          "guards/bindings/ents/binding.yaml": noFiles,
+          "guards/entitlements-3/faults/always-false.patch": FAULT.replaceAll("src/ents.mjs", path),
+        },
+        (root) =>
+          assert.equal(
+            message(() => loadGuard(root, "entitlements-3")),
+            `guards/entitlements-3/faults/always-false.patch: ${path} is not among the binding's files`,
+          ),
+      );
+    }
+  });
+
+  it("lists translations and kept faults in name order, by the name without its extension", () => {
+    // `_` sorts after `.`, so by file name `a_b.tla` would come last all the same;
+    // `a.tla` comes before it by its name.
+    withProject(
+      {
+        "guards/entitlements-3/translations/a_b.tla": TRANSLATION_B.replace("MODULE b", "MODULE a_b"),
+        "guards/entitlements-3/faults/always-false-2.patch": FAULT,
+      },
+      (root) => {
+        const guard = loadGuard(root, "entitlements-3");
+        assert.deepEqual(guard.translations.map((translation) => translation.name), ["a", "a_b", "b"]);
+        assert.deepEqual(guard.faults.map((fault) => fault.name), ["always-false", "always-false-2"]);
+      },
+    );
+  });
+
   it("takes a guard with no kept fault", () => {
     withProject({ "guards/entitlements-3/faults/always-false.patch": null }, (root) => {
       assert.deepEqual(loadGuard(root, "entitlements-3").faults, []);
@@ -410,11 +492,10 @@ describe("guards-18: files: one whole guard", () => {
     ["a guard file that is not there", { [`${G}/guard.yaml`]: null }, `${G}/guard.yaml: not found`],
     ["a guard file that does not parse", { [`${G}/guard.yaml`]: "format: {1\n" }, `${G}/guard.yaml: not readable as YAML — `],
     ["a guard file with an unknown key", { [`${G}/guard.yaml`]: `${GUARD}tools: []\n` }, `${G}/guard.yaml: unknown key 'tools'`],
-    ["a stray file in the guard's folder", { [`${G}/notes.md`]: "x" }, `${G}/notes.md: not part of a guard; its folder holds guard.yaml, readings/, faults/ and approval.json`],
+    ["a stray file in the guard's folder", { [`${G}/notes.md`]: "x" }, `${G}/notes.md: not part of a guard; its folder holds guard.yaml, translations/, faults/ and approval.json`],
     ["a binding that is not there", { [`${G}/guard.yaml`]: GUARD.replace("binding: ents", "binding: api") }, "guards/bindings/api: no such binding"],
     ["a binding name that is a path", { [`${G}/guard.yaml`]: GUARD.replace("binding: ents", "binding: ../ents") }, "'../ents' cannot be a binding's name"],
     ["a binding with no declaration", { "guards/bindings/ents/binding.yaml": null }, "guards/bindings/ents/binding.yaml: not found"],
-    ["a binding with no module", { "guards/bindings/ents/binding.mjs": null }, "guards/bindings/ents/binding.mjs: not found"],
     ["a fault in the binding's declaration", { "guards/bindings/ents/binding.yaml": BINDING.replace("effect: { ok: bool }", "effect: { ok: boolean }") }, `guards/bindings/ents/binding.yaml: event use: effect: ok: 'boolean' is not a type or a values name in type "boolean"`],
     ["a binding naming a file that is not in the project", { "src/ents.mjs": null }, "guards/bindings/ents/binding.yaml: files: 'src' is not in the project"],
     [
@@ -424,17 +505,21 @@ describe("guards-18: files: one whole guard", () => {
     ],
     [
       "a binding naming another guard's folder among its files",
-      { "guards/bindings/ents/binding.yaml": BINDING.replace("  - src\n", "  - src\n  - guards/entitlements-3/readings\n") },
-      "guards/bindings/ents/binding.yaml: files: 'guards/entitlements-3/readings' is under guards/; a binding's folder is copied by itself and is no code under test",
+      { "guards/bindings/ents/binding.yaml": BINDING.replace("  - src\n", "  - src\n  - guards/entitlements-3/translations\n") },
+      "guards/bindings/ents/binding.yaml: files: 'guards/entitlements-3/translations' is under guards/; a binding's folder is copied by itself and is no code under test",
     ],
-    ["an example step of the wrong type", { [`${G}/guard.yaml`]: GUARD.replace("effect: { ok: true }", "effect: { ok: 1 }") }, `${G}/guard.yaml: example entitlements-4: step 2: effect: ok: expected bool, found 1`],
-    ["an assertion that is no spec item", { "specs/packages/entitlements.md": SPEC.replace("### entitlements-3", "### entitlements-9") }, "entitlements-3: no spec item has this ID"],
-    ["an example that is no spec item", { [`${G}/guard.yaml`]: GUARD.replace("item: entitlements-5", "item: entitlements-50") }, "entitlements-50: no spec item has this ID"],
-    ["an example that does not cite the behavior item", { "specs/packages/entitlements.md": SPEC.replace("never fail [[entitlements-1](#entitlements-1)]", "never fail [[entitlements-2](#entitlements-2)]") }, "entitlements-5: does not cite entitlements-1, the behavior item the guard protects"],
-    ["no readings folder", { [`${G}/readings/a.yaml`]: null, [`${G}/readings/b.yaml`]: null }, `${G}/readings: no reading; a guard needs at least one`],
-    ["a stray file among the readings", { [`${G}/readings/c.yml`]: READING_A }, `${G}/readings/c.yml: only <name>.yaml files are kept in this folder`],
-    ["a fault in a reading", { [`${G}/readings/b.yaml`]: READING_B.replace("has[who]", "has[held]") }, `${G}/readings/b.yaml: rule 1: when: unknown name 'held' in "has[held]"`],
-    ["a reading of an undeclared event", { [`${G}/readings/a.yaml`]: READING_A.replace("revoke:", "renew:") }, `${G}/readings/a.yaml: event renew: the binding declares no such event`],
+    ["a step of the wrong type", { [`${G}/guard.yaml`]: GUARD.replace("effect: { ok: true }", "effect: { ok: 1 }") }, `${G}/guard.yaml: case 'a granted user uses': step 2: effect: ok: expected bool, found 1`],
+    ["a guard named for no spec item", { "specs/packages/entitlements.md": SPEC.replace("### entitlements-3", "### entitlements-9") }, "entitlements-3: no spec item has this ID"],
+    ["a guard item that cites no behavior item", { "specs/packages/entitlements.md": SPEC.replace("succeeds [[entitlements-1](#entitlements-1)], in", "succeeds, in") }, "entitlements-3: cites no behavior item of its own file; a guard checks one"],
+    ["a guard item with no forbidden case", { "specs/packages/entitlements.md": SPEC.replace("- forbidden \u2014", "- refused \u2014") }, "entitlements-3: no forbidden case; a guard item has at least one, written '- forbidden \u2014 <label>: <the case in plain words>'"],
+    ["an entry for no case of the item", { [`${G}/guard.yaml`]: GUARD.replace("case: a granted use fails", "case: a granted use is refused") }, `${G}/guard.yaml: an entry for no case: a granted use is refused`],
+    ["a case of the item with no entry", { "specs/packages/entitlements.md": SPEC.replace("uses, and the use fails.", "uses, and the use fails;\n- forbidden \u2014 a third: it fails.") }, `${G}/guard.yaml: a case with no entry: a third`],
+    ["a case entered twice", { [`${G}/guard.yaml`]: GUARD.replace("case: a granted use fails", "case: a granted user uses") }, `${G}/guard.yaml: a case entered twice: a granted user uses`],
+    ["no translations folder", { [`${G}/translations/a.tla`]: null, [`${G}/translations/b.tla`]: null }, `${G}/translations: no translation; a guard needs two or more`],
+    ["a stray file among the translations", { [`${G}/translations/c.yaml`]: TRANSLATION_A }, `${G}/translations/c.yaml: only <name>.tla files are kept in this folder`],
+    ["a translation named with an upper-case letter", { [`${G}/translations/Ab.tla`]: TRANSLATION_A }, `${G}/translations/Ab.tla: a translation's name is a lowercase letter, then lowercase letters, digits and _`],
+    ["a translation named as a file TLC loads", { [`${G}/translations/tlc.tla`]: TRANSLATION_A }, `${G}/translations/tlc.tla: 'tlc' is the name of a file TLC or Spex loads; pick another`],
+    ["a translation named as one of Spex's own files", { [`${G}/translations/spexmodel.tla`]: TRANSLATION_A }, `${G}/translations/spexmodel.tla: 'spexmodel' is the name of a file TLC or Spex loads; pick another`],
     ["a kept fault that is no patch", { [`${G}/faults/always-false.patch`]: "Just words.\n" }, `${G}/faults/always-false.patch: no change found; a kept fault is a unified diff, as git diff writes it`],
     ["a stray file among the kept faults", { [`${G}/faults/README.md`]: "x" }, `${G}/faults/README.md: only <name>.patch files are kept in this folder`],
     [
@@ -472,16 +557,6 @@ describe("guards-18: files: one whole guard", () => {
       { [`${G}/faults/always-false.patch`]: FAULT.replaceAll("src/ents.mjs", "src/.git/config") },
       `${G}/faults/always-false.patch: src/.git/config is not among the binding's files`,
     ],
-    [
-      "steps of two examples leaving out effect fields, each named once",
-      { [`${G}/guard.yaml`]: GUARD.replace(", effect: { ok: false }", "").replace(", effect: { ok: true }", "") },
-      `${G}/guard.yaml: example entitlements-4, step 2: reading a reads effect.ok, which the step does not state; example entitlements-5, step 2: reading a reads effect.ok, which the step does not state`,
-    ],
-    [
-      "a step leaving out an effect field a reading reads",
-      { [`${G}/guard.yaml`]: GUARD.replace(", effect: { ok: false }", "") },
-      `${G}/guard.yaml: example entitlements-5, step 2: reading a reads effect.ok, which the step does not state`,
-    ],
     ["a name that is a path", {}, "'../x' cannot be a guard's name"],
   ];
   for (const [name, changes, expected] of cases) {
@@ -517,13 +592,9 @@ describe("guards-18: files: one whole guard", () => {
     );
   });
 
-  it("lets a step leave out an effect field where no rule applies", () => {
-    const guardFile = GUARD.replace(
-      "      - { event: grant, params: { who: ann } }\n      - { event: use, params: { who: ann }, effect: { ok: true } }\n",
-      "      - { event: use, params: { who: bob } }\n      - { event: grant, params: { who: ann } }\n      - { event: use, params: { who: ann }, effect: { ok: true } }\n",
-    );
-    withProject({ "guards/entitlements-3/guard.yaml": guardFile }, (root) => {
-      assert.equal(loadGuard(root, "entitlements-3").examples[0].steps.length, 3);
+  it("loads a translation without reading what its text means", () => {
+    withProject({ "guards/entitlements-3/translations/b.tla": "not TLA+ at all\n" }, (root) => {
+      assert.equal(loadGuard(root, "entitlements-3").translations[1].text, "not TLA+ at all\n");
     });
   });
 });
@@ -558,6 +629,7 @@ describe("guards-1: files: finding guards and bindings", () => {
     withProject({}, (root) => {
       const { binding, inputs } = loadBinding(root, "ents");
       assert.equal(binding.name, "ents");
+      assert.equal(binding.module, true);
       assert.deepEqual(Object.keys(binding.events), ["grant", "revoke", "use"]);
       assert.deepEqual(binding.events.use.effect, { ok: parseType("bool", binding.vocabulary) });
       assert.deepEqual(Object.keys(inputs), binding.folderFiles.map((path) => `file ${path}`));

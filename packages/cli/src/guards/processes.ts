@@ -7,7 +7,8 @@
  * process is stopped at the time limit, and whatever it started is
  * stopped with it: at the limit, when it ends, and when the run is
  * interrupted. The run never waits for what such a process prints:
- * standard error goes to a file, read once the process has ended.
+ * standard error goes to a file, read once the process has ended, and
+ * standard output is dropped or goes to a file the caller names.
  *
  * On POSIX a process leads a group of its own and the whole group is
  * killed; a process that has left that group, by starting a session
@@ -39,6 +40,9 @@ export type RunOptions = {
   seconds: number;
   /** A file to hold what the process writes on standard error. */
   errors: string;
+  /** A file to hold what it writes on standard output; dropped where
+   * none is named. */
+  output?: string;
 };
 
 /** The most of a process's standard error that is read back. */
@@ -89,8 +93,9 @@ function endOf(file: string): string {
 
 /**
  * Run one program to its end or to the time limit, whichever comes
- * first. What it prints on standard output is dropped. When it ends,
- * however it ends, every process it started is stopped too.
+ * first. What it prints on standard output is dropped, or kept in the
+ * file `output` names. When it ends, however it ends, every process
+ * it started is stopped too.
  */
 export function runProcess(program: string, args: readonly string[], options: RunOptions): Promise<Ran> {
   if (!hooked) {
@@ -99,13 +104,14 @@ export function runProcess(program: string, args: readonly string[], options: Ru
   }
   return new Promise((resolve) => {
     const errors = openSync(options.errors, "w");
+    const output = options.output === undefined ? null : openSync(options.output, "w");
     let child: ChildProcess;
     try {
       child = spawn(program, [...args], {
         cwd: options.cwd,
         env: options.env,
         // No pipe: a process left behind cannot hold one open.
-        stdio: ["ignore", "ignore", errors],
+        stdio: ["ignore", output ?? "ignore", errors],
         // A group of its own on POSIX, so the whole group can be stopped.
         detached: process.platform !== "win32",
         windowsHide: true,
@@ -115,6 +121,7 @@ export function runProcess(program: string, args: readonly string[], options: Ru
       return;
     } finally {
       closeSync(errors);
+      if (output !== null) closeSync(output);
     }
     running.add(child);
     let timedOut = false;

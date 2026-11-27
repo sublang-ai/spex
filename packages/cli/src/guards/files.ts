@@ -2,45 +2,49 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 /*
- * Guards package, DR-252: a guard's files. A binding's declaration
+ * Guards package (guards-1, guards-3, guards-10, guards-18), DR-252:
+ * a guard's files. A binding's declaration
  * (`guards/bindings/<name>/binding.yaml`) names the values, the
  * events with their params and effects, the files a run copies and
  * the commands that build the copy. The guard file
- * (`guards/<assertion>/guard.yaml`) names the binding, the bounds and
- * each example's sequence. `loadGuard` reads everything one guard is
- * made of into one checked object, or throws a GuardError naming the
- * file or item and the cause.
+ * (`guards/<guard>/guard.yaml`) names the binding, fixes the time
+ * limit and holds each case of the guard item again as steps. `loadGuard`
+ * reads everything one guard is made of into one checked object, or
+ * throws a GuardError naming the file or item and the cause.
  */
 
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import { digest, fileLabel, itemLabel, sortInputs, type Inputs } from "./approval.js";
-import { guardItems, readItems, type GuardItems, type ItemIndex } from "./items.js";
+import { guardItems, readItems, type GuardItems, type ItemCase, type ItemIndex } from "./items.js";
+import { checkNames } from "./declaration.js";
 import { parsePatch, type Patch } from "./patch.js";
-import { Unstated, checkExample, parseReading, type Reading } from "./reading.js";
+import { translationNameFault, type Translation } from "./translation.js";
 import {
   GuardError,
   byText,
   decodeFields,
-  isValuesSet,
+  eventFault,
+  fieldFault,
   mapping,
   mappingOrNone,
-  nameFault,
   parseType,
   parseYaml,
   showData,
   vocabulary,
   within,
+  type Case,
   type Declaration,
   type EventDeclaration,
-  type Example,
   type Step,
   type Type,
 } from "./types.js";
 
 /** What binding.yaml declares. */
 export type BindingDeclaration = Declaration & {
-  /** Project files and folders a run copies, relative to the root. */
+  /** Project files and folders a run copies, relative to the root.
+   * Empty where the declaration names none: no copy can then be made
+   * (guards-36). */
   files: string[];
   /** Commands run in the copy, in order, each an argv list. */
   commands: string[][];
@@ -53,31 +57,48 @@ export type Binding = BindingDeclaration & {
   folder: string;
   /** Every file under the folder, relative to the root, in order. */
   folderFiles: string[];
+  /** The folder holds a `binding.mjs`. Without one the guard still
+   * loads, and the checks on the code find a failing binding
+   * (guards-36). */
+  module: boolean;
 };
 
-/** The bounds of the sampled check. */
-export type Sample = { sequences: number; events: number; seed: number; seconds: number };
+/** The limits: the seconds each run of TLC and each command may
+ * take. */
+export type Limits = { seconds: number };
 
-/** What guard.yaml holds. */
-export type GuardFile = { binding: string; sample: Sample; examples: Example[] };
+/** What guard.yaml holds: `entries` are its `cases` as written, in
+ * the file's order. */
+export type GuardFile = { binding: string; limits: Limits; entries: { label: string; steps: Step[] }[] };
 
-/** A kept fault. `title` is the first line of the patch's description. */
-export type Fault = { name: string; file: string; title: string; patch: Patch };
+/** A kept fault. */
+export type Fault = { name: string; file: string; patch: Patch };
+
+/** A guard that loads but for its translations: it has none yet. Its
+ * declaration is there for `spex verify --keep` to leave in TLA+. */
+export class NoTranslation extends GuardError {
+  constructor(
+    message: string,
+    readonly binding: Binding,
+  ) {
+    super(message);
+  }
+}
 
 /** Everything one guard is made of, loaded and checked. */
 export type Guard = {
-  /** The assertion item's ID, which is also the folder's name. */
+  /** The guard item's ID, which is also the folder's name. */
   name: string;
   root: string;
   /** `guards/<name>`. */
   folder: string;
   items: GuardItems;
   binding: Binding;
-  sample: Sample;
-  /** In guard.yaml's order; `items.examples` follows the same order. */
-  examples: Example[];
-  /** In name order; at least one. */
-  readings: Reading[];
+  limits: Limits;
+  /** The guard item's cases with their steps, in the item's order. */
+  cases: Case[];
+  /** In name order; at least one, and two or more for the guard to pass. */
+  translations: Translation[];
   /** In name order; may be empty. */
   faults: Fault[];
   /** The digest of every approval input, labels in order. */
@@ -85,21 +106,17 @@ export type Guard = {
 };
 
 const FOLDER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const MOST_SEED = 2147483647;
 
 // ---------------------------------------------------------------
 // binding.yaml
 // ---------------------------------------------------------------
 
-function typedFields(raw: unknown, vocab: ReturnType<typeof vocabulary>, isParam: boolean): Record<string, Type> {
+function typedFields(raw: unknown, vocab: ReturnType<typeof vocabulary>): Record<string, Type> {
   const fields: Record<string, Type> = {};
   for (const [name, type] of Object.entries(mappingOrNone(raw))) {
     within(name, () => {
-      const fault = nameFault(name);
+      const fault = fieldFault(name);
       if (fault !== null) throw new GuardError(fault);
-      if (isParam && isValuesSet(vocab, name)) {
-        throw new GuardError("this is also a values name; pick another");
-      }
       fields[name] = parseType(type, vocab);
     });
   }
@@ -130,22 +147,26 @@ export function parseBinding(text: string): BindingDeclaration {
   const declared = within("events", () => mapping(top.events));
   for (const [event, raw] of Object.entries(declared)) {
     within(`event ${event}`, () => {
-      const fault = nameFault(event);
+      const fault = eventFault(event);
       if (fault !== null) throw new GuardError(fault);
       const entry = mappingOrNone(raw, ["params", "effect"]);
       events[event] = {
-        params: within("params", () => typedFields(entry.params, vocab, true)),
-        effect: within("effect", () => typedFields(entry.effect, vocab, false)),
+        params: within("params", () => typedFields(entry.params, vocab)),
+        effect: within("effect", () => typedFields(entry.effect, vocab)),
       };
     });
   }
   if (Object.keys(events).length === 0) throw new GuardError("events: a binding declares at least one event");
+  // The names the declaration in TLA+ would define must be free.
+  checkNames({ vocabulary: vocab, events });
 
-  if (!Array.isArray(top.files) || top.files.length === 0) {
-    throw new GuardError("files: expected a list of one or more paths to copy");
+  // A declaration may name no files: it loads, and no copy can then
+  // be made (guards-36).
+  if (top.files !== undefined && top.files !== null && !Array.isArray(top.files)) {
+    throw new GuardError("files: expected a list of paths to copy");
   }
   const files: string[] = [];
-  for (const raw of top.files as unknown[]) {
+  for (const raw of (top.files ?? []) as unknown[]) {
     if (typeof raw !== "string") throw new GuardError(`files: expected a path, found ${showData(raw)}`);
     const path = raw.replace(/^(\.\/)+/, "").replace(/\/+$/, "");
     const parts = path.split("/");
@@ -218,7 +239,8 @@ function filesUnder(root: string, folder: string): string[] {
 
 /**
  * Load the binding `guards/bindings/<name>` and digest every file in
- * its folder. Every error is a GuardError starting with the file.
+ * its folder. A folder with no `binding.mjs` still loads. Every error
+ * is a GuardError starting with the file.
  */
 export function loadBinding(root: string, name: string): { binding: Binding; inputs: Inputs } {
   const folder = `guards/bindings/${name}`;
@@ -226,7 +248,6 @@ export function loadBinding(root: string, name: string): { binding: Binding; inp
   if (!isDir(abs(root, folder))) throw new GuardError(`${folder}: no such binding`);
   const declarationFile = `${folder}/binding.yaml`;
   if (!isFile(abs(root, declarationFile))) throw new GuardError(`${declarationFile}: not found`);
-  if (!isFile(abs(root, `${folder}/binding.mjs`))) throw new GuardError(`${folder}/binding.mjs: not found`);
 
   const folderFiles = filesUnder(root, folder);
   const inputs: Inputs = {};
@@ -248,63 +269,57 @@ export function loadBinding(root: string, name: string): { binding: Binding; inp
     }
     return parsed;
   });
-  return { binding: { ...declaration, name, folder, folderFiles }, inputs };
+  const module = isFile(abs(root, `${folder}/binding.mjs`));
+  return { binding: { ...declaration, name, folder, folderFiles, module }, inputs };
 }
 
 // ---------------------------------------------------------------
 // guard.yaml
 // ---------------------------------------------------------------
 
-function count(raw: unknown, name: string, least: number, most: number = Number.MAX_SAFE_INTEGER): number {
-  if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < least || raw > most) {
-    throw new GuardError(
-      `sample.${name} must be a whole number${least === 0 ? `, 0 to ${most}` : ", 1 or more"}, found ${showData(raw)}`,
-    );
+/** The most seconds a time limit can be: the longest a timer of Node
+ * runs, 2147483647 ms. */
+const MOST_SECONDS = 2147483;
+
+function limit(raw: unknown, name: string): number {
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1 || raw > MOST_SECONDS) {
+    throw new GuardError(`limits.${name} must be a whole number from 1 to ${MOST_SECONDS}, found ${showData(raw)}`);
   }
   return raw;
 }
 
 /**
- * Read guard.yaml's text. `declarationOf` gives the declaration of
- * the binding the file names, against which every example step is
- * decoded: every param stated, the stated effect fields of the right
- * type. Errors carry no file name; the caller adds it.
+ * Read guard.yaml's text (guards-10). `declarationOf` gives the
+ * declaration of the binding the file names, against which every step
+ * is decoded: every param stated, the stated effect fields of the
+ * right type. A label entered twice is an error here; whether every
+ * entry is a case of the guard item is `caseSteps`'s to say. Errors
+ * carry no file name; the caller adds it.
  */
 export function parseGuardFile(text: string, declarationOf: (binding: string) => Declaration): GuardFile {
-  const top = mapping(parseYaml(text), ["format", "binding", "sample", "examples"]);
+  const top = mapping(parseYaml(text), ["format", "binding", "limits", "cases"]);
   if (top.format !== 1) throw new GuardError("format must be 1");
   if (typeof top.binding !== "string") {
     throw new GuardError(`binding must be a binding's name, found ${showData(top.binding)}`);
   }
-  const bounds = within("sample", () => mapping(top.sample, ["sequences", "events", "seed", "seconds"]));
-  const sample: Sample = {
-    sequences: count(bounds.sequences, "sequences", 1),
-    events: count(bounds.events, "events", 1),
-    seed: count(bounds.seed, "seed", 0, MOST_SEED),
-    seconds: count(bounds.seconds, "seconds", 1),
-  };
+  const written = within("limits", () => mapping(top.limits, ["seconds"]));
+  const limits: Limits = { seconds: limit(written.seconds, "seconds") };
   const declaration = declarationOf(top.binding);
 
-  if (!Array.isArray(top.examples)) throw new GuardError("examples must be a list");
-  const examples: Example[] = [];
-  for (const [index, raw] of (top.examples as unknown[]).entries()) {
-    const entry = within(`example ${index + 1}`, () => mapping(raw, ["item", "kind", "steps"]));
-    if (typeof entry.item !== "string" || entry.item === "") {
-      throw new GuardError(`example ${index + 1}: item must be a spec item's ID, found ${showData(entry.item)}`);
+  if (!Array.isArray(top.cases)) throw new GuardError("cases must be a list");
+  const entries: GuardFile["entries"] = [];
+  for (const [index, raw] of (top.cases as unknown[]).entries()) {
+    const entry = within(`cases entry ${index + 1}`, () => mapping(raw, ["case", "steps"]));
+    if (typeof entry.case !== "string" || entry.case.trim() === "") {
+      throw new GuardError(
+        `cases entry ${index + 1}: case must be the label of a case of the guard item, found ${showData(entry.case)}`,
+      );
     }
-    const item = entry.item;
-    within(`example ${item}`, () => {
-      if (examples.some((example) => example.item === item)) throw new GuardError("listed twice");
-      if (entry.kind !== "permitted" && entry.kind !== "forbidden") {
-        throw new GuardError(`kind must be permitted or forbidden, found ${showData(entry.kind)}`);
-      }
+    const label = entry.case;
+    if (entries.some((other) => other.label === label)) throw new GuardError(`a case entered twice: ${label}`);
+    within(`case '${label}'`, () => {
       if (!Array.isArray(entry.steps) || entry.steps.length === 0) {
         throw new GuardError("steps must be a list of one or more steps");
-      }
-      if (entry.steps.length > sample.events) {
-        throw new GuardError(
-          `it has ${entry.steps.length} steps, more than sample.events allows (${sample.events})`,
-        );
       }
       const steps: Step[] = (entry.steps as unknown[]).map((rawStep, at) =>
         within(`step ${at + 1}`, () => {
@@ -322,15 +337,29 @@ export function parseGuardFile(text: string, declarationOf: (binding: string) =>
           };
         }),
       );
-      examples.push({ item, kind: entry.kind, steps });
+      entries.push({ label, steps });
     });
   }
-  for (const kind of ["forbidden", "permitted"] as const) {
-    if (!examples.some((example) => example.kind === kind)) {
-      throw new GuardError(`no ${kind} example; a guard needs at least one`);
+  return { binding: top.binding, limits, entries };
+}
+
+/**
+ * Each case of the guard item with its steps from the guard file, in
+ * the item's order (guards-10). A case with no entry, and an entry
+ * for no case, is a GuardError naming the label; the caller adds the
+ * file.
+ */
+export function caseSteps(cases: readonly ItemCase[], entries: GuardFile["entries"]): Case[] {
+  for (const entry of entries) {
+    if (!cases.some((known) => known.label === entry.label)) {
+      throw new GuardError(`an entry for no case: ${entry.label}`);
     }
   }
-  return { binding: top.binding, sample, examples };
+  return cases.map((known) => {
+    const entry = entries.find((other) => other.label === known.label);
+    if (entry === undefined) throw new GuardError(`a case with no entry: ${known.label}`);
+    return { label: known.label, kind: known.kind, words: known.words, steps: entry.steps };
+  });
 }
 
 // ---------------------------------------------------------------
@@ -355,23 +384,28 @@ function amongFiles(files: readonly string[], path: string): boolean {
   return files.some((file) => path === file || path.startsWith(`${file}/`));
 }
 
+/** The `<name><suffix>` files of a folder, in name order: by the name
+ * without its extension, so `a` comes before `a-b` (guards-1). */
 function namedFiles(root: string, folder: string, suffix: string): { name: string; path: string }[] {
   if (!existsSync(abs(root, folder))) return [];
   if (!isDir(abs(root, folder))) throw new GuardError(`${folder}: expected a folder`);
-  return names(abs(root, folder)).map((entry) => {
-    const path = `${folder}/${entry}`;
-    const name = entry.slice(0, -suffix.length);
-    if (!entry.endsWith(suffix) || !FOLDER_NAME_RE.test(name) || !isFile(abs(root, path))) {
-      throw new GuardError(`${path}: only <name>${suffix} files are kept in this folder`);
-    }
-    return { name, path };
-  });
+  return names(abs(root, folder))
+    .map((entry) => {
+      const path = `${folder}/${entry}`;
+      const name = entry.slice(0, -suffix.length);
+      if (!entry.endsWith(suffix) || !FOLDER_NAME_RE.test(name) || !isFile(abs(root, path))) {
+        throw new GuardError(`${path}: only <name>${suffix} files are kept in this folder`);
+      }
+      return { name, path };
+    })
+    .sort((a, b) => byText(a.name, b.name));
 }
 
 /**
  * Load one guard: its items, guard file, binding declaration,
- * readings and kept faults, each checked, with the digest of every
- * approval input. `index` is the tree's items where the caller has
+ * translations and kept faults, each checked but a translation's
+ * text, which is TLC's to read, with the digest of
+ * every approval input. `index` is the tree's items where the caller has
  * read them already. Every error is a GuardError naming the file or
  * item and the cause; the approval record is not read here.
  */
@@ -381,9 +415,9 @@ export function loadGuard(root: string, name: string, index?: ItemIndex): Guard 
   if (!FOLDER_NAME_RE.test(name) || name === "bindings") throw new GuardError(`'${name}' cannot be a guard's name`);
   if (!isFile(abs(root, guardFile))) throw new GuardError(`${guardFile}: not found`);
   for (const entry of names(abs(root, folder))) {
-    if (!["guard.yaml", "readings", "faults", "approval.json"].includes(entry)) {
+    if (!["guard.yaml", "translations", "faults", "approval.json"].includes(entry)) {
       throw new GuardError(
-        `${folder}/${entry}: not part of a guard; its folder holds guard.yaml, readings/, faults/ and approval.json`,
+        `${folder}/${entry}: not part of a guard; its folder holds guard.yaml, translations/, faults/ and approval.json`,
       );
     }
   }
@@ -418,15 +452,20 @@ export function loadGuard(root: string, name: string, index?: ItemIndex): Guard 
   if (binding === undefined) throw new GuardError(`${guardFile}: no binding`);
   const declaration: Binding = binding;
 
-  const items = guardItems(index ?? readItems(root), name, file.examples.map((example) => example.item));
-  for (const item of [items.assertion, items.behavior, ...items.examples, ...items.cited]) {
+  const items = guardItems(index ?? readItems(root), name);
+  for (const item of [items.guard, items.behavior, ...items.cited]) {
     inputs[itemLabel(item.id)] = digest(item.text);
   }
+  const cases = within(guardFile, () => caseSteps(items.cases, file.entries));
 
-  const readings = namedFiles(root, `${folder}/readings`, ".yaml").map((entry) =>
-    parseReading(read(entry.path), entry.name, entry.path, declaration),
-  );
-  if (readings.length === 0) throw new GuardError(`${folder}/readings: no reading; a guard needs at least one`);
+  const translations: Translation[] = namedFiles(root, `${folder}/translations`, ".tla").map((entry) => {
+    const fault = translationNameFault(entry.name);
+    if (fault !== null) throw new GuardError(`${entry.path}: ${fault}`);
+    return { name: entry.name, file: entry.path, text: read(entry.path) };
+  });
+  if (translations.length === 0) {
+    throw new NoTranslation(`${folder}/translations: no translation; a guard needs two or more`, declaration);
+  }
 
   const faults: Fault[] = namedFiles(root, `${folder}/faults`, ".patch").map((entry) => {
     const patch = within(entry.path, () => {
@@ -434,32 +473,20 @@ export function loadGuard(root: string, name: string, index?: ItemIndex): Guard 
       // A kept fault is a defect in the code a run copies, never in
       // the binding or in an installed dependency. No entry of `files`
       // is under guards/; a path there is refused here all the same.
+      // Where the declaration names no files yet, it loads (guards-3)
+      // and the failing binding says so; only what holds of any path
+      // is then checked here.
       for (const changed of parsed.files) {
-        if (changed.path.split("/")[0] === "guards" || !amongFiles(declaration.files, changed.path)) {
+        const parts = changed.path.split("/");
+        const never = parts[0] === "guards" || parts.includes("node_modules") || parts.includes(".git");
+        if (never || (declaration.files.length > 0 && !amongFiles(declaration.files, changed.path))) {
           throw new GuardError(`${changed.path} is not among the binding's files`);
         }
       }
       return parsed;
     });
-    return { name: entry.name, file: entry.path, title: patch.title, patch };
+    return { name: entry.name, file: entry.path, patch };
   });
-
-  // An example may leave out effect fields, but none a reading reads.
-  // Every step short of a field is named at once, each by the first
-  // reading that reads it.
-  const unstated = new Map<string, string>();
-  for (const example of file.examples) {
-    for (const reading of readings) {
-      try {
-        checkExample(reading, example);
-      } catch (error) {
-        if (!(error instanceof Unstated)) throw error;
-        const place = `${error.example} ${error.step} ${error.fields.join(" ")}`;
-        if (!unstated.has(place)) unstated.set(place, error.message);
-      }
-    }
-  }
-  if (unstated.size > 0) throw new GuardError(`${guardFile}: ${[...unstated.values()].join("; ")}`);
 
   return {
     name,
@@ -467,9 +494,9 @@ export function loadGuard(root: string, name: string, index?: ItemIndex): Guard 
     folder,
     items,
     binding: declaration,
-    sample: file.sample,
-    examples: file.examples,
-    readings,
+    limits: file.limits,
+    cases,
+    translations,
     faults,
     inputs: sortInputs(inputs),
   };

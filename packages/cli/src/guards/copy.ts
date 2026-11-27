@@ -28,7 +28,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { byText } from "./types.js";
 
 /** One copy and the folders made beside it. */
@@ -69,6 +70,46 @@ function removeHome(home: string): void {
 /** Remove one copy. */
 export function removeCopy(copy: Copy): void {
   removeHome(copy.home);
+}
+
+/**
+ * A fresh folder under the OS temp folder for what a run writes
+ * beside its copies: the TLA+ files it generates and what TLC leaves.
+ * It is removed with the copies, however the process exits.
+ */
+export function makeHome(): string {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "spex-verify-")));
+  live.add(home);
+  if (!hooked) {
+    hooked = true;
+    process.on("exit", removeCopies);
+  }
+  return home;
+}
+
+/** Remove a folder `makeHome` made. */
+export function removeFolder(home: string): void {
+  removeHome(home);
+}
+
+/**
+ * `text` with every path into a copy told relative to the copy's
+ * folder, as a path or as a `file:` URL: `src/lock.mjs` for a copied
+ * file, `.` for the folder itself and `../tmp/…` for what lies in the
+ * copy's temp folder. `home` is the copy's fresh folder, whose name is
+ * new in every run, so a cause told this way is the same in every run
+ * (guards-36).
+ */
+export function relativeToCopy(text: string, home: string): string {
+  const folder = join(home, "copy");
+  const swap = (told: string, prefix: string, slash: string, inside: string, alone: string): string =>
+    told.split(prefix + slash).join(inside).split(prefix).join(alone);
+  let told = text;
+  told = swap(told, pathToFileURL(folder).href, "/", "", ".");
+  told = swap(told, folder, sep, "", ".");
+  told = swap(told, pathToFileURL(home).href, "/", "../", "..");
+  told = swap(told, home, sep, `..${sep}`, "..");
+  return told;
 }
 
 function abs(base: string, path: string): string {
@@ -165,6 +206,6 @@ export function makeCopy(root: string, paths: readonly string[]): Copy {
     return { home, folder, scratch, digest: digestOf(folder, [...files].sort(byText)) };
   } catch (error) {
     removeHome(home);
-    throw error;
+    throw new Error(relativeToCopy(error instanceof Error ? error.message : String(error), home));
   }
 }

@@ -22,7 +22,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { makeCopy, removeCopies, removeCopy } from "./copy.js";
+import { pathToFileURL } from "node:url";
+import { makeCopy, makeHome, relativeToCopy, removeCopies, removeFolder, removeCopy } from "./copy.js";
 
 const made: string[] = [];
 
@@ -115,6 +116,21 @@ describe("guards-12: copy: the files a run copies", () => {
     assert.equal(dependency.digest, first.digest, "[guards-12] what is linked, not copied, is no part of it");
     for (const copy of [first, again, edited, renamed, dependency]) removeCopy(copy);
   });
+
+  it("tells a path into a copy relative to the copy, as a path and as a file URL", () => {
+    const copy = makeCopy(projectOf(FILES), ["pkg/src"]);
+    const file = join(copy.folder, "pkg", "src", "a.mjs");
+    const left = join(copy.scratch, "left.txt");
+    assert.equal(
+      relativeToCopy(`Cannot find module '${file}' imported from ${pathToFileURL(join(copy.folder, "binding.mjs")).href}`, copy.home),
+      `Cannot find module '${join("pkg", "src", "a.mjs")}' imported from binding.mjs`,
+      "[guards-36] a copied file is named by the path it has in the project",
+    );
+    assert.equal(relativeToCopy(`no such folder ${copy.folder}`, copy.home), "no such folder .", "[guards-36] the copy's folder itself is .");
+    assert.equal(relativeToCopy(`cannot open ${left}`, copy.home), `cannot open ${join("..", "tmp", "left.txt")}`, "[guards-36] what lies in the copy's temp folder is beside it");
+    assert.equal(relativeToCopy("the queue is full", copy.home), "the queue is full", "a cause that names no path stays as it is");
+    removeCopy(copy);
+  });
 });
 
 describe("guards-28: copy: removing a copy", () => {
@@ -136,5 +152,15 @@ describe("guards-28: copy: removing a copy", () => {
     removeCopies();
     for (const copy of copies) assert.equal(existsSync(copy.home), false, "[guards-28] no copy outlives its run");
     assert.ok(existsSync(join(root, "node_modules", "dep", "index.js")), "[guards-28] the project's dependencies stay");
+  });
+  it("makes a folder for what a run writes beside its copies, removed alone or with them", () => {
+    const [one, two] = [makeHome(), makeHome()];
+    assert.ok(existsSync(one) && existsSync(two) && one !== two);
+    assert.ok(one.startsWith(realpathSync(tmpdir())), "under the OS temp folder");
+    writeFileSync(join(one, "SpexModel.tla"), "x");
+    removeFolder(one);
+    assert.equal(existsSync(one), false);
+    removeCopies();
+    assert.equal(existsSync(two), false, "[guards-28] no folder outlives its run");
   });
 });

@@ -24,9 +24,9 @@ export type Hunk = { line: number; lines: PatchLine[] };
 /** The changes to one file. `path` is relative to the root, with `/`. */
 export type FilePatch = { path: string; hunks: Hunk[] };
 
-/** A parsed patch. `description` is the text before the first file,
- * `title` its first non-empty line. */
-export type Patch = { description: string; title: string; files: FilePatch[] };
+/** A parsed patch. The text before its first file is a description
+ * for people and is not read. */
+export type Patch = { files: FilePatch[] };
 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
@@ -58,8 +58,6 @@ export function parsePatch(text: string): Patch {
   if (lines[lines.length - 1] === "") lines.pop();
   let at = lines.findIndex((line) => line.startsWith("diff --git ") || line.startsWith("--- "));
   if (at < 0) throw new GuardError("no change found; a kept fault is a unified diff, as git diff writes it");
-  const description = lines.slice(0, at).join("\n").trim();
-  const title = description.split("\n")[0].trim();
 
   const files: FilePatch[] = [];
   while (at < lines.length) {
@@ -145,7 +143,7 @@ export function parsePatch(text: string): Patch {
     files.push({ path, hunks });
   }
   if (files.length === 0) throw new GuardError("no change found; a kept fault is a unified diff, as git diff writes it");
-  return { description, title, files };
+  return { files };
 }
 
 type Line = { text: string; end: string };

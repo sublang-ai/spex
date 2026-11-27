@@ -13,16 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `spex verify` checks every guard under `guards/`, or the guards you
-  name, on a copy of your code, and exits `0` only when each one passes.
-  A guard protects one critical behavior on every change: one assertion
-  with permitted and forbidden examples kept as spec items, and beside
-  the code its readings, a binding to the code and a kept fault the
-  check must catch. It calls no model and needs Node.js 22.15 or newer.
+  name, and exits `0` only when each one passes. A guard protects one
+  critical behavior on every change. It is a test item that
+  `spex verify` carries out, together with the files under
+  `guards/<its ID>/` that say how: the item cites one rule and lists
+  permitted and forbidden cases in plain words, and the files hold each
+  case's steps, translations of the guard's items into TLA+, a kept
+  fault and a binding to the code. Each translation holds the rule and a
+  model of what the items say each event gives. `spex verify` has TLC,
+  the model checker of the TLA+ tools, check that every translation
+  allows each permitted case and forbids each forbidden case, that the
+  translations agree, and that the model never gives an effect the rule
+  forbids, in every state the model reaches. A guard needs two
+  translations or more to pass; with one it is still checked and tested
+  in full. It then tests your code on
+  a copy: it causes every step of the model once, the code must give the
+  model's effect, and the same test must catch the kept fault. A passing
+  guard reads `Model checked, code tested`, with what the result
+  assumes. It calls no language model, draws nothing at random and needs
+  Node.js 22.15 or newer and Java 11 or later; it pins TLC 2.19 and
+  downloads it on first use, or uses the copy `SPEX_TLC_JAR` names.
+  `spex verify --keep <folder>` leaves every file it gave TLC, with the
+  command lines, so each step can be run again without Spex.
 
-- `spex approve <guard>` prints a guard's examples and what changed
-  since the last approval, then writes `guards/<guard>/approval.json`
-  for you to commit. `spex verify` passes no guard whose items or files
-  changed since that record.
+- `spex approve <guard>` prints the guard item's statement, the rule,
+  then each case with its steps, the name of every other file and item
+  it records, and what changed since the last approval. It then writes
+  `guards/<guard>/approval.json` for you to commit, or leaves the file
+  as it is where nothing changed. `spex verify` passes no guard whose
+  items or files changed since that record.
 
 ### Changed
 

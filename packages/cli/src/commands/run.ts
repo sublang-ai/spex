@@ -133,8 +133,11 @@ const HELP: Readonly<Record<string, Help>> = {
     options: [["<path>", "The folder holding specs/ (the Git repository's top level by default)"]],
   },
   verify: {
-    usage: "spex verify [<guard>…]",
-    options: [["<guard>…", "The guards to check, by name (every guard under guards/ by default)"]],
+    usage: "spex verify [--keep <folder>] [<guard>…]",
+    options: [
+      ["<guard>…", "The guards to check, by name (every guard under guards/ by default)"],
+      ["--keep <folder>", "Leave every file generated for TLC, with its command lines, in <folder>", "a folder"],
+    ],
   },
   approve: {
     usage: "spex approve <guard>",

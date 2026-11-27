@@ -226,7 +226,7 @@ const COMMAND_HELP: Record<string, { aliases?: string[]; options: string[] }> = 
   whoami: { options: ["--registry <url>", "--space <url>"] },
   scaffold: { options: ["--update", "--lang <code>", "--agents <names>"] },
   lint: { options: [] },
-  verify: { options: [] },
+  verify: { options: ["--keep <folder>"] },
   approve: { options: [] },
 };
 

@@ -142,9 +142,14 @@ export function readApproval(root: string, guard: string): Inputs | null {
   }
 }
 
-/** Write a guard's approval record. Returns its path from the root. */
-export function writeApproval(root: string, guard: string, inputs: Inputs): string {
+/** Write a guard's approval record. Returns its path from the root,
+ * and whether the file was written: one that holds these bytes
+ * already is left as it is. */
+export function writeApproval(root: string, guard: string, inputs: Inputs): { path: string; written: boolean } {
   const path = approvalPath(guard);
-  writeFileSync(join(root, ...path.split("/")), approvalText(inputs));
-  return path;
+  const file = join(root, ...path.split("/"));
+  const text = approvalText(inputs);
+  if (existsSync(file) && readFileSync(file, "utf8") === text) return { path, written: false };
+  writeFileSync(file, text);
+  return { path, written: true };
 }

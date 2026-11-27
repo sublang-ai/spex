@@ -101,6 +101,19 @@ describe("guards-12: processes: one program, stopped with all it started", () =>
     assert.deepEqual(await run("").ran, { code: 0, timedOut: false, errors: "", failed: null });
   });
 
+  it("keeps what a program wrote on standard output in the file named for it", async () => {
+    const output = join(dir, "output.txt");
+    const ran = await runProcess(process.execPath, ["-e", 'console.log("first"); console.error("aside"); console.log("second");'], {
+      cwd: dir,
+      env: process.env,
+      seconds: 60,
+      errors: join(dir, "errors-output.txt"),
+      output,
+    });
+    assert.deepEqual(ran, { code: 0, timedOut: false, errors: "aside\n", failed: null });
+    assert.equal(readFileSync(output, "utf8"), "first\nsecond\n");
+  });
+
   it("says why a program could not start", async () => {
     const ran = await runProcess(join(dir, "no-such-program"), [], {
       cwd: dir,
@@ -144,7 +157,7 @@ describe("guards-12: processes: one program, stopped with all it started", () =>
   });
 });
 
-describe("guards-26: processes: the cause a process gave", () => {
+describe("guards-36: processes: the cause a process gave", () => {
   it("is the last line that is neither Node's version line nor a line of a stack", () => {
     const crash = [
       "[eval]:1",

@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // What an export places (environments-6, environments-8, environments-41,
-// DR-174), on scratch roots holding installed releases and a lock naming
+// environments-55, DR-174), on scratch roots holding installed releases
+// and a lock naming
 // them: only what a release provides — no support skill copied, no
 // support playbook's skill generated, no spec a release does not offer;
 // a provided spec at `specs/packages/<pkg>.md` opening with the marker
@@ -308,7 +309,7 @@ test("environments-41: a file of the name blocks the placement — the project's
   assert.deepEqual(readPlacedRecord(root), recorded, "[environments-41] each recorded as the package's copy, its version and hash");
 });
 
-test("environments-41: of two packages of one <pkg>, the one whose copy stands keeps its place and a later arrival first by <org> is blocked, by the record and by the marker line on a fresh clone; the copy gone with its package, the other is placed", async () => {
+test("environments-55: of two packages of one <pkg>, the one whose copy stands keeps its place and a later arrival first by <org> is blocked, by the record and by the marker line on a fresh clone; the copy gone with its package, the other is placed", async () => {
   const root = scratchRoot(true);
   const zeta = specRelease(root, "zeta/kit", "1.0.0", [], " Zeta's.");
   await place(root, { "zeta/kit": zeta });
@@ -317,13 +318,13 @@ test("environments-41: of two packages of one <pkg>, the one whose copy stands k
   const acme = specRelease(root, "acme/kit", "1.0.0");
   const both = { "acme/kit": acme, "zeta/kit": zeta };
   const report = await place(root, both);
-  assert.deepEqual(report.specs, [placement("acme/kit", "blocked"), placement("zeta/kit", "placed")], "[environments-41] the copy standing keeps its place; the arrival, first by <org>, is blocked");
-  assert.equal(read(root, "specs/packages/kit.md"), standing, "[environments-41] the copy as it was");
+  assert.deepEqual(report.specs, [placement("acme/kit", "blocked"), placement("zeta/kit", "placed")], "[environments-55] the copy standing keeps its place; the arrival, first by <org>, is blocked");
+  assert.equal(read(root, "specs/packages/kit.md"), standing, "[environments-55] the copy as it was");
   assert.deepEqual(Object.keys(readPlacedRecord(root)!.specs), ["zeta/kit"], "[environments-41] the blocked arrival not recorded");
   // A fresh clone: no record, and the marker line names the copy's package.
   rmSync(placedRecordPath(root));
-  assert.deepEqual((await place(root, both)).specs, report.specs, "[environments-41] by the marker line alike");
-  assert.equal(read(root, "specs/packages/kit.md"), standing, "[environments-41] and not rewritten");
+  assert.deepEqual((await place(root, both)).specs, report.specs, "[environments-55] by the marker line alike");
+  assert.equal(read(root, "specs/packages/kit.md"), standing, "[environments-55] and not rewritten");
   // zeta/kit leaves the lock: its unedited copy leaves, and acme/kit is placed.
   const after = await place(root, { "acme/kit": acme });
   assert.deepEqual(after.specs, [placement("acme/kit", "placed")], "[environments-41] the copy gone with its package, the other placed");
